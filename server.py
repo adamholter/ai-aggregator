@@ -31,6 +31,7 @@ OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
 REPLICATE_API_KEY = (os.environ.get('REPLICATE_API_KEY') or '').strip()
 REPLICATE_BASE_URL = 'https://api.replicate.com/v1'
 DEEP_RESEARCH_MODEL_ID = 'openai/o4-mini-deep-research'
+MAX_REPLICATE_MODELS = int(os.environ.get('MAX_REPLICATE_MODELS', '60'))
 
 OPENROUTER_KEY_REQUIRED_MESSAGE = (
     'An OpenRouter API key is required for this feature. Add your key in Settings to continue.'
@@ -2279,6 +2280,8 @@ def get_replicate_models():
     """Get media generation models data from Replicate API with optional streaming updates."""
     cache_key = get_cache_key('replicate_models')
     stream_results = request.args.get('stream', 'false').lower() == 'true'
+    page = max(int(request.args.get('page', '1').strip() or '1'), 1)
+    page_size = int(request.args.get('page_size', str(MAX_REPLICATE_MODELS))) if not stream_results else MAX_REPLICATE_MODELS
 
     def process_category(model_data):
         try:
@@ -2367,6 +2370,7 @@ def get_replicate_models():
         collections_response = requests.get(
             f'{REPLICATE_BASE_URL}/collections/official',
             headers=headers,
+            params={'per_page': page_size, 'page': page},
             timeout=10
         )
         collections_response.raise_for_status()
