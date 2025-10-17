@@ -1304,7 +1304,7 @@ async function sendMessage() {
         }
         
         // Remove streaming class from the final message
-        const streamingMessage = chatMessages.querySelector('.message.ai.streaming');
+        streamingMessage = chatMessages.querySelector('.message.ai.streaming');
         if (streamingMessage) {
             streamingMessage.classList.remove('streaming');
         }
