@@ -1385,7 +1385,24 @@ async function callGLMAgent(userMessage) {
 
 // Fallback streaming using fetch
 async function handleStreamingWithFetch(userMessage, resolve, reject) {
+    let timeoutId;
+    let reader;
+    
     try {
+        // Set up timeout for the entire streaming operation
+        const STREAM_TIMEOUT = 150000; // 2.5 minutes
+        
+        timeoutId = setTimeout(() => {
+            if (reader) {
+                try {
+                    reader.cancel();
+                } catch (e) {
+                    // Ignore cancellation errors
+                }
+            }
+            reject(new Error('Streaming timeout - please try again'));
+        }, STREAM_TIMEOUT);
+
         const response = await fetch('/api/ai-agent', {
             method: 'POST',
             headers: withUserOpenRouterKey({
@@ -1400,6 +1417,7 @@ async function handleStreamingWithFetch(userMessage, resolve, reject) {
         });
 
         if (!response.ok) {
+            clearTimeout(timeoutId);
             let errorMessage = `HTTP error! status: ${response.status}`;
             try {
                 const payload = await response.json();
@@ -1416,23 +1434,66 @@ async function handleStreamingWithFetch(userMessage, resolve, reject) {
             throw new Error(errorMessage);
         }
 
-        const reader = response.body?.getReader();
+        reader = response.body?.getReader();
         if (!reader) {
+            clearTimeout(timeoutId);
             throw new Error('Response body is not readable');
         }
 
-        const decoder = new TextDecoder('utf-8');
+        const decoder = new TextDecoder('utf-8', { fatal: false });
         let buffer = '';
         let fullResponse = '';
         let traces = [];
+        let lastEventTime = Date.now();
+        let eventsReceived = 0;
+        const MAX_EVENTS = 1000;
+        
+        // Check for stalled connection
+        const stallCheckInterval = setInterval(() => {
+            const timeSinceLastEvent = Date.now() - lastEventTime;
+            if (timeSinceLastEvent > 30000) { // 30 seconds without data
+                clearInterval(stallCheckInterval);
+                clearTimeout(timeoutId);
+                if (reader) {
+                    try {
+                        reader.cancel();
+                    } catch (e) {
+                        // Ignore cancellation errors
+                    }
+                }
+                reject(new Error('Connection stalled - please try again'));
+            }
+        }, 10000); // Check every 10 seconds
 
         try {
             while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
+                const { done, value } = await Promise.race([
+                    reader.read(),
+                    new Promise((_, reject) =>
+                        setTimeout(() => reject(new Error('Read timeout')), 45000)
+                    )
+                ]);
+                
+                if (done) {
+                    clearInterval(stallCheckInterval);
+                    clearTimeout(timeoutId);
+                    break;
+                }
+
+                lastEventTime = Date.now();
+                eventsReceived++;
+
+                // Safety check for too many events
+                if (eventsReceived > MAX_EVENTS) {
+                    clearInterval(stallCheckInterval);
+                    clearTimeout(timeoutId);
+                    reject(new Error('Too many events received - response truncated'));
+                    return;
+                }
 
                 buffer += decoder.decode(value, { stream: true });
 
+                // Process all complete lines in buffer
                 while (true) {
                     const lineEnd = buffer.indexOf('\n');
                     if (lineEnd === -1) break;
@@ -1442,7 +1503,14 @@ async function handleStreamingWithFetch(userMessage, resolve, reject) {
 
                     if (line.startsWith('data: ')) {
                         const data = line.slice(6);
-                        if (data === '[DONE]') break;
+                        
+                        // Handle proper SSE termination
+                        if (data === '[DONE]') {
+                            clearInterval(stallCheckInterval);
+                            clearTimeout(timeoutId);
+                            resolve({ response: fixEncodingArtifacts(fullResponse), traces: traces });
+                            return;
+                        }
 
                         try {
                             const parsed = JSON.parse(data);
@@ -1458,24 +1526,48 @@ async function handleStreamingWithFetch(userMessage, resolve, reject) {
                                     break;
                                 }
                                 case 'done':
-                                    resolve({ response: fullResponse, traces: traces });
+                                    clearInterval(stallCheckInterval);
+                                    clearTimeout(timeoutId);
+                                    resolve({ response: fixEncodingArtifacts(fullResponse), traces: traces });
                                     return;
                                 case 'error':
-                                    reject(new Error(parsed.error));
+                                    clearInterval(stallCheckInterval);
+                                    clearTimeout(timeoutId);
+                                    reject(new Error(parsed.error || 'Unknown error occurred'));
                                     return;
                             }
                         } catch (e) {
-                            // Ignore invalid JSON
+                            console.warn('Invalid SSE JSON:', data, e);
+                            // Continue processing other events
                         }
                     }
                 }
             }
             
-            resolve({ response: fixEncodingArtifacts(fullResponse), traces: traces });
+            // If we get here without a done event, resolve with what we have
+            clearInterval(stallCheckInterval);
+            clearTimeout(timeoutId);
+            if (fullResponse || traces.length > 0) {
+                resolve({ response: fixEncodingArtifacts(fullResponse), traces: traces });
+            } else {
+                reject(new Error('Stream ended without response'));
+            }
         } finally {
-            reader.cancel();
+            clearInterval(stallCheckInterval);
+            clearTimeout(timeoutId);
+            if (reader) {
+                try {
+                    reader.cancel();
+                } catch (e) {
+                    // Ignore cancellation errors
+                }
+            }
         }
     } catch (error) {
+        if (timeoutId) {
+            clearTimeout(timeoutId);
+        }
+        console.error('Streaming error:', error);
         handleNonStreamingFallback(userMessage, resolve, reject);
     }
 }

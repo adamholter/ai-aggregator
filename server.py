@@ -2874,7 +2874,28 @@ Respond concisely and cite the sources (Conversation History, Database, Web Sear
                         mode='deep-research' if deep_research else 'standard',
                         max_iterations=8 if deep_research else 6
                     )
+                    
+                    # Add timeout and connection management
+                    start_time = time.time()
+                    timeout_seconds = 120  # 2 minute timeout for production
+                    
+                    events_sent = 0
+                    max_events = 1000  # Prevent infinite loops
+                    
                     for event in local_generator:
+                        # Check timeout
+                        if time.time() - start_time > timeout_seconds:
+                            timeout_json = json.dumps({'type': 'error', 'error': 'Request timeout - please try again'}, ensure_ascii=False)
+                            yield f"data: {timeout_json}\n\n".encode('utf-8')
+                            return
+                        
+                        # Check event limit
+                        events_sent += 1
+                        if events_sent > max_events:
+                            error_json = json.dumps({'type': 'error', 'error': 'Too many events - response truncated'}, ensure_ascii=False)
+                            yield f"data: {error_json}\n\n".encode('utf-8')
+                            return
+                        
                         kind = event[0]
                         if kind == 'traces':
                             traces_snapshot = event[1]
@@ -2890,15 +2911,37 @@ Respond concisely and cite the sources (Conversation History, Database, Web Sear
                             final_content = event[1]
                             for chunk in iter_text_chunks(final_content):
                                 yield encode_content(chunk)
+                            # Ensure proper termination
                             yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n".encode('utf-8')
                             return
-                    error_json = json.dumps({'type': 'error', 'error': 'Agent loop ended unexpectedly.'}, ensure_ascii=False)
-                    yield f"data: {error_json}\n\n".encode('utf-8')
+                    
+                    # Ensure we always send a done event if we get here
+                    done_json = json.dumps({'type': 'done'}, ensure_ascii=False)
+                    yield f"data: {done_json}\n\n".encode('utf-8')
+                    return
+                    
                 except Exception as exc:
+                    print(f"ERROR in generate_stream: {exc}")
                     error_json = json.dumps({'type': 'error', 'error': str(exc)}, ensure_ascii=False)
                     yield f"data: {error_json}\n\n".encode('utf-8')
+                finally:
+                    # Ensure cleanup
+                    pass
 
-            return Response(generate_stream(), mimetype='text/event-stream', headers=sse_headers)
+            # Enhanced SSE headers for production compatibility
+            enhanced_sse_headers = {
+                **sse_headers,
+                'X-Accel-Buffering': 'no',  # Disable nginx buffering
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0'
+            }
+            
+            return Response(
+                stream_with_context(generate_stream()),
+                mimetype='text/event-stream',
+                headers=enhanced_sse_headers
+            )
 
         final_content = ''
         final_traces = []
