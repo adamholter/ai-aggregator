@@ -976,18 +976,19 @@ def fetch_category_payload(category_id, config):
         return None
 
     params = config.get('params')
-    local_port = os.environ.get('PORT', '8765')
-    url = f'http://localhost:{local_port}{endpoint}'
-
     try:
-        response = requests.get(url, params=params, timeout=30)
-        response.raise_for_status()
-        try:
-            return response.json()
-        except ValueError:
+        with app.test_client() as client:
+            response = client.get(endpoint, query_string=params or {})
+        if response.status_code == 200:
+            try:
+                return response.get_json()
+            except Exception:
+                return None
+        else:
+            print(f"WARNING: Test client hydration failed for '{category_id}' with status {response.status_code}")
             return None
     except Exception as exc:
-        print(f"WARNING: Failed to hydrate category '{category_id}' via {endpoint}: {exc}")
+        print(f"WARNING: Failed to hydrate category '{category_id}' via internal client {endpoint}: {exc}")
         return None
 
 def load_category_payload(category):
