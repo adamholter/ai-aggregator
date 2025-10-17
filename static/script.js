@@ -1,6 +1,6 @@
 // API Configuration
-const ARTIFICIAL_ANALYSIS_API_KEY = 'aa_YwwFQfLcyyZShcfOzYdqVuPKZHHERBBq';
-const OPENROUTER_API_KEY = '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';
+// NOTE: No hardcoded API keys - all keys are user-provided via Settings modal
+// Server-side keys are handled by the backend for catalog data only
 const ARTIFICIAL_ANALYSIS_BASE_URL = 'https://artificialanalysis.ai/api/v2';
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
 
@@ -202,7 +202,20 @@ async function fetchExistingAnalysis(model, type) {
         return null;
     }
     if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        let errorMessage = `HTTP error! status: ${response.status}`;
+        try {
+            const payload = await response.json();
+            errorMessage = payload.error || payload.message || errorMessage;
+        } catch (parseError) {
+            // Response body might not be JSON; ignore.
+        }
+
+        // Handle specific error cases
+        if (response.status === 402) {
+            errorMessage = "🔑 OpenRouter API key required. Please add your key in Settings to use AI features.";
+        }
+
+        throw new Error(errorMessage);
     }
     const result = await response.json();
     if (!hasAnalysisContent(result)) {
@@ -285,7 +298,14 @@ async function requestModelMatch(source, target, modelPayload, options = {}) {
 
     const result = await response.json();
     if (!response.ok) {
-        throw new Error(result.error || 'Model match request failed');
+        let errorMessage = result.error || 'Model match request failed';
+
+        // Handle specific error cases
+        if (response.status === 402) {
+            errorMessage = "🔑 OpenRouter API key required. Please add your key in Settings to use AI features.";
+        }
+
+        throw new Error(errorMessage);
     }
 
     modelMatchCache.set(cacheKey, result);
@@ -580,6 +600,12 @@ async function makeAPICall(url, apiKey, options = {}) {
             } catch (parseError) {
                 // Response body might not be JSON; ignore.
             }
+
+            // Handle specific error cases
+            if (response.status === 402) {
+                message = "🔑 OpenRouter API key required. Please add your key in Settings to use AI features.";
+            }
+
             throw new Error(message);
         }
 
@@ -1280,19 +1306,6 @@ async function sendMessage() {
     try {
         // Call AI agent with streaming and context
         const response = await callGLMAgent(message);
-
-        // Remove initial loading indicator if still present
-        const loadingIndicator = chatMessages.querySelector('.message.ai.loading-initial');
-        if (loadingIndicator) {
-            loadingIndicator.remove();
-        }
-        
-        // Ensure there is a rendered AI message even if we fell back to non-streaming
-        let streamingMessage = chatMessages.querySelector('.message.ai.streaming');
-        if (!streamingMessage && response && (response.response || '').trim()) {
-            updateStreamingResponse(response.response, response.traces || []);
-            streamingMessage = chatMessages.querySelector('.message.ai.streaming');
-        }
         
         // Add AI response to conversation history
         if (response && response.response) {
@@ -1304,7 +1317,7 @@ async function sendMessage() {
         }
         
         // Remove streaming class from the final message
-        streamingMessage = chatMessages.querySelector('.message.ai.streaming');
+        const streamingMessage = chatMessages.querySelector('.message.ai.streaming');
         if (streamingMessage) {
             streamingMessage.classList.remove('streaming');
         }
@@ -1330,9 +1343,7 @@ async function sendMessage() {
         errorMessage.className = 'message ai error';
         errorMessage.innerHTML = `<div class="error-content">❌ <strong>Error:</strong> ${error.message}</div>`;
         chatMessages.appendChild(errorMessage);
-
-        showToast(error.message || 'Agent request failed. Add your OpenRouter key in Settings.', 'error');
-
+        
         // Scroll to bottom
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }
@@ -1396,6 +1407,12 @@ async function handleStreamingWithFetch(userMessage, resolve, reject) {
             } catch (parseError) {
                 // No-op: response may not contain JSON when streaming fails before start.
             }
+
+            // Handle specific error cases
+            if (response.status === 402) {
+                errorMessage = "🔑 OpenRouter API key required. Please add your key in Settings to use AI features.";
+            }
+
             throw new Error(errorMessage);
         }
 
@@ -1476,6 +1493,24 @@ async function handleNonStreamingFallback(userMessage, resolve, reject) {
                 conversationHistory: agentConfig.conversationHistory
             })
         });
+
+        if (!response.ok) {
+            let errorMessage = `HTTP error! status: ${response.status}`;
+            try {
+                const payload = await response.json();
+                errorMessage = payload.error || payload.message || errorMessage;
+            } catch (parseError) {
+                // Ignore parsing error
+            }
+
+            // Handle specific error cases
+            if (response.status === 402) {
+                errorMessage = "🔑 OpenRouter API key required. Please add your key in Settings to use AI features.";
+            }
+
+            throw new Error(errorMessage);
+        }
+
         if (response && typeof response.response === 'string') {
             resolve({
                 ...response,
@@ -2772,6 +2807,12 @@ async function streamModelAnalysis(analysisContainer, model, type, options = {})
             } catch (parseError) {
                 // Ignore parse failures; we already have a fallback message.
             }
+
+            // Handle specific error cases
+            if (response.status === 402) {
+                errorMessage = "🔑 OpenRouter API key required. Please add your key in Settings to use AI features.";
+            }
+
             throw new Error(errorMessage);
         }
 
@@ -3092,6 +3133,12 @@ async function handleNonStreamingModalAnalysis(analysisContainer, model, type) {
             } catch (parseError) {
                 // Ignore parsing error
             }
+
+            // Handle specific error cases
+            if (response.status === 402) {
+                errorMessage = "🔑 OpenRouter API key required. Please add your key in Settings to use AI features.";
+            }
+
             throw new Error(errorMessage);
         }
 
