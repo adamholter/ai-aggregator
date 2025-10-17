@@ -31,7 +31,9 @@ OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
 REPLICATE_API_KEY = (os.environ.get('REPLICATE_API_KEY') or '').strip()
 REPLICATE_BASE_URL = 'https://api.replicate.com/v1'
 DEEP_RESEARCH_MODEL_ID = 'openai/o4-mini-deep-research'
-MAX_REPLICATE_MODELS = int(os.environ.get('MAX_REPLICATE_MODELS', '60'))
+MAX_REPLICATE_MODELS = max(int(os.environ.get('MAX_REPLICATE_MODELS', '60')), 1)
+MAX_REPLICATE_TOTAL = max(int(os.environ.get('MAX_REPLICATE_TOTAL', '250')), MAX_REPLICATE_MODELS)
+MAX_REPLICATE_PAGES = max(int(os.environ.get('MAX_REPLICATE_PAGES', '5')), 1)
 
 OPENROUTER_KEY_REQUIRED_MESSAGE = (
     'An OpenRouter API key is required for this feature. Add your key in Settings to continue.'
@@ -2280,8 +2282,15 @@ def get_replicate_models():
     """Get media generation models data from Replicate API with optional streaming updates."""
     cache_key = get_cache_key('replicate_models')
     stream_results = request.args.get('stream', 'false').lower() == 'true'
-    page = max(int(request.args.get('page', '1').strip() or '1'), 1)
-    page_size = int(request.args.get('page_size', str(MAX_REPLICATE_MODELS))) if not stream_results else MAX_REPLICATE_MODELS
+    page = int(request.args.get('page', '1') or 1)
+    page = page if page > 0 else 1
+    raw_page_size = request.args.get('page_size')
+    page_size = MAX_REPLICATE_MODELS
+    if raw_page_size and raw_page_size.isdigit():
+        page_size = max(1, min(int(raw_page_size), MAX_REPLICATE_TOTAL))
+
+    if stream_results:
+        page_size = MAX_REPLICATE_MODELS
 
     def process_category(model_data):
         try:
@@ -2302,42 +2311,6 @@ def get_replicate_models():
         except Exception as exc:
             print(f"Error in category detection: {exc}")
             return 'unknown'
-
-    def build_model_payload(model_data):
-        processed_model = {
-            'id': f"{model_data.get('owner')}/{model_data.get('name')}",
-            'name': model_data.get('name', ''),
-            'owner': model_data.get('owner', ''),
-            'title': model_data.get('name', ''),
-            'description': model_data.get('description', ''),
-            'url': model_data.get('url', ''),
-            'cover_image_url': model_data.get('cover_image_url', ''),
-            'github_url': model_data.get('github_url', ''),
-            'paper_url': model_data.get('paper_url', ''),
-            'license_url': model_data.get('license_url', ''),
-            'created_at': model_data.get('created_at', ''),
-            'run_count': model_data.get('run_count', 0),
-            'visibility': model_data.get('visibility', ''),
-            'latest_version': model_data.get('latest_version', {}),
-            'default_example': model_data.get('default_example', {}),
-            'platform': 'replicate'
-        }
-
-        default_example = processed_model['default_example']
-        latency_seconds = compute_latency_seconds(default_example)
-        if latency_seconds is not None:
-            processed_model['latency_seconds'] = latency_seconds
-
-        if isinstance(default_example, dict):
-            input_data = default_example.get('input') or {}
-            processed_model['default_inputs'] = input_data
-
-        processed_model['category'] = process_category(model_data)
-
-        latest_version = processed_model['latest_version'] or {}
-        processed_model['latest_version_created_at'] = latest_version.get('created_at')
-
-        return processed_model
 
     def stream_from_cache(models):
         def generator():
@@ -2361,66 +2334,104 @@ def get_replicate_models():
     if not stream_results and cache_key in cache and is_cache_valid(cache[cache_key]['timestamp']):
         return jsonify(cache[cache_key]['data'])
 
-    try:
-        headers = {
-            'Authorization': f'Token {REPLICATE_API_KEY}',
-            'Content-Type': 'application/json'
+    def build_model_payload(model_data):
+        owner = model_data.get('owner', '')
+        slug = model_data.get('slug') or model_data.get('name') or ''
+        model_id = f"{owner}/{slug}".strip('/')
+
+        processed_model = {
+            'id': model_id,
+            'name': model_data.get('name') or slug,
+            'owner': owner,
+            'title': model_data.get('name') or slug,
+            'description': model_data.get('description', ''),
+            'url': model_data.get('url'),
+            'cover_image_url': model_data.get('cover_image_url'),
+            'github_url': model_data.get('github_url'),
+            'paper_url': model_data.get('paper_url'),
+            'license_url': model_data.get('license_url'),
+            'created_at': model_data.get('created_at') or model_data.get('published_at'),
+            'run_count': model_data.get('run_count', 0),
+            'visibility': model_data.get('visibility', ''),
+            'platform': 'replicate'
         }
 
-        collections_response = requests.get(
+        latest_version = model_data.get('latest_version')
+        default_example = model_data.get('default_example')
+        if isinstance(latest_version, dict):
+            processed_model['latest_version'] = latest_version
+            processed_model['latest_version_created_at'] = latest_version.get('created_at')
+        if isinstance(default_example, dict):
+            processed_model['default_example'] = default_example
+            processed_model['default_inputs'] = default_example.get('input') or {}
+            latency_seconds = compute_latency_seconds(default_example)
+            if latency_seconds is not None:
+                processed_model['latency_seconds'] = latency_seconds
+
+        processed_model['category'] = process_category(processed_model)
+        return processed_model
+
+    def fetch_collection_page(page_number):
+        response = requests.get(
             f'{REPLICATE_BASE_URL}/collections/official',
-            headers=headers,
-            params={'per_page': page_size, 'page': page},
+            headers={
+                'Authorization': f'Token {REPLICATE_API_KEY}',
+                'Content-Type': 'application/json'
+            },
+            params={'per_page': page_size, 'page': page_number},
             timeout=10
         )
-        collections_response.raise_for_status()
+        response.raise_for_status()
+        payload = response.json()
+        raw_models = payload.get('models') or []
+        processed = []
+        for entry in raw_models:
+            try:
+                processed.append(build_model_payload(entry))
+            except Exception as exc:
+                print(f"Error transforming Replicate model entry: {exc}")
+        pagination = payload.get('pagination') or {}
+        has_next = bool(pagination.get('next'))
+        return processed, has_next
 
-        collections_data = collections_response.json()
-        model_urls = [model['url'] for model in collections_data.get('models', [])]
-
+    try:
         if stream_results:
             def streaming_generator():
+                seen_ids = set()
                 processed_models = []
-                skipped_count = 0
-                yield f"data: {json.dumps({'type': 'start', 'total': len(model_urls)})}\n\n"
+                current_page = page
+                pages_fetched = 0
+                total_sent = 0
+                yield f"data: {json.dumps({'type': 'start'})}\n\n"
 
-                for url in model_urls:
-                    owner_name = url.replace('https://replicate.com/', '')
-                    try:
-                        model_response = requests.get(
-                            f'{REPLICATE_BASE_URL}/models/{owner_name}',
-                            headers=headers,
-                            timeout=8
-                        )
-                        if model_response.status_code != 200:
+                while pages_fetched < MAX_REPLICATE_PAGES and len(processed_models) < MAX_REPLICATE_TOTAL:
+                    page_models, has_next = fetch_collection_page(current_page)
+                    if not page_models:
+                        break
+
+                    for model in page_models:
+                        model_id = model.get('id')
+                        if model_id and model_id in seen_ids:
                             continue
+                        seen_ids.add(model_id)
+                        processed_models.append(model)
+                        total_sent += 1
+                        yield f"data: {json.dumps({'type': 'model', 'model': model}, ensure_ascii=False)}\n\n"
 
-                        response_text = model_response.text
-                        if len(response_text) > 10000:
-                            skipped_count += 1
-                            continue
+                        if len(processed_models) >= MAX_REPLICATE_TOTAL:
+                            break
 
-                        model_data = model_response.json()
-                        processed_model = build_model_payload(model_data)
-                        processed_models.append(processed_model)
-                        yield f"data: {json.dumps({'type': 'model', 'model': processed_model}, ensure_ascii=False)}\n\n"
-                    except json.JSONDecodeError as exc:
-                        print(f"JSON decode error for {owner_name}: {exc}")
-                        continue
-                    except requests.exceptions.RequestException as exc:
-                        print(f"Request error for {owner_name}: {exc}")
-                        continue
-                    except Exception as exc:
-                        print(f"Error processing {owner_name}: {exc}")
-                        continue
+                    pages_fetched += 1
+                    current_page += 1
+                    if not has_next or len(processed_models) >= MAX_REPLICATE_TOTAL:
+                        break
 
-                processed_models.sort(key=lambda x: x.get('run_count', 0), reverse=True)
                 cache[cache_key] = {
                     'data': processed_models,
                     'timestamp': datetime.now()
                 }
 
-                yield f"data: {json.dumps({'type': 'done', 'total': len(processed_models), 'skipped': skipped_count, 'source': 'live'})}\n\n"
+                yield f"data: {json.dumps({'type': 'done', 'total': total_sent, 'pagesFetched': pages_fetched, 'source': 'live'})}\n\n"
 
             return Response(
                 stream_with_context(streaming_generator()),
@@ -2433,37 +2444,44 @@ def get_replicate_models():
             )
 
         # Non-streaming path
-        processed_models = []
-        skipped_count = 0
-        for url in model_urls:
-            owner_name = url.replace('https://replicate.com/', '')
-            try:
-                model_response = requests.get(
-                    f'{REPLICATE_BASE_URL}/models/{owner_name}',
-                    headers=headers,
-                    timeout=8
-                )
-                if model_response.status_code != 200:
+        if request.args.get('page'):
+            page_models, _ = fetch_collection_page(page)
+            return jsonify(page_models), 200, {
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+            }
+
+        aggregated_models = []
+        seen_ids = set()
+        current_page = 1
+        pages_fetched = 0
+
+        while pages_fetched < MAX_REPLICATE_PAGES and len(aggregated_models) < MAX_REPLICATE_TOTAL:
+            page_models, has_next = fetch_collection_page(current_page)
+            if not page_models:
+                break
+
+            for model in page_models:
+                model_id = model.get('id')
+                if model_id and model_id in seen_ids:
                     continue
+                seen_ids.add(model_id)
+                aggregated_models.append(model)
+                if len(aggregated_models) >= MAX_REPLICATE_TOTAL:
+                    break
 
-                response_text = model_response.text
-                if len(response_text) > 10000:
-                    skipped_count += 1
-                    continue
+            pages_fetched += 1
+            current_page += 1
+            if not has_next or len(aggregated_models) >= MAX_REPLICATE_TOTAL:
+                break
 
-                model_data = model_response.json()
-                processed_models.append(build_model_payload(model_data))
-            except (json.JSONDecodeError, requests.exceptions.RequestException) as exc:
-                print(f"Skipping {owner_name}: {exc}")
-                continue
-
-        processed_models.sort(key=lambda x: x.get('run_count', 0), reverse=True)
         cache[cache_key] = {
-            'data': processed_models,
+            'data': aggregated_models,
             'timestamp': datetime.now()
         }
 
-        return jsonify(processed_models), 200, {
+        return jsonify(aggregated_models), 200, {
             'Access-Control-Allow-Origin': '*',
             'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
             'Access-Control-Allow-Headers': 'Content-Type, Authorization'
