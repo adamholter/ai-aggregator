@@ -669,5 +669,69 @@
       "persisted_at": "2025-10-17T07:58:56.190245"
     },
     "saved_at": "2025-10-17T07:58:56.190287"
+  },
+  "artificial-analysis::openrouter::gpt-5 mini (high)::openai": {
+    "result": {
+      "match": {
+        "id": "openai/gpt-5-mini",
+        "confidence": 1.0,
+        "reason": "Exact match found for 'GPT-5 mini' from provider 'OpenAI'.",
+        "target": "openrouter",
+        "metadata": {
+          "id": "openai/gpt-5-mini",
+          "slug": "openai/gpt-5-mini-2025-08-07",
+          "name": "OpenAI: GPT-5 Mini",
+          "vendor": "OpenAI",
+          "base_name": "GPT-5 Mini",
+          "created": 1754587407,
+          "description": "GPT-5 Mini is a compact version of GPT-5, designed to handle lighter-weight reasoning tasks. It provides the same instruction-following and safety-tuning benefits as GPT-5, but with reduced latency and cost. GPT-5 Mini is the successor to OpenAI's o4-mini model.",
+          "context_length": 400000,
+          "hugging_face_id": "",
+          "architecture": {
+            "modality": "text+image->text",
+            "input_modalities": [
+              "text",
+              "image",
+              "file"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "tokenizer": "GPT",
+            "instruct_type": null
+          },
+          "pricing": {
+            "prompt": "0.00000025",
+            "completion": "0.000002",
+            "request": "0",
+            "image": "0",
+            "web_search": "0.01",
+            "internal_reasoning": "0",
+            "input_cache_read": "0.000000025"
+          },
+          "top_provider": {
+            "context_length": 400000,
+            "max_completion_tokens": 128000,
+            "is_moderated": true
+          },
+          "per_request_limits": null,
+          "supported_parameters": [
+            "include_reasoning",
+            "max_tokens",
+            "reasoning",
+            "response_format",
+            "seed",
+            "structured_outputs",
+            "tool_choice",
+            "tools"
+          ],
+          "default_parameters": {},
+          "tags": [],
+          "display_url": "https://openrouter.ai/models/openai/gpt-5-mini-2025-08-07"
+        }
+      },
+      "persisted_at": "2025-10-17T09:21:48.081082"
+    },
+    "saved_at": "2025-10-17T09:21:48.081100"
   }
 }

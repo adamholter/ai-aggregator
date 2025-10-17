@@ -1,5 +1,6 @@
 from flask import Flask, jsonify, request, Response, stream_with_context, has_request_context
 from flask_cors import CORS
+import argparse
 import requests
 import json
 from datetime import datetime, timedelta
@@ -4274,6 +4275,12 @@ def debug_utf8():
         }
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='AI Model Analysis Dashboard Server')
+    parser.add_argument('--port', type=int, help='Port to bind the server')
+    parser.add_argument('--host', type=str, help='Host/IP to bind (default 0.0.0.0)')
+    parser.add_argument('--debug', action='store_true', help='Enable Flask debug mode')
+    args = parser.parse_args()
+
     # Create static directory if it doesn't exist
     static_dir = os.path.join(os.path.dirname(__file__), 'static')
     if not os.path.exists(static_dir):
@@ -4285,14 +4292,18 @@ if __name__ == '__main__':
         if os.path.exists(file):
             shutil.copy2(file, os.path.join(static_dir, file))
     
-    # Use PORT env var if set, otherwise default to 8910 to avoid conflicts
-    port_str = os.environ.get('PORT', '8765')
-    try:
-        port = int(port_str)
-    except ValueError:
-        print(f"Invalid PORT value '{port_str}', falling back to 8765")
-        port = 8765
+    # Determine host/port/debug precedence: CLI > env > defaults
+    host = args.host or os.environ.get('HOST', '0.0.0.0')
 
-    debug_mode = os.environ.get('FLASK_DEBUG', 'false').lower() in ('1', 'true', 'yes')
-    print(f"Starting server on 0.0.0.0:{port} (debug={debug_mode})")
-    app.run(debug=debug_mode, host='0.0.0.0', port=port)
+    port = args.port
+    if port is None:
+        port_str = os.environ.get('PORT', '8765')
+        try:
+            port = int(port_str)
+        except ValueError:
+            print(f"Invalid PORT value '{port_str}', falling back to 8765")
+            port = 8765
+
+    debug_mode = args.debug or os.environ.get('FLASK_DEBUG', 'false').lower() in ('1', 'true', 'yes')
+    print(f"Starting server on {host}:{port} (debug={debug_mode})")
+    app.run(debug=debug_mode, host=host, port=port)
