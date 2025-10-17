@@ -1280,6 +1280,19 @@ async function sendMessage() {
     try {
         // Call AI agent with streaming and context
         const response = await callGLMAgent(message);
+
+        // Remove initial loading indicator if still present
+        const loadingIndicator = chatMessages.querySelector('.message.ai.loading-initial');
+        if (loadingIndicator) {
+            loadingIndicator.remove();
+        }
+        
+        // Ensure there is a rendered AI message even if we fell back to non-streaming
+        let streamingMessage = chatMessages.querySelector('.message.ai.streaming');
+        if (!streamingMessage && response && (response.response || '').trim()) {
+            updateStreamingResponse(response.response, response.traces || []);
+            streamingMessage = chatMessages.querySelector('.message.ai.streaming');
+        }
         
         // Add AI response to conversation history
         if (response && response.response) {
@@ -1317,7 +1330,9 @@ async function sendMessage() {
         errorMessage.className = 'message ai error';
         errorMessage.innerHTML = `<div class="error-content">❌ <strong>Error:</strong> ${error.message}</div>`;
         chatMessages.appendChild(errorMessage);
-        
+
+        showToast(error.message || 'Agent request failed. Add your OpenRouter key in Settings.', 'error');
+
         // Scroll to bottom
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }
