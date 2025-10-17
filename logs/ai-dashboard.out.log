@@ -1,0 +1,296 @@
+Starting ai-dashboard server in /Users/adam/playground/ai-dashboard on 0.0.0.0:8910 (FLASK_DEBUG=false)
+Starting server on 0.0.0.0:8910 (debug=False)
+ * Serving Flask app 'server'
+ * Debug mode: off
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8910
+ * Running on http://192.168.1.44:8910
+[33mPress CTRL+C to quit[0m
+127.0.0.1 - - [09/Aug/2025 12:02:07] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [09/Aug/2025 12:02:07] "GET /static/styles.css HTTP/1.1" 200 -
+127.0.0.1 - - [09/Aug/2025 12:02:07] "GET /static/script.js HTTP/1.1" 200 -
+127.0.0.1 - - [09/Aug/2025 12:02:08] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+127.0.0.1 - - [09/Aug/2025 12:02:08] "GET /api/llms HTTP/1.1" 200 -
+127.0.0.1 - - [09/Aug/2025 12:02:17] "POST /api/model-analysis HTTP/1.1" 200 -
+127.0.0.1 - - [09/Aug/2025 12:03:11] "[36mGET /static/styles.css HTTP/1.1[0m" 304 -
+127.0.0.1 - - [09/Aug/2025 12:03:11] "[33mGET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1[0m" 404 -
+127.0.0.1 - - [09/Aug/2025 12:05:01] "[35m[1mPOST /api/ai-agent HTTP/1.1[0m" 500 -
+127.0.0.1 - - [09/Aug/2025 12:05:01] "[35m[1mPOST /api/ai-agent HTTP/1.1[0m" 500 -
+127.0.0.1 - - [09/Aug/2025 12:05:04] "[33mGET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1[0m" 404 -
+127.0.0.1 - - [09/Aug/2025 15:36:53] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [09/Aug/2025 15:36:53] "[36mGET /static/styles.css HTTP/1.1[0m" 304 -
+127.0.0.1 - - [09/Aug/2025 15:36:53] "GET /static/script.js HTTP/1.1" 200 -
+127.0.0.1 - - [09/Aug/2025 15:36:55] "[33mGET /static/favicon.svg HTTP/1.1[0m" 404 -
+127.0.0.1 - - [09/Aug/2025 15:36:55] "GET /api/llms HTTP/1.1" 200 -
+127.0.0.1 - - [09/Aug/2025 15:36:59] "POST /api/model-analysis HTTP/1.1" 200 -
+127.0.0.1 - - [09/Aug/2025 15:37:10] "[36mGET /static/styles.css HTTP/1.1[0m" 304 -
+127.0.0.1 - - [09/Aug/2025 15:37:10] "[33mGET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1[0m" 404 -
+127.0.0.1 - - [09/Aug/2025 15:37:34] "[35m[1mPOST /api/ai-agent HTTP/1.1[0m" 500 -
+127.0.0.1 - - [09/Aug/2025 15:37:34] "[35m[1mPOST /api/ai-agent HTTP/1.1[0m" 500 -
+Starting ai-dashboard server in /Users/adam/playground/ai-dashboard on 0.0.0.0:8910 (FLASK_DEBUG=1)
+Starting server on 0.0.0.0:8910 (debug=True)
+ * Serving Flask app 'server'
+ * Debug mode: on
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8910
+ * Running on http://192.168.1.44:8910
+[33mPress CTRL+C to quit[0m
+ * Restarting with stat
+ * Debugger is active!
+ * Debugger PIN: 103-070-850
+127.0.0.1 - - [09/Aug/2025 15:53:55] "[35m[1mPOST /api/ai-agent HTTP/1.1[0m" 500 -
+ * Detected change in '/Users/adam/playground/ai-dashboard/server.py', reloading
+Starting server on 0.0.0.0:8910 (debug=True)
+ * Restarting with stat
+ * Debugger is active!
+ * Debugger PIN: 103-070-850
+Starting ai-dashboard server in /Users/adam/playground/ai-dashboard on 0.0.0.0:8910 (FLASK_DEBUG=false)
+Starting server on 0.0.0.0:8910 (debug=False)
+ * Serving Flask app 'server'
+ * Debug mode: off
+Address already in use
+Port 8910 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Starting ai-dashboard server in /Users/adam/playground/ai-dashboard on 0.0.0.0:8910 (FLASK_DEBUG=false)
+Starting server on 0.0.0.0:8910 (debug=False)
+ * Serving Flask app 'server'
+ * Debug mode: off
+Address already in use
+Port 8910 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Starting server on 0.0.0.0:8910 (debug=False)
+ * Serving Flask app 'server'
+ * Debug mode: off
+Address already in use
+Port 8910 is in use by another program. Either identify and stop that program, or start the server with a different port.
+Starting server on 0.0.0.0:8910 (debug=False)
+ * Serving Flask app 'server'
+ * Debug mode: off
+Address already in use
+Port 8910 is in use by another program. Either identify and stop that program, or start the server with a different port.
+/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/multiprocessing/resource_tracker.py:301: UserWarning: resource_tracker: There appear to be 1 leaked semaphore objects to clean up at shutdown: {'/mp-5qclpp17'}
+  warnings.warn(
+/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/multiprocessing/resource_tracker.py:301: UserWarning: resource_tracker: There appear to be 1 leaked semaphore objects to clean up at shutdown: {'/mp-sdv8ppau'}
+  warnings.warn(
+Starting server on 0.0.0.0:8910 (debug=False)
+ * Serving Flask app 'server'
+ * Debug mode: off
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8910
+ * Running on http://192.168.1.44:8910
+[33mPress CTRL+C to quit[0m
+127.0.0.1 - - [10/Aug/2025 13:11:23] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:11:23] "[36mGET /static/styles.css HTTP/1.1[0m" 304 -
+127.0.0.1 - - [10/Aug/2025 13:11:23] "GET /static/script.js HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:11:24] "GET /api/llms HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:11:58] "POST /api/intelligent-query HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:11:58] "POST /api/ai-agent HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:12:01] "[36mGET /static/styles.css HTTP/1.1[0m" 304 -
+127.0.0.1 - - [10/Aug/2025 13:12:01] "[33mGET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1[0m" 404 -
+127.0.0.1 - - [10/Aug/2025 13:12:22] "[36mGET / HTTP/1.1[0m" 304 -
+127.0.0.1 - - [10/Aug/2025 13:12:22] "[36mGET /static/styles.css HTTP/1.1[0m" 304 -
+127.0.0.1 - - [10/Aug/2025 13:12:22] "[36mGET /static/script.js HTTP/1.1[0m" 304 -
+127.0.0.1 - - [10/Aug/2025 13:12:22] "GET /api/llms HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:12:43] "POST /api/intelligent-query HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:12:43] "POST /api/ai-agent HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:13:39] "GET /api/fal-models HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:14:09] "POST /api/model-analysis HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:14:18] "POST /api/intelligent-query HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:14:19] "POST /api/model-analysis HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:14:22] "POST /api/intelligent-query HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:14:25] "POST /api/model-analysis HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:14:29] "POST /api/intelligent-query HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:14:34] "[36mGET / HTTP/1.1[0m" 304 -
+127.0.0.1 - - [10/Aug/2025 13:14:34] "[35m[1mPOST /api/model-analysis HTTP/1.1[0m" 500 -
+127.0.0.1 - - [10/Aug/2025 13:14:34] "[36mGET /static/styles.css HTTP/1.1[0m" 304 -
+127.0.0.1 - - [10/Aug/2025 13:14:34] "[36mGET /static/script.js HTTP/1.1[0m" 304 -
+127.0.0.1 - - [10/Aug/2025 13:14:34] "GET /api/llms HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:14:56] "POST /api/intelligent-query HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:14:56] "POST /api/ai-agent HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:15:40] "POST /api/intelligent-query HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:15:40] "POST /api/ai-agent HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:21:52] "GET /api/text-to-speech HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:21:57] "GET /api/text-to-video HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:21:57] "GET /api/text-to-video HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:22:02] "POST /api/model-analysis HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:22:04] "POST /api/intelligent-query HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:22:32] "[36mGET /static/styles.css HTTP/1.1[0m" 304 -
+127.0.0.1 - - [10/Aug/2025 13:22:32] "[33mGET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1[0m" 404 -
+127.0.0.1 - - [10/Aug/2025 13:23:33] "[35m[1mPOST /api/model-analysis HTTP/1.1[0m" 500 -
+127.0.0.1 - - [10/Aug/2025 13:24:20] "POST /api/model-analysis HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:24:29] "POST /api/model-analysis HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:24:33] "POST /api/intelligent-query HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:25:28] "POST /api/model-analysis HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:25:30] "POST /api/model-analysis HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:25:34] "POST /api/intelligent-query HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:26:44] "GET /api/text-to-image?include_categories=true HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:27:25] "POST /api/model-analysis HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:27:28] "POST /api/intelligent-query HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:27:32] "[36mGET / HTTP/1.1[0m" 304 -
+127.0.0.1 - - [10/Aug/2025 13:27:32] "[36mGET /static/styles.css HTTP/1.1[0m" 304 -
+127.0.0.1 - - [10/Aug/2025 13:27:32] "GET /static/script.js HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:27:33] "GET /api/llms HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:27:35] "POST /api/model-analysis HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:27:39] "GET /api/text-to-video HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:27:41] "POST /api/model-analysis HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:27:43] "POST /api/intelligent-query HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:30:05] "POST /api/intelligent-query HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:30:05] "POST /api/ai-agent HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:31:10] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:31:10] "[36mGET /static/styles.css HTTP/1.1[0m" 304 -
+127.0.0.1 - - [10/Aug/2025 13:31:10] "[36mGET /static/script.js HTTP/1.1[0m" 304 -
+127.0.0.1 - - [10/Aug/2025 13:31:10] "GET /api/llms HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:33:26] "[36mGET / HTTP/1.1[0m" 304 -
+127.0.0.1 - - [10/Aug/2025 13:33:26] "[36mGET /static/styles.css HTTP/1.1[0m" 304 -
+127.0.0.1 - - [10/Aug/2025 13:33:26] "GET /static/script.js HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:33:26] "GET /api/llms HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:34:39] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:34:39] "[36mGET /static/styles.css HTTP/1.1[0m" 304 -
+127.0.0.1 - - [10/Aug/2025 13:34:39] "GET /static/script.js HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:34:39] "GET /api/llms HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:35:03] "POST /api/intelligent-query HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:35:03] "POST /api/ai-agent HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:42:16] "[36mGET / HTTP/1.1[0m" 304 -
+127.0.0.1 - - [10/Aug/2025 13:42:16] "[36mGET /static/script.js HTTP/1.1[0m" 304 -
+127.0.0.1 - - [10/Aug/2025 13:42:16] "[36mGET /static/styles.css HTTP/1.1[0m" 304 -
+127.0.0.1 - - [10/Aug/2025 13:42:16] "GET /api/llms HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:43:42] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:43:42] "GET /static/script.js HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:43:42] "[36mGET /static/styles.css HTTP/1.1[0m" 304 -
+127.0.0.1 - - [10/Aug/2025 13:43:42] "GET /api/llms HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:43:50] "POST /api/model-analysis HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:43:55] "POST /api/intelligent-query HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:45:20] "POST /api/intelligent-query HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:45:20] "POST /api/ai-agent HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:45:42] "[36mGET / HTTP/1.1[0m" 304 -
+127.0.0.1 - - [10/Aug/2025 13:45:42] "[36mGET /static/styles.css HTTP/1.1[0m" 304 -
+127.0.0.1 - - [10/Aug/2025 13:45:42] "GET /static/script.js HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:45:42] "GET /api/llms HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:45:59] "POST /api/intelligent-query HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:45:59] "POST /api/ai-agent HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:50:23] "GET /api/text-to-speech HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:50:26] "POST /api/model-analysis HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:50:31] "POST /api/intelligent-query HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:51:16] "GET /api/image-editing HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:51:26] "POST /api/model-analysis HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:51:30] "POST /api/intelligent-query HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:51:32] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:51:32] "[36mGET /static/styles.css HTTP/1.1[0m" 304 -
+127.0.0.1 - - [10/Aug/2025 13:51:32] "GET /static/script.js HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:51:32] "GET /api/llms HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:52:08] "POST /api/intelligent-query HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:52:08] "POST /api/ai-agent HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:52:23] "POST /api/intelligent-query HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:52:23] "POST /api/ai-agent HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:52:40] "POST /api/intelligent-query HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:52:40] "POST /api/ai-agent HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:58:15] "[36mGET / HTTP/1.1[0m" 304 -
+127.0.0.1 - - [10/Aug/2025 13:58:15] "GET /static/script.js HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:58:15] "[36mGET /static/styles.css HTTP/1.1[0m" 304 -
+127.0.0.1 - - [10/Aug/2025 13:58:15] "GET /api/llms HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:58:42] "POST /api/intelligent-query HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:58:51] "[36mGET / HTTP/1.1[0m" 304 -
+127.0.0.1 - - [10/Aug/2025 13:58:51] "[36mGET /static/styles.css HTTP/1.1[0m" 304 -
+127.0.0.1 - - [10/Aug/2025 13:58:51] "GET /static/script.js HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:58:51] "GET /api/llms HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 13:58:52] "POST /api/ai-agent HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 14:01:38] "POST /api/intelligent-query HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 14:02:06] "POST /api/ai-agent HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 16:00:56] "[36mGET / HTTP/1.1[0m" 304 -
+127.0.0.1 - - [10/Aug/2025 16:00:56] "[36mGET /static/styles.css HTTP/1.1[0m" 304 -
+127.0.0.1 - - [10/Aug/2025 16:00:56] "GET /static/script.js HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 16:00:57] "GET /api/llms HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 16:01:11] "POST /api/intelligent-query HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 16:01:22] "POST /api/ai-agent HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 16:03:25] "POST /api/intelligent-query HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 16:04:01] "POST /api/intelligent-query HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 16:04:11] "POST /api/ai-agent HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 16:04:36] "POST /api/ai-agent HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 16:25:49] "[36mGET / HTTP/1.1[0m" 304 -
+127.0.0.1 - - [10/Aug/2025 16:25:49] "[36mGET /static/styles.css HTTP/1.1[0m" 304 -
+127.0.0.1 - - [10/Aug/2025 16:25:49] "[36mGET /static/script.js HTTP/1.1[0m" 304 -
+127.0.0.1 - - [10/Aug/2025 16:25:49] "GET /api/llms HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 16:25:51] "POST /api/model-analysis HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 16:25:56] "POST /api/intelligent-query HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 16:27:25] "POST /api/intelligent-query HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 16:27:25] "POST /api/ai-agent HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 16:27:49] "POST /api/intelligent-query HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 16:27:49] "POST /api/ai-agent HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 20:02:50] "[36mGET / HTTP/1.1[0m" 304 -
+127.0.0.1 - - [10/Aug/2025 20:02:50] "[36mGET /static/script.js HTTP/1.1[0m" 304 -
+127.0.0.1 - - [10/Aug/2025 20:02:50] "GET /static/styles.css HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 20:02:51] "GET /api/llms HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 20:03:01] "POST /api/intelligent-query HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 20:03:01] "POST /api/ai-agent HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 20:09:42] "[36mGET / HTTP/1.1[0m" 304 -
+127.0.0.1 - - [10/Aug/2025 20:09:42] "[36mGET /static/styles.css HTTP/1.1[0m" 304 -
+127.0.0.1 - - [10/Aug/2025 20:09:42] "[36mGET /static/script.js HTTP/1.1[0m" 304 -
+127.0.0.1 - - [10/Aug/2025 20:09:42] "GET /api/llms HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 20:09:49] "POST /api/intelligent-query HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 20:09:49] "POST /api/ai-agent HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 20:10:38] "[36mGET / HTTP/1.1[0m" 304 -
+127.0.0.1 - - [10/Aug/2025 20:10:38] "[36mGET /static/script.js HTTP/1.1[0m" 304 -
+127.0.0.1 - - [10/Aug/2025 20:10:38] "[36mGET /static/styles.css HTTP/1.1[0m" 304 -
+127.0.0.1 - - [10/Aug/2025 20:10:38] "GET /api/llms HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 20:10:51] "POST /api/intelligent-query HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 20:10:51] "POST /api/ai-agent HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 20:14:15] "[36mGET / HTTP/1.1[0m" 304 -
+127.0.0.1 - - [10/Aug/2025 20:14:15] "[36mGET /static/styles.css HTTP/1.1[0m" 304 -
+127.0.0.1 - - [10/Aug/2025 20:14:15] "[36mGET /static/script.js HTTP/1.1[0m" 304 -
+127.0.0.1 - - [10/Aug/2025 20:14:15] "GET /api/llms HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 20:14:29] "POST /api/intelligent-query HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 20:14:29] "POST /api/ai-agent HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 20:14:43] "[36mGET / HTTP/1.1[0m" 304 -
+127.0.0.1 - - [10/Aug/2025 20:14:43] "[36mGET /static/styles.css HTTP/1.1[0m" 304 -
+127.0.0.1 - - [10/Aug/2025 20:14:43] "[36mGET /static/script.js HTTP/1.1[0m" 304 -
+127.0.0.1 - - [10/Aug/2025 20:14:43] "GET /api/llms HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 20:15:16] "POST /api/intelligent-query HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 20:15:16] "POST /api/ai-agent HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 20:18:08] "POST /api/intelligent-query HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 20:18:35] "POST /api/ai-agent HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 20:18:38] "POST /api/intelligent-query HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 20:18:53] "POST /api/ai-agent HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 20:19:46] "POST /api/intelligent-query HTTP/1.1" 200 -
+127.0.0.1 - - [10/Aug/2025 20:20:44] "POST /api/ai-agent HTTP/1.1" 200 -
+127.0.0.1 - - [11/Aug/2025 07:32:26] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [11/Aug/2025 07:32:26] "GET /static/styles.css HTTP/1.1" 200 -
+127.0.0.1 - - [11/Aug/2025 07:32:26] "GET /static/script.js HTTP/1.1" 200 -
+127.0.0.1 - - [11/Aug/2025 07:32:26] "[33mGET /static/favicon.svg HTTP/1.1[0m" 404 -
+127.0.0.1 - - [11/Aug/2025 07:32:27] "GET /api/llms HTTP/1.1" 200 -
+127.0.0.1 - - [11/Aug/2025 07:32:39] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [11/Aug/2025 07:32:39] "GET /static/styles.css HTTP/1.1" 200 -
+127.0.0.1 - - [11/Aug/2025 07:32:39] "GET /static/script.js HTTP/1.1" 200 -
+127.0.0.1 - - [11/Aug/2025 07:32:39] "GET /api/llms HTTP/1.1" 200 -
+127.0.0.1 - - [11/Aug/2025 07:32:53] "POST /api/intelligent-query HTTP/1.1" 200 -
+127.0.0.1 - - [11/Aug/2025 07:32:53] "POST /api/ai-agent HTTP/1.1" 200 -
+Starting ai-dashboard server in /Users/adam/playground/ai-dashboard on 0.0.0.0:8910 (FLASK_DEBUG=false)
+Traceback (most recent call last):
+  File "/Users/adam/playground/ai-dashboard/server.py", line 1, in <module>
+    from flask import Flask, jsonify, request
+ModuleNotFoundError: No module named 'flask'
+Starting ai-dashboard server in /Users/adam/playground/ai-dashboard on 0.0.0.0:8910 (FLASK_DEBUG=false)
+Traceback (most recent call last):
+  File "/Users/adam/playground/ai-dashboard/server.py", line 1, in <module>
+    from flask import Flask, jsonify, request
+ModuleNotFoundError: No module named 'flask'
+Starting ai-dashboard server in /Users/adam/playground/ai-dashboard on 0.0.0.0:8910 (FLASK_DEBUG=false)
+Traceback (most recent call last):
+  File "/Users/adam/playground/ai-dashboard/server.py", line 1, in <module>
+    from flask import Flask, jsonify, request
+ModuleNotFoundError: No module named 'flask'
+Starting ai-dashboard server in /Users/adam/playground/ai-dashboard on 0.0.0.0:8910 (FLASK_DEBUG=false)
+Traceback (most recent call last):
+  File "/Users/adam/playground/ai-dashboard/server.py", line 1, in <module>
+    from flask import Flask, jsonify, request
+ModuleNotFoundError: No module named 'flask'
+Starting ai-dashboard server in /Users/adam/playground/ai-dashboard on 0.0.0.0:8910 (FLASK_DEBUG=false)
+Traceback (most recent call last):
+  File "/Users/adam/playground/ai-dashboard/server.py", line 1, in <module>
+    from flask import Flask, jsonify, request
+ModuleNotFoundError: No module named 'flask'
+Starting ai-dashboard server in /Users/adam/playground/ai-dashboard on 0.0.0.0:8910 (FLASK_DEBUG=false)
+Traceback (most recent call last):
+  File "/Users/adam/playground/ai-dashboard/server.py", line 1, in <module>
+    from flask import Flask, jsonify, request, Response, stream_with_context
+ModuleNotFoundError: No module named 'flask'

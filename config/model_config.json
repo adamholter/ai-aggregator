@@ -1,0 +1,44 @@
+{
+  "agent": {
+    "defaultModel": "x-ai/grok-4-fast",
+    "speedModeModel": "openai/gpt-oss-120b",
+    "availableModels": [
+      "anthropic/claude-sonnet-4.5",
+      "openai/gpt-5",
+      "openai/gpt-5-mini",
+      "openai/gpt-5-nano",
+      "z-ai/glm-4.6"
+    ],
+    "fallbackModels": [
+      "x-ai/grok-4-fast",
+      "anthropic/claude-sonnet-4.5",
+      "google/gemini-2.5-flash-preview-09-2025"
+    ],
+    "knownSpeedModels": [
+      "google/gemini-2.5-flash-preview-09-2025",
+      "x-ai/grok-4-fast",
+      "google/gemini-2.5-flash-lite-preview-09-2025"
+    ]
+  },
+  "analysis": {
+    "defaultModel": "x-ai/grok-4-fast",
+    "sequence": [
+      {
+        "step": "intelligent-query",
+        "modelId": "google/gemini-2.5-flash-lite-preview-09-2025"
+      },
+      {
+        "step": "web-search",
+        "modelId": "perplexity/sonar-pro"
+      },
+      {
+        "step": "web-search-speed",
+        "modelId": "perplexity/sonar"
+      },
+      {
+        "step": "analysis-generation",
+        "modelId": "x-ai/grok-4-fast"
+      }
+    ]
+  }
+}

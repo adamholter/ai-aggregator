@@ -1,0 +1,213 @@
+Starting server on 0.0.0.0:8765 (debug=False)
+ * Serving Flask app 'server'
+ * Debug mode: off
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8765
+ * Running on http://192.168.1.44:8765
+[33mPress CTRL+C to quit[0m
+127.0.0.1 - - [11/Oct/2025 22:07:42] "[36mGET / HTTP/1.1[0m" 304 -
+127.0.0.1 - - [11/Oct/2025 22:07:42] "[36mGET /static/script.js HTTP/1.1[0m" 304 -
+127.0.0.1 - - [11/Oct/2025 22:07:42] "[36mGET /static/styles.css HTTP/1.1[0m" 304 -
+127.0.0.1 - - [11/Oct/2025 22:07:42] "[36mGET /static/gear-icon.png HTTP/1.1[0m" 304 -
+127.0.0.1 - - [11/Oct/2025 22:07:42] "GET /api/model-config HTTP/1.1" 200 -
+127.0.0.1 - - [11/Oct/2025 22:07:42] "GET /api/llms HTTP/1.1" 200 -
+127.0.0.1 - - [11/Oct/2025 22:07:42] "GET /api/openrouter-models HTTP/1.1" 200 -
+127.0.0.1 - - [11/Oct/2025 22:07:47] "GET /api/text-to-video HTTP/1.1" 200 -
+127.0.0.1 - - [11/Oct/2025 22:07:51] "[35m[1mGET /api/fal-models HTTP/1.1[0m" 500 -
+127.0.0.1 - - [11/Oct/2025 22:07:52] "GET /api/image-editing HTTP/1.1" 200 -
+127.0.0.1 - - [11/Oct/2025 22:07:53] "GET /api/text-to-image?include_categories=true HTTP/1.1" 200 -
+127.0.0.1 - - [11/Oct/2025 22:08:05] "[35m[1mGET /api/fal-models HTTP/1.1[0m" 500 -
+127.0.0.1 - - [11/Oct/2025 22:08:09] "[35m[1mGET /api/replicate-models HTTP/1.1[0m" 500 -
+127.0.0.1 - - [11/Oct/2025 22:08:09] "[35m[1mPOST /api/model-analysis HTTP/1.1[0m" 500 -
+127.0.0.1 - - [11/Oct/2025 22:08:15] "[35m[1mGET /api/fal-models HTTP/1.1[0m" 500 -
+127.0.0.1 - - [11/Oct/2025 22:08:19] "[35m[1mGET /api/replicate-models HTTP/1.1[0m" 500 -
+127.0.0.1 - - [11/Oct/2025 22:08:19] "[35m[1mPOST /api/model-analysis HTTP/1.1[0m" 500 -
+127.0.0.1 - - [11/Oct/2025 22:08:37] "[36mGET / HTTP/1.1[0m" 304 -
+127.0.0.1 - - [11/Oct/2025 22:08:37] "[36mGET /static/gear-icon.png HTTP/1.1[0m" 304 -
+127.0.0.1 - - [11/Oct/2025 22:08:37] "[36mGET /static/styles.css HTTP/1.1[0m" 304 -
+127.0.0.1 - - [11/Oct/2025 22:08:37] "[36mGET /static/script.js HTTP/1.1[0m" 304 -
+127.0.0.1 - - [11/Oct/2025 22:08:37] "GET /api/model-config HTTP/1.1" 200 -
+127.0.0.1 - - [11/Oct/2025 22:08:37] "GET /api/llms HTTP/1.1" 200 -
+127.0.0.1 - - [11/Oct/2025 22:08:37] "GET /api/openrouter-models HTTP/1.1" 200 -
+127.0.0.1 - - [11/Oct/2025 22:08:39] "GET /api/image-editing HTTP/1.1" 200 -
+127.0.0.1 - - [11/Oct/2025 22:08:40] "GET /api/text-to-image?include_categories=true HTTP/1.1" 200 -
+127.0.0.1 - - [11/Oct/2025 22:08:49] "[35m[1mGET /api/fal-models HTTP/1.1[0m" 500 -
+127.0.0.1 - - [11/Oct/2025 22:08:52] "[35m[1mGET /api/replicate-models HTTP/1.1[0m" 500 -
+127.0.0.1 - - [11/Oct/2025 22:08:52] "[35m[1mPOST /api/model-analysis HTTP/1.1[0m" 500 -
+127.0.0.1 - - [11/Oct/2025 22:08:58] "[35m[1mGET /api/fal-models HTTP/1.1[0m" 500 -
+127.0.0.1 - - [11/Oct/2025 22:09:01] "[35m[1mGET /api/replicate-models HTTP/1.1[0m" 500 -
+127.0.0.1 - - [11/Oct/2025 22:09:01] "[35m[1mPOST /api/model-analysis HTTP/1.1[0m" 500 -
+127.0.0.1 - - [11/Oct/2025 22:13:37] "[35m[1mPOST /api/ai-agent HTTP/1.1[0m" 500 -
+127.0.0.1 - - [11/Oct/2025 22:13:37] "[35m[1mPOST /api/ai-agent HTTP/1.1[0m" 500 -
+127.0.0.1 - - [11/Oct/2025 22:13:40] "[36mGET /static/styles.css HTTP/1.1[0m" 304 -
+127.0.0.1 - - [11/Oct/2025 22:13:40] "[33mGET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1[0m" 404 -
+127.0.0.1 - - [12/Oct/2025 16:13:05] "[36mGET / HTTP/1.1[0m" 304 -
+127.0.0.1 - - [12/Oct/2025 16:13:05] "[33mGET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1[0m" 404 -
+127.0.0.1 - - [12/Oct/2025 16:13:06] "[36mGET /static/script.js HTTP/1.1[0m" 304 -
+127.0.0.1 - - [12/Oct/2025 16:13:06] "[36mGET /static/styles.css HTTP/1.1[0m" 304 -
+127.0.0.1 - - [12/Oct/2025 16:13:06] "[36mGET /static/gear-icon.png HTTP/1.1[0m" 304 -
+127.0.0.1 - - [12/Oct/2025 16:13:06] "GET /api/model-config HTTP/1.1" 200 -
+127.0.0.1 - - [12/Oct/2025 16:13:06] "GET /api/llms HTTP/1.1" 200 -
+127.0.0.1 - - [12/Oct/2025 16:13:06] "GET /api/openrouter-models HTTP/1.1" 200 -
+127.0.0.1 - - [12/Oct/2025 16:13:09] "GET /api/text-to-image?include_categories=true HTTP/1.1" 200 -
+127.0.0.1 - - [12/Oct/2025 16:13:09] "GET /api/image-editing HTTP/1.1" 200 -
+DEBUG: fal-models endpoint called, cache_key=fal_models, force_refresh=False
+DEBUG: Cache contains 2 entries
+DEBUG: Cache key exists: False
+Fetched page 1 of fal.ai models: 40 models
+Fetched page 2 of fal.ai models: 40 models
+Fetched page 3 of fal.ai models: 40 models
+Fetched page 4 of fal.ai models: 40 models
+Fetched page 5 of fal.ai models: 40 models
+Fetched page 6 of fal.ai models: 40 models
+Fetched page 7 of fal.ai models: 40 models
+Fetched page 8 of fal.ai models: 40 models
+Fetched page 9 of fal.ai models: 40 models
+Fetched page 10 of fal.ai models: 40 models
+Fetched page 11 of fal.ai models: 40 models
+Fetched page 12 of fal.ai models: 40 models
+Fetched page 13 of fal.ai models: 40 models
+Fetched page 14 of fal.ai models: 40 models
+Fetched page 15 of fal.ai models: 40 models
+Fetched page 16 of fal.ai models: 40 models
+Fetched page 17 of fal.ai models: 40 models
+Fetched page 18 of fal.ai models: 40 models
+Fetched page 19 of fal.ai models: 40 models
+Fetched page 20 of fal.ai models: 21 models
+Total fal.ai models fetched: 781 from 20 pages
+Error processing fal.ai models data: name 'normalize_fal_model_url' is not defined
+DEBUG: fal-models endpoint called, cache_key=fal_models, force_refresh=False
+DEBUG: Cache contains 5 entries
+DEBUG: Cache key exists: False
+Fetched page 1 of fal.ai models: 40 models
+Fetched page 2 of fal.ai models: 40 models
+Fetched page 3 of fal.ai models: 40 models
+Fetched page 4 of fal.ai models: 40 models
+Fetched page 5 of fal.ai models: 40 models
+Fetched page 6 of fal.ai models: 40 models
+Fetched page 7 of fal.ai models: 40 models
+Fetched page 8 of fal.ai models: 40 models
+Fetched page 9 of fal.ai models: 40 models
+Fetched page 10 of fal.ai models: 40 models
+Fetched page 11 of fal.ai models: 40 models
+Fetched page 12 of fal.ai models: 40 models
+Fetched page 13 of fal.ai models: 40 models
+Fetched page 14 of fal.ai models: 40 models
+Fetched page 15 of fal.ai models: 40 models
+Fetched page 16 of fal.ai models: 40 models
+Fetched page 17 of fal.ai models: 40 models
+Fetched page 18 of fal.ai models: 40 models
+Fetched page 19 of fal.ai models: 40 models
+Fetched page 20 of fal.ai models: 21 models
+Total fal.ai models fetched: 781 from 20 pages
+Error processing fal.ai models data: name 'normalize_fal_model_url' is not defined
+WARNING: Failed to hydrate category 'fal' via /api/fal-models: 500 Server Error: INTERNAL SERVER ERROR for url: http://localhost:8765/api/fal-models
+Error processing Replicate models data: name 'compute_latency_seconds' is not defined
+WARNING: Failed to hydrate category 'replicate' via /api/replicate-models: 500 Server Error: INTERNAL SERVER ERROR for url: http://localhost:8765/api/replicate-models
+ERROR: model_analysis handler failed: name 'get_prompt_value' is not defined
+DEBUG: fal-models endpoint called, cache_key=fal_models, force_refresh=False
+DEBUG: Cache contains 5 entries
+DEBUG: Cache key exists: False
+Fetched page 1 of fal.ai models: 40 models
+Fetched page 2 of fal.ai models: 40 models
+Fetched page 3 of fal.ai models: 40 models
+Fetched page 4 of fal.ai models: 40 models
+Fetched page 5 of fal.ai models: 40 models
+Fetched page 6 of fal.ai models: 40 models
+Fetched page 7 of fal.ai models: 40 models
+Fetched page 8 of fal.ai models: 40 models
+Fetched page 9 of fal.ai models: 40 models
+Fetched page 10 of fal.ai models: 40 models
+Fetched page 11 of fal.ai models: 40 models
+Fetched page 12 of fal.ai models: 40 models
+Fetched page 13 of fal.ai models: 40 models
+Fetched page 14 of fal.ai models: 40 models
+Fetched page 15 of fal.ai models: 40 models
+Fetched page 16 of fal.ai models: 40 models
+Fetched page 17 of fal.ai models: 40 models
+Fetched page 18 of fal.ai models: 40 models
+Fetched page 19 of fal.ai models: 40 models
+Fetched page 20 of fal.ai models: 21 models
+Total fal.ai models fetched: 781 from 20 pages
+Error processing fal.ai models data: name 'normalize_fal_model_url' is not defined
+WARNING: Failed to hydrate category 'fal' via /api/fal-models: 500 Server Error: INTERNAL SERVER ERROR for url: http://localhost:8765/api/fal-models
+Error processing Replicate models data: name 'compute_latency_seconds' is not defined
+WARNING: Failed to hydrate category 'replicate' via /api/replicate-models: 500 Server Error: INTERNAL SERVER ERROR for url: http://localhost:8765/api/replicate-models
+ERROR: model_analysis handler failed: name 'get_prompt_value' is not defined
+DEBUG: fal-models endpoint called, cache_key=fal_models, force_refresh=False
+DEBUG: Cache contains 5 entries
+DEBUG: Cache key exists: False
+Fetched page 1 of fal.ai models: 40 models
+Fetched page 2 of fal.ai models: 40 models
+Fetched page 3 of fal.ai models: 40 models
+Fetched page 4 of fal.ai models: 40 models
+Fetched page 5 of fal.ai models: 40 models
+Fetched page 6 of fal.ai models: 40 models
+Fetched page 7 of fal.ai models: 40 models
+Fetched page 8 of fal.ai models: 40 models
+Fetched page 9 of fal.ai models: 40 models
+Fetched page 10 of fal.ai models: 40 models
+Fetched page 11 of fal.ai models: 40 models
+Fetched page 12 of fal.ai models: 40 models
+Fetched page 13 of fal.ai models: 40 models
+Fetched page 14 of fal.ai models: 40 models
+Fetched page 15 of fal.ai models: 40 models
+Fetched page 16 of fal.ai models: 40 models
+Fetched page 17 of fal.ai models: 40 models
+Fetched page 18 of fal.ai models: 40 models
+Fetched page 19 of fal.ai models: 40 models
+Fetched page 20 of fal.ai models: 21 models
+Total fal.ai models fetched: 781 from 20 pages
+Error processing fal.ai models data: name 'normalize_fal_model_url' is not defined
+WARNING: Failed to hydrate category 'fal' via /api/fal-models: 500 Server Error: INTERNAL SERVER ERROR for url: http://localhost:8765/api/fal-models
+Error processing Replicate models data: name 'compute_latency_seconds' is not defined
+WARNING: Failed to hydrate category 'replicate' via /api/replicate-models: 500 Server Error: INTERNAL SERVER ERROR for url: http://localhost:8765/api/replicate-models
+ERROR: model_analysis handler failed: name 'get_prompt_value' is not defined
+DEBUG: fal-models endpoint called, cache_key=fal_models, force_refresh=False
+DEBUG: Cache contains 5 entries
+DEBUG: Cache key exists: False
+Fetched page 1 of fal.ai models: 40 models
+Fetched page 2 of fal.ai models: 40 models
+Fetched page 3 of fal.ai models: 40 models
+Fetched page 4 of fal.ai models: 40 models
+Fetched page 5 of fal.ai models: 40 models
+Fetched page 6 of fal.ai models: 40 models
+Fetched page 7 of fal.ai models: 40 models
+Fetched page 8 of fal.ai models: 40 models
+Fetched page 9 of fal.ai models: 40 models
+Fetched page 10 of fal.ai models: 40 models
+Fetched page 11 of fal.ai models: 40 models
+Fetched page 12 of fal.ai models: 40 models
+Fetched page 13 of fal.ai models: 40 models
+Fetched page 14 of fal.ai models: 40 models
+Fetched page 15 of fal.ai models: 40 models
+Fetched page 16 of fal.ai models: 40 models
+Fetched page 17 of fal.ai models: 40 models
+Fetched page 18 of fal.ai models: 40 models
+Fetched page 19 of fal.ai models: 40 models
+Fetched page 20 of fal.ai models: 21 models
+Total fal.ai models fetched: 781 from 20 pages
+Error processing fal.ai models data: name 'normalize_fal_model_url' is not defined
+WARNING: Failed to hydrate category 'fal' via /api/fal-models: 500 Server Error: INTERNAL SERVER ERROR for url: http://localhost:8765/api/fal-models
+Error processing Replicate models data: name 'compute_latency_seconds' is not defined
+WARNING: Failed to hydrate category 'replicate' via /api/replicate-models: 500 Server Error: INTERNAL SERVER ERROR for url: http://localhost:8765/api/replicate-models
+ERROR: model_analysis handler failed: name 'get_prompt_value' is not defined
+ERROR: ai_agent handler failed: name 'get_prompt_value' is not defined
+ERROR: ai_agent handler failed: name 'get_prompt_value' is not defined
+DEBUG: fal-models endpoint called, cache_key=fal_models, force_refresh=False
+DEBUG: Cache contains 5 entries
+DEBUG: Cache key exists: False
+Fetched page 1 of fal.ai models: 40 models
+Fetched page 2 of fal.ai models: 40 models
+Fetched page 3 of fal.ai models: 40 models
+Fetched page 4 of fal.ai models: 40 models
+Fetched page 5 of fal.ai models: 40 models
+Fetched page 6 of fal.ai models: 40 models
+Fetched page 7 of fal.ai models: 40 models127.0.0.1 - - [12/Oct/2025 16:13:20] "[35m[1mGET /api/fal-models HTTP/1.1[0m" 500 -
+127.0.0.1 - - [12/Oct/2025 16:13:25] "GET /api/image-to-video HTTP/1.1" 200 -
+127.0.0.1 - - [12/Oct/2025 16:13:29] "[35m[1mGET /api/replicate-models HTTP/1.1[0m" 500 -
+127.0.0.1 - - [12/Oct/2025 16:13:37] "[35m[1mGET /api/fal-models HTTP/1.1[0m" 500 -
+127.0.0.1 - - [12/Oct/2025 16:13:38] "[35m[1mGET /api/replicate-models HTTP/1.1[0m" 500 -
+127.0.0.1 - - [12/Oct/2025 16:13:38] "GET /api/text-to-speech HTTP/1.1" 200 -
+127.0.0.1 - - [12/Oct/2025 16:13:43] "[35m[1mGET /api/fal-models HTTP/1.1[0m" 500 -
