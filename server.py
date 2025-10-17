@@ -1618,183 +1618,299 @@ def agent_tool_loop_generator(
     mode='standard',
     max_iterations=6
 ):
-    fetch_context = fetch_context or initialize_fetch_context()
-    web_context = web_context or initialize_web_context()
+    print(f"🔧 [AGENT] Starting tool loop generator")
+    print(f"📝 [AGENT] User message: {user_message[:100]}{'...' if len(user_message) > 100 else ''}")
+    print(f"🤖 [AGENT] Model: {final_model}")
+    print(f"🔧 [AGENT] Mode: {mode}")
+    print(f"🔢 [AGENT] Max iterations: {max_iterations}")
+    
+    try:
+        fetch_context = fetch_context or initialize_fetch_context()
+        web_context = web_context or initialize_web_context()
 
-    traces = []
-    normalized_initial = [
-        normalize_category_id(cat)
-        for cat in (initial_categories or [])
-        if normalize_category_id(cat)
-    ]
-    mode_label = (mode or 'standard').lower()
-    dataset_trace = {
-        'step': 'Dataset Fetch' if mode_label != 'deep-research' else 'Deep Research Context',
-        'description': describe_loaded_categories(fetch_context),
-        'tool': f"fetch_data ({len(normalized_initial) or len(fetch_context.get('metadata', []))} categories)",
-        'status': 'success'
-    }
-    if mode_label == 'deep-research':
-        descriptor = describe_loaded_categories(fetch_context)
-        dataset_trace['description'] = (
-            f"Loaded full database context: {descriptor}" if descriptor else
-            "Loaded full database context from primary datasets."
-        )
-    traces.append(dataset_trace)
-    yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
-
-    prompt_context = build_agent_prompt_context(user_message, fetch_context, web_context)
-    final_prompt = format_prompt(prompt_template, **prompt_context)
-    if mode_label == 'deep-research':
-        final_prompt = (
-            f"{final_prompt}\n\n"
-            "DEEP RESEARCH MODE:\n"
-            "1. Review the database context above before issuing any additional tool commands.\n"
-            "2. Only invoke `WEB_SEARCH` for details that are missing or outdated in the database summary.\n"
-            "3. Combine database findings with external research, and cite each source group (Database vs Web Search).\n"
-            "4. Summarize key discoveries and note where fresh web research augmented the internal data."
-        )
-    model_display = get_model_display_name(final_model)
-
-    iteration = 0
-    while iteration < max_iterations:
-        iteration += 1
-        messages = build_agent_messages(final_prompt, conversation_history, user_message)
-        payload = {
-            'model': final_model,
-            'messages': messages,
-            'stream': False
+        traces = []
+        normalized_initial = [
+            normalize_category_id(cat)
+            for cat in (initial_categories or [])
+            if normalize_category_id(cat)
+        ]
+        mode_label = (mode or 'standard').lower()
+        dataset_trace = {
+            'step': 'Dataset Fetch' if mode_label != 'deep-research' else 'Deep Research Context',
+            'description': describe_loaded_categories(fetch_context),
+            'tool': f"fetch_data ({len(normalized_initial) or len(fetch_context.get('metadata', []))} categories)",
+            'status': 'success'
         }
-        if final_model == DEEP_RESEARCH_MODEL_ID:
-            payload.setdefault('addons', ['web_search'])
-        try:
-            response = requests.post(
-                f'{OPENROUTER_BASE_URL}/chat/completions',
-                headers=headers,
-                json=payload,
-                timeout=60
+        if mode_label == 'deep-research':
+            descriptor = describe_loaded_categories(fetch_context)
+            dataset_trace['description'] = (
+                f"Loaded full database context: {descriptor}" if descriptor else
+                "Loaded full database context from primary datasets."
             )
-            if response.status_code >= 400:
-                try:
-                    error_payload = response.json()
-                except Exception:
-                    error_payload = response.text
-                raise requests.exceptions.HTTPError(
-                    f'Request failed with status {response.status_code}: {error_payload}',
-                    response=response
-                )
-            result = response.json()
-        except requests.exceptions.RequestException as exc:
-            error_message = f'Request to language model failed: {exc}'
-            traces.append({
-                'step': 'Response Generation',
-                'description': 'Request to language model failed.',
-                'tool': model_display,
-                'status': 'failed'
-            })
-            yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
-            yield ('error', error_message, traces, fetch_context, web_context)
-            return
-        except ValueError as exc:
-            error_message = f'Failed to parse language model response: {exc}'
-            traces.append({
-                'step': 'Response Generation',
-                'description': 'Failed to parse language model response.',
-                'tool': model_display,
-                'status': 'failed'
-            })
-            yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
-            yield ('error', error_message, traces, fetch_context, web_context)
-            return
+        traces.append(dataset_trace)
+        print(f"📊 [AGENT] Initial trace created, yielding...")
+        yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
+        print(f"✅ [AGENT] Initial trace yielded successfully")
 
-        content = (
-            result.get('choices', [{}])[0]
-            .get('message', {})
-            .get('content') or ''
-        )
-        normalized_content = content.strip()
-        upper_content = normalized_content.upper()
+        prompt_context = build_agent_prompt_context(user_message, fetch_context, web_context)
+        final_prompt = format_prompt(prompt_template, **prompt_context)
+        if mode_label == 'deep-research':
+            final_prompt = (
+                f"{final_prompt}\n\n"
+                "DEEP RESEARCH MODE:\n"
+                "1. Review the database context above before issuing any additional tool commands.\n"
+                "2. Only invoke `WEB_SEARCH` for details that are missing or outdated in the database summary.\n"
+                "3. Combine database findings with external research, and cite each source group (Database vs Web Search).\n"
+                "4. Summarize key discoveries and note where fresh web research augmented the internal data."
+            )
+        model_display = get_model_display_name(final_model)
+        print(f"💬 [AGENT] Final prompt prepared for {model_display}")
 
-        if upper_content.startswith('FETCH_DATA:'):
-            categories_payload = normalized_content.split(':', 1)[1].strip()
-            requested_categories, error = parse_fetch_category_payload(categories_payload)
-            if error:
-                traces.append({
-                    'step': 'Dataset Fetch',
-                    'description': f"Invalid fetch_data request: {error}",
-                    'tool': 'fetch_data (invalid request)',
-                    'status': 'failed'
-                })
-                yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
-                fail_message = (
-                    "Unable to complete the request because the agent issued an invalid fetch_data command. "
-                    "Please refine your request."
+        iteration = 0
+        while iteration < max_iterations:
+            iteration += 1
+            print(f"🔄 [AGENT] Starting iteration {iteration}/{max_iterations}")
+            
+            try:
+                messages = build_agent_messages(final_prompt, conversation_history, user_message)
+                payload = {
+                    'model': final_model,
+                    'messages': messages,
+                    'stream': False
+                }
+                if final_model == DEEP_RESEARCH_MODEL_ID:
+                    payload.setdefault('addons', ['web_search'])
+                
+                print(f"📡 [AGENT] Sending request to OpenRouter...")
+                response = requests.post(
+                    f'{OPENROUTER_BASE_URL}/chat/completions',
+                    headers=headers,
+                    json=payload,
+                    timeout=60
                 )
+                
+                if response.status_code >= 400:
+                    try:
+                        error_payload = response.json()
+                    except Exception:
+                        error_payload = response.text
+                    raise requests.exceptions.HTTPError(
+                        f'Request failed with status {response.status_code}: {error_payload}',
+                        response=response
+                    )
+                
+                result = response.json()
+                print(f"✅ [AGENT] Response received from OpenRouter")
+                
+            except requests.exceptions.RequestException as exc:
+                print(f"❌ [AGENT] Request to language model failed: {exc}")
+                import traceback
+                print(f"TRACEBACK: {traceback.format_exc()}")
+                error_message = f'Request to language model failed: {exc}'
                 traces.append({
                     'step': 'Response Generation',
-                    'description': 'Stopped due to invalid fetch_data command.',
+                    'description': 'Request to language model failed.',
                     'tool': model_display,
                     'status': 'failed'
                 })
                 yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
-                yield ('final', fail_message, traces, fetch_context, web_context)
+                yield ('error', error_message, traces, fetch_context, web_context)
+                return
+            except ValueError as exc:
+                print(f"❌ [AGENT] Failed to parse language model response: {exc}")
+                import traceback
+                print(f"TRACEBACK: {traceback.format_exc()}")
+                error_message = f'Failed to parse language model response: {exc}'
+                traces.append({
+                    'step': 'Response Generation',
+                    'description': 'Failed to parse language model response.',
+                    'tool': model_display,
+                    'status': 'failed'
+                })
+                yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
+                yield ('error', error_message, traces, fetch_context, web_context)
+                return
+            except Exception as exc:
+                print(f"❌ [AGENT] Unexpected error in iteration {iteration}: {exc}")
+                import traceback
+                print(f"TRACEBACK: {traceback.format_exc()}")
+                error_message = f'Unexpected error: {exc}'
+                traces.append({
+                    'step': 'Response Generation',
+                    'description': f'Unexpected error in iteration {iteration}.',
+                    'tool': model_display,
+                    'status': 'failed'
+                })
+                yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
+                yield ('error', error_message, traces, fetch_context, web_context)
                 return
 
-            fetch_result = fetch_data_for_categories(requested_categories)
-            fetch_context = merge_fetch_context(fetch_context, fetch_result)
-            prompt_context = build_agent_prompt_context(user_message, fetch_context, web_context)
-            final_prompt = format_prompt(prompt_template, **prompt_context)
-            description = (
-                f"Fetched datasets for {', '.join(requested_categories)}. "
-                f"{describe_loaded_categories(fetch_context)}"
-            )
+            try:
+                content = (
+                    result.get('choices', [{}])[0]
+                    .get('message', {})
+                    .get('content') or ''
+                )
+                normalized_content = content.strip()
+                upper_content = normalized_content.upper()
+                print(f"📄 [AGENT] Content received: {len(normalized_content)} chars")
+            except Exception as exc:
+                print(f"❌ [AGENT] Error processing response content: {exc}")
+                error_message = f'Error processing response content: {exc}'
+                traces.append({
+                    'step': 'Response Generation',
+                    'description': 'Error processing response content.',
+                    'tool': model_display,
+                    'status': 'failed'
+                })
+                yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
+                yield ('error', error_message, traces, fetch_context, web_context)
+                return
+
+            if upper_content.startswith('FETCH_DATA:'):
+                print(f"📊 [AGENT] Processing FETCH_DATA command")
+                try:
+                    categories_payload = normalized_content.split(':', 1)[1].strip()
+                    requested_categories, error = parse_fetch_category_payload(categories_payload)
+                    if error:
+                        print(f"❌ [AGENT] Invalid fetch_data request: {error}")
+                        traces.append({
+                            'step': 'Dataset Fetch',
+                            'description': f"Invalid fetch_data request: {error}",
+                            'tool': 'fetch_data (invalid request)',
+                            'status': 'failed'
+                        })
+                        yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
+                        fail_message = (
+                            "Unable to complete the request because the agent issued an invalid fetch_data command. "
+                            "Please refine your request."
+                        )
+                        traces.append({
+                            'step': 'Response Generation',
+                            'description': 'Stopped due to invalid fetch_data command.',
+                            'tool': model_display,
+                            'status': 'failed'
+                        })
+                        yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
+                        yield ('final', fail_message, traces, fetch_context, web_context)
+                        return
+
+                    print(f"📊 [AGENT] Fetching data for categories: {requested_categories}")
+                    fetch_result = fetch_data_for_categories(requested_categories)
+                    fetch_context = merge_fetch_context(fetch_context, fetch_result)
+                    prompt_context = build_agent_prompt_context(user_message, fetch_context, web_context)
+                    final_prompt = format_prompt(prompt_template, **prompt_context)
+                    description = (
+                        f"Fetched datasets for {', '.join(requested_categories)}. "
+                        f"{describe_loaded_categories(fetch_context)}"
+                    )
+                    traces.append({
+                        'step': 'Dataset Fetch',
+                        'description': description,
+                        'tool': f"fetch_data ({len(requested_categories)} categories)",
+                        'status': 'success'
+                    })
+                    yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
+                    print(f"✅ [AGENT] Data fetched successfully, continuing to next iteration")
+                    continue
+                except Exception as exc:
+                    print(f"❌ [AGENT] Error processing FETCH_DATA: {exc}")
+                    import traceback
+                    print(f"TRACEBACK: {traceback.format_exc()}")
+                    error_message = f'Error processing fetch_data command: {exc}'
+                    traces.append({
+                        'step': 'Dataset Fetch',
+                        'description': f"Error processing fetch_data: {exc}",
+                        'tool': 'fetch_data (error)',
+                        'status': 'failed'
+                    })
+                    yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
+                    yield ('error', error_message, traces, fetch_context, web_context)
+                    return
+
+            if upper_content.startswith('WEB_SEARCH:'):
+                print(f"🔍 [AGENT] Processing WEB_SEARCH command")
+                try:
+                    query = normalized_content.split(':', 1)[1].strip()
+                    print(f"🔍 [AGENT] Searching for: {query}")
+                    web_data, tool_display = perform_web_search(query, analysis_sequence, user_openrouter_token)
+                    web_context = add_web_result(web_context, query, web_data, tool_display)
+                    prompt_context = build_agent_prompt_context(user_message, fetch_context, web_context)
+                    final_prompt = format_prompt(prompt_template, **prompt_context)
+                    traces.append({
+                        'step': 'Web Search',
+                        'description': f'Performed live search for "{query}"' if query else 'Performed live search',
+                        'tool': tool_display or 'Web Search',
+                        'status': 'success' if web_data else 'warning'
+                    })
+                    yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
+                    print(f"✅ [AGENT] Web search completed, continuing to next iteration")
+                    continue
+                except Exception as exc:
+                    print(f"❌ [AGENT] Error processing WEB_SEARCH: {exc}")
+                    import traceback
+                    print(f"TRACEBACK: {traceback.format_exc()}")
+                    error_message = f'Error processing web_search command: {exc}'
+                    traces.append({
+                        'step': 'Web Search',
+                        'description': f"Error processing web search: {exc}",
+                        'tool': 'Web Search (error)',
+                        'status': 'failed'
+                    })
+                    yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
+                    yield ('error', error_message, traces, fetch_context, web_context)
+                    return
+
+            # Final response
+            final_content = normalized_content or content
+            print(f"✅ [AGENT] Final response ready: {len(final_content)} chars")
             traces.append({
-                'step': 'Dataset Fetch',
-                'description': description,
-                'tool': f"fetch_data ({len(requested_categories)} categories)",
+                'step': 'Response Generation',
+                'description': f'Response generated by {model_display}',
+                'tool': model_display,
                 'status': 'success'
             })
             yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
-            continue
+            yield ('final', final_content, traces, fetch_context, web_context)
+            print(f"🏁 [AGENT] Tool loop completed successfully")
+            return
 
-        if upper_content.startswith('WEB_SEARCH:'):
-            query = normalized_content.split(':', 1)[1].strip()
-            web_data, tool_display = perform_web_search(query, analysis_sequence, user_openrouter_token)
-            web_context = add_web_result(web_context, query, web_data, tool_display)
-            prompt_context = build_agent_prompt_context(user_message, fetch_context, web_context)
-            final_prompt = format_prompt(prompt_template, **prompt_context)
-            traces.append({
-                'step': 'Web Search',
-                'description': f'Performed live search for "{query}"' if query else 'Performed live search',
-                'tool': tool_display or 'Web Search',
-                'status': 'success' if web_data else 'warning'
-            })
-            yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
-            continue
-
-        final_content = normalized_content or content
+        # Exceeded iterations
+        print(f"⚠️ [AGENT] Exceeded maximum iterations ({max_iterations})")
+        final_message = (
+            "I couldn't complete that request within the tool-call limit. "
+            "Please try again with a more specific question."
+        )
         traces.append({
             'step': 'Response Generation',
-            'description': f'Response generated by {model_display}',
+            'description': 'Exceeded maximum tool iterations without final reply.',
             'tool': model_display,
-            'status': 'success'
+            'status': 'failed'
         })
         yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
-        yield ('final', final_content, traces, fetch_context, web_context)
+        yield ('final', final_message, traces, fetch_context, web_context)
         return
-
-    final_message = (
-        "I couldn't complete that request within the tool-call limit. "
-        "Please try again with a more specific question."
-    )
-    traces.append({
-        'step': 'Response Generation',
-        'description': 'Exceeded maximum tool iterations without final reply.',
-        'tool': model_display,
-        'status': 'failed'
-    })
-    yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
-    yield ('final', final_message, traces, fetch_context, web_context)
+        
+    except GeneratorExit:
+        print(f"🛑 [AGENT] Client disconnected from generator")
+        raise
+    except Exception as exc:
+        print(f"❌ [AGENT] FATAL ERROR in tool loop generator: {exc}")
+        import traceback
+        print(f"TRACEBACK: {traceback.format_exc()}")
+        try:
+            error_message = f'Fatal error in agent processing: {exc}'
+            traces.append({
+                'step': 'Response Generation',
+                'description': f'Fatal error: {exc}',
+                'tool': 'Agent System',
+                'status': 'failed'
+            })
+            yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
+            yield ('error', error_message, traces, fetch_context, web_context)
+        except Exception as yield_exc:
+            print(f"❌ [AGENT] Failed to yield error: {yield_exc}")
+        return
 
 def determine_analysis_categories(model_type, model_data=None):
     category_map = {
@@ -2782,8 +2898,15 @@ Respond concisely and cite the sources (Conversation History, Database, Web Sear
 
             if stream:
                 def generate_chart_stream():
+                    print(f"🔧 [CHART] Starting chart stream generation for model: {final_model}")
                     traces = build_chart_traces('in_progress')
                     yield encode_traces(traces)
+                    print(f"📊 [CHART] Initial traces yielded, making API request...")
+                    
+                    # Add timeout and connection management (same as regular stream)
+                    start_time = time.time()
+                    timeout_seconds = 120  # 2 minute timeout for production
+                    
                     try:
                         response = requests.post(
                             f'{OPENROUTER_BASE_URL}/chat/completions',
@@ -2791,6 +2914,8 @@ Respond concisely and cite the sources (Conversation History, Database, Web Sear
                             json=payload,
                             timeout=90
                         )
+                        print(f"📡 [CHART] API response received, status: {response.status_code}")
+                        
                         if response.status_code >= 400:
                             try:
                                 error_payload = response.json()
@@ -2806,19 +2931,86 @@ Respond concisely and cite the sources (Conversation History, Database, Web Sear
                             .get('message', {})
                             .get('content') or ''
                         )
-                    except Exception as exc:
+                        print(f"✅ [CHART] Content received: {len(final_content)} chars")
+                        
+                    except requests.exceptions.Timeout as exc:
+                        print(f"⏰ [CHART] Request timeout: {exc}")
                         traces[-1]['status'] = 'failed'
+                        traces[-1]['description'] = f'Chart generation timed out after 90 seconds'
                         yield encode_traces(traces)
-                        error_json = json.dumps({'type': 'error', 'error': str(exc)}, ensure_ascii=False)
+                        error_json = json.dumps({'type': 'error', 'error': 'Chart generation timed out - please try again'}, ensure_ascii=False)
                         yield f"data: {error_json}\n\n".encode('utf-8')
                         return
+                        
+                    except requests.exceptions.RequestException as exc:
+                        print(f"❌ [CHART] Request failed: {exc}")
+                        traces[-1]['status'] = 'failed'
+                        traces[-1]['description'] = f'Network error during chart generation: {exc}'
+                        yield encode_traces(traces)
+                        error_json = json.dumps({'type': 'error', 'error': f'Chart generation failed: {str(exc)}'}, ensure_ascii=False)
+                        yield f"data: {error_json}\n\n".encode('utf-8')
+                        return
+                        
+                    except Exception as exc:
+                        print(f"❌ [CHART] Unexpected error: {exc}")
+                        import traceback
+                        print(f"TRACEBACK: {traceback.format_exc()}")
+                        traces[-1]['status'] = 'failed'
+                        traces[-1]['description'] = f'Unexpected error during chart generation: {exc}'
+                        yield encode_traces(traces)
+                        error_json = json.dumps({'type': 'error', 'error': f'Chart generation failed: {str(exc)}'}, ensure_ascii=False)
+                        yield f"data: {error_json}\n\n".encode('utf-8')
+                        return
+                    
+                    # Check overall timeout
+                    current_time = time.time()
+                    if current_time - start_time > timeout_seconds:
+                        print(f"⏰ [CHART] Overall timeout after {current_time - start_time:.2f}s")
+                        traces[-1]['status'] = 'failed'
+                        traces[-1]['description'] = f'Chart generation timed out after {timeout_seconds} seconds'
+                        yield encode_traces(traces)
+                        timeout_json = json.dumps({'type': 'error', 'error': 'Chart generation timeout - please try again'}, ensure_ascii=False)
+                        yield f"data: {timeout_json}\n\n".encode('utf-8')
+                        return
+                    
+                    # Success path
                     traces[-1]['status'] = 'success'
+                    traces[-1]['description'] = f'Chart visualization generated by {model_display_name}'
                     yield encode_traces(traces)
+                    
+                    # Stream content with chunking
+                    chunks_sent = 0
+                    max_chunks = 1000  # Prevent infinite loops
                     for chunk in iter_text_chunks(final_content):
+                        current_time = time.time()
+                        if current_time - start_time > timeout_seconds:
+                            print(f"⏰ [CHART] Timeout during content streaming")
+                            timeout_json = json.dumps({'type': 'error', 'error': 'Chart generation timeout during streaming'}, ensure_ascii=False)
+                            yield f"data: {timeout_json}\n\n".encode('utf-8')
+                            return
+                        
+                        if chunks_sent >= max_chunks:
+                            print(f"🚫 [CHART] Chunk limit exceeded: {chunks_sent}")
+                            break
+                            
                         yield encode_content(chunk)
+                        chunks_sent += 1
+                    
+                    # Always ensure proper termination
+                    print(f"🏁 [CHART] Chart stream completed successfully, {chunks_sent} chunks sent")
                     yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n".encode('utf-8')
+                    return
 
-                return Response(generate_chart_stream(), mimetype='text/event-stream', headers=sse_headers)
+                # Enhanced SSE headers for production compatibility (same as regular stream)
+                enhanced_sse_headers = {
+                    **sse_headers,
+                    'X-Accel-Buffering': 'no',  # Disable nginx buffering
+                    'Cache-Control': 'no-cache, no-store, must-revalidate',
+                    'Pragma': 'no-cache',
+                    'Expires': '0'
+                }
+                
+                return Response(stream_with_context(generate_chart_stream()), mimetype='text/event-stream', headers=enhanced_sse_headers)
 
             try:
                 response = requests.post(
@@ -2861,6 +3053,7 @@ Respond concisely and cite the sources (Conversation History, Database, Web Sear
         if stream:
             def generate_stream():
                 try:
+                    print(f"🚀 [SERVER] Starting stream generation for model: {final_model}")
                     local_generator = agent_tool_loop_generator(
                         user_message,
                         conversation_history,
@@ -2874,6 +3067,7 @@ Respond concisely and cite the sources (Conversation History, Database, Web Sear
                         mode='deep-research' if deep_research else 'standard',
                         max_iterations=8 if deep_research else 6
                     )
+                    print(f"✅ [SERVER] Generator created successfully")
                     
                     # Add timeout and connection management
                     start_time = time.time()
@@ -2881,52 +3075,89 @@ Respond concisely and cite the sources (Conversation History, Database, Web Sear
                     
                     events_sent = 0
                     max_events = 1000  # Prevent infinite loops
+                    last_yield_time = start_time
+                    stall_timeout = 30  # 30 seconds without yielding
                     
-                    for event in local_generator:
-                        # Check timeout
-                        if time.time() - start_time > timeout_seconds:
-                            timeout_json = json.dumps({'type': 'error', 'error': 'Request timeout - please try again'}, ensure_ascii=False)
-                            yield f"data: {timeout_json}\n\n".encode('utf-8')
-                            return
+                    try:
+                        for event in local_generator:
+                            current_time = time.time()
+                            last_yield_time = current_time
+                            events_sent += 1
+                            print(f"📦 [SERVER] Processing event {events_sent}: {type(event)}")
+                            
+                            # Check timeout
+                            if current_time - start_time > timeout_seconds:
+                                print(f"⏰ [SERVER] Stream timeout after {current_time - start_time:.2f}s")
+                                timeout_json = json.dumps({'type': 'error', 'error': 'Request timeout - please try again'}, ensure_ascii=False)
+                                yield f"data: {timeout_json}\n\n".encode('utf-8')
+                                return
+                            
+                            # Check event limit
+                            if events_sent > max_events:
+                                print(f"🚫 [SERVER] Event limit exceeded: {events_sent} > {max_events}")
+                                error_json = json.dumps({'type': 'error', 'error': 'Too many events - response truncated'}, ensure_ascii=False)
+                                yield f"data: {error_json}\n\n".encode('utf-8')
+                                return
+                            
+                            # Validate event structure
+                            if not isinstance(event, (list, tuple)) or len(event) < 1:
+                                print(f"⚠️ [SERVER] Invalid event structure: {event}")
+                                continue
+                            
+                            kind = event[0]
+                            if kind == 'traces':
+                                traces_snapshot = event[1] if len(event) > 1 else []
+                                print(f"📍 [SERVER] Yielding traces: {len(traces_snapshot)} steps")
+                                yield encode_traces(traces_snapshot)
+                            elif kind == 'error':
+                                error_message = event[1] if len(event) > 1 else 'Unknown error'
+                                traces_snapshot = event[2] if len(event) > 2 else []
+                                print(f"❌ [SERVER] Yielding error: {error_message}")
+                                yield encode_traces(traces_snapshot)
+                                error_json = json.dumps({'type': 'error', 'error': error_message}, ensure_ascii=False)
+                                yield f"data: {error_json}\n\n".encode('utf-8')
+                                return
+                            elif kind == 'final':
+                                final_content = event[1] if len(event) > 1 else ''
+                                print(f"✅ [SERVER] Yielding final content: {len(final_content)} chars")
+                                for chunk in iter_text_chunks(final_content):
+                                    yield encode_content(chunk)
+                                # Ensure proper termination
+                                yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n".encode('utf-8')
+                                return
+                            else:
+                                print(f"⚠️ [SERVER] Unknown event type: {kind}")
+                                continue
                         
-                        # Check event limit
-                        events_sent += 1
-                        if events_sent > max_events:
-                            error_json = json.dumps({'type': 'error', 'error': 'Too many events - response truncated'}, ensure_ascii=False)
-                            yield f"data: {error_json}\n\n".encode('utf-8')
-                            return
-                        
-                        kind = event[0]
-                        if kind == 'traces':
-                            traces_snapshot = event[1]
-                            yield encode_traces(traces_snapshot)
-                        elif kind == 'error':
-                            error_message = event[1]
-                            traces_snapshot = event[2]
-                            yield encode_traces(traces_snapshot)
-                            error_json = json.dumps({'type': 'error', 'error': error_message}, ensure_ascii=False)
-                            yield f"data: {error_json}\n\n".encode('utf-8')
-                            return
-                        elif kind == 'final':
-                            final_content = event[1]
-                            for chunk in iter_text_chunks(final_content):
-                                yield encode_content(chunk)
-                            # Ensure proper termination
-                            yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n".encode('utf-8')
-                            return
+                        # Ensure we always send a done event if we get here
+                        print(f"🏁 [SERVER] Stream completed normally after {events_sent} events")
+                        done_json = json.dumps({'type': 'done'}, ensure_ascii=False)
+                        yield f"data: {done_json}\n\n".encode('utf-8')
+                        return
                     
-                    # Ensure we always send a done event if we get here
-                    done_json = json.dumps({'type': 'done'}, ensure_ascii=False)
-                    yield f"data: {done_json}\n\n".encode('utf-8')
-                    return
+                    except GeneratorExit:
+                        print(f"🛑 [SERVER] Client disconnected from stream")
+                        raise
+                    except Exception as inner_exc:
+                        print(f"❌ [SERVER] Error in stream processing: {inner_exc}")
+                        import traceback
+                        print(f"TRACEBACK: {traceback.format_exc()}")
+                        error_json = json.dumps({'type': 'error', 'error': str(inner_exc)}, ensure_ascii=False)
+                        yield f"data: {error_json}\n\n".encode('utf-8')
+                        return
                     
                 except Exception as exc:
-                    print(f"ERROR in generate_stream: {exc}")
-                    error_json = json.dumps({'type': 'error', 'error': str(exc)}, ensure_ascii=False)
-                    yield f"data: {error_json}\n\n".encode('utf-8')
+                    print(f"❌ [SERVER] ERROR in generate_stream: {exc}")
+                    import traceback
+                    print(f"TRACEBACK: {traceback.format_exc()}")
+                    try:
+                        error_json = json.dumps({'type': 'error', 'error': str(exc)}, ensure_ascii=False)
+                        yield f"data: {error_json}\n\n".encode('utf-8')
+                    except Exception as json_exc:
+                        print(f"❌ [SERVER] Failed to encode error: {json_exc}")
+                        yield f"data: {json.dumps({'type': 'error', 'error': 'Unknown error'})}\n\n".encode('utf-8')
                 finally:
-                    # Ensure cleanup
-                    pass
+                    print(f"🧹 [SERVER] Stream generator cleanup completed")
 
             # Enhanced SSE headers for production compatibility
             enhanced_sse_headers = {
@@ -2998,6 +3229,8 @@ Respond concisely and cite the sources (Conversation History, Database, Web Sear
         })
     except Exception as exc:
         print(f"ERROR: ai_agent handler failed: {exc}")
+        import traceback
+        print(f"TRACEBACK: {traceback.format_exc()}")
         return jsonify({'error': 'Failed to process agent request.', 'details': str(exc)}), 500
 
 def _handle_model_analysis_post():
@@ -3175,6 +3408,9 @@ Explicitly note when information is not present in the provided datasets."""
                         timeout=90
                     )
                 except requests.exceptions.RequestException as exc:
+                    print(f"ERROR in analysis stream: {exc}")
+                    import traceback
+                    print(f"TRACEBACK: {traceback.format_exc()}")
                     traces[-1]['status'] = 'failed'
                     traces[-1]['description'] = f'Network error during analysis: {exc}'
                     yield emit_traces()
@@ -3183,6 +3419,7 @@ Explicitly note when information is not present in the provided datasets."""
                     return
 
                 if response.status_code != 200:
+                    print(f"ERROR in analysis stream: HTTP {response.status_code}")
                     traces[-1]['status'] = 'failed'
                     traces[-1]['description'] = f'Analysis generation failed with status {response.status_code}'
                     yield emit_traces()
@@ -3287,6 +3524,8 @@ Explicitly note when information is not present in the provided datasets."""
         return jsonify(analysis_payload)
     except Exception as exc:
         print(f"ERROR: model_analysis handler failed: {exc}")
+        import traceback
+        print(f"TRACEBACK: {traceback.format_exc()}")
         return jsonify({'error': 'Failed to generate model analysis.', 'details': str(exc)}), 500
 
 

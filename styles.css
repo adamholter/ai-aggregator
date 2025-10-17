@@ -5,6 +5,38 @@
     box-sizing: border-box;
 }
 
+/* Debug indicator styles */
+.debug-indicator {
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin-bottom: 12px;
+    font-size: 0.85rem;
+    font-family: monospace;
+}
+
+.debug-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #1e40af;
+}
+
+.debug-emoji {
+    font-size: 1em;
+}
+
+.debug-text {
+    flex: 1;
+    font-weight: 500;
+}
+
+.debug-time {
+    color: #6b7280;
+    font-size: 0.8rem;
+}
+
 :root {
     /* Light mode colors */
     --bg-color: #ffffff;

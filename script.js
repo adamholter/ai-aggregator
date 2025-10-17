@@ -1262,11 +1262,25 @@ function createMediaCard(model, mediaCategory = '') {
 
 // AI Agent functionality with streaming support and conversation context
 async function sendMessage() {
+    const sendMessageStartTime = Date.now();
+    console.log('💬 [AI Agent] sendMessage called', {
+        timestamp: new Date().toISOString()
+    });
+    
     const userInput = document.getElementById('user-input');
     const chatMessages = document.getElementById('chat-messages');
     const message = userInput.value.trim();
     
-    if (!message) return;
+    if (!message) {
+        console.log('⚠️ [AI Agent] Empty message, aborting');
+        return;
+    }
+    
+    console.log('📝 [AI Agent] Processing message', {
+        messageLength: message.length,
+        preview: message.substring(0, 50) + (message.length > 50 ? '...' : ''),
+        currentHistoryLength: agentConfig.conversationHistory.length
+    });
     
     // Add user message to chat
     const userMessage = document.createElement('div');
@@ -1284,6 +1298,7 @@ async function sendMessage() {
     // Keep conversation history to last 10 exchanges to avoid token limits
     if (agentConfig.conversationHistory.length > 20) {
         agentConfig.conversationHistory = agentConfig.conversationHistory.slice(-20);
+        console.log('📚 [AI Agent] Trimmed conversation history to 20 items');
     }
     
     // Add initial loading indicator
@@ -1304,8 +1319,17 @@ async function sendMessage() {
     chatMessages.scrollTop = chatMessages.scrollHeight;
     
     try {
+        console.log('🤖 [AI Agent] Calling AI agent...');
         // Call AI agent with streaming and context
         const response = await callGLMAgent(message);
+        
+        console.log('✅ [AI Agent] AI agent call successful', {
+            hasResponse: !!response.response,
+            responseLength: response.response ? response.response.length : 0,
+            hasTraces: !!response.traces,
+            tracesCount: response.traces ? response.traces.length : 0,
+            totalElapsed: Date.now() - sendMessageStartTime
+        });
         
         // Add AI response to conversation history
         if (response && response.response) {
@@ -1314,28 +1338,38 @@ async function sendMessage() {
                 content: response.response,
                 timestamp: new Date().toISOString()
             });
+            console.log('📚 [AI Agent] Added AI response to conversation history');
         }
         
         // Remove streaming class from the final message
         const streamingMessage = chatMessages.querySelector('.message.ai.streaming');
         if (streamingMessage) {
             streamingMessage.classList.remove('streaming');
+            console.log('🎨 [AI Agent] Removed streaming class from final message');
         }
         
         // Ensure final scroll to bottom
         chatMessages.scrollTop = chatMessages.scrollHeight;
         
     } catch (error) {
+        console.error('❌ [AI Agent] sendMessage failed', {
+            error: error.message,
+            stack: error.stack,
+            elapsed: Date.now() - sendMessageStartTime
+        });
+        
         // Remove initial loading indicator if it exists
         const loadingIndicator = chatMessages.querySelector('.message.ai.loading-initial');
         if (loadingIndicator) {
             loadingIndicator.remove();
+            console.log('🗑️ [AI Agent] Removed initial loading indicator');
         }
         
         // Remove any streaming message
         const streamingMessage = chatMessages.querySelector('.message.ai.streaming');
         if (streamingMessage) {
             chatMessages.removeChild(streamingMessage);
+            console.log('🗑️ [AI Agent] Removed streaming message');
         }
         
         // Add error message
@@ -1378,8 +1412,30 @@ function clearChatHistory() {
 
 // Call AI agent with streaming support
 async function callGLMAgent(userMessage) {
+    const callStartTime = Date.now();
+    console.log('🚀 [AI Agent] callGLMAgent initiated', {
+        messageLength: userMessage.length,
+        model: agentConfig.model,
+        conversationHistoryLength: agentConfig.conversationHistory.length,
+        timestamp: new Date().toISOString()
+    });
+    
     return new Promise((resolve, reject) => {
-        handleStreamingWithFetch(userMessage, resolve, reject);
+        handleStreamingWithFetch(userMessage, (result) => {
+            console.log('✅ [AI Agent] callGLMAgent resolved successfully', {
+                responseLength: result.response ? result.response.length : 0,
+                tracesCount: result.traces ? result.traces.length : 0,
+                elapsed: Date.now() - callStartTime
+            });
+            resolve(result);
+        }, (error) => {
+            console.error('❌ [AI Agent] callGLMAgent rejected', {
+                error: error.message,
+                stack: error.stack,
+                elapsed: Date.now() - callStartTime
+            });
+            reject(error);
+        });
     });
 }
 
@@ -1387,22 +1443,36 @@ async function callGLMAgent(userMessage) {
 async function handleStreamingWithFetch(userMessage, resolve, reject) {
     let timeoutId;
     let reader;
+    const startTime = Date.now();
+    
+    console.log('🔄 [AI Agent] Starting streaming request', {
+        model: agentConfig.model,
+        messageLength: userMessage.length,
+        conversationHistoryLength: agentConfig.conversationHistory.length,
+        timestamp: new Date().toISOString()
+    });
     
     try {
         // Set up timeout for the entire streaming operation
         const STREAM_TIMEOUT = 150000; // 2.5 minutes
         
         timeoutId = setTimeout(() => {
+            console.log('⏰ [AI Agent] Streaming timeout reached', {
+                elapsed: Date.now() - startTime,
+                timeout: STREAM_TIMEOUT
+            });
             if (reader) {
                 try {
                     reader.cancel();
+                    console.log('🛑 [AI Agent] Reader cancelled due to timeout');
                 } catch (e) {
-                    // Ignore cancellation errors
+                    console.log('⚠️ [AI Agent] Error cancelling reader:', e);
                 }
             }
             reject(new Error('Streaming timeout - please try again'));
         }, STREAM_TIMEOUT);
 
+        console.log('📤 [AI Agent] Sending fetch request to /api/ai-agent');
         const response = await fetch('/api/ai-agent', {
             method: 'POST',
             headers: withUserOpenRouterKey({
@@ -1416,14 +1486,22 @@ async function handleStreamingWithFetch(userMessage, resolve, reject) {
             })
         });
 
+        console.log('📥 [AI Agent] Received response', {
+            status: response.status,
+            statusText: response.statusText,
+            headers: Object.fromEntries(response.headers.entries()),
+            ok: response.ok
+        });
+
         if (!response.ok) {
             clearTimeout(timeoutId);
             let errorMessage = `HTTP error! status: ${response.status}`;
             try {
                 const payload = await response.json();
                 errorMessage = payload.error || payload.message || errorMessage;
+                console.log('❌ [AI Agent] HTTP error response', { status: response.status, error: errorMessage, payload });
             } catch (parseError) {
-                // No-op: response may not contain JSON when streaming fails before start.
+                console.log('❌ [AI Agent] HTTP error but could not parse response body', { status: response.status, parseError });
             }
 
             // Handle specific error cases
@@ -1437,8 +1515,11 @@ async function handleStreamingWithFetch(userMessage, resolve, reject) {
         reader = response.body?.getReader();
         if (!reader) {
             clearTimeout(timeoutId);
+            console.log('❌ [AI Agent] Response body is not readable');
             throw new Error('Response body is not readable');
         }
+
+        console.log('✅ [AI Agent] Reader initialized successfully');
 
         const decoder = new TextDecoder('utf-8', { fatal: false });
         let buffer = '';
@@ -1446,14 +1527,29 @@ async function handleStreamingWithFetch(userMessage, resolve, reject) {
         let traces = [];
         let lastEventTime = Date.now();
         let eventsReceived = 0;
+        let chunksReceived = 0;
         const MAX_EVENTS = 1000;
         
         // Check for stalled connection
         const stallCheckInterval = setInterval(() => {
             const timeSinceLastEvent = Date.now() - lastEventTime;
+            const totalElapsed = Date.now() - startTime;
+            console.log(`🔍 [AI Agent] Stall check`, {
+                timeSinceLastEvent,
+                totalElapsed,
+                eventsReceived,
+                chunksReceived,
+                bufferLength: buffer.length
+            });
+            
             if (timeSinceLastEvent > 30000) { // 30 seconds without data
                 clearInterval(stallCheckInterval);
                 clearTimeout(timeoutId);
+                console.log('❌ [AI Agent] Connection stalled', {
+                    timeSinceLastEvent,
+                    totalElapsed,
+                    eventsReceived
+                });
                 if (reader) {
                     try {
                         reader.cancel();
@@ -1466,7 +1562,9 @@ async function handleStreamingWithFetch(userMessage, resolve, reject) {
         }, 10000); // Check every 10 seconds
 
         try {
+            console.log('🔄 [AI Agent] Starting to read stream');
             while (true) {
+                const readStartTime = Date.now();
                 const { done, value } = await Promise.race([
                     reader.read(),
                     new Promise((_, reject) =>
@@ -1474,9 +1572,27 @@ async function handleStreamingWithFetch(userMessage, resolve, reject) {
                     )
                 ]);
                 
+                const readDuration = Date.now() - readStartTime;
+                chunksReceived++;
+                
+                console.log(`📦 [AI Agent] Chunk received`, {
+                    done,
+                    chunkSize: value ? value.length : 0,
+                    readDuration,
+                    totalChunks: chunksReceived,
+                    totalElapsed: Date.now() - startTime
+                });
+                
                 if (done) {
                     clearInterval(stallCheckInterval);
                     clearTimeout(timeoutId);
+                    console.log('✅ [AI Agent] Stream completed', {
+                        totalChunks: chunksReceived,
+                        totalElapsed: Date.now() - startTime,
+                        finalBufferLength: buffer.length,
+                        fullResponseLength: fullResponse.length,
+                        tracesCount: traces.length
+                    });
                     break;
                 }
 
@@ -1487,19 +1603,27 @@ async function handleStreamingWithFetch(userMessage, resolve, reject) {
                 if (eventsReceived > MAX_EVENTS) {
                     clearInterval(stallCheckInterval);
                     clearTimeout(timeoutId);
+                    console.log('❌ [AI Agent] Too many events received', { eventsReceived, MAX_EVENTS });
                     reject(new Error('Too many events received - response truncated'));
                     return;
                 }
 
                 buffer += decoder.decode(value, { stream: true });
+                console.log(`📝 [AI Agent] Buffer updated`, {
+                    bufferLength: buffer.length,
+                    chunkSize: value.length,
+                    totalElapsed: Date.now() - startTime
+                });
 
                 // Process all complete lines in buffer
+                let linesProcessed = 0;
                 while (true) {
                     const lineEnd = buffer.indexOf('\n');
                     if (lineEnd === -1) break;
 
                     const line = buffer.slice(0, lineEnd).trim();
                     buffer = buffer.slice(lineEnd + 1);
+                    linesProcessed++;
 
                     if (line.startsWith('data: ')) {
                         const data = line.slice(6);
@@ -1508,45 +1632,84 @@ async function handleStreamingWithFetch(userMessage, resolve, reject) {
                         if (data === '[DONE]') {
                             clearInterval(stallCheckInterval);
                             clearTimeout(timeoutId);
+                            console.log('✅ [AI Agent] Received [DONE] signal', {
+                                totalEvents: eventsReceived,
+                                totalLines: linesProcessed,
+                                totalElapsed: Date.now() - startTime
+                            });
                             resolve({ response: fixEncodingArtifacts(fullResponse), traces: traces });
                             return;
                         }
 
                         try {
                             const parsed = JSON.parse(data);
+                            console.log(`🔧 [AI Agent] Event received`, {
+                                type: parsed.type,
+                                hasContent: !!parsed.content,
+                                hasTraces: !!parsed.traces,
+                                tracesCount: parsed.traces ? parsed.traces.length : 0,
+                                totalElapsed: Date.now() - startTime
+                            });
                             
                             switch(parsed.type) {
                                 case 'traces':
                                     traces = parsed.traces;
+                                    console.log(`📍 [AI Agent] Traces updated`, {
+                                        tracesCount: traces.length,
+                                        traces: traces.map(t => ({ step: t.step, status: t.status }))
+                                    });
                                     break;
                                 case 'content': {
                                     const sanitizedChunk = fixEncodingArtifacts(parsed.content);
                                     fullResponse = appendStreamChunk(fullResponse, sanitizedChunk);
+                                    console.log(`📄 [AI Agent] Content updated`, {
+                                        chunkLength: sanitizedChunk.length,
+                                        totalResponseLength: fullResponse.length,
+                                        preview: sanitizedChunk.substring(0, 100) + (sanitizedChunk.length > 100 ? '...' : '')
+                                    });
                                     updateStreamingResponse(fullResponse, traces);
                                     break;
                                 }
                                 case 'done':
                                     clearInterval(stallCheckInterval);
                                     clearTimeout(timeoutId);
+                                    console.log('✅ [AI Agent] Received done event', {
+                                        totalResponseLength: fullResponse.length,
+                                        tracesCount: traces.length,
+                                        totalElapsed: Date.now() - startTime
+                                    });
                                     resolve({ response: fixEncodingArtifacts(fullResponse), traces: traces });
                                     return;
                                 case 'error':
                                     clearInterval(stallCheckInterval);
                                     clearTimeout(timeoutId);
+                                    console.log('❌ [AI Agent] Received error event', { error: parsed.error });
                                     reject(new Error(parsed.error || 'Unknown error occurred'));
                                     return;
                             }
                         } catch (e) {
-                            console.warn('Invalid SSE JSON:', data, e);
+                            console.warn('⚠️ [AI Agent] Invalid SSE JSON', { data, error: e.message });
                             // Continue processing other events
                         }
                     }
+                }
+                
+                if (linesProcessed > 0) {
+                    console.log(`📋 [AI Agent] Processed ${linesProcessed} lines from buffer`);
                 }
             }
             
             // If we get here without a done event, resolve with what we have
             clearInterval(stallCheckInterval);
             clearTimeout(timeoutId);
+            console.log('⚠️ [AI Agent] Stream ended without done event', {
+                hasResponse: !!fullResponse,
+                hasTraces: traces.length > 0,
+                responseLength: fullResponse.length,
+                tracesCount: traces.length,
+                totalElapsed: Date.now() - startTime
+            });
+            
             if (fullResponse || traces.length > 0) {
                 resolve({ response: fixEncodingArtifacts(fullResponse), traces: traces });
             } else {
@@ -1558,8 +1721,9 @@ async function handleStreamingWithFetch(userMessage, resolve, reject) {
             if (reader) {
                 try {
                     reader.cancel();
+                    console.log('🛑 [AI Agent] Reader cancelled in finally block');
                 } catch (e) {
-                    // Ignore cancellation errors
+                    console.log('⚠️ [AI Agent] Error cancelling reader in finally:', e);
                 }
             }
         }
@@ -1567,7 +1731,12 @@ async function handleStreamingWithFetch(userMessage, resolve, reject) {
         if (timeoutId) {
             clearTimeout(timeoutId);
         }
-        console.error('Streaming error:', error);
+        console.error('❌ [AI Agent] Streaming error occurred', {
+            error: error.message,
+            stack: error.stack,
+            elapsed: Date.now() - startTime,
+            phase: 'initialization'
+        });
         handleNonStreamingFallback(userMessage, resolve, reject);
     }
 }
@@ -1618,6 +1787,14 @@ async function handleNonStreamingFallback(userMessage, resolve, reject) {
 
 // Update streaming response in real-time
 function updateStreamingResponse(content, traces) {
+    console.log('🎨 [AI Agent] updateStreamingResponse called', {
+        hasContent: !!content,
+        contentLength: content ? content.length : 0,
+        hasTraces: !!traces,
+        tracesCount: traces ? traces.length : 0,
+        timestamp: new Date().toISOString()
+    });
+    
     const chatMessages = document.getElementById('chat-messages');
     const sanitizedContent = fixEncodingArtifacts(content || '');
     
@@ -1625,6 +1802,7 @@ function updateStreamingResponse(content, traces) {
     const loadingIndicator = chatMessages.querySelector('.message.ai.loading-initial');
     if (loadingIndicator && traces && traces.length > 0) {
         loadingIndicator.remove();
+        console.log('🗑️ [AI Agent] Removed initial loading indicator');
     }
     
     let aiMessage = chatMessages.querySelector('.message.ai.streaming');
@@ -1635,13 +1813,16 @@ function updateStreamingResponse(content, traces) {
             // Remove loading indicator now since we're creating the actual message
             if (loadingIndicator) {
                 loadingIndicator.remove();
+                console.log('🗑️ [AI Agent] Removed loading indicator for message creation');
             }
             
             aiMessage = document.createElement('div');
             aiMessage.className = 'message ai streaming';
             chatMessages.appendChild(aiMessage);
+            console.log('✨ [AI Agent] Created new streaming message');
         } else {
             // Don't create message yet, keep showing loading indicator
+            console.log('⏳ [AI Agent] Keeping loading indicator - no content or traces yet');
             return;
         }
     }
@@ -1649,8 +1830,22 @@ function updateStreamingResponse(content, traces) {
     // Clear and rebuild the message
     aiMessage.innerHTML = '';
     
+    // Add visual debugging indicator
+    const debugIndicator = document.createElement('div');
+    debugIndicator.className = 'debug-indicator';
+    debugIndicator.innerHTML = `
+        <div class="debug-status">
+            <span class="debug-emoji">🔍</span>
+            <span class="debug-text">Streaming: ${content.length} chars, ${traces.length} traces</span>
+            <span class="debug-time">${new Date().toLocaleTimeString()}</span>
+        </div>
+    `;
+    aiMessage.appendChild(debugIndicator);
+    console.log('🐛 [AI Agent] Added debug indicator');
+    
     // Add traces if available
     if (traces && traces.length > 0) {
+        console.log('📍 [AI Agent] Adding traces to message', { tracesCount: traces.length });
         const tracesContainer = document.createElement('div');
         tracesContainer.className = 'traces-container';
         
@@ -1680,6 +1875,7 @@ function updateStreamingResponse(content, traces) {
         tracesContainer.appendChild(tracesHeader);
         tracesContainer.appendChild(tracesList);
         aiMessage.appendChild(tracesContainer);
+        console.log('✅ [AI Agent] Traces added successfully');
     }
     
     // Add streaming content
@@ -1687,6 +1883,7 @@ function updateStreamingResponse(content, traces) {
     responseContent.className = 'response-content';
     
     if (sanitizedContent) {
+        console.log('📄 [AI Agent] Adding content to message', { contentLength: sanitizedContent.length });
         if (typeof marked !== 'undefined' && marked.parse) {
             try {
                 responseContent.innerHTML = marked.parse(sanitizedContent);
@@ -1699,12 +1896,14 @@ function updateStreamingResponse(content, traces) {
         }
     } else {
         responseContent.innerHTML = '<div class="typing-indicator">Thinking...</div>';
+        console.log('💭 [AI Agent] Added thinking indicator');
     }
     
     aiMessage.appendChild(responseContent);
     
     // Scroll to bottom
     chatMessages.scrollTop = chatMessages.scrollHeight;
+    console.log('📍 [AI Agent] Scrolled to bottom');
 }
 
 // Toggle traces visibility
