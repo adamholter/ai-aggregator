@@ -1773,11 +1773,25 @@ def agent_tool_loop_generator(
                         print(f"✅ [AGENT] Streaming complete ({len(content)} chars)")
                         yield ('status', status_payload('LLM Response', f'Completed streaming {len(content)} characters'))
                 except requests.exceptions.Timeout as exc:
-                    yield ('status', status_payload('LLM Response', f'Stream timeout after {total_chars} characters: {exc}'))
-                    content = sanitize_quickchart_urls_in_text(assistant_accumulator, theme)
+                    prev_length = sanitized_progress_length
+                    yield ('status', status_payload('LLM Response', f'Stream timeout after {total_chars} characters: {exc}; retrying without streaming'))
+                    fallback_content = fetch_non_stream_content(headers, payload, theme)
+                    sanitized_full = fallback_content
+                    assistant_accumulator = fallback_content
+                    sanitized_progress_length = len(fallback_content)
+                    if sanitized_progress_length > prev_length:
+                        yield ('content', fallback_content[prev_length:])
+                    content = fallback_content
                 except requests.exceptions.RequestException as exc:
-                    yield ('status', status_payload('LLM Response', f'Stream interrupted: {exc}'))
-                    content = sanitize_quickchart_urls_in_text(assistant_accumulator, theme)
+                    prev_length = sanitized_progress_length
+                    yield ('status', status_payload('LLM Response', f'Stream interrupted ({exc}); retrying without streaming'))
+                    fallback_content = fetch_non_stream_content(headers, payload, theme)
+                    sanitized_full = fallback_content
+                    assistant_accumulator = fallback_content
+                    sanitized_progress_length = len(fallback_content)
+                    if sanitized_progress_length > prev_length:
+                        yield ('content', fallback_content[prev_length:])
+                    content = fallback_content
                 
                 result_message = (last_choice_snapshot.get('message') or {}) if last_choice_snapshot else {}
                 if not content:
@@ -3279,6 +3293,8 @@ Explicitly note when information is not present in the provided datasets."""
             'datasets': compose_fetch_datasets(fetch_context)
         }
 
+        theme = request.args.get('theme', 'light')
+
         if stream:
             def generate_analysis_stream():
                 traces = [
@@ -3304,83 +3320,113 @@ Explicitly note when information is not present in the provided datasets."""
 
                 yield emit_traces()
 
-                request_payload = {
+                stream_payload = {
                     'model': analysis_model,
                     'messages': [{'role': 'user', 'content': analysis_prompt}],
                     'stream': True
                 }
 
+                fallback_payload = {
+                    'model': analysis_model,
+                    'messages': [{'role': 'user', 'content': analysis_prompt}],
+                    'stream': False
+                }
+
                 full_content = ""
+                fallback_reason = None
                 try:
                     response = requests.post(
                         f'{OPENROUTER_BASE_URL}/chat/completions',
                         headers=headers,
-                        json=request_payload,
+                        json=stream_payload,
                         stream=True,
-                        timeout=90
+                        timeout=(10, 180)
                     )
+                    if response.status_code != 200:
+                        fallback_reason = f'Stream request failed with status {response.status_code}'
+                        response = None
                 except requests.exceptions.RequestException as exc:
                     print(f"ERROR in analysis stream: {exc}")
                     import traceback
                     print(f"TRACEBACK: {traceback.format_exc()}")
-                    traces[-1]['status'] = 'failed'
-                    traces[-1]['description'] = f'Network error during analysis: {exc}'
-                    yield emit_traces()
-                    error_event = json.dumps({'type': 'error', 'error': str(exc)}, ensure_ascii=False)
-                    yield f"data: {error_event}\n\n".encode('utf-8')
-                    return
+                    fallback_reason = str(exc)
+                    response = None
 
-                if response.status_code != 200:
-                    print(f"ERROR in analysis stream: HTTP {response.status_code}")
-                    traces[-1]['status'] = 'failed'
-                    traces[-1]['description'] = f'Analysis generation failed with status {response.status_code}'
-                    yield emit_traces()
-                    error_payload = json.dumps(
-                        {'type': 'error', 'error': f'Stream request failed with status {response.status_code}'},
-                        ensure_ascii=False
-                    )
-                    yield f"data: {error_payload}\n\n".encode('utf-8')
-                    return
-
-                buffer = ""
-                for chunk in response.iter_content(chunk_size=1024, decode_unicode=True):
-                    if not chunk:
-                        continue
-                    buffer += chunk
-                    while True:
-                        line_end = buffer.find('\n')
-                        if line_end == -1:
-                            break
-                        line = buffer[:line_end].strip()
-                        buffer = buffer[line_end + 1:]
-                        if not line.startswith('data: '):
+                if response is not None:
+                    buffer = ""
+                    for chunk in response.iter_content(chunk_size=1024, decode_unicode=True):
+                        if not chunk:
                             continue
-                        payload_line = line[6:]
-                        if payload_line == '[DONE]':
-                            traces[-1]['status'] = 'success'
-                            yield emit_traces()
+                        buffer += chunk
+                        while True:
+                            line_end = buffer.find('\n')
+                            if line_end == -1:
+                                break
+                            line = buffer[:line_end].strip()
+                            buffer = buffer[line_end + 1:]
+                            if not line.startswith('data: '):
+                                continue
+                            payload_line = line[6:]
+                            if payload_line == '[DONE]':
+                                traces[-1]['status'] = 'success'
+                                yield emit_traces()
 
-                            analysis_payload = {
-                                'analysis': full_content,
-                                'model_data': model_data,
-                                'traces': traces,
-                                'fetch_data': fetch_summary,
-                                'saved_at': datetime.now().isoformat()
-                            }
-                            cache[cache_key] = build_cache_entry(analysis_payload)
-                            persist_model_analysis(model_name, model_type, full_content, traces, model_data, fetch_summary)
+                                sanitized_content = sanitize_quickchart_urls_in_text(full_content, theme)
+                                analysis_payload = {
+                                    'analysis': sanitized_content,
+                                    'model_data': model_data,
+                                    'traces': traces,
+                                    'fetch_data': fetch_summary,
+                                    'saved_at': datetime.now().isoformat()
+                                }
+                                cache[cache_key] = build_cache_entry(analysis_payload)
+                                persist_model_analysis(model_name, model_type, sanitized_content, traces, model_data, fetch_summary)
 
-                            yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n".encode('utf-8')
-                            return
-                        try:
-                            parsed = json.loads(payload_line)
-                            delta = parsed.get('choices', [{}])[0].get('delta', {})
-                            content_piece = delta.get('content')
-                            if content_piece:
-                                full_content += content_piece
-                                yield emit_content(content_piece)
-                        except json.JSONDecodeError:
-                            continue
+                                yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n".encode('utf-8')
+                                return
+                            try:
+                                parsed = json.loads(payload_line)
+                                delta = parsed.get('choices', [{}])[0].get('delta', {})
+                                content_piece = delta.get('content')
+                                if content_piece:
+                                    full_content += content_piece
+                                    yield emit_content(content_piece)
+                            except json.JSONDecodeError:
+                                continue
+
+                if fallback_reason:
+                    print(f"⚠️ [ANALYSIS] Falling back to non-stream mode: {fallback_reason}")
+                    traces[-1]['status'] = 'warning'
+                    traces[-1]['description'] = f'Stream interrupted: {fallback_reason}. Retrying without streaming.'
+                    yield emit_traces()
+                    try:
+                        fallback_content = fetch_non_stream_content(headers, fallback_payload, theme)
+                        traces[-1]['status'] = 'success'
+                        traces[-1]['description'] = 'Analysis generated via non-stream fallback.'
+                        yield emit_traces()
+                        yield emit_content(fallback_content)
+
+                        analysis_payload = {
+                            'analysis': fallback_content,
+                            'model_data': model_data,
+                            'traces': traces,
+                            'fetch_data': fetch_summary,
+                            'saved_at': datetime.now().isoformat()
+                        }
+                        cache[cache_key] = build_cache_entry(analysis_payload)
+                        persist_model_analysis(model_name, model_type, fallback_content, traces, model_data, fetch_summary)
+
+                        yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n".encode('utf-8')
+                    except requests.exceptions.RequestException as exc:
+                        print(f"ERROR in analysis fallback: {exc}")
+                        import traceback
+                        print(f"TRACEBACK: {traceback.format_exc()}")
+                        traces[-1]['status'] = 'failed'
+                        traces[-1]['description'] = f'Fallback analysis failed: {exc}'
+                        yield emit_traces()
+                        error_event = json.dumps({'type': 'error', 'error': str(exc)}, ensure_ascii=False)
+                        yield f"data: {error_event}\n\n".encode('utf-8')
+                    return
 
             return Response(stream_with_context(generate_analysis_stream()), mimetype='text/event-stream', headers=sse_headers)
 
@@ -3395,7 +3441,7 @@ Explicitly note when information is not present in the provided datasets."""
                 f'{OPENROUTER_BASE_URL}/chat/completions',
                 headers=headers,
                 json=request_payload,
-                timeout=90
+                timeout=180
             )
             response.raise_for_status()
             result = response.json()
@@ -3406,6 +3452,8 @@ Explicitly note when information is not present in the provided datasets."""
             )
         except requests.exceptions.RequestException as exc:
             return jsonify({'error': f'Analysis request failed: {exc}'}), 500
+
+        final_content = sanitize_quickchart_urls_in_text(final_content, theme)
 
         final_traces = [
             {
@@ -4086,6 +4134,32 @@ def append_quickchart_guidance(prompt_template, theme):
     if placeholder in prompt_template:
         return prompt_template.replace(placeholder, guidance)
     return f"{prompt_template}\n\n{guidance}"
+
+
+def fetch_non_stream_content(headers, payload, theme, timeout=180):
+    """Fetch a non-streamed completion and sanitize the response."""
+    response = requests.post(
+        f'{OPENROUTER_BASE_URL}/chat/completions',
+        headers=headers,
+        json=payload,
+        timeout=timeout
+    )
+    if response.status_code >= 400:
+        try:
+            error_payload = response.json()
+        except Exception:
+            error_payload = response.text
+        raise requests.exceptions.HTTPError(
+            f'Request failed with status {response.status_code}: {error_payload}',
+            response=response
+        )
+    result = response.json()
+    content = (
+        result.get('choices', [{}])[0]
+        .get('message', {})
+        .get('content') or ''
+    )
+    return sanitize_quickchart_urls_in_text(content, theme)
 
 
 def get_quickchart_url(chart_config, theme='light'):
