@@ -1693,14 +1693,14 @@ def agent_tool_loop_generator(
                     payload.setdefault('addons', ['web_search'])
                 stream_payload = dict(payload)
                 stream_payload['stream'] = True
-                
+
                 yield ('status', {
                     'stage': 'LLM Request',
                     'message': f'Requesting response from {model_display} (iteration {iteration})',
                     'timestamp': datetime.utcnow().isoformat()
                 })
                 print(f"📡 [AGENT] Sending streaming request to OpenRouter...")
-                
+
                 total_chars = 0
                 status_step = 160
                 stream_buffer = ''
@@ -1708,6 +1708,7 @@ def agent_tool_loop_generator(
                 assistant_accumulator = ''
                 sanitized_full = ''
                 sanitized_progress_length = 0
+                stream_completed = False
                 try:
                     with requests.post(
                         f'{OPENROUTER_BASE_URL}/chat/completions',
@@ -1734,6 +1735,7 @@ def agent_tool_loop_generator(
                             if not line or line.startswith(':'):
                                 continue
                             if line == 'data: [DONE]':
+                                stream_completed = True
                                 break
                             if not line.startswith('data: '):
                                 continue
@@ -1770,8 +1772,9 @@ def agent_tool_loop_generator(
                         if not sanitized_full:
                             sanitized_full = sanitize_quickchart_urls_in_text(assistant_accumulator, theme)
                         content = sanitized_full
-                        print(f"✅ [AGENT] Streaming complete ({len(content)} chars)")
-                        yield ('status', status_payload('LLM Response', f'Completed streaming {len(content)} characters'))
+                        if stream_completed:
+                            print(f"✅ [AGENT] Streaming complete ({len(content)} chars)")
+                            yield ('status', status_payload('LLM Response', f'Completed streaming {len(content)} characters'))
                 except requests.exceptions.Timeout as exc:
                     prev_length = sanitized_progress_length
                     yield ('status', status_payload('LLM Response', f'Stream timeout after {total_chars} characters: {exc}; retrying without streaming'))
@@ -1792,7 +1795,18 @@ def agent_tool_loop_generator(
                     if sanitized_progress_length > prev_length:
                         yield ('content', fallback_content[prev_length:])
                     content = fallback_content
-                
+                else:
+                    if not stream_completed:
+                        prev_length = sanitized_progress_length
+                        yield ('status', status_payload('LLM Response', 'Stream ended without completion; retrying without streaming'))
+                        fallback_content = fetch_non_stream_content(headers, payload, theme)
+                        sanitized_full = fallback_content
+                        assistant_accumulator = fallback_content
+                        sanitized_progress_length = len(fallback_content)
+                        if sanitized_progress_length > prev_length:
+                            yield ('content', fallback_content[prev_length:])
+                        content = fallback_content
+
                 result_message = (last_choice_snapshot.get('message') or {}) if last_choice_snapshot else {}
                 if not content:
                     fallback_raw = result_message.get('content') or ''
@@ -3334,6 +3348,7 @@ Explicitly note when information is not present in the provided datasets."""
 
                 full_content = ""
                 fallback_reason = None
+                stream_completed = False
                 try:
                     response = requests.post(
                         f'{OPENROUTER_BASE_URL}/chat/completions',
@@ -3368,6 +3383,7 @@ Explicitly note when information is not present in the provided datasets."""
                                 continue
                             payload_line = line[6:]
                             if payload_line == '[DONE]':
+                                stream_completed = True
                                 traces[-1]['status'] = 'success'
                                 yield emit_traces()
 
@@ -3393,6 +3409,9 @@ Explicitly note when information is not present in the provided datasets."""
                                     yield emit_content(content_piece)
                             except json.JSONDecodeError:
                                 continue
+
+                if not stream_completed and not fallback_reason:
+                    fallback_reason = 'stream ended without completion'
 
                 if fallback_reason:
                     print(f"⚠️ [ANALYSIS] Falling back to non-stream mode: {fallback_reason}")
