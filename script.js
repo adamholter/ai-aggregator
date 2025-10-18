@@ -124,6 +124,18 @@ function fixEncodingArtifacts(text) {
 
 const STREAM_BLOCK_PATTERN = /^(#{1,6}\s|[-*+]\s|```|>|\|)/;
 
+const MAX_AGENT_STATUS_ENTRIES = 20;
+
+function escapeHtml(value) {
+    return (value == null ? '' : String(value)).replace(/[&<>"']/g, char => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    }[char]));
+}
+
 function appendStreamChunk(current, chunk) {
     if (!chunk) return current || '';
     if (!current) return chunk;
@@ -1525,10 +1537,11 @@ async function handleStreamingWithFetch(userMessage, resolve, reject) {
         let buffer = '';
         let fullResponse = '';
         let traces = [];
+        let statuses = [];
         let lastEventTime = Date.now();
         let eventsReceived = 0;
         let chunksReceived = 0;
-        const MAX_EVENTS = 1000;
+        const MAX_EVENTS = 5000;
         
         // Check for stalled connection
         const stallCheckInterval = setInterval(() => {
@@ -1658,7 +1671,25 @@ async function handleStreamingWithFetch(userMessage, resolve, reject) {
                                         tracesCount: traces.length,
                                         traces: traces.map(t => ({ step: t.step, status: t.status }))
                                     });
+                                    updateStreamingResponse(fullResponse, traces, statuses);
                                     break;
+                                case 'status': {
+                                    const statusPayload = parsed.status;
+                                    if (statusPayload && typeof statusPayload === 'object') {
+                                        const statusEntry = {
+                                            stage: statusPayload.stage || 'Status',
+                                            message: statusPayload.message || '',
+                                            timestamp: statusPayload.timestamp || new Date().toISOString()
+                                        };
+                                        statuses.push(statusEntry);
+                                        if (statuses.length > MAX_AGENT_STATUS_ENTRIES) {
+                                            statuses = statuses.slice(-MAX_AGENT_STATUS_ENTRIES);
+                                        }
+                                        console.log('ℹ️ [AI Agent] Status update', statusEntry);
+                                        updateStreamingResponse(fullResponse, traces, statuses);
+                                    }
+                                    break;
+                                }
                                 case 'content': {
                                     const sanitizedChunk = fixEncodingArtifacts(parsed.content);
                                     fullResponse = appendStreamChunk(fullResponse, sanitizedChunk);
@@ -1667,7 +1698,7 @@ async function handleStreamingWithFetch(userMessage, resolve, reject) {
                                         totalResponseLength: fullResponse.length,
                                         preview: sanitizedChunk.substring(0, 100) + (sanitizedChunk.length > 100 ? '...' : '')
                                     });
-                                    updateStreamingResponse(fullResponse, traces);
+                                    updateStreamingResponse(fullResponse, traces, statuses);
                                     break;
                                 }
                                 case 'done':
@@ -1678,6 +1709,7 @@ async function handleStreamingWithFetch(userMessage, resolve, reject) {
                                         tracesCount: traces.length,
                                         totalElapsed: Date.now() - startTime
                                     });
+                                    updateStreamingResponse(fullResponse, traces, statuses);
                                     resolve({ response: fixEncodingArtifacts(fullResponse), traces: traces });
                                     return;
                                 case 'error':
@@ -1744,7 +1776,7 @@ async function handleStreamingWithFetch(userMessage, resolve, reject) {
 // Fallback to non-streaming
 async function handleNonStreamingFallback(userMessage, resolve, reject) {
     try {
-        const response = await makeAPICall('/api/ai-agent', null, {
+        const payload = await makeAPICall('/api/ai-agent', null, {
             method: 'POST',
             headers: withUserOpenRouterKey({}),
             body: JSON.stringify({
@@ -1755,52 +1787,41 @@ async function handleNonStreamingFallback(userMessage, resolve, reject) {
             })
         });
 
-        if (!response.ok) {
-            let errorMessage = `HTTP error! status: ${response.status}`;
-            try {
-                const payload = await response.json();
-                errorMessage = payload.error || payload.message || errorMessage;
-            } catch (parseError) {
-                // Ignore parsing error
-            }
-
-            // Handle specific error cases
-            if (response.status === 402) {
-                errorMessage = "🔑 OpenRouter API key required. Please add your key in Settings to use AI features.";
-            }
-
-            throw new Error(errorMessage);
-        }
-
-        if (response && typeof response.response === 'string') {
-            resolve({
-                ...response,
-                response: fixEncodingArtifacts(response.response)
-            });
-        } else {
-            resolve(response);
-        }
+        const sanitizedResponse = payload && typeof payload.response === 'string'
+            ? fixEncodingArtifacts(payload.response)
+            : '';
+        updateStreamingResponse(sanitizedResponse, payload?.traces || [], []);
+        resolve({
+            ...payload,
+            response: sanitizedResponse
+        });
     } catch (error) {
         reject(error);
     }
 }
 
 // Update streaming response in real-time
-function updateStreamingResponse(content, traces) {
+function updateStreamingResponse(content, traces, statuses = []) {
+    const sanitizedContent = fixEncodingArtifacts(content || '');
+    const hasStatuses = Array.isArray(statuses) && statuses.length > 0;
+    const contentLength = sanitizedContent ? sanitizedContent.length : 0;
+    const traceCount = traces ? traces.length : 0;
+
     console.log('🎨 [AI Agent] updateStreamingResponse called', {
-        hasContent: !!content,
-        contentLength: content ? content.length : 0,
+        hasContent: !!sanitizedContent,
+        contentLength,
         hasTraces: !!traces,
-        tracesCount: traces ? traces.length : 0,
+        tracesCount: traceCount,
+        hasStatuses,
+        statusesCount: Array.isArray(statuses) ? statuses.length : 0,
         timestamp: new Date().toISOString()
     });
     
     const chatMessages = document.getElementById('chat-messages');
-    const sanitizedContent = fixEncodingArtifacts(content || '');
     
     // Only remove initial loading indicator if we have traces to show
     const loadingIndicator = chatMessages.querySelector('.message.ai.loading-initial');
-    if (loadingIndicator && traces && traces.length > 0) {
+    if (loadingIndicator && ((traces && traces.length > 0) || hasStatuses || (sanitizedContent && sanitizedContent.trim()))) {
         loadingIndicator.remove();
         console.log('🗑️ [AI Agent] Removed initial loading indicator');
     }
@@ -1808,8 +1829,8 @@ function updateStreamingResponse(content, traces) {
     let aiMessage = chatMessages.querySelector('.message.ai.streaming');
     
     if (!aiMessage) {
-        // Create the AI message container if it doesn't exist, but only if we have traces or content
-        if ((traces && traces.length > 0) || content) {
+        // Create the AI message container if it doesn't exist, but only if we have traces, content, or statuses
+        if ((traces && traces.length > 0) || (sanitizedContent && sanitizedContent.trim()) || hasStatuses) {
             // Remove loading indicator now since we're creating the actual message
             if (loadingIndicator) {
                 loadingIndicator.remove();
@@ -1832,11 +1853,11 @@ function updateStreamingResponse(content, traces) {
     
     // Add visual debugging indicator
     const debugIndicator = document.createElement('div');
-    debugIndicator.className = 'debug-indicator';
+  	debugIndicator.className = 'debug-indicator';
     debugIndicator.innerHTML = `
         <div class="debug-status">
             <span class="debug-emoji">🔍</span>
-            <span class="debug-text">Streaming: ${content.length} chars, ${traces.length} traces</span>
+            <span class="debug-text">Streaming: ${contentLength} chars, ${traceCount} traces, ${hasStatuses ? statuses.length : 0} statuses</span>
             <span class="debug-time">${new Date().toLocaleTimeString()}</span>
         </div>
     `;
@@ -1876,6 +1897,26 @@ function updateStreamingResponse(content, traces) {
         tracesContainer.appendChild(tracesList);
         aiMessage.appendChild(tracesContainer);
         console.log('✅ [AI Agent] Traces added successfully');
+    }
+    
+    if (hasStatuses) {
+        console.log('ℹ️ [AI Agent] Rendering status log', { statusesCount: statuses.length });
+        const statusContainer = document.createElement('div');
+        statusContainer.className = 'status-log';
+        statusContainer.innerHTML = statuses.map(status => {
+            const stage = escapeHtml(status.stage || 'Status');
+            const message = escapeHtml(status.message || '');
+            const timestamp = status.timestamp ? new Date(status.timestamp).toLocaleTimeString() : '';
+            const timeLabel = timestamp ? `<span class="status-log-time">${escapeHtml(timestamp)}</span>` : '';
+            return `
+                <div class="status-log-item">
+                    <span class="status-log-stage">${stage}</span>
+                    <span class="status-log-message">${message}</span>
+                    ${timeLabel}
+                </div>
+            `;
+        }).join('');
+        aiMessage.appendChild(statusContainer);
     }
     
     // Add streaming content

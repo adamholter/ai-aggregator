@@ -318,6 +318,7 @@ body {
     box-sizing: border-box;
     width: 44px;
     height: 44px;
+    aspect-ratio: 1 / 1;
     margin: 0 auto 16px;
     border: 4px solid var(--spinner-track);
     border-top-color: var(--button-bg);
@@ -971,6 +972,7 @@ body {
 .initial-loading .loading-spinner {
     width: 20px;
     height: 20px;
+    aspect-ratio: 1 / 1;
     margin: 0 auto;
     border: 2px solid var(--spinner-track);
     border-top: 2px solid var(--button-bg);
@@ -1454,6 +1456,49 @@ body {
     color: #f5c6cb;
 }
 
+.status-log {
+    width: 100%;
+    margin-top: 16px;
+    padding: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--info-bg);
+    max-height: 220px;
+    overflow-y: auto;
+    text-align: left;
+}
+
+.status-log-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 0.85rem;
+    color: var(--text-color);
+}
+
+.status-log-item:last-child {
+    margin-bottom: 0;
+}
+
+.status-log-stage {
+    font-weight: 600;
+    color: var(--text-color);
+    min-width: 110px;
+}
+
+.status-log-message {
+    flex: 1;
+    color: var(--info-text);
+    word-break: break-word;
+}
+
+.status-log-time {
+    color: var(--info-text);
+    font-size: 0.75rem;
+    white-space: nowrap;
+}
+
 /* Markdown content styling */
 .response-content {
     line-height: 1.6;
@@ -1706,6 +1751,7 @@ body {
 .loading-spinner {
     width: 40px;
     height: 40px;
+    aspect-ratio: 1 / 1;
     margin: 0 auto 16px;
     border: 3px solid var(--spinner-track);
     border-top: 3px solid var(--button-bg);

@@ -1617,6 +1617,7 @@ def agent_tool_loop_generator(
     fetch_context,
     web_context,
     initial_categories,
+    theme='light',
     mode='standard',
     max_iterations=6
 ):
@@ -1626,6 +1627,13 @@ def agent_tool_loop_generator(
     print(f"🔧 [AGENT] Mode: {mode}")
     print(f"🔢 [AGENT] Max iterations: {max_iterations}")
     
+    def status_payload(stage, message):
+        return {
+            'stage': stage,
+            'message': message,
+            'timestamp': datetime.utcnow().isoformat()
+        }
+
     try:
         fetch_context = fetch_context or initialize_fetch_context()
         web_context = web_context or initialize_web_context()
@@ -1652,6 +1660,7 @@ def agent_tool_loop_generator(
         traces.append(dataset_trace)
         print(f"📊 [AGENT] Initial trace created, yielding...")
         yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
+        yield ('status', status_payload('Datasets', dataset_trace['description'] or 'No datasets loaded'))
         print(f"✅ [AGENT] Initial trace yielded successfully")
 
         prompt_context = build_agent_prompt_context(user_message, fetch_context, web_context)
@@ -1672,37 +1681,107 @@ def agent_tool_loop_generator(
         while iteration < max_iterations:
             iteration += 1
             print(f"🔄 [AGENT] Starting iteration {iteration}/{max_iterations}")
+            yield ('status', status_payload('Iteration', f'Starting iteration {iteration}/{max_iterations}'))
             
             try:
                 messages = build_agent_messages(final_prompt, conversation_history, user_message)
                 payload = {
                     'model': final_model,
-                    'messages': messages,
-                    'stream': False
+                    'messages': messages
                 }
                 if final_model == DEEP_RESEARCH_MODEL_ID:
                     payload.setdefault('addons', ['web_search'])
+                stream_payload = dict(payload)
+                stream_payload['stream'] = True
                 
-                print(f"📡 [AGENT] Sending request to OpenRouter...")
-                response = requests.post(
-                    f'{OPENROUTER_BASE_URL}/chat/completions',
-                    headers=headers,
-                    json=payload,
-                    timeout=60
-                )
+                yield ('status', {
+                    'stage': 'LLM Request',
+                    'message': f'Requesting response from {model_display} (iteration {iteration})',
+                    'timestamp': datetime.utcnow().isoformat()
+                })
+                print(f"📡 [AGENT] Sending streaming request to OpenRouter...")
                 
-                if response.status_code >= 400:
-                    try:
-                        error_payload = response.json()
-                    except Exception:
-                        error_payload = response.text
-                    raise requests.exceptions.HTTPError(
-                        f'Request failed with status {response.status_code}: {error_payload}',
-                        response=response
-                    )
+                total_chars = 0
+                status_step = 160
+                stream_buffer = ''
+                last_choice_snapshot = {}
+                assistant_accumulator = ''
+                sanitized_full = ''
+                sanitized_progress_length = 0
+                try:
+                    with requests.post(
+                        f'{OPENROUTER_BASE_URL}/chat/completions',
+                        headers=headers,
+                        json=stream_payload,
+                        stream=True,
+                        timeout=60
+                    ) as response:
+                        if response.status_code >= 400:
+                            try:
+                                error_payload = response.json()
+                            except Exception:
+                                error_payload = response.text
+                            raise requests.exceptions.HTTPError(
+                                f'Request failed with status {response.status_code}: {error_payload}',
+                                response=response
+                            )
+                        
+                        print(f"✅ [AGENT] Streaming response established")
+                        for raw_line in response.iter_lines(decode_unicode=True):
+                            if raw_line is None:
+                                continue
+                            line = raw_line.strip()
+                            if not line or line.startswith(':'):
+                                continue
+                            if line == 'data: [DONE]':
+                                break
+                            if not line.startswith('data: '):
+                                continue
+                            payload_str = line[6:].strip()
+                            if not payload_str:
+                                continue
+                            try:
+                                chunk_json = json.loads(payload_str)
+                            except json.JSONDecodeError:
+                                continue
+                            choices = chunk_json.get('choices', [])
+                            if not choices:
+                                continue
+                            last_choice_snapshot = choices[0]
+                            delta = choices[0].get('delta') or {}
+                            token = delta.get('content')
+                            if token:
+                                assistant_accumulator += token
+                                sanitized_full = sanitize_quickchart_urls_in_text(assistant_accumulator, theme)
+                                new_segment = sanitized_full[sanitized_progress_length:]
+                                sanitized_progress_length = len(sanitized_full)
+                                if new_segment:
+                                    stream_buffer += new_segment
+                                total_chars = sanitized_progress_length
+                                if len(stream_buffer) >= 160 or '\n' in stream_buffer:
+                                    yield ('content', stream_buffer)
+                                    stream_buffer = ''
+                                if total_chars >= status_step:
+                                    yield ('status', status_payload('LLM Response', f'Streamed {total_chars} characters so far'))
+                                    status_step += 160
+                        if stream_buffer:
+                            yield ('content', stream_buffer)
+                            stream_buffer = ''
+                        if not sanitized_full:
+                            sanitized_full = sanitize_quickchart_urls_in_text(assistant_accumulator, theme)
+                        content = sanitized_full
+                        print(f"✅ [AGENT] Streaming complete ({len(content)} chars)")
+                        yield ('status', status_payload('LLM Response', f'Completed streaming {len(content)} characters'))
+                except requests.exceptions.Timeout as exc:
+                    raise requests.exceptions.Timeout(f'Streaming request timed out: {exc}') from exc
                 
-                result = response.json()
-                print(f"✅ [AGENT] Response received from OpenRouter")
+                result_message = (last_choice_snapshot.get('message') or {}) if last_choice_snapshot else {}
+                if not content:
+                    fallback_raw = result_message.get('content') or ''
+                    content = sanitize_quickchart_urls_in_text(fallback_raw, theme)
+                normalized_content = content.strip()
+                upper_content = normalized_content.upper()
+                print(f"📄 [AGENT] Content received: {len(normalized_content)} chars")
                 
             except requests.exceptions.RequestException as exc:
                 print(f"❌ [AGENT] Request to language model failed: {exc}")
@@ -1716,6 +1795,7 @@ def agent_tool_loop_generator(
                     'status': 'failed'
                 })
                 yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
+                yield ('status', status_payload('LLM Request', f'Error: {exc}'))
                 yield ('error', error_message, traces, fetch_context, web_context)
                 return
             except ValueError as exc:
@@ -1730,6 +1810,7 @@ def agent_tool_loop_generator(
                     'status': 'failed'
                 })
                 yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
+                yield ('status', status_payload('LLM Request', f'Parsing error: {exc}'))
                 yield ('error', error_message, traces, fetch_context, web_context)
                 return
             except Exception as exc:
@@ -1744,30 +1825,12 @@ def agent_tool_loop_generator(
                     'status': 'failed'
                 })
                 yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
+                yield ('status', status_payload('LLM Request', f'Unexpected error: {exc}'))
                 yield ('error', error_message, traces, fetch_context, web_context)
                 return
 
-            try:
-                content = (
-                    result.get('choices', [{}])[0]
-                    .get('message', {})
-                    .get('content') or ''
-                )
-                normalized_content = content.strip()
-                upper_content = normalized_content.upper()
-                print(f"📄 [AGENT] Content received: {len(normalized_content)} chars")
-            except Exception as exc:
-                print(f"❌ [AGENT] Error processing response content: {exc}")
-                error_message = f'Error processing response content: {exc}'
-                traces.append({
-                    'step': 'Response Generation',
-                    'description': 'Error processing response content.',
-                    'tool': model_display,
-                    'status': 'failed'
-                })
-                yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
-                yield ('error', error_message, traces, fetch_context, web_context)
-                return
+            normalized_content = content.strip()
+            upper_content = normalized_content.upper()
 
             if upper_content.startswith('FETCH_DATA:'):
                 print(f"📊 [AGENT] Processing FETCH_DATA command")
@@ -1813,6 +1876,7 @@ def agent_tool_loop_generator(
                         'status': 'success'
                     })
                     yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
+                    yield ('status', status_payload('Tool', description))
                     print(f"✅ [AGENT] Data fetched successfully, continuing to next iteration")
                     continue
                 except Exception as exc:
@@ -1827,6 +1891,7 @@ def agent_tool_loop_generator(
                         'status': 'failed'
                     })
                     yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
+                    yield ('status', status_payload('Tool', f'fetch_data failed: {exc}'))
                     yield ('error', error_message, traces, fetch_context, web_context)
                     return
 
@@ -1846,6 +1911,7 @@ def agent_tool_loop_generator(
                         'status': 'success' if web_data else 'warning'
                     })
                     yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
+                    yield ('status', status_payload('Tool', f'WEB_SEARCH -> {query or "(blank)"}'))
                     print(f"✅ [AGENT] Web search completed, continuing to next iteration")
                     continue
                 except Exception as exc:
@@ -1860,12 +1926,14 @@ def agent_tool_loop_generator(
                         'status': 'failed'
                     })
                     yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
+                    yield ('status', status_payload('Tool', f'web_search failed: {exc}'))
                     yield ('error', error_message, traces, fetch_context, web_context)
                     return
 
             # Final response
             final_content = normalized_content or content
             print(f"✅ [AGENT] Final response ready: {len(final_content)} chars")
+            yield ('status', status_payload('Agent', 'Final response ready'))
             traces.append({
                 'step': 'Response Generation',
                 'description': f'Response generated by {model_display}',
@@ -2817,6 +2885,7 @@ def ai_agent():
         fetch_result = fetch_data_for_categories(fetch_categories)
         fetch_context = merge_fetch_context(fetch_context, fetch_result)
         web_context = initialize_web_context()
+        relevant_data = compose_fetch_markdown(fetch_context)
         headers = build_openrouter_headers(user_openrouter_token)
         sse_headers = {
             'Cache-Control': 'no-cache',
@@ -2871,6 +2940,9 @@ Respond concisely and cite the sources (Conversation History, Database, Web Sear
 
         def encode_content(text):
             return f"data: {json.dumps({'type': 'content', 'content': text}, ensure_ascii=False)}\n\n".encode('utf-8')
+
+        def encode_status(status_payload):
+            return f"data: {json.dumps({'type': 'status', 'status': status_payload}, ensure_ascii=False)}\n\n".encode('utf-8')
         if stream:
             def generate_stream():
                 try:
@@ -2885,6 +2957,7 @@ Respond concisely and cite the sources (Conversation History, Database, Web Sear
                         fetch_context,
                         web_context,
                         fetch_categories,
+                        theme=current_theme,
                         mode='deep-research' if deep_research else 'standard',
                         max_iterations=8 if deep_research else 6
                     )
@@ -2895,9 +2968,10 @@ Respond concisely and cite the sources (Conversation History, Database, Web Sear
                     timeout_seconds = 120  # 2 minute timeout for production
                     
                     events_sent = 0
-                    max_events = 1000  # Prevent infinite loops
+                    max_events = 5000  # Prevent infinite loops while streaming
                     last_yield_time = start_time
                     stall_timeout = 30  # 30 seconds without yielding
+                    content_emitted = False
                     
                     try:
                         for event in local_generator:
@@ -2930,6 +3004,15 @@ Respond concisely and cite the sources (Conversation History, Database, Web Sear
                                 traces_snapshot = event[1] if len(event) > 1 else []
                                 print(f"📍 [SERVER] Yielding traces: {len(traces_snapshot)} steps")
                                 yield encode_traces(traces_snapshot)
+                            elif kind == 'status':
+                                status_payload = event[1] if len(event) > 1 else {}
+                                print(f"ℹ️  [SERVER] Status update: {status_payload}")
+                                yield encode_status(status_payload)
+                            elif kind == 'content':
+                                chunk_payload = event[1] if len(event) > 1 else ''
+                                if chunk_payload:
+                                    content_emitted = True
+                                    yield encode_content(chunk_payload)
                             elif kind == 'error':
                                 error_message = event[1] if len(event) > 1 else 'Unknown error'
                                 traces_snapshot = event[2] if len(event) > 2 else []
@@ -2941,9 +3024,10 @@ Respond concisely and cite the sources (Conversation History, Database, Web Sear
                             elif kind == 'final':
                                 final_content = event[1] if len(event) > 1 else ''
                                 final_content = sanitize_quickchart_urls_in_text(final_content or '', current_theme)
-                                print(f"✅ [SERVER] Yielding final content: {len(final_content)} chars")
-                                for chunk in iter_text_chunks(final_content):
-                                    yield encode_content(chunk)
+                                print(f"✅ [SERVER] Final content ready: {len(final_content)} chars")
+                                if not content_emitted and final_content:
+                                    for chunk in iter_text_chunks(final_content):
+                                        yield encode_content(chunk)
                                 # Ensure proper termination
                                 yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n".encode('utf-8')
                                 return
@@ -3012,6 +3096,7 @@ Respond concisely and cite the sources (Conversation History, Database, Web Sear
             fetch_context,
             web_context,
             fetch_categories,
+            theme=current_theme,
             mode='deep-research' if deep_research else 'standard',
             max_iterations=8 if deep_research else 6
         )
