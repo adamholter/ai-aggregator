@@ -1812,6 +1812,23 @@ def agent_tool_loop_generator(
                 if not content:
                     fallback_raw = result_message.get('content') or ''
                     content = sanitize_quickchart_urls_in_text(fallback_raw, theme)
+
+                if stream_completed:
+                    try:
+                        non_stream_full = fetch_non_stream_content(headers, payload, theme)
+                    except requests.exceptions.RequestException as exc:
+                        print(f"⚠️ [AGENT] Non-stream verification failed: {exc}")
+                    else:
+                        if non_stream_full and non_stream_full != sanitized_full:
+                            yield ('status', status_payload('LLM Response', 'Verified completion via non-stream request'))
+                            delta = non_stream_full[len(sanitized_full):]
+                            if delta:
+                                yield ('content', delta)
+                            assistant_accumulator = non_stream_full
+                            sanitized_full = non_stream_full
+                            sanitized_progress_length = len(sanitized_full)
+                            content = sanitized_full
+                            total_chars = sanitized_progress_length
                 normalized_content = content.strip()
                 upper_content = normalized_content.upper()
                 print(f"📄 [AGENT] Content received: {len(normalized_content)} chars")
@@ -3391,6 +3408,18 @@ Explicitly note when information is not present in the provided datasets."""
                                 yield emit_traces()
 
                                 sanitized_content = sanitize_quickchart_urls_in_text(full_content, theme)
+                                try:
+                                    verified_content = fetch_non_stream_content(headers, fallback_payload, theme)
+                                except requests.exceptions.RequestException as exc:
+                                    print(f"⚠️ [ANALYSIS] Non-stream verification failed: {exc}")
+                                    verified_content = sanitized_content
+                                if verified_content and verified_content != sanitized_content:
+                                    delta = verified_content[len(sanitized_content):]
+                                    if delta:
+                                        yield emit_content(delta)
+                                    sanitized_content = verified_content
+                                    full_content = verified_content
+
                                 analysis_payload = {
                                     'analysis': sanitized_content,
                                     'model_data': model_data,
