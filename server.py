@@ -1714,7 +1714,7 @@ def agent_tool_loop_generator(
                         headers=headers,
                         json=stream_payload,
                         stream=True,
-                        timeout=60
+                        timeout=(10, 180)
                     ) as response:
                         if response.status_code >= 400:
                             try:
@@ -1773,7 +1773,11 @@ def agent_tool_loop_generator(
                         print(f"✅ [AGENT] Streaming complete ({len(content)} chars)")
                         yield ('status', status_payload('LLM Response', f'Completed streaming {len(content)} characters'))
                 except requests.exceptions.Timeout as exc:
-                    raise requests.exceptions.Timeout(f'Streaming request timed out: {exc}') from exc
+                    yield ('status', status_payload('LLM Response', f'Stream timeout after {total_chars} characters: {exc}'))
+                    content = sanitize_quickchart_urls_in_text(assistant_accumulator, theme)
+                except requests.exceptions.RequestException as exc:
+                    yield ('status', status_payload('LLM Response', f'Stream interrupted: {exc}'))
+                    content = sanitize_quickchart_urls_in_text(assistant_accumulator, theme)
                 
                 result_message = (last_choice_snapshot.get('message') or {}) if last_choice_snapshot else {}
                 if not content:
