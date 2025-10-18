@@ -1783,7 +1783,13 @@ def agent_tool_loop_generator(
                 except requests.exceptions.Timeout as exc:
                     prev_length = sanitized_progress_length
                     yield ('status', status_payload('LLM Response', f'Stream timeout after {total_chars} characters: {exc}; retrying without streaming'))
-                    fallback_content = fetch_non_stream_content(headers, payload, theme)
+                    try:
+                        fallback_content = fetch_non_stream_content(headers, payload, theme)
+                    except requests.exceptions.RequestException as fetch_exc:
+                        error_message = f'Fallback completion failed after timeout: {fetch_exc}'
+                        print(f"⚠️ [AGENT] {error_message}")
+                        yield encode_error(error_message)
+                        return
                     sanitized_full = fallback_content
                     assistant_accumulator = fallback_content
                     sanitized_progress_length = len(fallback_content)
@@ -1793,7 +1799,13 @@ def agent_tool_loop_generator(
                 except requests.exceptions.RequestException as exc:
                     prev_length = sanitized_progress_length
                     yield ('status', status_payload('LLM Response', f'Stream interrupted ({exc}); retrying without streaming'))
-                    fallback_content = fetch_non_stream_content(headers, payload, theme)
+                    try:
+                        fallback_content = fetch_non_stream_content(headers, payload, theme)
+                    except requests.exceptions.RequestException as fetch_exc:
+                        error_message = f'Fallback completion failed after interruption: {fetch_exc}'
+                        print(f"⚠️ [AGENT] {error_message}")
+                        yield encode_error(error_message)
+                        return
                     sanitized_full = fallback_content
                     assistant_accumulator = fallback_content
                     sanitized_progress_length = len(fallback_content)
@@ -1804,7 +1816,13 @@ def agent_tool_loop_generator(
                     if not stream_completed:
                         prev_length = sanitized_progress_length
                         yield ('status', status_payload('LLM Response', 'Stream ended without completion; retrying without streaming'))
-                        fallback_content = fetch_non_stream_content(headers, payload, theme)
+                        try:
+                            fallback_content = fetch_non_stream_content(headers, payload, theme)
+                        except requests.exceptions.RequestException as fetch_exc:
+                            error_message = f'Fallback completion failed after incomplete stream: {fetch_exc}'
+                            print(f"⚠️ [AGENT] {error_message}")
+                            yield encode_error(error_message)
+                            return
                         sanitized_full = fallback_content
                         assistant_accumulator = fallback_content
                         sanitized_progress_length = len(fallback_content)
@@ -1829,7 +1847,10 @@ def agent_tool_loop_generator(
                     try:
                         verified_content = fetch_non_stream_content(headers, payload, theme)
                     except requests.exceptions.RequestException as exc:
-                        print(f"⚠️ [AGENT] Non-stream fallback failed: {exc}")
+                        error_message = f'Non-stream completion failed: {exc}'
+                        print(f"⚠️ [AGENT] {error_message}")
+                        yield encode_error(error_message)
+                        return
                     else:
                         verified_content = verified_content or ''
                         if verified_content and verified_content != sanitized_full:
@@ -3003,6 +3024,9 @@ Respond concisely and cite the sources (Conversation History, Database, Web Sear
 
         def encode_content(text):
             return f"data: {json.dumps({'type': 'content', 'content': text}, ensure_ascii=False)}\n\n".encode('utf-8')
+
+        def encode_error(message):
+            return f"data: {json.dumps({'type': 'error', 'error': message}, ensure_ascii=False)}\n\n".encode('utf-8')
 
         def encode_status(status_payload):
             return f"data: {json.dumps({'type': 'status', 'status': status_payload}, ensure_ascii=False)}\n\n".encode('utf-8')
