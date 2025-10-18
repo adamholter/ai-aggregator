@@ -2809,8 +2809,6 @@ def ai_agent():
 
         needs_charts = detect_chart_request(user_message)
         current_theme = request.args.get('theme', 'light')
-        chart_failure_message = None
-        chart_failure_traces = []
         if deep_research:
             fetch_categories = list(FETCH_DATA_CATEGORY_CONFIG.keys())
         else:
@@ -2819,8 +2817,6 @@ def ai_agent():
         fetch_result = fetch_data_for_categories(fetch_categories)
         fetch_context = merge_fetch_context(fetch_context, fetch_result)
         web_context = initialize_web_context()
-        relevant_data = compose_fetch_markdown(fetch_context)
-
         headers = build_openrouter_headers(user_openrouter_token)
         sse_headers = {
             'Cache-Control': 'no-cache',
@@ -2867,256 +2863,14 @@ Respond concisely and cite the sources (Conversation History, Database, Web Sear
 
         prompt_template = get_prompt_value(['ai-agent', 'final-system'], default_final_prompt)
 
+        if needs_charts:
+            prompt_template = append_quickchart_guidance(prompt_template, current_theme)
+
         def encode_traces(traces_list):
             return f"data: {json.dumps({'type': 'traces', 'traces': traces_list}, ensure_ascii=False)}\n\n".encode('utf-8')
 
         def encode_content(text):
             return f"data: {json.dumps({'type': 'content', 'content': text}, ensure_ascii=False)}\n\n".encode('utf-8')
-
-        if needs_charts:
-            final_prompt = create_quickchart_prompt(user_message, relevant_data, '')
-
-            def build_chart_traces(status):
-                return [
-                    {
-                        'step': 'Dataset Fetch',
-                        'description': describe_loaded_categories(fetch_context),
-                        'tool': f"fetch_data ({len(fetch_categories)} categories)",
-                        'status': 'success'
-                    },
-                    {
-                        'step': 'Response Generation',
-                        'description': f"Preparing visualization{' (Speed Mode)' if speed_mode else ''}",
-                        'tool': model_display_name,
-                        'status': status
-                    }
-                ]
-
-            messages = build_agent_messages(final_prompt, conversation_history, user_message)
-            payload = {
-                'model': final_model,
-                'messages': messages,
-                'stream': False
-            }
-            if final_model == DEEP_RESEARCH_MODEL_ID:
-                payload.setdefault('addons', ['web_search'])
-
-            if stream:
-                def generate_chart_stream():
-                    print(f"🔧 [CHART] Starting chart stream generation for model: {final_model}")
-                    traces = build_chart_traces('in_progress')
-                    yield encode_traces(traces)
-                    print(f"📊 [CHART] Initial traces yielded, making API request...")
-                    
-                    # Add timeout and connection management (same as regular stream)
-                    start_time = time.time()
-                    timeout_seconds = 120  # 2 minute timeout for production
-
-                    def stream_standard_fallback(reason_text):
-                        """Fallback to the regular agent stream when chart generation fails."""
-                        print(f"🔁 [CHART] Falling back to standard agent: {reason_text}")
-                        fallback_prefix = (
-                            f"⚠️ Chart visualization failed ({reason_text}). "
-                            "Sharing textual insights instead.\n\n"
-                        )
-                        mode_label = 'deep-research' if deep_research else 'standard'
-                        fallback_generator = agent_tool_loop_generator(
-                            user_message,
-                            conversation_history,
-                            final_model,
-                            headers,
-                            analysis_sequence,
-                            prompt_template,
-                            fetch_context,
-                            web_context,
-                            fetch_categories,
-                            mode=mode_label,
-                            max_iterations=8 if deep_research else 6
-                        )
-                        try:
-                            intro_sent = False
-                            for event in fallback_generator:
-                                if not isinstance(event, (list, tuple)) or not event:
-                                    continue
-                                kind = event[0]
-                                if kind == 'traces':
-                                    traces_snapshot = event[1] if len(event) > 1 else []
-                                    yield encode_traces(traces_snapshot)
-                                elif kind == 'error':
-                                    error_message = event[1] if len(event) > 1 else 'Unknown error'
-                                    traces_snapshot = event[2] if len(event) > 2 else []
-                                    yield encode_traces(traces_snapshot)
-                                    fallback_body = f"{fallback_prefix}{error_message}"
-                                    fallback_body = sanitize_quickchart_urls_in_text(fallback_body, current_theme)
-                                    for chunk in iter_text_chunks(fallback_body):
-                                        yield encode_content(chunk)
-                                    yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n".encode('utf-8')
-                                    return
-                                elif kind == 'final':
-                                    fallback_content = event[1] if len(event) > 1 else ''
-                                    traces_snapshot = event[2] if len(event) > 2 else []
-                                    if traces_snapshot:
-                                        yield encode_traces(traces_snapshot)
-                                    fallback_body = fallback_prefix if not intro_sent else ''
-                                    intro_sent = True
-                                    fallback_body += fallback_content or ''
-                                    fallback_body = sanitize_quickchart_urls_in_text(fallback_body, current_theme)
-                                    if not fallback_body.strip():
-                                        fallback_body = fallback_prefix.rstrip()
-                                    for chunk in iter_text_chunks(fallback_body):
-                                        yield encode_content(chunk)
-                                    yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n".encode('utf-8')
-                                    return
-                            print("🏁 [CHART] Fallback generator completed without final event")
-                            yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n".encode('utf-8')
-                        finally:
-                            if hasattr(fallback_generator, 'close'):
-                                try:
-                                    fallback_generator.close()
-                                except Exception:
-                                    pass
-                    
-                    try:
-                        response = requests.post(
-                            f'{OPENROUTER_BASE_URL}/chat/completions',
-                            headers=headers,
-                            json=payload,
-                            timeout=90
-                        )
-                        print(f"📡 [CHART] API response received, status: {response.status_code}")
-                        
-                        if response.status_code >= 400:
-                            try:
-                                error_payload = response.json()
-                            except Exception:
-                                error_payload = response.text
-                            raise requests.exceptions.HTTPError(
-                                f'Request failed with status {response.status_code}: {error_payload}',
-                                response=response
-                            )
-                        result = response.json()
-                        final_content = (
-                            result.get('choices', [{}])[0]
-                            .get('message', {})
-                            .get('content') or ''
-                        )
-                        print(f"✅ [CHART] Content received: {len(final_content)} chars")
-                        
-                    except requests.exceptions.Timeout as exc:
-                        print(f"⏰ [CHART] Request timeout: {exc}")
-                        traces[-1]['status'] = 'failed'
-                        traces[-1]['description'] = 'Chart generation timed out after 90 seconds'
-                        yield encode_traces(traces)
-                        yield from stream_standard_fallback('timed out while generating the visualization')
-                        return
-                        
-                    except requests.exceptions.RequestException as exc:
-                        print(f"❌ [CHART] Request failed: {exc}")
-                        traces[-1]['status'] = 'failed'
-                        traces[-1]['description'] = f'Network error during chart generation: {exc}'
-                        yield encode_traces(traces)
-                        yield from stream_standard_fallback(f'network error during chart generation ({exc})')
-                        return
-                    
-                    except Exception as exc:
-                        print(f"❌ [CHART] Unexpected error: {exc}")
-                        import traceback
-                        print(f"TRACEBACK: {traceback.format_exc()}")
-                        traces[-1]['status'] = 'failed'
-                        traces[-1]['description'] = f'Unexpected error during chart generation: {exc}'
-                        yield encode_traces(traces)
-                        yield from stream_standard_fallback(f'unexpected error: {exc}')
-                        return
-                    
-                    # Check overall timeout
-                    current_time = time.time()
-                    if current_time - start_time > timeout_seconds:
-                        print(f"⏰ [CHART] Overall timeout after {current_time - start_time:.2f}s")
-                        traces[-1]['status'] = 'failed'
-                        traces[-1]['description'] = f'Chart generation timed out after {timeout_seconds} seconds'
-                        yield encode_traces(traces)
-                        yield from stream_standard_fallback(f'timed out after {timeout_seconds} seconds while streaming content')
-                        return
-                    
-                    # Success path
-                    traces[-1]['status'] = 'success'
-                    traces[-1]['description'] = f'Chart visualization generated by {model_display_name}'
-                    yield encode_traces(traces)
-                    final_content = sanitize_quickchart_urls_in_text(final_content, current_theme)
-                    
-                    # Stream content with chunking
-                    chunks_sent = 0
-                    max_chunks = 1000  # Prevent infinite loops
-                    for chunk in iter_text_chunks(final_content):
-                        current_time = time.time()
-                        if current_time - start_time > timeout_seconds:
-                            print(f"⏰ [CHART] Timeout during content streaming")
-                            timeout_json = json.dumps({'type': 'error', 'error': 'Chart generation timeout during streaming'}, ensure_ascii=False)
-                            yield f"data: {timeout_json}\n\n".encode('utf-8')
-                            return
-                        
-                        if chunks_sent >= max_chunks:
-                            print(f"🚫 [CHART] Chunk limit exceeded: {chunks_sent}")
-                            break
-                            
-                        yield encode_content(chunk)
-                        chunks_sent += 1
-                    
-                    # Always ensure proper termination
-                    print(f"🏁 [CHART] Chart stream completed successfully, {chunks_sent} chunks sent")
-                    yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n".encode('utf-8')
-                    return
-
-                # Enhanced SSE headers for production compatibility (same as regular stream)
-                enhanced_sse_headers = {
-                    **sse_headers,
-                    'X-Accel-Buffering': 'no',  # Disable nginx buffering
-                    'Cache-Control': 'no-cache, no-store, must-revalidate',
-                    'Pragma': 'no-cache',
-                    'Expires': '0'
-                }
-                
-                return Response(stream_with_context(generate_chart_stream()), mimetype='text/event-stream', headers=enhanced_sse_headers)
-
-            try:
-                response = requests.post(
-                    f'{OPENROUTER_BASE_URL}/chat/completions',
-                    headers=headers,
-                    json=payload,
-                    timeout=90
-                )
-                if response.status_code >= 400:
-                    try:
-                        error_payload = response.json()
-                    except Exception:
-                        error_payload = response.text
-                    raise requests.exceptions.HTTPError(
-                        f'Request failed with status {response.status_code}: {error_payload}',
-                        response=response
-                    )
-                result = response.json()
-                final_content = (
-                    result.get('choices', [{}])[0]
-                    .get('message', {})
-                    .get('content') or ''
-                )
-                final_content = sanitize_quickchart_urls_in_text(final_content, current_theme)
-                traces = build_chart_traces('success')
-                return jsonify({
-                    'response': final_content,
-                    'traces': traces,
-                    'fetch_data': {
-                        'categories': fetch_context.get('metadata', []),
-                        'structured': compose_fetch_structured(fetch_context),
-                        'datasets': compose_fetch_datasets(fetch_context)
-                    },
-                    'web_search': web_context
-                })
-            except Exception as exc:
-                chart_failure_message = str(exc)
-                chart_failure_traces = build_chart_traces('failed')
-                print(f"⚠️ [CHART] Non-stream chart generation failed; falling back to standard agent: {chart_failure_message}")
-
         if stream:
             def generate_stream():
                 try:
@@ -3279,15 +3033,6 @@ Respond concisely and cite the sources (Conversation History, Database, Web Sear
                 final_traces = event[2]
                 final_fetch_ctx = event[3]
                 final_web_ctx = event[4]
-
-        if chart_failure_message:
-            failure_prefix = (
-                f"⚠️ Chart visualization failed ({chart_failure_message}). "
-                "Providing textual insights instead.\n\n"
-            )
-            final_content = (failure_prefix + (final_content or '')).strip() or failure_prefix.rstrip()
-            if chart_failure_traces:
-                final_traces = (chart_failure_traces or []) + (final_traces or [])
 
         if error_message:
             return jsonify({'error': error_message, 'traces': final_traces}), 500
@@ -4200,6 +3945,60 @@ def sanitize_quickchart_urls_in_text(content, theme='light'):
     return QUICKCHART_URL_PATTERN.sub(replacer, content)
 
 
+def build_quickchart_guidance(theme):
+    """Construct guidance text for QuickChart-based visualizations."""
+    example_config = {
+        "type": "scatter",
+        "data": {
+            "datasets": [
+                {
+                    "label": "Example Models",
+                    "data": [
+                        {"x": 45, "y": 82, "r": 6, "label": "Model Alpha"},
+                        {"x": 68, "y": 74, "r": 8, "label": "Model Beta"},
+                        {"x": 90, "y": 88, "r": 10, "label": "Model Gamma"}
+                    ],
+                    "backgroundColor": "rgba(17, 24, 39, 0.65)",
+                    "borderColor": "rgba(17, 24, 39, 0.9)",
+                    "hoverRadius": 12
+                }
+            ]
+        },
+        "options": {
+            "plugins": {
+                "legend": {"display": False},
+                "tooltip": {"enabled": True}
+            },
+            "scales": {
+                "x": {"title": {"display": True, "text": "Speed (tokens/sec)"}},
+                "y": {"title": {"display": True, "text": "Coding Intelligence Index"}}
+            }
+        }
+    }
+    example_url = get_quickchart_url(example_config, theme=theme)
+    return (
+        f"### QuickChart Visualization Mode ({theme} theme)\n"
+        "- When visualizations improve clarity, embed QuickChart.io images using markdown syntax: "
+        "![Chart Title](quickchart_url).\n"
+        "- Generate valid JSON chart configurations (double quotes only) with explicit axis titles, units, and "
+        "sensible numeric scales derived from the provided datasets.\n"
+        "- For scatter or bubble charts, map X and Y axes to the requested metrics and encode magnitude with "
+        "`data[].r` (radius). Supply readable `backgroundColor` and `borderColor` values that respect the active theme.\n"
+        "- Label every point via `data[].label` so each model is identifiable in the chart and ensure tooltips remain informative.\n"
+        "- Cite data sources (Database, Web Search, Conversation History) alongside the chart analysis.\n"
+        f"- Example QuickChart URL: {example_url}"
+    )
+
+
+def append_quickchart_guidance(prompt_template, theme):
+    """Inject QuickChart guidance into the active prompt template."""
+    guidance = build_quickchart_guidance(theme)
+    placeholder = '{QUICKCHART_GUIDANCE}'
+    if placeholder in prompt_template:
+        return prompt_template.replace(placeholder, guidance)
+    return f"{prompt_template}\n\n{guidance}"
+
+
 def get_quickchart_url(chart_config, theme='light'):
     """Generate a QuickChart.io URL for the given chart configuration."""
     
@@ -4299,86 +4098,6 @@ def detect_chart_request(message):
             return True
     
     return False
-
-def create_quickchart_prompt(user_message, relevant_data, web_data):
-    """Create AI agent prompt with QuickChart.io visualization capabilities"""
-    # Get the current theme from request or default to light
-    theme = request.args.get('theme', 'light')
-    
-    # Example QuickChart URL based on theme with validated JSON payload
-    example_config = {
-        "type": "bar",
-        "data": {
-            "labels": ["January", "February", "March", "April", "May"],
-            "datasets": [
-                {
-                    "label": "Example Data",
-                    "data": [50, 60, 70, 180, 190]
-                }
-            ]
-        }
-    }
-    example_url = get_quickchart_url(example_config, theme=theme)
-    
-    return f"""You are an advanced AI Model Analysis Assistant with powerful data analysis and visualization capabilities using QuickChart.io.
-
-## Core Capabilities:
-
-### 1. Data Analysis & Insights
-- Analyze model performance, pricing, and capabilities
-- Compare models across different metrics
-- Identify trends and patterns in AI model landscape
-- Provide strategic recommendations for model selection
-
-### 2. Chart Generation with QuickChart.io
-- Create professional charts using QuickChart.io API
-- Generate bar charts, line charts, scatter plots, pie charts, and more
-- Use consistent styling that matches the current theme ({theme} mode)
-- Embed charts directly in responses as images
-
-## Available Data:
-{relevant_data}
-
-{f"Web Search Results: {web_data}" if web_data else ""}
-
-## User Request: "{user_message}"
-
-## Chart Generation Guidelines:
-
-When the user asks for visualizations, comparisons, or data analysis:
-
-1. **Create QuickChart.io URLs** that:
-   - Use the appropriate chart type for the data
-   - Include proper labels, titles, and legends
-   - Match the current theme ({theme} mode)
-   - Display data clearly and professionally
-
-2. **Chart Configuration Structure**:
-   - Background: {'black' if theme == 'dark' else 'white'}
-   - Text colors: {'white' if theme == 'dark' else 'black'}
-   - Grid colors: {'rgba(255,255,255,0.15)' if theme == 'dark' else 'rgba(0,0,0,0.1)'}
-   - Data colors: Use contrasting colors that work well with the theme
-
-3. **Response Format**:
-   - First, provide a brief explanation of what the chart shows
-   - Then, embed the chart using markdown image syntax: ![Chart Title](quickchart_url)
-   - Finally, provide insights and analysis based on the visualization
-
-## Example QuickChart URL:
-{example_url}
-
-This creates a bar chart with proper theme styling.
-
-## Instructions:
-- When users ask for comparisons, trends, or visualizations, create appropriate QuickChart.io charts
-- Base all analysis on the provided data only
-- Create clear, informative visualizations with proper labeling
-- Provide actionable insights based on the analysis
-- Use emojis and formatting for better readability
-- Embed charts as images in your markdown response
-- NEVER generate Python code or mention Python execution
-
-Remember: Use QuickChart.io to create beautiful, theme-aware visualizations that help users understand AI model data at a glance."""
 
 def analyze_data_correlations(model_data, metrics=None):
     """Analyze correlations between different model metrics"""
@@ -4562,11 +4281,18 @@ DO NOT generate Python code. Use QuickChart.io for all visualizations.
 
 Focus on delivering intelligent, contextually-aware responses that go beyond simple data retrieval."""
 
-        return smart_prompt
-        
+        return append_quickchart_guidance(smart_prompt, theme)
+    
     except Exception as e:
         # Fallback to standard prompt
-        return create_quickchart_prompt(user_message, relevant_data, web_data)
+        fallback_prompt = (
+            f"You are an AI assistant focused on AI model analysis.\n\n"
+            f"User Query: {user_message}\n\n"
+            f"Available Data Summary:\n{relevant_data or 'No cached analysis entries provided.'}\n\n"
+            f"Supplementary Context:\n{web_data or 'No web context supplied.'}"
+        )
+        theme = request.args.get('theme', 'light')
+        return append_quickchart_guidance(fallback_prompt, theme)
 
 def detect_query_intent(message):
     """Detect the intent behind user queries for smarter responses"""

@@ -10,6 +10,7 @@
     --bg-color: #ffffff;
     --text-color: #000000;
     --border-color: #e0e0e0;
+    --spinner-track: rgba(0, 0, 0, 0.12);
     --card-bg: #ffffff;
     --input-bg: #ffffff;
     --button-bg: #000000;
@@ -26,6 +27,7 @@
     --bg-color: #121212;
     --text-color: #ffffff;
     --border-color: #333333;
+    --spinner-track: rgba(255, 255, 255, 0.18);
     --card-bg: #1e1e1e;
     --input-bg: #2a2a2a;
     --button-bg: #ffffff;
@@ -41,6 +43,7 @@
     --bg-color: #f8f9fb;
     --text-color: #111827;
     --border-color: #d4d6dd;
+    --spinner-track: rgba(17, 24, 39, 0.16);
     --card-bg: #ffffff;
     --input-bg: #ffffff;
     --button-bg: #111827;
@@ -303,9 +306,11 @@ body {
     align-items: center;
     justify-content: center;
     flex-direction: column;
+    width: 100%;
     padding: 60px 20px;
     min-height: 160px;
     color: var(--info-text);
+    text-align: center;
 }
 
 .loading .loading-spinner {
@@ -313,11 +318,12 @@ body {
     box-sizing: border-box;
     width: 44px;
     height: 44px;
-    aspect-ratio: 1 / 1;
-    border: 4px solid var(--border-color);
+    margin: 0 auto 16px;
+    border: 4px solid var(--spinner-track);
     border-top-color: var(--button-bg);
     border-radius: 50%;
     transform-origin: center;
+    transform: translateZ(0);
     will-change: transform;
     animation: spin 0.75s linear infinite;
 }
@@ -965,10 +971,12 @@ body {
 .initial-loading .loading-spinner {
     width: 20px;
     height: 20px;
-    border: 2px solid var(--border-color);
+    margin: 0 auto;
+    border: 2px solid var(--spinner-track);
     border-top: 2px solid var(--button-bg);
     border-radius: 50%;
     animation: spin 1s linear infinite;
+    transform: translateZ(0);
 }
 
 .initial-loading .loading-text {
@@ -1698,11 +1706,12 @@ body {
 .loading-spinner {
     width: 40px;
     height: 40px;
-    border: 3px solid var(--border-color);
+    margin: 0 auto 16px;
+    border: 3px solid var(--spinner-track);
     border-top: 3px solid var(--button-bg);
     border-radius: 50%;
     animation: spin 1s linear infinite;
-    margin-bottom: 16px;
+    transform: translateZ(0);
 }
 
 @keyframes spin {
