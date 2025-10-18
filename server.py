@@ -1706,6 +1706,7 @@ def agent_tool_loop_generator(
                 status_step = 160
                 stream_buffer = ''
                 last_choice_snapshot = {}
+                last_finish_reason = None
                 assistant_accumulator = ''
                 sanitized_full = ''
                 sanitized_progress_length = 0
@@ -1751,6 +1752,9 @@ def agent_tool_loop_generator(
                             if not choices:
                                 continue
                             last_choice_snapshot = choices[0]
+                            finish_reason = choices[0].get('finish_reason')
+                            if finish_reason:
+                                last_finish_reason = finish_reason
                             delta = choices[0].get('delta') or {}
                             token = delta.get('content')
                             if token:
@@ -1813,21 +1817,31 @@ def agent_tool_loop_generator(
                     fallback_raw = result_message.get('content') or ''
                     content = sanitize_quickchart_urls_in_text(fallback_raw, theme)
 
-                try:
-                    verified_content = fetch_non_stream_content(headers, payload, theme)
-                except requests.exceptions.RequestException as exc:
-                    print(f"⚠️ [AGENT] Non-stream verification failed: {exc}")
-                else:
-                    if verified_content and verified_content != sanitized_full:
-                        yield ('status', status_payload('LLM Response', 'Supplementing with non-stream completion'))
-                        delta = verified_content[len(sanitized_full):] if sanitized_full else verified_content
-                        if delta:
-                            yield ('content', delta)
-                        assistant_accumulator = verified_content
-                        sanitized_full = verified_content
-                        sanitized_progress_length = len(sanitized_full)
-                        content = sanitized_full
-                        total_chars = sanitized_progress_length
+                needs_supplement = False
+                if not sanitized_full:
+                    needs_supplement = True
+                elif not stream_completed:
+                    needs_supplement = True
+                elif last_finish_reason and last_finish_reason != 'stop':
+                    needs_supplement = True
+
+                if needs_supplement:
+                    try:
+                        verified_content = fetch_non_stream_content(headers, payload, theme)
+                    except requests.exceptions.RequestException as exc:
+                        print(f"⚠️ [AGENT] Non-stream fallback failed: {exc}")
+                    else:
+                        verified_content = verified_content or ''
+                        if verified_content and verified_content != sanitized_full:
+                            yield ('status', status_payload('LLM Response', 'Supplementing with non-stream completion'))
+                            delta = verified_content[len(sanitized_full):] if sanitized_full else verified_content
+                            if delta:
+                                yield ('content', delta)
+                            assistant_accumulator = verified_content
+                            sanitized_full = verified_content
+                            sanitized_progress_length = len(sanitized_full)
+                            content = sanitized_full
+                            total_chars = sanitized_progress_length
                 normalized_content = content.strip()
                 upper_content = normalized_content.upper()
                 print(f"📄 [AGENT] Content received: {len(normalized_content)} chars")
@@ -3368,6 +3382,7 @@ Explicitly note when information is not present in the provided datasets."""
                 full_content = ""
                 fallback_reason = None
                 stream_completed = False
+                finish_reason = None
                 try:
                     response = requests.post(
                         f'{OPENROUTER_BASE_URL}/chat/completions',
@@ -3434,6 +3449,7 @@ Explicitly note when information is not present in the provided datasets."""
                             try:
                                 parsed = json.loads(payload_line)
                                 delta = parsed.get('choices', [{}])[0].get('delta', {})
+                                finish_reason = parsed.get('choices', [{}])[0].get('finish_reason') or finish_reason
                                 content_piece = delta.get('content')
                                 if content_piece:
                                     full_content += content_piece
@@ -3443,6 +3459,8 @@ Explicitly note when information is not present in the provided datasets."""
 
                 if not stream_completed and not fallback_reason:
                     fallback_reason = 'stream ended without completion'
+                elif finish_reason and finish_reason != 'stop' and not fallback_reason:
+                    fallback_reason = f'stream finished with reason {finish_reason}'
 
                 if fallback_reason:
                     print(f"⚠️ [ANALYSIS] Falling back to non-stream mode: {fallback_reason}")
