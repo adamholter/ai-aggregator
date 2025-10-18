@@ -1687,7 +1687,8 @@ def agent_tool_loop_generator(
                 messages = build_agent_messages(final_prompt, conversation_history, user_message)
                 payload = {
                     'model': final_model,
-                    'messages': messages
+                    'messages': messages,
+                    'max_tokens': 4096
                 }
                 if final_model == DEEP_RESEARCH_MODEL_ID:
                     payload.setdefault('addons', ['web_search'])
@@ -3337,13 +3338,15 @@ Explicitly note when information is not present in the provided datasets."""
                 stream_payload = {
                     'model': analysis_model,
                     'messages': [{'role': 'user', 'content': analysis_prompt}],
-                    'stream': True
+                    'stream': True,
+                    'max_tokens': 4096
                 }
 
                 fallback_payload = {
                     'model': analysis_model,
                     'messages': [{'role': 'user', 'content': analysis_prompt}],
-                    'stream': False
+                    'stream': False,
+                    'max_tokens': 4096
                 }
 
                 full_content = ""
@@ -3452,7 +3455,8 @@ Explicitly note when information is not present in the provided datasets."""
         request_payload = {
             'model': analysis_model,
             'messages': [{'role': 'user', 'content': analysis_prompt}],
-            'stream': False
+            'stream': False,
+            'max_tokens': 4096
         }
 
         try:
