@@ -1303,7 +1303,9 @@ def format_dataset_entry(category_id, item):
         return compress_openrouter_entry(item)
     return compress_generic_entry(category_id, item)
 
-def compose_compressed_datasets(fetch_context, max_items=MAX_COMPRESSED_ITEMS_PER_CATEGORY):
+def compose_compressed_datasets(fetch_context, max_items=None):
+    if max_items is None:
+        max_items = MAX_COMPRESSED_ITEMS_PER_CATEGORY
     metadata = (fetch_context or {}).get('metadata') or []
     datasets = (fetch_context or {}).get('datasets') or {}
     if not metadata or not datasets:
