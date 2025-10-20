@@ -1834,6 +1834,7 @@ def agent_tool_loop_generator(
                 if not content:
                     fallback_raw = result_message.get('content') or ''
                     content = sanitize_quickchart_urls_in_text(fallback_raw, theme)
+                content, _ = ensure_quickchart_visualization(content, theme)
 
                 needs_supplement = False
                 if not sanitized_full:
@@ -3111,6 +3112,7 @@ Respond concisely and cite the sources (Conversation History, Database, Web Sear
                             elif kind == 'final':
                                 final_content = event[1] if len(event) > 1 else ''
                                 final_content = sanitize_quickchart_urls_in_text(final_content or '', current_theme)
+                                final_content, _ = ensure_quickchart_visualization(final_content, current_theme)
                                 print(f"✅ [SERVER] Final content ready: {len(final_content)} chars")
                                 if not content_emitted and final_content:
                                     for chunk in iter_text_chunks(final_content):
@@ -3211,6 +3213,7 @@ Respond concisely and cite the sources (Conversation History, Database, Web Sear
         if not final_content:
             final_content = "I don't have additional information to share right now."
         final_content = sanitize_quickchart_urls_in_text(final_content, current_theme)
+        final_content, _ = ensure_quickchart_visualization(final_content, current_theme)
 
         return jsonify({
             'response': final_content,
@@ -3446,6 +3449,7 @@ Explicitly note when information is not present in the provided datasets."""
                                 yield emit_traces()
 
                                 sanitized_content = sanitize_quickchart_urls_in_text(full_content, theme)
+                                sanitized_content, _ = ensure_quickchart_visualization(sanitized_content, theme)
                                 try:
                                     verified_content = fetch_non_stream_content(headers, fallback_payload, theme)
                                 except requests.exceptions.RequestException as exc:
@@ -3547,6 +3551,7 @@ Explicitly note when information is not present in the provided datasets."""
             return jsonify({'error': f'Analysis request failed: {exc}'}), 500
 
         final_content = sanitize_quickchart_urls_in_text(final_content, theme)
+        final_content, _ = ensure_quickchart_visualization(final_content, theme)
 
         final_traces = [
             {
@@ -4175,6 +4180,189 @@ def sanitize_quickchart_urls_in_text(content, theme='light'):
     return QUICKCHART_URL_PATTERN.sub(replacer, content)
 
 
+def _parse_float(value):
+    if value is None:
+        return None
+    cleaned = str(value).replace(',', '')
+    match = re.search(r'-?\d+(?:\.\d+)?', cleaned)
+    if not match:
+        return None
+    try:
+        return float(match.group(0))
+    except ValueError:
+        return None
+
+
+def _strip_markdown_tokens(text):
+    if text is None:
+        return ''
+    return re.sub(r'[*_`]', '', str(text)).strip()
+
+
+def _extract_markdown_table_rows(content):
+    lines = content.splitlines()
+    table_lines = []
+    collecting = False
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith('|') and '|' in stripped:
+            if not collecting and 'model' in stripped.lower():
+                collecting = True
+            if collecting:
+                table_lines.append(stripped)
+        elif collecting:
+            break
+
+    if len(table_lines) < 3:
+        return []
+
+    headers = [_strip_markdown_tokens(part).lower() for part in table_lines[0].strip('|').split('|')]
+    data_lines = [
+        l for l in table_lines[2:]
+        if any(ch not in '-:| ' for ch in l)
+    ]
+
+    rows = []
+    for line in data_lines:
+        cells = [_strip_markdown_tokens(part) for part in line.strip('|').split('|')]
+        if len(cells) != len(headers):
+            continue
+        rows.append(dict(zip(headers, cells)))
+    return rows
+
+
+def _extract_model_rows(content):
+    rows = _extract_markdown_table_rows(content)
+    if not rows:
+        return []
+
+    def find_header(keywords):
+        for header in rows[0].keys():
+            lowered = header.lower()
+            if any(keyword in lowered for keyword in keywords):
+                return header
+        return None
+
+    model_col = find_header(['model'])
+    price_col = find_header(['price'])
+    speed_col = find_header(['speed', 'tokens'])
+    coding_col = find_header(['coding', 'intelligence'])
+
+    extracted = []
+    for row in rows:
+        name = _strip_markdown_tokens(row.get(model_col)) if model_col else ''
+        if not name:
+            continue
+
+        row_text = ' '.join(row.values())
+        price = _parse_float(row.get(price_col)) if price_col else None
+        if price is None:
+            price = _parse_float(row_text)
+        if price is None or price <= 0:
+            continue
+
+        speed = _parse_float(row.get(speed_col)) if speed_col else None
+        if speed is None:
+            speed = _parse_float(row_text)
+        if speed is None or speed <= 0:
+            continue
+
+        coding = _parse_float(row.get(coding_col)) if coding_col else None
+        if coding is None:
+            coding = _parse_float(row_text)
+        if coding is None:
+            continue
+
+        extracted.append({
+            'name': name,
+            'price': price,
+            'speed': speed,
+            'coding': coding
+        })
+    return extracted
+
+
+def ensure_quickchart_visualization(content, theme='light'):
+    """Append a QuickChart visualization when the response lacks one."""
+    if not content or 'quickchart.io' in content:
+        return content, False
+
+    models = _extract_model_rows(content)
+    if len(models) < 2:
+        return content, False
+
+    bubble_data = []
+    for model in models:
+        price = model['price']
+        speed = model['speed']
+        coding = model['coding']
+        if price <= 0 or speed <= 0:
+            continue
+        radius = max(6, min(30, price * 160))
+        bubble_data.append({
+            'x': speed,
+            'y': coding,
+            'r': radius,
+            'label': model['name']
+        })
+    if len(bubble_data) < 2:
+        return content, False
+
+    if theme == 'dark':
+        dataset_color = 'rgba(96, 165, 250, 0.6)'
+        border_color = 'rgba(147, 197, 253, 0.9)'
+        text_color = 'white'
+    else:
+        dataset_color = 'rgba(37, 99, 235, 0.6)'
+        border_color = 'rgba(29, 78, 216, 0.9)'
+        text_color = 'black'
+
+    chart_config = {
+        "type": "bubble",
+        "data": {
+            "datasets": [{
+                "label": "Coding Models",
+                "data": bubble_data,
+                "backgroundColor": dataset_color,
+                "borderColor": border_color,
+                "borderWidth": 1,
+                "hoverRadius": 10
+            }]
+        },
+        "options": {
+            "responsive": True,
+            "legend": {"display": False},
+            "title": {
+                "display": True,
+                "text": "Coding Models: Price vs Speed (bubble = price)",
+                "fontColor": text_color
+            },
+            "scales": {
+                "xAxes": [{
+                    "scaleLabel": {
+                        "display": True,
+                        "labelString": "Speed (tokens/sec)",
+                        "fontColor": text_color
+                    },
+                    "ticks": {"fontColor": text_color}
+                }],
+                "yAxes": [{
+                    "scaleLabel": {
+                        "display": True,
+                        "labelString": "Coding Intelligence Index",
+                        "fontColor": text_color
+                    },
+                    "ticks": {"fontColor": text_color}
+                }]
+            }
+        }
+    }
+
+    quickchart_url = get_quickchart_url(chart_config, theme)
+    augmented = f"{content.rstrip()}\n\n![Coding Models QuickChart]({quickchart_url})\n"
+    return augmented, True
+
+
 def build_quickchart_guidance(theme):
     """Construct guidance text for QuickChart-based visualizations."""
     example_config = {
@@ -4252,7 +4440,9 @@ def fetch_non_stream_content(headers, payload, theme, timeout=180):
         .get('message', {})
         .get('content') or ''
     )
-    return sanitize_quickchart_urls_in_text(content, theme)
+    sanitized = sanitize_quickchart_urls_in_text(content, theme)
+    enhanced, _ = ensure_quickchart_visualization(sanitized, theme)
+    return enhanced
 
 
 def get_quickchart_url(chart_config, theme='light'):
