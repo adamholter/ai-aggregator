@@ -1356,7 +1356,7 @@ Rules:
             f'{OPENROUTER_BASE_URL}/chat/completions',
             headers=headers,
             json=payload,
-            timeout=25
+            timeout=40
         )
         response.raise_for_status()
         result = response.json()
