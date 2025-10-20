@@ -2063,6 +2063,7 @@ def agent_tool_loop_generator(
         web_context = web_context or initialize_web_context()
 
         selection_status_message = None
+        selection_attempted = bool(auth_token)
         if auth_token:
             yield ('status', status_payload('Dataset Filter', 'Selecting relevant dataset entries...'))
             refined_context, selection_info = refine_fetch_context_for_query(
@@ -2119,6 +2120,10 @@ def agent_tool_loop_generator(
                 'status': 'success'
             })
             selection_status_message = selection_description
+            print(f"✅ [AGENT] Dataset filter applied: {selection_description}")
+        elif selection_attempted:
+            selection_status_message = 'Dataset filter skipped (using full datasets).'
+            print("ℹ️  [AGENT] Dataset filter skipped; using full datasets.")
         print(f"📊 [AGENT] Initial trace created, yielding...")
         yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
         yield ('status', status_payload('Datasets', dataset_trace['description'] or 'No datasets loaded'))
