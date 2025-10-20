@@ -1688,182 +1688,49 @@ def agent_tool_loop_generator(
                 payload = {
                     'model': final_model,
                     'messages': messages,
+                    'stream': False,
                     'max_tokens': 4096
                 }
                 if final_model == DEEP_RESEARCH_MODEL_ID:
                     payload.setdefault('addons', ['web_search'])
-                stream_payload = dict(payload)
-                stream_payload['stream'] = True
 
                 yield ('status', {
                     'stage': 'LLM Request',
                     'message': f'Requesting response from {model_display} (iteration {iteration})',
                     'timestamp': datetime.utcnow().isoformat()
                 })
-                print(f"📡 [AGENT] Sending streaming request to OpenRouter...")
+                print(f"📡 [AGENT] Requesting non-stream completion from OpenRouter...")
 
-                total_chars = 0
-                status_step = 160
-                stream_buffer = ''
-                last_choice_snapshot = {}
-                last_finish_reason = None
-                assistant_accumulator = ''
-                sanitized_full = ''
-                sanitized_progress_length = 0
-                stream_completed = False
                 try:
-                    with requests.post(
-                        f'{OPENROUTER_BASE_URL}/chat/completions',
-                        headers=headers,
-                        json=stream_payload,
-                        stream=True,
-                        timeout=(10, 180)
-                    ) as response:
-                        if response.status_code >= 400:
-                            try:
-                                error_payload = response.json()
-                            except Exception:
-                                error_payload = response.text
-                            raise requests.exceptions.HTTPError(
-                                f'Request failed with status {response.status_code}: {error_payload}',
-                                response=response
-                            )
-                        
-                        print(f"✅ [AGENT] Streaming response established")
-                        for raw_line in response.iter_lines(decode_unicode=True):
-                            if raw_line is None:
-                                continue
-                            line = raw_line.strip()
-                            if not line or line.startswith(':'):
-                                continue
-                            if line == 'data: [DONE]':
-                                stream_completed = True
-                                break
-                            if not line.startswith('data: '):
-                                continue
-                            payload_str = line[6:].strip()
-                            if not payload_str:
-                                continue
-                            try:
-                                chunk_json = json.loads(payload_str)
-                            except json.JSONDecodeError:
-                                continue
-                            choices = chunk_json.get('choices', [])
-                            if not choices:
-                                continue
-                            last_choice_snapshot = choices[0]
-                            finish_reason = choices[0].get('finish_reason')
-                            if finish_reason:
-                                last_finish_reason = finish_reason
-                            delta = choices[0].get('delta') or {}
-                            token = delta.get('content')
-                            if token:
-                                assistant_accumulator += token
-                                sanitized_full = sanitize_quickchart_urls_in_text(assistant_accumulator, theme)
-                                new_segment = sanitized_full[sanitized_progress_length:]
-                                sanitized_progress_length = len(sanitized_full)
-                                if new_segment:
-                                    stream_buffer += new_segment
-                                total_chars = sanitized_progress_length
-                                if len(stream_buffer) >= 160 or '\n' in stream_buffer:
-                                    yield ('content', stream_buffer)
-                                    stream_buffer = ''
-                                if total_chars >= status_step:
-                                    yield ('status', status_payload('LLM Response', f'Streamed {total_chars} characters so far'))
-                                    status_step += 160
-                        if stream_buffer:
-                            yield ('content', stream_buffer)
-                            stream_buffer = ''
-                        if not sanitized_full:
-                            sanitized_full = sanitize_quickchart_urls_in_text(assistant_accumulator, theme)
-                        content = sanitized_full
-                        if stream_completed:
-                            print(f"✅ [AGENT] Streaming complete ({len(content)} chars)")
-                            yield ('status', status_payload('LLM Response', f'Completed streaming {len(content)} characters'))
-                except requests.exceptions.Timeout as exc:
-                    prev_length = sanitized_progress_length
-                    yield ('status', status_payload('LLM Response', f'Stream timeout after {total_chars} characters: {exc}; retrying without streaming'))
-                    try:
-                        fallback_content = fetch_non_stream_content(headers, payload, theme)
-                    except requests.exceptions.RequestException as fetch_exc:
-                        error_message = f'Fallback completion failed after timeout: {fetch_exc}'
-                        print(f"⚠️ [AGENT] {error_message}")
-                        yield encode_error(error_message)
-                        return
-                    sanitized_full = fallback_content
-                    assistant_accumulator = fallback_content
-                    sanitized_progress_length = len(fallback_content)
-                    if sanitized_progress_length > prev_length:
-                        yield ('content', fallback_content[prev_length:])
-                    content = fallback_content
+                    full_text = fetch_non_stream_content(headers, payload, theme)
                 except requests.exceptions.RequestException as exc:
-                    prev_length = sanitized_progress_length
-                    yield ('status', status_payload('LLM Response', f'Stream interrupted ({exc}); retrying without streaming'))
-                    try:
-                        fallback_content = fetch_non_stream_content(headers, payload, theme)
-                    except requests.exceptions.RequestException as fetch_exc:
-                        error_message = f'Fallback completion failed after interruption: {fetch_exc}'
-                        print(f"⚠️ [AGENT] {error_message}")
-                        yield encode_error(error_message)
-                        return
-                    sanitized_full = fallback_content
-                    assistant_accumulator = fallback_content
-                    sanitized_progress_length = len(fallback_content)
-                    if sanitized_progress_length > prev_length:
-                        yield ('content', fallback_content[prev_length:])
-                    content = fallback_content
-                else:
-                    if not stream_completed:
-                        prev_length = sanitized_progress_length
-                        yield ('status', status_payload('LLM Response', 'Stream ended without completion; retrying without streaming'))
-                        try:
-                            fallback_content = fetch_non_stream_content(headers, payload, theme)
-                        except requests.exceptions.RequestException as fetch_exc:
-                            error_message = f'Fallback completion failed after incomplete stream: {fetch_exc}'
-                            print(f"⚠️ [AGENT] {error_message}")
-                            yield encode_error(error_message)
-                            return
-                        sanitized_full = fallback_content
-                        assistant_accumulator = fallback_content
-                        sanitized_progress_length = len(fallback_content)
-                        if sanitized_progress_length > prev_length:
-                            yield ('content', fallback_content[prev_length:])
-                        content = fallback_content
+                    error_message = f'LLM request failed: {exc}'
+                    print(f"❌ [AGENT] {error_message}")
+                    traces.append({
+                        'step': 'Response Generation',
+                        'description': error_message,
+                        'tool': model_display,
+                        'status': 'failed'
+                    })
+                    yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
+                    yield ('status', status_payload('LLM Request', f'Error: {exc}'))
+                    yield ('error', error_message, traces, fetch_context, web_context)
+                    return
 
-                result_message = (last_choice_snapshot.get('message') or {}) if last_choice_snapshot else {}
-                if not content:
-                    fallback_raw = result_message.get('content') or ''
-                    content = sanitize_quickchart_urls_in_text(fallback_raw, theme)
+                content = full_text or ''
+                content = sanitize_quickchart_urls_in_text(content, theme)
                 content, _ = ensure_quickchart_visualization(content, theme)
+                total_chars = len(content)
+                print(f"✅ [AGENT] Received completion ({total_chars} chars)")
 
-                needs_supplement = False
-                if not sanitized_full:
-                    needs_supplement = True
-                elif not stream_completed:
-                    needs_supplement = True
-                elif last_finish_reason and last_finish_reason != 'stop':
-                    needs_supplement = True
+                if content:
+                    delivered = 0
+                    for chunk in iter_text_chunks(content, chunk_size=320):
+                        delivered += len(chunk)
+                        yield ('content', chunk)
+                        yield ('status', status_payload('LLM Response', f'Delivered {delivered} of {total_chars} characters'))
 
-                if needs_supplement:
-                    try:
-                        verified_content = fetch_non_stream_content(headers, payload, theme)
-                    except requests.exceptions.RequestException as exc:
-                        error_message = f'Non-stream completion failed: {exc}'
-                        print(f"⚠️ [AGENT] {error_message}")
-                        yield encode_error(error_message)
-                        return
-                    else:
-                        verified_content = verified_content or ''
-                        if verified_content and verified_content != sanitized_full:
-                            yield ('status', status_payload('LLM Response', 'Supplementing with non-stream completion'))
-                            delta = verified_content[len(sanitized_full):] if sanitized_full else verified_content
-                            if delta:
-                                yield ('content', delta)
-                            assistant_accumulator = verified_content
-                            sanitized_full = verified_content
-                            sanitized_progress_length = len(sanitized_full)
-                            content = sanitized_full
-                            total_chars = sanitized_progress_length
+                last_choice_snapshot = {'message': {'content': content}}
                 normalized_content = content.strip()
                 upper_content = normalized_content.upper()
                 print(f"📄 [AGENT] Content received: {len(normalized_content)} chars")

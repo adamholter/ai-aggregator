@@ -33,8 +33,8 @@ PROMPTS = {
         "Include pros/cons and end with a recommendation paragraph."
     ),
     "table": (
-        "Produce a markdown table comparing Claude 3.5 Sonnet, GPT-4o mini, "
-        "Mistral Large, and Gemini 1.5 Pro with columns Model, Context window, "
+        "Produce a markdown table comparing Claude 4.5 Sonnet, GPT-5 mini, "
+        "Mistral Large, and Gemini 2.5 Pro with columns Model, Context window, "
         "Speed, Price, and Best use cases."
     ),
     "quickchart": (
