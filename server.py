@@ -2093,6 +2093,16 @@ def prune_conversation_history(history):
     summary_text = "\n".join(summary_snippets)
     return trimmed_history, summary_text
 
+def estimate_prompt_size(messages):
+    total_chars = 0
+    for message in messages or []:
+        if not isinstance(message, dict):
+            continue
+        content = message.get('content')
+        if isinstance(content, str):
+            total_chars += len(content)
+    return total_chars
+
 
 def initialize_web_context():
     return {'entries': []}
@@ -2126,13 +2136,7 @@ def build_agent_prompt_context(user_message, fetch_context, web_context):
         compose_fetch_markdown(fetch_context),
         MAX_PROMPT_MARKDOWN_CHARS
     )
-    structured_raw = compose_fetch_structured(fetch_context)
-    structured_trimmed = prune_structured_summary(structured_raw)
-    structured_json = safe_json_for_prompt(
-        structured_trimmed,
-        'FETCH_DATA_JSON',
-        MAX_PROMPT_STRUCTURED_CHARS
-    )
+    structured_json = "Structured JSON omitted to preserve context budget. Refer to the compressed snapshot and markdown summary."
     compressed_snapshot = compose_compressed_datasets(fetch_context)
     compressed_snapshot = truncate_text_for_prompt(
         compressed_snapshot,
@@ -2300,6 +2304,9 @@ def agent_tool_loop_generator(
             
             try:
                 messages = build_agent_messages(final_prompt, conversation_history, user_message)
+                prompt_char_count = estimate_prompt_size(messages)
+                if prompt_char_count > 0:
+                    print(f"🧮 [AGENT] Prompt size ~{prompt_char_count:,} characters across {len(messages)} messages")
                 payload = {
                     'model': final_model,
                     'messages': messages,
@@ -3478,11 +3485,11 @@ Loaded Datasets: {LOADED_DATASETS}
 Fetched Dataset Summary:
 {FETCH_DATA_MARKDOWN}
 
-Structured Dataset JSON:
-{FETCH_DATA_JSON}
-
 Compressed Dataset Snapshot:
 {COMPRESSED_DATASETS}
+
+Structured Dataset JSON:
+{FETCH_DATA_JSON}
 
 {WEB_DATA_SECTION}
 
