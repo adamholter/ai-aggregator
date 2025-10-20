@@ -1842,20 +1842,24 @@ def refine_fetch_context_for_query(user_message, fetch_context, analysis_sequenc
     if not user_message or not fetch_context:
         return fetch_context, None
 
-    candidates = build_dataset_selection_candidates(fetch_context)
-    if not candidates:
-        return fetch_context, None
+    try:
+        candidates = build_dataset_selection_candidates(fetch_context)
+        if not candidates:
+            return fetch_context, None
 
-    selection_result = perform_dataset_selection(user_message, candidates, analysis_sequence, auth_token)
-    if not selection_result:
-        return fetch_context, None
+        selection_result = perform_dataset_selection(user_message, candidates, analysis_sequence, auth_token)
+        if not selection_result:
+            return fetch_context, None
 
-    applied_info = apply_dataset_selection(fetch_context, selection_result['mapping'], selection_result.get('notes', ''))
-    if not applied_info:
-        return fetch_context, None
+        applied_info = apply_dataset_selection(fetch_context, selection_result['mapping'], selection_result.get('notes', ''))
+        if not applied_info:
+            return fetch_context, None
 
-    refresh_fetch_context_summary(fetch_context)
-    return fetch_context, applied_info
+        refresh_fetch_context_summary(fetch_context)
+        return fetch_context, applied_info
+    except Exception as exc:
+        print(f"WARNING: Failed to refine dataset selection: {exc}")
+        return fetch_context, None
 
 
 def enforce_prompt_ceiling(prompt_text, limit=MAX_PROMPT_FINAL_CHARS):
@@ -2058,6 +2062,22 @@ def agent_tool_loop_generator(
         fetch_context = fetch_context or initialize_fetch_context()
         web_context = web_context or initialize_web_context()
 
+        selection_status_message = None
+        if auth_token:
+            yield ('status', status_payload('Dataset Filter', 'Selecting relevant dataset entries...'))
+            refined_context, selection_info = refine_fetch_context_for_query(
+                user_message,
+                fetch_context,
+                analysis_sequence,
+                auth_token
+            )
+            if selection_info:
+                selection_status_message = selection_info.get('notes') or ''
+                refined_context.setdefault('selection', selection_info)
+                fetch_context = refined_context
+            else:
+                fetch_context.pop('selection', None)
+
         traces = []
         normalized_initial = [
             normalize_category_id(cat)
@@ -2078,10 +2098,9 @@ def agent_tool_loop_generator(
                 "Loaded full database context from primary datasets."
             )
         traces.append(dataset_trace)
-        selection_status_message = None
-        selection_info = (fetch_context or {}).get('selection') or {}
-        if selection_info.get('applied'):
-            kept_counts = selection_info.get('kept_counts') or {}
+        selection_info_snapshot = (fetch_context or {}).get('selection') or {}
+        if selection_info_snapshot.get('applied'):
+            kept_counts = selection_info_snapshot.get('kept_counts') or {}
             if kept_counts:
                 count_summary = ', '.join(
                     f"{cat}: {count}"
@@ -2089,7 +2108,7 @@ def agent_tool_loop_generator(
                 )
             else:
                 count_summary = ''
-            selection_description = selection_info.get('notes') or (
+            selection_description = selection_info_snapshot.get('notes') or (
                 f"Filtered datasets to relevant entries ({count_summary})" if count_summary else
                 "Filtered datasets to relevant entries."
             )
@@ -3317,16 +3336,6 @@ def ai_agent():
         fetch_context = initialize_fetch_context()
         fetch_result = fetch_data_for_categories(fetch_categories)
         fetch_context = merge_fetch_context(fetch_context, fetch_result)
-        fetch_context, selection_info = refine_fetch_context_for_query(
-            user_message,
-            fetch_context,
-            analysis_sequence,
-            user_openrouter_token
-        )
-        if selection_info:
-            fetch_context['selection'] = selection_info
-        else:
-            fetch_context.pop('selection', None)
         web_context = initialize_web_context()
         relevant_data = compose_fetch_markdown(fetch_context)
         headers = build_openrouter_headers(user_openrouter_token)
