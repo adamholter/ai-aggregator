@@ -1564,6 +1564,7 @@ def build_loaded_datasets_label(context):
 
 MAX_PROMPT_MARKDOWN_CHARS = 6000
 MAX_PROMPT_STRUCTURED_CHARS = 9000
+MAX_PROMPT_DATASETS_CHARS = 90000
 MAX_PROMPT_FINAL_CHARS = 60000
 MAX_PROMPT_CATEGORY_SUMMARIES = 5
 MAX_PROMPT_CATEGORY_SUMMARY_CHARS = 480
@@ -1950,11 +1951,18 @@ def build_agent_prompt_context(user_message, fetch_context, web_context):
         'FETCH_DATA_JSON',
         MAX_PROMPT_STRUCTURED_CHARS
     )
+    datasets_raw = compose_fetch_datasets(fetch_context)
+    datasets_json = safe_json_for_prompt(
+        datasets_raw,
+        'FETCH_DATASETS_JSON',
+        MAX_PROMPT_DATASETS_CHARS
+    )
     web_data, web_section = compose_web_data(web_context)
     return {
         'USER_MESSAGE': user_message,
         'FETCH_DATA_MARKDOWN': fetch_markdown,
         'FETCH_DATA_JSON': structured_json,
+        'FETCH_DATASETS_JSON': datasets_json,
         'WEB_DATA': web_data,
         'WEB_DATA_SECTION': web_section,
         'LOADED_DATASETS': build_loaded_datasets_label(fetch_context)
@@ -2060,24 +2068,8 @@ def agent_tool_loop_generator(
 
     try:
         fetch_context = fetch_context or initialize_fetch_context()
+        fetch_context.pop('selection', None)
         web_context = web_context or initialize_web_context()
-
-        selection_status_message = None
-        selection_attempted = bool(auth_token)
-        if auth_token:
-            yield ('status', status_payload('Dataset Filter', 'Selecting relevant dataset entries...'))
-            refined_context, selection_info = refine_fetch_context_for_query(
-                user_message,
-                fetch_context,
-                analysis_sequence,
-                auth_token
-            )
-            if selection_info:
-                selection_status_message = selection_info.get('notes') or ''
-                refined_context.setdefault('selection', selection_info)
-                fetch_context = refined_context
-            else:
-                fetch_context.pop('selection', None)
 
         traces = []
         normalized_initial = [
@@ -2099,36 +2091,9 @@ def agent_tool_loop_generator(
                 "Loaded full database context from primary datasets."
             )
         traces.append(dataset_trace)
-        selection_info_snapshot = (fetch_context or {}).get('selection') or {}
-        if selection_info_snapshot.get('applied'):
-            kept_counts = selection_info_snapshot.get('kept_counts') or {}
-            if kept_counts:
-                count_summary = ', '.join(
-                    f"{cat}: {count}"
-                    for cat, count in sorted(kept_counts.items())
-                )
-            else:
-                count_summary = ''
-            selection_description = selection_info_snapshot.get('notes') or (
-                f"Filtered datasets to relevant entries ({count_summary})" if count_summary else
-                "Filtered datasets to relevant entries."
-            )
-            traces.append({
-                'step': 'Dataset Filter',
-                'description': selection_description,
-                'tool': 'dataset_selection',
-                'status': 'success'
-            })
-            selection_status_message = selection_description
-            print(f"✅ [AGENT] Dataset filter applied: {selection_description}")
-        elif selection_attempted:
-            selection_status_message = 'Dataset filter skipped (using full datasets).'
-            print("ℹ️  [AGENT] Dataset filter skipped; using full datasets.")
         print(f"📊 [AGENT] Initial trace created, yielding...")
         yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
         yield ('status', status_payload('Datasets', dataset_trace['description'] or 'No datasets loaded'))
-        if selection_status_message:
-            yield ('status', status_payload('Dataset Filter', selection_status_message))
         print(f"✅ [AGENT] Initial trace yielded successfully")
 
         prompt_context = build_agent_prompt_context(user_message, fetch_context, web_context)
@@ -2284,16 +2249,6 @@ def agent_tool_loop_generator(
                     print(f"📊 [AGENT] Fetching data for categories: {requested_categories}")
                     fetch_result = fetch_data_for_categories(requested_categories)
                     fetch_context = merge_fetch_context(fetch_context, fetch_result)
-                    fetch_context, selection_info = refine_fetch_context_for_query(
-                        user_message,
-                        fetch_context,
-                        analysis_sequence,
-                        auth_token
-                    )
-                    if selection_info:
-                        fetch_context['selection'] = selection_info
-                    else:
-                        fetch_context.pop('selection', None)
                     prompt_context = build_agent_prompt_context(user_message, fetch_context, web_context)
                     final_prompt = format_prompt(prompt_template, **prompt_context)
                     final_prompt = enforce_prompt_ceiling(final_prompt)
@@ -2307,31 +2262,8 @@ def agent_tool_loop_generator(
                         'tool': f"fetch_data ({len(requested_categories)} categories)",
                         'status': 'success'
                     })
-                    selection_trace_description = None
-                    selection_info = (fetch_context or {}).get('selection') or {}
-                    if selection_info.get('applied'):
-                        kept_counts = selection_info.get('kept_counts') or {}
-                        if kept_counts:
-                            count_summary = ', '.join(
-                                f"{cat}: {count}"
-                                for cat, count in sorted(kept_counts.items())
-                            )
-                        else:
-                            count_summary = ''
-                        selection_trace_description = selection_info.get('notes') or (
-                            f"Filtered datasets to relevant entries ({count_summary})" if count_summary else
-                            "Filtered datasets to relevant entries."
-                        )
-                        traces.append({
-                            'step': 'Dataset Filter',
-                            'description': selection_trace_description,
-                            'tool': 'dataset_selection',
-                            'status': 'success'
-                        })
                     yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
                     yield ('status', status_payload('Tool', description))
-                    if selection_trace_description:
-                        yield ('status', status_payload('Dataset Filter', selection_trace_description))
                     print(f"✅ [AGENT] Data fetched successfully, continuing to next iteration")
                     continue
                 except Exception as exc:
@@ -3367,6 +3299,9 @@ Fetched Dataset Summary:
 
 Structured Dataset JSON:
 {FETCH_DATA_JSON}
+
+Raw Dataset Snapshot:
+{FETCH_DATASETS_JSON}
 
 {WEB_DATA_SECTION}
 

@@ -32,7 +32,7 @@ let rawData = {
 
 // AI Agent configuration
 let agentConfig = {
-    model: 'z-ai/glm-4.5',
+    model: 'openai/gpt-5-nano',
     availableModels: [], // Will be populated from settings
     conversationHistory: [] // For context memory
 };
