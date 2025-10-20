@@ -13,6 +13,7 @@ import json
 import signal
 import time
 import numpy as np
+import math
 import re
 import ast
 import urllib.parse
@@ -1156,6 +1157,179 @@ def infer_item_metrics(category_id, item):
             metrics['confidence'] = item['ci95']
     return {k: v for k, v in metrics.items() if v not in (None, '', [])}
 
+def format_decimal(value, digits=2):
+    if value is None:
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return str(value)
+    if math.isfinite(number):
+        return f"{number:.{digits}f}"
+    return str(value)
+
+def format_ratio(value):
+    formatted = format_decimal(value, 3)
+    return formatted.lstrip('0') if formatted and formatted.startswith('0') else formatted
+
+def compress_llm_entry(item):
+    parts = []
+    slug = item.get('slug') or item.get('id') or infer_item_name(item)
+    provider = infer_item_provider('llms', item) or 'Unknown'
+    name = infer_item_name(item)
+    parts.append(f"{slug}; {provider}")
+    if slug != name and name:
+        parts[-1] += f" ({name})"
+
+    release_date = item.get('release_date')
+    if release_date:
+        parts.append(release_date)
+
+    perf_segments = []
+    tps = format_decimal(item.get('median_output_tokens_per_second'))
+    if tps:
+        perf_segments.append(f"{tps} tps")
+    ttft = format_decimal(item.get('median_time_to_first_token_seconds'))
+    if ttft:
+        perf_segments.append(f"TTFT {ttft}s")
+    ttfa = format_decimal(item.get('median_time_to_first_answer_token'))
+    if ttfa:
+        perf_segments.append(f"TTFA {ttfa}s")
+    if perf_segments:
+        parts.append(f"Perf: {', '.join(perf_segments)}")
+
+    pricing = item.get('pricing') or {}
+    price_segments = []
+    blended = format_decimal(pricing.get('price_1m_blended_3_to_1'))
+    if blended:
+        price_segments.append(f"Blend {blended}")
+    input_price = format_decimal(pricing.get('price_1m_input_tokens'))
+    if input_price:
+        price_segments.append(f"In {input_price}")
+    output_price = format_decimal(pricing.get('price_1m_output_tokens'))
+    if output_price:
+        price_segments.append(f"Out {output_price}")
+    if price_segments:
+        parts.append(f"Price/1M: {', '.join(price_segments)}")
+
+    evaluations = item.get('evaluations') or {}
+    ai_index_segments = []
+    ai_math = format_decimal(evaluations.get('artificial_analysis_math_index'))
+    ai_int = format_decimal(evaluations.get('artificial_analysis_intelligence_index'))
+    ai_code = format_decimal(evaluations.get('artificial_analysis_coding_index'))
+    if ai_math:
+        ai_index_segments.append(f"Math {ai_math}")
+    if ai_int:
+        ai_index_segments.append(f"Int {ai_int}")
+    if ai_code:
+        ai_index_segments.append(f"Code {ai_code}")
+    if ai_index_segments:
+        parts.append(f"AI Index: {', '.join(ai_index_segments)}")
+
+    eval_fields = [
+        ('aime_25', 'AIME25'),
+        ('mmlu_pro', 'MMLU'),
+        ('gpqa', 'GPQA'),
+        ('ifbench', 'IFB'),
+        ('tau2', 'Tau2'),
+        ('livecodebench', 'LCB'),
+        ('lcr', 'LCR'),
+        ('scicode', 'SC'),
+        ('terminalbench_hard', 'TBH'),
+        ('hle', 'HLE'),
+    ]
+    eval_segments = []
+    for key, label in eval_fields:
+        value = evaluations.get(key)
+        formatted = format_ratio(value)
+        if formatted:
+            eval_segments.append(f"{label} {formatted}")
+    if eval_segments:
+        parts.append(f"Evals: {', '.join(eval_segments)}")
+
+    return '; '.join(parts)
+
+def compress_openrouter_entry(item):
+    name = item.get('base_name') or item.get('name') or item.get('id')
+    vendor = item.get('vendor') or infer_item_provider('openrouter', item) or 'Unknown'
+    context_length = item.get('context_length') or item.get('top_provider', {}).get('context_length')
+    modalities = item.get('architecture', {}).get('modality') or 'n/a'
+
+    parts = [f"{name}; {vendor}"]
+    if context_length:
+        parts.append(f"Context {context_length:,}")
+    parts.append(f"Modalities {modalities}")
+
+    pricing = item.get('pricing') or {}
+    price_segments = []
+    for key, label in [('prompt', 'Prompt'), ('completion', 'Completion'), ('request', 'Request')]:
+        value = pricing.get(key)
+        if value not in (None, '', '0'):
+            price_segments.append(f"{label} {value}")
+    if price_segments:
+        parts.append(f"Price: {', '.join(price_segments)}")
+
+    support = item.get('supported_parameters') or []
+    if support:
+        parts.append(f"Params: {', '.join(support[:6])}")
+
+    description = (item.get('description') or '').replace('\n', ' ').strip()
+    if description:
+        parts.append(f"Desc: {description[:180]}{'…' if len(description) > 180 else ''}")
+
+    return '; '.join(parts)
+
+def compress_generic_entry(category_id, item):
+    name = infer_item_name(item)
+    provider = infer_item_provider(category_id, item) or 'Unknown'
+    metrics = infer_item_metrics(category_id, item)
+    metric_segments = []
+    for key, value in metrics.items():
+        formatted = format_decimal(value)
+        if formatted:
+            metric_segments.append(f"{key}: {formatted}")
+    description = item.get('description') or item.get('summary')
+    segments = [f"{name}; {provider}"]
+    if metric_segments:
+        segments.append(', '.join(metric_segments))
+    if description:
+        segments.append(description.replace('\n', ' ')[:180])
+    return '; '.join(segments)
+
+def format_dataset_entry(category_id, item):
+    if category_id == 'llms':
+        return compress_llm_entry(item)
+    if category_id == 'openrouter':
+        return compress_openrouter_entry(item)
+    return compress_generic_entry(category_id, item)
+
+def compose_compressed_datasets(fetch_context, max_items=MAX_COMPRESSED_ITEMS_PER_CATEGORY):
+    metadata = (fetch_context or {}).get('metadata') or []
+    datasets = (fetch_context or {}).get('datasets') or {}
+    if not metadata or not datasets:
+        return "No dataset entries were available."
+
+    sections = []
+    total_chars = 0
+    for meta in metadata:
+        cat_id = meta.get('id')
+        label = meta.get('label') or cat_id or 'Category'
+        items = datasets.get(cat_id) or []
+        if not items:
+            continue
+        header = f"### {label} ({len(items)} entries)"
+        sections.append(header)
+        total_chars += len(header) + 1
+        for entry in items[:max_items]:
+            line = f"- {format_dataset_entry(cat_id, entry)}"
+            total_chars += len(line) + 1
+            if total_chars > MAX_COMPRESSED_DATASET_CHARS:
+                sections.append('- ... (truncated)')
+                return '\n'.join(sections)
+            sections.append(line)
+        sections.append('')
+    return '\n'.join(sections).strip()
+
 def extract_item_identifier(category_id, item):
     if not isinstance(item, dict):
         return None
@@ -1565,6 +1739,8 @@ def build_loaded_datasets_label(context):
 MAX_PROMPT_MARKDOWN_CHARS = 6000
 MAX_PROMPT_STRUCTURED_CHARS = 9000
 MAX_PROMPT_DATASETS_CHARS = 90000
+MAX_COMPRESSED_DATASET_CHARS = 60000
+MAX_COMPRESSED_ITEMS_PER_CATEGORY = 40
 MAX_PROMPT_FINAL_CHARS = 60000
 MAX_PROMPT_CATEGORY_SUMMARIES = 5
 MAX_PROMPT_CATEGORY_SUMMARY_CHARS = 480
@@ -1951,18 +2127,17 @@ def build_agent_prompt_context(user_message, fetch_context, web_context):
         'FETCH_DATA_JSON',
         MAX_PROMPT_STRUCTURED_CHARS
     )
-    datasets_raw = compose_fetch_datasets(fetch_context)
-    datasets_json = safe_json_for_prompt(
-        datasets_raw,
-        'FETCH_DATASETS_JSON',
-        MAX_PROMPT_DATASETS_CHARS
+    compressed_snapshot = compose_compressed_datasets(fetch_context)
+    compressed_snapshot = truncate_text_for_prompt(
+        compressed_snapshot,
+        MAX_COMPRESSED_DATASET_CHARS
     )
     web_data, web_section = compose_web_data(web_context)
     return {
         'USER_MESSAGE': user_message,
         'FETCH_DATA_MARKDOWN': fetch_markdown,
         'FETCH_DATA_JSON': structured_json,
-        'FETCH_DATASETS_JSON': datasets_json,
+        'COMPRESSED_DATASETS': compressed_snapshot,
         'WEB_DATA': web_data,
         'WEB_DATA_SECTION': web_section,
         'LOADED_DATASETS': build_loaded_datasets_label(fetch_context)
@@ -3300,8 +3475,8 @@ Fetched Dataset Summary:
 Structured Dataset JSON:
 {FETCH_DATA_JSON}
 
-Raw Dataset Snapshot:
-{FETCH_DATASETS_JSON}
+Compressed Dataset Snapshot:
+{COMPRESSED_DATASETS}
 
 {WEB_DATA_SECTION}
 
@@ -3582,6 +3757,10 @@ def _handle_model_analysis_post():
             indent=2
         )
         fetch_markdown = compose_fetch_markdown(fetch_context)
+        fetch_compressed = truncate_text_for_prompt(
+            compose_compressed_datasets(fetch_context),
+            MAX_COMPRESSED_DATASET_CHARS
+        )
         default_analysis_prompt = """You are an AI model analysis expert. Provide a comprehensive analysis of this model using ONLY the provided data.
 
 Model Data from Database:
@@ -3589,6 +3768,9 @@ Model Data from Database:
 
 Structured Dataset Summary:
 {FETCH_DATA_JSON}
+
+Compressed Dataset Snapshot:
+{COMPRESSED_DATASETS}
 
 Formatted Highlights:
 {FETCH_DATA_MARKDOWN}
@@ -3635,6 +3817,7 @@ Explicitly note when information is not present in the provided datasets."""
             analysis_prompt_template,
             MODEL_DATA_JSON=json.dumps(model_data, ensure_ascii=False, indent=2),
             FETCH_DATA_JSON=fetch_structured_json,
+             COMPRESSED_DATASETS=fetch_compressed,
             FETCH_DATA_MARKDOWN=fetch_markdown,
             WEB_DATA="Web search was not requested; rely on provided datasets.",
             RELATED_DATA=fetch_markdown

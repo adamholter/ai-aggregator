@@ -2284,6 +2284,24 @@ body {
     margin-bottom: 12px;
 }
 
+.agent-warning {
+    margin-top: 8px;
+    margin-bottom: 16px;
+    padding: 12px 14px;
+    border-radius: 6px;
+    background: rgba(234, 179, 8, 0.15);
+    border: 1px solid rgba(234, 179, 8, 0.35);
+    color: #92400e;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+.agent-warning.expensive {
+    background: rgba(248, 113, 113, 0.15);
+    border-color: rgba(248, 113, 113, 0.35);
+    color: #991b1b;
+}
+
 .error-details {
     font-family: 'Monaco', 'Menlo', monospace;
     font-size: 0.85rem;

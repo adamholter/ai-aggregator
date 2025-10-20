@@ -1,21 +1,21 @@
 {
   "agent": {
-    "defaultModel": "openai/gpt-5-nano",
+    "defaultModel": "google/gemini-2.5-flash-lite-preview-09-2025",
     "speedModeModel": "openai/gpt-oss-120b",
     "availableModels": [
-      "anthropic/claude-haiku-4.5",
-      "openai/gpt-5",
-      "openai/gpt-5-mini",
       "openai/gpt-5-nano",
-      "z-ai/glm-4.6",
       "x-ai/grok-4-fast",
-      "anthropic/claude-sonnet-4.5"
+      "google/gemini-2.5-flash-preview-09-2025",
+      "google/gemini-2.5-flash-lite-preview-09-2025",
+      "google/gemini-2.5-pro",
+      "openai/gpt-4.1-mini",
+      "openai/gpt-5-mini",
+      "openai/gpt-5"
     ],
     "fallbackModels": [
+      "google/gemini-2.5-flash-lite-preview-09-2025",
       "openai/gpt-5-nano",
-      "x-ai/grok-4-fast",
-      "anthropic/claude-sonnet-4.5",
-      "google/gemini-2.5-flash-preview-09-2025"
+      "x-ai/grok-4-fast"
     ],
     "knownSpeedModels": [
       "google/gemini-2.5-flash-preview-09-2025",

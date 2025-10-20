@@ -32,10 +32,88 @@ let rawData = {
 
 // AI Agent configuration
 let agentConfig = {
-    model: 'openai/gpt-5-nano',
+    model: 'google/gemini-2.5-flash-lite-preview-09-2025',
     availableModels: [], // Will be populated from settings
     conversationHistory: [] // For context memory
 };
+
+const AGENT_MODEL_INFO = {
+    'google/gemini-2.5-flash-lite-preview-09-2025': {
+        displayName: 'Google Gemini 2.5 Flash Lite',
+        optionLabel: 'Google Gemini 2.5 Flash Lite (default)',
+        costTier: 'moderate',
+        warning: 'Fast high-context baseline; recommended starting point.',
+        context: 'high'
+    },
+    'openai/gpt-5-nano': {
+        displayName: 'OpenAI GPT-5 Nano',
+        optionLabel: 'OpenAI GPT-5 Nano (cheapest)',
+        costTier: 'low',
+        warning: 'Cheapest high-context option but slower responses.',
+        context: 'high'
+    },
+    'x-ai/grok-4-fast': {
+        displayName: 'xAI Grok 4 Fast',
+        optionLabel: 'xAI Grok 4 Fast (fast)',
+        costTier: 'moderate',
+        warning: 'High-context with faster throughput; monitor costs.',
+        context: 'high'
+    },
+    'google/gemini-2.5-flash-preview-09-2025': {
+        displayName: 'Google Gemini 2.5 Flash',
+        optionLabel: 'Google Gemini 2.5 Flash (fast, pricier)',
+        costTier: 'moderate',
+        warning: 'Faster variant with higher per-token cost.',
+        context: 'high'
+    },
+    'google/gemini-2.5-pro': {
+        displayName: 'Google Gemini 2.5 Pro',
+        optionLabel: 'Google Gemini 2.5 Pro (very expensive)',
+        costTier: 'expensive',
+        warning: 'Extremely expensive high-context model; use sparingly.',
+        context: 'high'
+    },
+    'openai/gpt-4.1-mini': {
+        displayName: 'OpenAI GPT-4.1 Mini',
+        optionLabel: 'OpenAI GPT-4.1 Mini',
+        costTier: 'moderate',
+        warning: 'Balanced option with strong performance and cost.',
+        context: 'high'
+    },
+    'openai/gpt-5-mini': {
+        displayName: 'OpenAI GPT-5 Mini',
+        optionLabel: 'OpenAI GPT-5 Mini (expensive)',
+        costTier: 'expensive',
+        warning: 'Premium high-context model with significant cost.',
+        context: 'high'
+    },
+    'openai/gpt-5': {
+        displayName: 'OpenAI GPT-5',
+        optionLabel: 'OpenAI GPT-5 (flagship, very expensive)',
+        costTier: 'expensive',
+        warning: 'Flagship high-context model. Expect very high spend.',
+        context: 'high'
+    }
+};
+
+function getAgentModelInfo(modelId) {
+    return AGENT_MODEL_INFO[modelId] || null;
+}
+
+function applyAgentModelInfo(entry) {
+    const info = getAgentModelInfo(entry.id) || {};
+    const displayName = info.displayName || entry.name || entry.id;
+    const optionLabel = info.optionLabel || displayName;
+    return {
+        ...entry,
+        name: displayName,
+        displayName,
+        optionLabel,
+        warning: info.warning || '',
+        costTier: info.costTier || 'unknown',
+        context: info.context || 'high'
+    };
+}
 
 let openRouterIndex = null;
 const modelMatchCache = new Map();
@@ -537,7 +615,7 @@ function applyAgentDefaults() {
     if (!localStorage.getItem('dashboard-available-models') && selectedAvailableModels.length === 0) {
         const defaultIds = agentSettings.availableModels || [];
         if (defaultIds.length) {
-            selectedAvailableModels = defaultIds.map(id => ({ id, name: id }));
+            selectedAvailableModels = defaultIds.map(id => applyAgentModelInfo({ id, name: id }));
             updateAvailableModelsDisplay();
         }
     }
@@ -545,7 +623,7 @@ function applyAgentDefaults() {
     if (!localStorage.getItem('dashboard-fallback-models') && selectedFallbackModels.length === 0) {
         const fallbackIds = agentSettings.fallbackModels || [];
         if (fallbackIds.length) {
-            selectedFallbackModels = fallbackIds.map(id => ({ id, name: id }));
+            selectedFallbackModels = fallbackIds.map(id => applyAgentModelInfo({ id, name: id }));
             updateFallbackModelsDisplay();
         }
     }
@@ -565,14 +643,14 @@ function mergeSelectedModelsFromCatalog(catalog) {
     const enhance = (entry) => {
         const catalogModel = mapById.get(entry.id);
         if (!catalogModel) {
-            return entry;
+            return applyAgentModelInfo(entry);
         }
-        return {
+        return applyAgentModelInfo({
             ...entry,
             name: catalogModel.name || entry.name || entry.id,
             vendor: catalogModel.vendor || entry.vendor || '',
             pricing: catalogModel.pricing || entry.pricing || null
-        };
+        });
     };
 
     if (selectedAvailableModels.length) {
@@ -3742,7 +3820,11 @@ function selectModel(inputId, dropdownId, model) {
 // Add model to fallback models list
 function addFallbackModel(model) {
     if (!selectedFallbackModels.find(m => m.id === model.id)) {
-        selectedFallbackModels.push(model);
+        selectedFallbackModels.push(applyAgentModelInfo({
+            id: model.id,
+            name: model.name || model.id,
+            vendor: model.vendor || ''
+        }));
         updateFallbackModelsDisplay();
     }
     
@@ -3769,7 +3851,7 @@ function updateFallbackModelsDisplay() {
         const tag = document.createElement('div');
         tag.className = 'selected-model-tag';
         tag.innerHTML = `
-            <span>${model.name}</span>
+            <span>${model.optionLabel || model.name || model.id}</span>
             <button class="remove-btn" onclick="removeFallbackModel('${model.id}')">&times;</button>
         `;
         container.appendChild(tag);
@@ -3779,7 +3861,11 @@ function updateFallbackModelsDisplay() {
 // Add model to available models list
 function addAvailableModel(model) {
     if (!selectedAvailableModels.find(m => m.id === model.id)) {
-        selectedAvailableModels.push(model);
+        selectedAvailableModels.push(applyAgentModelInfo({
+            id: model.id,
+            name: model.name || model.id,
+            vendor: model.vendor || ''
+        }));
         updateAvailableModelsDisplay();
         populateAgentDropdown();
     }
@@ -3808,7 +3894,7 @@ function updateAvailableModelsDisplay() {
         const tag = document.createElement('div');
         tag.className = 'selected-model-tag';
         tag.innerHTML = `
-            <span>${model.name}</span>
+            <span>${model.optionLabel || model.name || model.id}</span>
             <button class="remove-btn" onclick="removeAvailableModel('${model.id}')">&times;</button>
         `;
         container.appendChild(tag);
@@ -3833,7 +3919,12 @@ function populateAgentDropdown() {
     selectedAvailableModels.forEach(model => {
         const option = document.createElement('option');
         option.value = model.id;
-        option.textContent = model.name || model.id;
+        const info = getAgentModelInfo(model.id);
+        let label = model.optionLabel || info?.optionLabel || model.name || model.id;
+        if (info?.costTier === 'expensive' || model.costTier === 'expensive') {
+            label += ' 💸';
+        }
+        option.textContent = label;
         agentSelect.appendChild(option);
     });
 
@@ -3850,9 +3941,10 @@ function populateAgentDropdown() {
     } else if (selectedAvailableModels.length > 0) {
         agentSelect.value = selectedAvailableModels[0].id;
     }
-    
+
     // Update agent config
     updateAgentModel();
+    updateAgentModelWarning();
 }
 
 // Get model display name helper
@@ -3881,6 +3973,27 @@ function updateAgentModel() {
         agentConfig.model = selectedValue;
         console.log('Agent model updated to:', selectedValue);
     }
+
+    updateAgentModelWarning();
+}
+
+function updateAgentModelWarning() {
+    const warningEl = document.getElementById('agent-model-guidance');
+    if (!warningEl) return;
+
+    warningEl.classList.remove('expensive');
+    const info = getAgentModelInfo(agentConfig.model);
+    let message = 'High-context models only. Expect large token usage and costs.';
+
+    if (info) {
+        message = `${info.optionLabel || info.displayName || agentConfig.model}: ${info.warning || 'High-context usage. Monitor costs.'}`;
+        if (info.costTier === 'expensive') {
+            warningEl.classList.add('expensive');
+            message += ' ⚠️ Very expensive for long prompts.';
+        }
+    }
+
+    warningEl.textContent = `${message} Long multi-dataset responses can exceed 100k tokens.`;
 }
 
 // Setup dropdown functionality
@@ -4072,13 +4185,13 @@ function loadSavedSettings() {
     const buildModelEntry = (id) => {
         const catalogModel = catalogById.get(id);
         if (catalogModel) {
-            return {
+            return applyAgentModelInfo({
                 id: catalogModel.id,
                 name: catalogModel.name || catalogModel.id,
                 vendor: catalogModel.vendor || ''
-            };
+            });
         }
-        return { id, name: id };
+        return applyAgentModelInfo({ id, name: id });
     };
 
     const availableIds = savedAvailableModels
@@ -4102,6 +4215,7 @@ function loadSavedSettings() {
 
     refreshOpenRouterKeyField();
     attachOpenRouterKeyHandlers();
+    updateAgentModelWarning();
 }
 
 // Make functions available globally
