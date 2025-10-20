@@ -17,6 +17,9 @@ import re
 import ast
 import urllib.parse
 from contextlib import contextmanager
+from copy import deepcopy
+from collections import defaultdict, deque
+from threading import Lock
 
 app = Flask(__name__, static_folder='.', static_url_path='')
 CORS(app)
@@ -40,6 +43,11 @@ MAX_REPLICATE_PAGES = max(int(os.environ.get('MAX_REPLICATE_PAGES', '5')), 1)
 OPENROUTER_KEY_REQUIRED_MESSAGE = (
     'An OpenRouter API key is required for this feature. Add your key in Settings to continue.'
 )
+
+RATE_LIMIT_WINDOW_SECONDS = max(int(os.environ.get('RATE_LIMIT_WINDOW_SECONDS', '60')), 1)
+RATE_LIMIT_MAX_REQUESTS = max(int(os.environ.get('RATE_LIMIT_MAX_REQUESTS', '180')), 1)
+_rate_limit_records = defaultdict(deque)
+_rate_limit_lock = Lock()
 
 
 def _warn_if_missing(name, value):
@@ -78,6 +86,50 @@ def require_user_openrouter_token():
     if token:
         return token
     raise MissingOpenRouterKeyError(OPENROUTER_KEY_REQUIRED_MESSAGE)
+
+def _get_rate_limit_key():
+    token = get_request_bearer_token()
+    if token:
+        return f"token:{token}"
+    forwarded_for = request.headers.get('X-Forwarded-For', '')
+    if isinstance(forwarded_for, str) and forwarded_for:
+        ip = forwarded_for.split(',', 1)[0].strip()
+        if ip:
+            return f"ip:{ip}"
+    ip_addr = request.remote_addr or 'unknown'
+    return f"ip:{ip_addr}"
+
+def _enforce_rate_limit():
+    now = time.time()
+    window = RATE_LIMIT_WINDOW_SECONDS
+    limit = RATE_LIMIT_MAX_REQUESTS
+    key = _get_rate_limit_key()
+    with _rate_limit_lock:
+        queue = _rate_limit_records[key]
+        while queue and now - queue[0] > window:
+            queue.popleft()
+        if len(queue) >= limit:
+            retry_after = max(1, int(window - (now - queue[0])) if queue else window)
+            response = jsonify({
+                'error': 'Too many requests',
+                'retry_after': retry_after
+            })
+            response.status_code = 429
+            response.headers['Retry-After'] = str(retry_after)
+            return response
+        queue.append(now)
+        return None
+
+@app.before_request
+def enforce_basic_rate_limit():
+    if RATE_LIMIT_MAX_REQUESTS <= 0:
+        return None
+    if request.method == 'OPTIONS':
+        return None
+    path = request.path or ''
+    if not path.startswith('/api/'):
+        return None
+    return _enforce_rate_limit()
 
 
 def build_openrouter_headers(token):
@@ -1104,6 +1156,30 @@ def infer_item_metrics(category_id, item):
             metrics['confidence'] = item['ci95']
     return {k: v for k, v in metrics.items() if v not in (None, '', [])}
 
+def extract_item_identifier(category_id, item):
+    if not isinstance(item, dict):
+        return None
+    for key in ('id', 'uuid', 'model_id', 'modelId', 'slug', 'hash', 'identifier'):
+        value = item.get(key)
+        if value:
+            return str(value)
+    name = infer_item_name(item)
+    provider = infer_item_provider(category_id, item)
+    if name and provider:
+        return f"{name}::{provider}"
+    if name:
+        return name
+    return None
+
+def extract_item_description(item):
+    if not isinstance(item, dict):
+        return ''
+    for key in ('description', 'summary', 'notes', 'details', 'overview', 'headline', 'excerpt'):
+        value = item.get(key)
+        if value:
+            return str(value)
+    return ''
+
 def build_fetch_data_markdown(metadata, summary, datasets):
     if not metadata:
         return ''
@@ -1497,6 +1573,8 @@ MAX_HISTORY_MESSAGES = 12
 MAX_HISTORY_MESSAGE_CHARS = 1600
 MAX_HISTORY_SUMMARY_SNIPPETS = 5
 HISTORY_SUMMARY_SNIPPET_CHARS = 200
+MAX_SELECTION_ITEMS_PER_CATEGORY = 200
+MAX_SELECTION_PROMPT_CHARS = 20000
 
 
 def truncate_text_for_prompt(value, limit):
@@ -1548,6 +1626,236 @@ def safe_json_for_prompt(data, label, limit):
     trimmed = serialized[:limit].rstrip()
     truncated_note = f"... [Truncated {len(serialized) - limit} chars from {label}]"
     return f"{trimmed}{truncated_note}"
+
+def build_dataset_selection_candidates(fetch_context):
+    metadata = (fetch_context or {}).get('metadata') or []
+    datasets = (fetch_context or {}).get('datasets') or {}
+    candidates = []
+    for meta in metadata:
+        category_id = meta.get('id')
+        if not category_id:
+            continue
+        items = datasets.get(category_id) or []
+        if not items:
+            continue
+        candidate_items = []
+        for item in items[:MAX_SELECTION_ITEMS_PER_CATEGORY]:
+            identifier = extract_item_identifier(category_id, item)
+            if not identifier:
+                continue
+            candidate_items.append({
+                'id': identifier,
+                'name': infer_item_name(item),
+                'provider': infer_item_provider(category_id, item),
+                'description': extract_item_description(item),
+                'metrics': infer_item_metrics(category_id, item)
+            })
+        if candidate_items:
+            candidates.append({
+                'category': category_id,
+                'items': candidate_items
+            })
+    return candidates
+
+def perform_dataset_selection(user_message, candidates, analysis_sequence, auth_token):
+    if not user_message or not candidates or not auth_token:
+        return None
+
+    selection_model = analysis_sequence.get('intelligent-query', 'google/gemini-2.5-flash-lite')
+    if not selection_model:
+        selection_model = 'google/gemini-2.5-flash-lite'
+
+    headers = build_openrouter_headers(auth_token)
+
+    default_selection_prompt = """You help choose relevant dataset entries for answering a question.
+
+User question: "{USER_MESSAGE}"
+
+Candidate entries grouped by category (each item includes id, name, provider, description, and metrics):
+{CANDIDATE_JSON}
+
+Return ONLY a JSON object with this structure:
+{
+  "selected_ids": {
+    "category_id": ["id1", "id2"]
+  },
+  "notes": "Optional short explanation of what you kept."
+}
+
+Guidelines:
+- Select every ID that could be useful for answering the question.
+- When uncertain, keep the item (do NOT drop potentially relevant entries).
+- The IDs returned must come from the candidates above; do not invent or rename them.
+- Prefer at least 5-10 items for broad queries, but you may keep more if needed.
+- Keeping many items is acceptable if relevance is unclear."""
+
+    selection_prompt_template = get_prompt_value(
+        ['ai-agent', 'dataset-selection'],
+        default_selection_prompt
+    )
+
+    candidate_json = safe_json_for_prompt(candidates, 'CANDIDATE_JSON', MAX_SELECTION_PROMPT_CHARS)
+    prompt = format_prompt(
+        selection_prompt_template,
+        USER_MESSAGE=user_message,
+        CANDIDATE_JSON=candidate_json
+    )
+    prompt = enforce_prompt_ceiling(prompt)
+
+    payload = {
+        'model': selection_model,
+        'messages': [{'role': 'user', 'content': prompt}],
+        'max_tokens': 2048,
+        'temperature': 0.2
+    }
+
+    try:
+        response = requests.post(
+            f'{OPENROUTER_BASE_URL}/chat/completions',
+            headers=headers,
+            json=payload,
+            timeout=30
+        )
+        response.raise_for_status()
+        result = response.json()
+        content = result['choices'][0]['message']['content']
+    except (requests.RequestException, KeyError, IndexError) as exc:
+        print(f"WARNING: dataset selection request failed: {exc}")
+        return None
+
+    if not content:
+        return None
+
+    cleaned = content.strip()
+    if cleaned.startswith('```'):
+        cleaned = cleaned.strip('`')
+        if cleaned.lower().startswith('json'):
+            cleaned = cleaned[4:]
+        cleaned = cleaned.strip()
+    if cleaned.endswith('```'):
+        cleaned = cleaned[:-3].strip()
+
+    try:
+        parsed = json.loads(cleaned)
+    except json.JSONDecodeError:
+        print("WARNING: dataset selection response was not valid JSON; skipping filter.")
+        return None
+
+    selected_ids = {}
+    raw_selected = parsed.get('selected_ids')
+    if isinstance(raw_selected, dict):
+        for category, ids in raw_selected.items():
+            normalized_category = normalize_category_id(category)
+            if not normalized_category:
+                continue
+            if isinstance(ids, (list, tuple, set)):
+                clean_ids = {str(identifier).strip() for identifier in ids if identifier}
+                if clean_ids:
+                    selected_ids[normalized_category] = clean_ids
+    notes = parsed.get('notes') if isinstance(parsed.get('notes'), str) else ''
+
+    if not selected_ids:
+        return None
+
+    return {
+        'mapping': selected_ids,
+        'notes': notes
+    }
+
+def apply_dataset_selection(fetch_context, selection_map, notes=''):
+    if not selection_map:
+        return None
+
+    datasets = (fetch_context or {}).get('datasets') or {}
+    if not datasets:
+        return None
+
+    kept_counts = {}
+    applied = False
+
+    for category_id, identifiers in selection_map.items():
+        items = datasets.get(category_id)
+        if not items:
+            continue
+
+        raw_identifiers = {str(identifier) for identifier in identifiers}
+        lowered_identifiers = {identifier.lower() for identifier in raw_identifiers}
+
+        filtered_items = []
+        for item in items:
+            identifier = extract_item_identifier(category_id, item) or ''
+            identifier_lower = identifier.lower()
+            name = infer_item_name(item) or ''
+            name_lower = name.lower()
+            if (
+                identifier in raw_identifiers
+                or identifier_lower in lowered_identifiers
+                or name_lower in lowered_identifiers
+            ):
+                filtered_items.append(item)
+
+        if filtered_items:
+            datasets[category_id] = filtered_items
+            kept_counts[category_id] = len(filtered_items)
+            applied = True
+
+    if not applied:
+        return None
+
+    metadata = (fetch_context or {}).get('metadata') or []
+    for entry in metadata:
+        category_id = entry.get('id')
+        if category_id in kept_counts:
+            entry['items'] = kept_counts[category_id]
+
+    return {
+        'applied': True,
+        'notes': notes,
+        'kept_counts': kept_counts,
+        'selected_ids': {
+            category_id: sorted({str(identifier) for identifier in identifiers})
+            for category_id, identifiers in selection_map.items()
+            if identifiers
+        }
+    }
+
+def refresh_fetch_context_summary(fetch_context):
+    try:
+        metadata = (fetch_context or {}).get('metadata') or []
+        datasets = (fetch_context or {}).get('datasets') or {}
+        if not metadata or not datasets:
+            return False
+        summary = run_fetch_data_summarizer(metadata, datasets)
+        if summary is None:
+            return False
+        fetch_context['structured'] = summary
+        fetch_context['markdown_sections'] = []
+        markdown_summary = summary.get('markdown_summary')
+        if markdown_summary:
+            fetch_context['markdown_sections'].append(markdown_summary)
+        return True
+    except Exception as exc:
+        print(f"WARNING: Failed to refresh dataset summary after selection: {exc}")
+        return False
+
+def refine_fetch_context_for_query(user_message, fetch_context, analysis_sequence, auth_token):
+    if not user_message or not fetch_context:
+        return fetch_context, None
+
+    candidates = build_dataset_selection_candidates(fetch_context)
+    if not candidates:
+        return fetch_context, None
+
+    selection_result = perform_dataset_selection(user_message, candidates, analysis_sequence, auth_token)
+    if not selection_result:
+        return fetch_context, None
+
+    applied_info = apply_dataset_selection(fetch_context, selection_result['mapping'], selection_result.get('notes', ''))
+    if not applied_info:
+        return fetch_context, None
+
+    refresh_fetch_context_summary(fetch_context)
+    return fetch_context, applied_info
 
 
 def enforce_prompt_ceiling(prompt_text, limit=MAX_PROMPT_FINAL_CHARS):
@@ -1728,6 +2036,7 @@ def agent_tool_loop_generator(
     fetch_context,
     web_context,
     initial_categories,
+    auth_token,
     theme='light',
     mode='standard',
     max_iterations=6
@@ -1769,9 +2078,33 @@ def agent_tool_loop_generator(
                 "Loaded full database context from primary datasets."
             )
         traces.append(dataset_trace)
+        selection_status_message = None
+        selection_info = (fetch_context or {}).get('selection') or {}
+        if selection_info.get('applied'):
+            kept_counts = selection_info.get('kept_counts') or {}
+            if kept_counts:
+                count_summary = ', '.join(
+                    f"{cat}: {count}"
+                    for cat, count in sorted(kept_counts.items())
+                )
+            else:
+                count_summary = ''
+            selection_description = selection_info.get('notes') or (
+                f"Filtered datasets to relevant entries ({count_summary})" if count_summary else
+                "Filtered datasets to relevant entries."
+            )
+            traces.append({
+                'step': 'Dataset Filter',
+                'description': selection_description,
+                'tool': 'dataset_selection',
+                'status': 'success'
+            })
+            selection_status_message = selection_description
         print(f"📊 [AGENT] Initial trace created, yielding...")
         yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
         yield ('status', status_payload('Datasets', dataset_trace['description'] or 'No datasets loaded'))
+        if selection_status_message:
+            yield ('status', status_payload('Dataset Filter', selection_status_message))
         print(f"✅ [AGENT] Initial trace yielded successfully")
 
         prompt_context = build_agent_prompt_context(user_message, fetch_context, web_context)
@@ -1927,6 +2260,16 @@ def agent_tool_loop_generator(
                     print(f"📊 [AGENT] Fetching data for categories: {requested_categories}")
                     fetch_result = fetch_data_for_categories(requested_categories)
                     fetch_context = merge_fetch_context(fetch_context, fetch_result)
+                    fetch_context, selection_info = refine_fetch_context_for_query(
+                        user_message,
+                        fetch_context,
+                        analysis_sequence,
+                        auth_token
+                    )
+                    if selection_info:
+                        fetch_context['selection'] = selection_info
+                    else:
+                        fetch_context.pop('selection', None)
                     prompt_context = build_agent_prompt_context(user_message, fetch_context, web_context)
                     final_prompt = format_prompt(prompt_template, **prompt_context)
                     final_prompt = enforce_prompt_ceiling(final_prompt)
@@ -1940,8 +2283,31 @@ def agent_tool_loop_generator(
                         'tool': f"fetch_data ({len(requested_categories)} categories)",
                         'status': 'success'
                     })
+                    selection_trace_description = None
+                    selection_info = (fetch_context or {}).get('selection') or {}
+                    if selection_info.get('applied'):
+                        kept_counts = selection_info.get('kept_counts') or {}
+                        if kept_counts:
+                            count_summary = ', '.join(
+                                f"{cat}: {count}"
+                                for cat, count in sorted(kept_counts.items())
+                            )
+                        else:
+                            count_summary = ''
+                        selection_trace_description = selection_info.get('notes') or (
+                            f"Filtered datasets to relevant entries ({count_summary})" if count_summary else
+                            "Filtered datasets to relevant entries."
+                        )
+                        traces.append({
+                            'step': 'Dataset Filter',
+                            'description': selection_trace_description,
+                            'tool': 'dataset_selection',
+                            'status': 'success'
+                        })
                     yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
                     yield ('status', status_payload('Tool', description))
+                    if selection_trace_description:
+                        yield ('status', status_payload('Dataset Filter', selection_trace_description))
                     print(f"✅ [AGENT] Data fetched successfully, continuing to next iteration")
                     continue
                 except Exception as exc:
@@ -1965,7 +2331,7 @@ def agent_tool_loop_generator(
                 try:
                     query = normalized_content.split(':', 1)[1].strip()
                     print(f"🔍 [AGENT] Searching for: {query}")
-                    web_data, tool_display = perform_web_search(query, analysis_sequence, user_openrouter_token)
+                    web_data, tool_display = perform_web_search(query, analysis_sequence, auth_token)
                     web_context = add_web_result(web_context, query, web_data, tool_display)
                     prompt_context = build_agent_prompt_context(user_message, fetch_context, web_context)
                     final_prompt = format_prompt(prompt_template, **prompt_context)
@@ -2951,6 +3317,16 @@ def ai_agent():
         fetch_context = initialize_fetch_context()
         fetch_result = fetch_data_for_categories(fetch_categories)
         fetch_context = merge_fetch_context(fetch_context, fetch_result)
+        fetch_context, selection_info = refine_fetch_context_for_query(
+            user_message,
+            fetch_context,
+            analysis_sequence,
+            user_openrouter_token
+        )
+        if selection_info:
+            fetch_context['selection'] = selection_info
+        else:
+            fetch_context.pop('selection', None)
         web_context = initialize_web_context()
         relevant_data = compose_fetch_markdown(fetch_context)
         headers = build_openrouter_headers(user_openrouter_token)
@@ -3024,6 +3400,7 @@ Respond concisely and cite the sources (Conversation History, Database, Web Sear
                         fetch_context,
                         web_context,
                         fetch_categories,
+                        user_openrouter_token,
                         theme=current_theme,
                         mode='deep-research' if deep_research else 'standard',
                         max_iterations=8 if deep_research else 6
@@ -3164,6 +3541,7 @@ Respond concisely and cite the sources (Conversation History, Database, Web Sear
             fetch_context,
             web_context,
             fetch_categories,
+            user_openrouter_token,
             theme=current_theme,
             mode='deep-research' if deep_research else 'standard',
             max_iterations=8 if deep_research else 6
