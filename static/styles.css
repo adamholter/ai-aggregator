@@ -2253,6 +2253,7 @@ body {
 }
 
 .agent-warning {
+    display: none;
     margin-top: 8px;
     margin-bottom: 16px;
     padding: 12px 14px;

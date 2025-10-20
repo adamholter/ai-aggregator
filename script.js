@@ -658,6 +658,8 @@ function applyAgentDefaults() {
     if (openRouterModels.length) {
         mergeSelectedModelsFromCatalog(openRouterModels);
     }
+
+    updateAgentModelWarning();
 }
 
 function mergeSelectedModelsFromCatalog(catalog) {
@@ -3943,9 +3945,11 @@ function populateAgentDropdown() {
 
     // Add speed mode option
     const speedModeOption = document.createElement('option');
-    const speedModel = localStorage.getItem('dashboard-speed-model') || agentConfig.speedModeModel || 'openai/gpt-4o-mini';
+    const speedModel = localStorage.getItem('dashboard-speed-model') || agentConfig.speedModeModel || 'google/gemini-2.5-flash-lite-preview-09-2025';
+    const speedInfo = getAgentModelInfo(speedModel);
+    const speedLabel = speedInfo?.displayName || getModelDisplayName(speedModel);
     speedModeOption.value = `speed:${speedModel}`;
-    speedModeOption.textContent = `⚡ Speed Mode (${getModelDisplayName(speedModel)})`;
+    speedModeOption.textContent = `⚡ Speed Mode (${speedLabel})`;
     agentSelect.appendChild(speedModeOption);
     
     // Restore previous selection or set default
@@ -3994,19 +3998,19 @@ function updateAgentModelWarning() {
     const warningEl = document.getElementById('agent-model-guidance');
     if (!warningEl) return;
 
-    warningEl.classList.remove('expensive');
     const info = getAgentModelInfo(agentConfig.model);
-    let message = 'High-context models only. Expect large token usage and costs.';
+    warningEl.classList.remove('expensive');
 
     if (info) {
-        message = `${info.optionLabel || info.displayName || agentConfig.model}: ${info.warning || 'High-context usage. Monitor costs.'}`;
-        if (info.costTier === 'expensive') {
-            warningEl.classList.add('expensive');
-            message += ' ⚠️ Very expensive for long prompts.';
-        }
+        warningEl.style.display = 'none';
+        warningEl.textContent = '';
+        return;
     }
 
-    warningEl.textContent = `${message} Long multi-dataset responses can exceed 100k tokens.`;
+    warningEl.style.display = 'block';
+    warningEl.classList.add('expensive');
+    const modelId = agentConfig.model || 'custom model';
+    warningEl.textContent = `${modelId}: ensure the model supports very large contexts (≥200k tokens) and expect high costs.`;
 }
 
 // Setup dropdown functionality

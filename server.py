@@ -1284,11 +1284,15 @@ def compress_generic_entry(category_id, item):
     provider = infer_item_provider(category_id, item) or 'Unknown'
     metrics = infer_item_metrics(category_id, item)
     metric_segments = []
-    for key, value in metrics.items():
+    for idx, (key, value) in enumerate(metrics.items()):
+        if idx >= 3:
+            break
         formatted = format_decimal(value)
         if formatted:
             metric_segments.append(f"{key}: {formatted}")
     description = item.get('description') or item.get('summary')
+    if category_id in {'fal', 'replicate'}:
+        description = ''
     segments = [f"{name}; {provider}"]
     if metric_segments:
         segments.append(', '.join(metric_segments))
@@ -1741,8 +1745,8 @@ def build_loaded_datasets_label(context):
 MAX_PROMPT_MARKDOWN_CHARS = 6000
 MAX_PROMPT_STRUCTURED_CHARS = 9000
 MAX_PROMPT_DATASETS_CHARS = 90000
-MAX_COMPRESSED_DATASET_CHARS = 60000
-MAX_COMPRESSED_ITEMS_PER_CATEGORY = 40
+MAX_COMPRESSED_DATASET_CHARS = 40000
+MAX_COMPRESSED_ITEMS_PER_CATEGORY = 12
 MAX_PROMPT_FINAL_CHARS = 60000
 MAX_PROMPT_CATEGORY_SUMMARIES = 5
 MAX_PROMPT_CATEGORY_SUMMARY_CHARS = 480
