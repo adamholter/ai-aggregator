@@ -115,11 +115,38 @@ function applyAgentModelInfo(entry) {
     };
 }
 
+function truncateForHistory(content, limit = MAX_AGENT_HISTORY_CHARS) {
+    if (!content || typeof content !== 'string') {
+        return content || '';
+    }
+    if (content.length <= limit) {
+        return content;
+    }
+    const truncated = content.slice(0, limit).trimEnd();
+    return `${truncated}… [truncated]`;
+}
+
+function pushConversationEntry(role, content) {
+    if (!agentConfig.conversationHistory) {
+        agentConfig.conversationHistory = [];
+    }
+    agentConfig.conversationHistory.push({
+        role,
+        content: truncateForHistory(content),
+        timestamp: new Date().toISOString()
+    });
+    if (agentConfig.conversationHistory.length > MAX_AGENT_HISTORY_MESSAGES) {
+        agentConfig.conversationHistory = agentConfig.conversationHistory.slice(-MAX_AGENT_HISTORY_MESSAGES);
+    }
+}
+
 let openRouterIndex = null;
 const modelMatchCache = new Map();
 const analysisCache = new Map();
 const openRouterMatchCache = new Map();
 const USER_OPENROUTER_KEY_STORAGE = 'dashboard-user-openrouter-key';
+const MAX_AGENT_HISTORY_MESSAGES = 12;
+const MAX_AGENT_HISTORY_CHARS = 1200;
 
 const THEME_SEQUENCE = ['light', 'dark', 'source'];
 const THEME_LABELS = {
@@ -1439,17 +1466,7 @@ async function sendMessage() {
     chatMessages.appendChild(userMessage);
     
     // Add to conversation history for context
-    agentConfig.conversationHistory.push({
-        role: 'user',
-        content: message,
-        timestamp: new Date().toISOString()
-    });
-    
-    // Keep conversation history to last 10 exchanges to avoid token limits
-    if (agentConfig.conversationHistory.length > 20) {
-        agentConfig.conversationHistory = agentConfig.conversationHistory.slice(-20);
-        console.log('📚 [AI Agent] Trimmed conversation history to 20 items');
-    }
+    pushConversationEntry('user', message);
     
     // Add initial loading indicator
     const loadingMessage = document.createElement('div');
@@ -1483,11 +1500,7 @@ async function sendMessage() {
         
         // Add AI response to conversation history
         if (response && response.response) {
-            agentConfig.conversationHistory.push({
-                role: 'assistant',
-                content: response.response,
-                timestamp: new Date().toISOString()
-            });
+            pushConversationEntry('assistant', response.response);
             console.log('📚 [AI Agent] Added AI response to conversation history');
         }
         
