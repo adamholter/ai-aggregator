@@ -124,6 +124,69 @@ function fixEncodingArtifacts(text) {
 
 const STREAM_BLOCK_PATTERN = /^(#{1,6}\s|[-*+]\s|```|>|\|)/;
 
+function escapeHtml(value) {
+    return (value == null ? '' : String(value)).replace(/[&<>"']/g, char => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    }[char]));
+}
+
+function showToast(message, type = 'error', duration = 5000) {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+    if (type === 'error') {
+        toast.classList.add('toast-error');
+    } else if (type === 'warning') {
+        toast.classList.add('toast-warning');
+    }
+
+    toast.innerHTML = `
+        <span class="toast-message">${escapeHtml(message)}</span>
+        <button type="button" aria-label="Dismiss toast">×</button>
+    `;
+
+    const dismiss = () => {
+        toast.classList.add('fade-out');
+        window.setTimeout(() => {
+            if (toast.parentNode) {
+                toast.parentNode.removeChild(toast);
+            }
+        }, 300);
+    };
+
+    const button = toast.querySelector('button');
+    if (button) {
+        button.addEventListener('click', dismiss);
+    }
+
+    container.appendChild(toast);
+
+    if (duration > 0) {
+        window.setTimeout(dismiss, duration);
+    }
+}
+
+function clearAgentLoadingState() {
+    const chatMessages = document.getElementById('chat-messages');
+    if (!chatMessages) return;
+
+    const loadingIndicator = chatMessages.querySelector('.message.ai.loading-initial');
+    if (loadingIndicator) {
+        loadingIndicator.remove();
+    }
+
+    const streamingMessage = chatMessages.querySelector('.message.ai.streaming');
+    if (streamingMessage) {
+        chatMessages.removeChild(streamingMessage);
+    }
+}
+
 function appendStreamChunk(current, chunk) {
     if (!chunk) return current || '';
     if (!current) return chunk;
@@ -1326,26 +1389,19 @@ async function sendMessage() {
         chatMessages.scrollTop = chatMessages.scrollHeight;
         
     } catch (error) {
-        // Remove initial loading indicator if it exists
-        const loadingIndicator = chatMessages.querySelector('.message.ai.loading-initial');
-        if (loadingIndicator) {
-            loadingIndicator.remove();
-        }
-        
-        // Remove any streaming message
-        const streamingMessage = chatMessages.querySelector('.message.ai.streaming');
-        if (streamingMessage) {
-            chatMessages.removeChild(streamingMessage);
-        }
-        
-        // Add error message
+        clearAgentLoadingState();
+
         const errorMessage = document.createElement('div');
         errorMessage.className = 'message ai error';
         errorMessage.innerHTML = `<div class="error-content">❌ <strong>Error:</strong> ${error.message}</div>`;
         chatMessages.appendChild(errorMessage);
-        
-        // Scroll to bottom
+
         chatMessages.scrollTop = chatMessages.scrollHeight;
+
+        if (!error || !error.__toastHandled) {
+            const message = (error && error.message) ? error.message : 'The AI agent request failed.';
+            showToast(message, 'error');
+        }
     }
 }
 
@@ -1460,9 +1516,15 @@ async function handleStreamingWithFetch(userMessage, resolve, reject) {
                                 case 'done':
                                     resolve({ response: fullResponse, traces: traces });
                                     return;
-                                case 'error':
-                                    reject(new Error(parsed.error));
+                                case 'error': {
+                                    const errorMessage = parsed.error || 'The AI agent encountered an error.';
+                                    clearAgentLoadingState();
+                                    showToast(errorMessage, 'error');
+                                    const errorObject = new Error(errorMessage);
+                                    errorObject.__toastHandled = true;
+                                    reject(errorObject);
                                     return;
+                                }
                             }
                         } catch (e) {
                             // Ignore invalid JSON

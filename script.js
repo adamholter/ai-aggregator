@@ -136,6 +136,66 @@ function escapeHtml(value) {
     }[char]));
 }
 
+function showToast(message, type = 'error', duration = 5000) {
+    const container = document.getElementById('toast-container');
+    if (!container) {
+        console.warn('⚠️ [Toast] No toast container found');
+        return;
+    }
+
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+    if (type === 'error') {
+        toast.classList.add('toast-error');
+    } else if (type === 'warning') {
+        toast.classList.add('toast-warning');
+    }
+
+    toast.innerHTML = `
+        <span class="toast-message">${escapeHtml(message)}</span>
+        <button type="button" aria-label="Dismiss toast">×</button>
+    `;
+
+    const dismiss = () => {
+        toast.classList.add('fade-out');
+        window.setTimeout(() => {
+            if (toast.parentNode) {
+                toast.parentNode.removeChild(toast);
+            }
+        }, 300);
+    };
+
+    const button = toast.querySelector('button');
+    if (button) {
+        button.addEventListener('click', dismiss);
+    }
+
+    container.appendChild(toast);
+    if (duration > 0) {
+        window.setTimeout(dismiss, duration);
+    }
+}
+
+function clearAgentLoadingState() {
+    const chatMessages = document.getElementById('chat-messages');
+    if (!chatMessages) {
+        console.warn('⚠️ [AI Agent] chat-messages container not found while clearing state');
+        return;
+    }
+
+    const loadingIndicator = chatMessages.querySelector('.message.ai.loading-initial');
+    if (loadingIndicator) {
+        loadingIndicator.remove();
+        console.log('🧹 [AI Agent] Removed loading indicator');
+    }
+
+    const streamingMessage = chatMessages.querySelector('.message.ai.streaming');
+    if (streamingMessage) {
+        chatMessages.removeChild(streamingMessage);
+        console.log('🧹 [AI Agent] Removed streaming message during cleanup');
+    }
+}
+
 function appendStreamChunk(current, chunk) {
     if (!chunk) return current || '';
     if (!current) return chunk;
@@ -1369,29 +1429,20 @@ async function sendMessage() {
             stack: error.stack,
             elapsed: Date.now() - sendMessageStartTime
         });
-        
-        // Remove initial loading indicator if it exists
-        const loadingIndicator = chatMessages.querySelector('.message.ai.loading-initial');
-        if (loadingIndicator) {
-            loadingIndicator.remove();
-            console.log('🗑️ [AI Agent] Removed initial loading indicator');
-        }
-        
-        // Remove any streaming message
-        const streamingMessage = chatMessages.querySelector('.message.ai.streaming');
-        if (streamingMessage) {
-            chatMessages.removeChild(streamingMessage);
-            console.log('🗑️ [AI Agent] Removed streaming message');
-        }
-        
+
+        clearAgentLoadingState();
+
         // Add error message
         const errorMessage = document.createElement('div');
         errorMessage.className = 'message ai error';
         errorMessage.innerHTML = `<div class="error-content">❌ <strong>Error:</strong> ${error.message}</div>`;
         chatMessages.appendChild(errorMessage);
-        
-        // Scroll to bottom
         chatMessages.scrollTop = chatMessages.scrollHeight;
+
+        if (!error || !error.__toastHandled) {
+            const toastMessage = error && error.message ? error.message : 'The AI agent request failed.';
+            showToast(toastMessage, 'error');
+        }
     }
 }
 
@@ -1712,12 +1763,18 @@ async function handleStreamingWithFetch(userMessage, resolve, reject) {
                                     updateStreamingResponse(fullResponse, traces, statuses);
                                     resolve({ response: fixEncodingArtifacts(fullResponse), traces: traces });
                                     return;
-                                case 'error':
+                                case 'error': {
                                     clearInterval(stallCheckInterval);
                                     clearTimeout(timeoutId);
-                                    console.log('❌ [AI Agent] Received error event', { error: parsed.error });
-                                    reject(new Error(parsed.error || 'Unknown error occurred'));
+                                    const errorMessage = parsed.error || 'The AI agent encountered an error.';
+                                    console.log('❌ [AI Agent] Received error event', { error: errorMessage });
+                                    clearAgentLoadingState();
+                                    showToast(errorMessage, 'error');
+                                    const errorObject = new Error(errorMessage);
+                                    errorObject.__toastHandled = true;
+                                    reject(errorObject);
                                     return;
+                                }
                             }
                         } catch (e) {
                             console.warn('⚠️ [AI Agent] Invalid SSE JSON', { data, error: e.message });

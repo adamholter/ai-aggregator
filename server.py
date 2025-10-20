@@ -1267,6 +1267,7 @@ Rules:
         CATEGORY_METADATA=json.dumps(metadata, ensure_ascii=False, indent=2),
         DATASETS_JSON=json.dumps(datasets, ensure_ascii=False, indent=2)
     )
+    prompt = enforce_prompt_ceiling(prompt)
 
     payload = {
         'model': fetch_model,
@@ -1485,6 +1486,119 @@ def build_loaded_datasets_label(context):
             labels.append(cat_id)
     return ', '.join(labels) if labels else 'None'
 
+MAX_PROMPT_MARKDOWN_CHARS = 6000
+MAX_PROMPT_STRUCTURED_CHARS = 9000
+MAX_PROMPT_FINAL_CHARS = 60000
+MAX_PROMPT_CATEGORY_SUMMARIES = 5
+MAX_PROMPT_CATEGORY_SUMMARY_CHARS = 480
+MAX_PROMPT_CATEGORY_TOP_ITEMS = 5
+MAX_PROMPT_HIGHLIGHTS = 6
+MAX_HISTORY_MESSAGES = 12
+MAX_HISTORY_MESSAGE_CHARS = 1600
+MAX_HISTORY_SUMMARY_SNIPPETS = 5
+HISTORY_SUMMARY_SNIPPET_CHARS = 200
+
+
+def truncate_text_for_prompt(value, limit):
+    if not value or limit <= 0:
+        return value
+    if len(value) <= limit:
+        return value
+    trimmed = value[:limit].rstrip()
+    return f"{trimmed}…\n[Trimmed {len(value) - limit} chars]"
+
+
+def prune_structured_summary(structured):
+    if not isinstance(structured, dict):
+        return {}
+    trimmed = {}
+    for key, value in structured.items():
+        if key == 'category_summaries' and isinstance(value, list):
+            limited = []
+            for entry in value[:MAX_PROMPT_CATEGORY_SUMMARIES]:
+                if isinstance(entry, dict):
+                    entry_copy = dict(entry)
+                    summary_text = entry_copy.get('summary')
+                    if isinstance(summary_text, str):
+                        entry_copy['summary'] = truncate_text_for_prompt(
+                            summary_text,
+                            MAX_PROMPT_CATEGORY_SUMMARY_CHARS
+                        )
+                    top_items = entry_copy.get('top_items')
+                    if isinstance(top_items, list) and len(top_items) > MAX_PROMPT_CATEGORY_TOP_ITEMS:
+                        entry_copy['top_items'] = top_items[:MAX_PROMPT_CATEGORY_TOP_ITEMS]
+                    limited.append(entry_copy)
+                else:
+                    limited.append(entry)
+            trimmed[key] = limited
+        elif key == 'highlights' and isinstance(value, list):
+            trimmed[key] = value[:MAX_PROMPT_HIGHLIGHTS]
+        else:
+            trimmed[key] = value
+    return trimmed
+
+
+def safe_json_for_prompt(data, label, limit):
+    try:
+        serialized = json.dumps(data, ensure_ascii=False, separators=(',', ':'))
+    except (TypeError, ValueError):
+        serialized = json.dumps(str(data), ensure_ascii=False)
+    if len(serialized) <= limit:
+        return serialized
+    trimmed = serialized[:limit].rstrip()
+    truncated_note = f"... [Truncated {len(serialized) - limit} chars from {label}]"
+    return f"{trimmed}{truncated_note}"
+
+
+def enforce_prompt_ceiling(prompt_text, limit=MAX_PROMPT_FINAL_CHARS):
+    if not isinstance(prompt_text, str) or len(prompt_text) <= limit:
+        return prompt_text
+    trimmed = prompt_text[:limit].rstrip()
+    return f"{trimmed}\n\n[System: Prompt truncated to {limit} characters to stay within provider limits.]"
+
+
+def prune_conversation_history(history):
+    if not history:
+        return [], ''
+    trimmed_history = []
+    for entry in history[-MAX_HISTORY_MESSAGES:]:
+        if not isinstance(entry, dict):
+            continue
+        role = entry.get('role')
+        content = entry.get('content')
+        if role not in {'user', 'assistant'} or not isinstance(content, str):
+            continue
+        truncated = False
+        if len(content) > MAX_HISTORY_MESSAGE_CHARS:
+            content = content[:MAX_HISTORY_MESSAGE_CHARS].rstrip()
+            content = f"{content}…\n[Message truncated for length]"
+            truncated = True
+        trimmed_entry = dict(entry)
+        trimmed_entry['content'] = content
+        trimmed_entry.setdefault('metadata', {})
+        if truncated:
+            trimmed_entry['metadata']['truncated'] = True
+        trimmed_history.append(trimmed_entry)
+
+    overflow = history[:-MAX_HISTORY_MESSAGES] if len(history) > MAX_HISTORY_MESSAGES else []
+    summary_snippets = []
+    for msg in overflow[-MAX_HISTORY_SUMMARY_SNIPPETS:]:
+        if not isinstance(msg, dict):
+            continue
+        role = msg.get('role')
+        content = msg.get('content')
+        if role not in {'user', 'assistant'} or not content:
+            continue
+        snippet = str(content)
+        if len(snippet) > HISTORY_SUMMARY_SNIPPET_CHARS:
+            snippet = snippet[:HISTORY_SUMMARY_SNIPPET_CHARS].rstrip() + '…'
+        label = 'User' if role == 'user' else 'Assistant'
+        summary_snippets.append(f"{label}: {snippet}")
+
+    summary_text = "\n".join(summary_snippets)
+    return trimmed_history, summary_text
+
+
 def initialize_web_context():
     return {'entries': []}
 
@@ -1513,15 +1627,22 @@ def compose_web_data(web_context):
     return combined, section
 
 def build_agent_prompt_context(user_message, fetch_context, web_context):
-    fetch_markdown = compose_fetch_markdown(fetch_context)
-    fetch_structured = compose_fetch_structured(fetch_context)
-    fetch_datasets = compose_fetch_datasets(fetch_context)
+    fetch_markdown = truncate_text_for_prompt(
+        compose_fetch_markdown(fetch_context),
+        MAX_PROMPT_MARKDOWN_CHARS
+    )
+    structured_raw = compose_fetch_structured(fetch_context)
+    structured_trimmed = prune_structured_summary(structured_raw)
+    structured_json = safe_json_for_prompt(
+        structured_trimmed,
+        'FETCH_DATA_JSON',
+        MAX_PROMPT_STRUCTURED_CHARS
+    )
     web_data, web_section = compose_web_data(web_context)
     return {
         'USER_MESSAGE': user_message,
         'FETCH_DATA_MARKDOWN': fetch_markdown,
-        'FETCH_DATA_JSON': json.dumps(fetch_structured, ensure_ascii=False, indent=2),
-        'FETCH_DATASETS_JSON': json.dumps(fetch_datasets, ensure_ascii=False, indent=2),
+        'FETCH_DATA_JSON': structured_json,
         'WEB_DATA': web_data,
         'WEB_DATA_SECTION': web_section,
         'LOADED_DATASETS': build_loaded_datasets_label(fetch_context)
@@ -1533,29 +1654,19 @@ def build_agent_messages(final_prompt, conversation_history, user_message):
         'content': final_prompt
     }]
 
-    if conversation_history:
-        recent_history = conversation_history[-20:] if len(conversation_history) > 20 else conversation_history
-        for entry in recent_history:
-            role = entry.get('role')
-            content = entry.get('content')
-            if role in ['user', 'assistant'] and content:
-                messages.append({
-                    'role': role,
-                    'content': content
-                })
+    trimmed_history, summary_text = prune_conversation_history(conversation_history or [])
+    for entry in trimmed_history:
+        role = entry.get('role')
+        content = entry.get('content')
+        if role in ['user', 'assistant'] and content:
+            messages.append({
+                'role': role,
+                'content': content
+            })
 
     current_user_content = user_message
-    if conversation_history:
-        fallback_history = conversation_history[-10:] if len(conversation_history) > 10 else conversation_history
-        context_parts = []
-        for msg in fallback_history:
-            if msg.get('role') in ['user', 'assistant'] and msg.get('content'):
-                prefix = "User: " if msg.get('role') == 'user' else "Assistant: "
-                snippet = str(msg.get('content', ''))[:200]
-                context_parts.append(f"{prefix}{snippet}")
-        if context_parts:
-            context_summary = "\n".join(context_parts)
-            current_user_content = f"CONTEXT:\n{context_summary}\n\nCURRENT REQUEST: {user_message}"
+    if summary_text:
+        current_user_content = f"RECENT CONTEXT SUMMARY (trimmed):\n{summary_text}\n\nCURRENT REQUEST: {user_message}"
 
     messages.append({
         'role': 'user',
@@ -1674,6 +1785,7 @@ def agent_tool_loop_generator(
                 "3. Combine database findings with external research, and cite each source group (Database vs Web Search).\n"
                 "4. Summarize key discoveries and note where fresh web research augmented the internal data."
             )
+        final_prompt = enforce_prompt_ceiling(final_prompt)
         model_display = get_model_display_name(final_model)
         print(f"💬 [AGENT] Final prompt prepared for {model_display}")
 
@@ -1817,6 +1929,7 @@ def agent_tool_loop_generator(
                     fetch_context = merge_fetch_context(fetch_context, fetch_result)
                     prompt_context = build_agent_prompt_context(user_message, fetch_context, web_context)
                     final_prompt = format_prompt(prompt_template, **prompt_context)
+                    final_prompt = enforce_prompt_ceiling(final_prompt)
                     description = (
                         f"Fetched datasets for {', '.join(requested_categories)}. "
                         f"{describe_loaded_categories(fetch_context)}"
@@ -1856,6 +1969,7 @@ def agent_tool_loop_generator(
                     web_context = add_web_result(web_context, query, web_data, tool_display)
                     prompt_context = build_agent_prompt_context(user_message, fetch_context, web_context)
                     final_prompt = format_prompt(prompt_template, **prompt_context)
+                    final_prompt = enforce_prompt_ceiling(final_prompt)
                     traces.append({
                         'step': 'Web Search',
                         'description': f'Performed live search for "{query}"' if query else 'Performed live search',
@@ -2013,6 +2127,7 @@ Return a concise markdown report that cites sources inline when available."""
         search_prompt_template,
         USER_MESSAGE=query
     )
+    formatted_prompt = enforce_prompt_ceiling(formatted_prompt)
 
     payload = {
         'model': web_search_model,
@@ -2863,9 +2978,6 @@ Fetched Dataset Summary:
 Structured Dataset JSON:
 {FETCH_DATA_JSON}
 
-Raw Dataset Snapshot:
-{FETCH_DATASETS_JSON}
-
 {WEB_DATA_SECTION}
 
 CONVERSATION USAGE:
@@ -3143,12 +3255,6 @@ def _handle_model_analysis_post():
             indent=2
         )
         fetch_markdown = compose_fetch_markdown(fetch_context)
-        fetch_datasets_json = json.dumps(
-            compose_fetch_datasets(fetch_context),
-            ensure_ascii=False,
-            indent=2
-        )
-
         default_analysis_prompt = """You are an AI model analysis expert. Provide a comprehensive analysis of this model using ONLY the provided data.
 
 Model Data from Database:
@@ -3159,9 +3265,6 @@ Structured Dataset Summary:
 
 Formatted Highlights:
 {FETCH_DATA_MARKDOWN}
-
-Raw Dataset Snapshot:
-{FETCH_DATASETS_JSON}
 
 Additional Web Research:
 {WEB_DATA}
@@ -3206,10 +3309,10 @@ Explicitly note when information is not present in the provided datasets."""
             MODEL_DATA_JSON=json.dumps(model_data, ensure_ascii=False, indent=2),
             FETCH_DATA_JSON=fetch_structured_json,
             FETCH_DATA_MARKDOWN=fetch_markdown,
-            FETCH_DATASETS_JSON=fetch_datasets_json,
             WEB_DATA="Web search was not requested; rely on provided datasets.",
             RELATED_DATA=fetch_markdown
         )
+        analysis_prompt = enforce_prompt_ceiling(analysis_prompt)
 
         headers = build_openrouter_headers(user_openrouter_token)
 
@@ -3655,6 +3758,7 @@ Be selective - only include the top 5-10 most relevant results. Focus on models 
             QUERY=query,
             DATASET_JSON=json.dumps(all_data, indent=2)
         )
+        prompt = enforce_prompt_ceiling(prompt)
         
         payload = {
             'model': intelligent_query_model,
