@@ -2361,7 +2361,23 @@ def agent_tool_loop_generator(
         fetch_context = fetch_context or initialize_fetch_context()
         fetch_context.pop('selection', None)
         web_context = web_context or initialize_web_context()
+        if isinstance(conversation_history, list):
+            conversation_history = list(conversation_history)
+        else:
+            conversation_history = []
 
+        def append_tool_note(tool_name, note):
+            if not note or not isinstance(conversation_history, list):
+                return
+            message = str(note).strip()
+            if not message:
+                return
+            conversation_history.append({
+                'role': 'assistant',
+                'content': f"[{tool_name}] {message}",
+                'metadata': {'tool': tool_name}
+            })
+        
         traces = []
         normalized_initial = [
             normalize_category_id(cat)
@@ -2540,24 +2556,52 @@ def agent_tool_loop_generator(
                         yield ('final', fail_message, traces, fetch_context, web_context)
                         return
 
-                    print(f"📊 [AGENT] Fetching data for categories: {requested_categories}")
-                    fetch_result = fetch_data_for_categories(requested_categories)
+                    normalized_requested = [
+                        normalize_category_id(cat) for cat in (requested_categories or [])
+                        if normalize_category_id(cat)
+                    ]
+                    existing_categories = {
+                        normalize_category_id(item.get('id'))
+                        for item in (fetch_context.get('metadata') or [])
+                        if isinstance(item, dict) and item.get('id')
+                    }
+                    missing_categories = [
+                        cat for cat in normalized_requested
+                        if cat not in existing_categories
+                    ]
+
+                    if not missing_categories:
+                        description = (
+                            f"Datasets already loaded for {', '.join(normalized_requested)}."
+                        )
+                        traces.append({
+                            'step': 'Dataset Fetch',
+                            'description': description,
+                            'tool': f"fetch_data ({len(normalized_requested)} categories)",
+                            'status': 'success'
+                        })
+                        yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
+                        yield ('status', status_payload('Tool', description))
+                        append_tool_note('fetch_data', description)
+                        print(f"ℹ️ [AGENT] Requested datasets already available; skipping fetch.")
+                        continue
+
+                    print(f"📊 [AGENT] Fetching data for categories: {missing_categories}")
+                    fetch_result = fetch_data_for_categories(missing_categories)
                     fetch_context = merge_fetch_context(fetch_context, fetch_result)
-                    prompt_context = build_agent_prompt_context(user_message, fetch_context, web_context)
-                    final_prompt = format_prompt(prompt_template, **prompt_context)
-                    final_prompt = enforce_prompt_ceiling(final_prompt)
                     description = (
-                        f"Fetched datasets for {', '.join(requested_categories)}. "
+                        f"Fetched datasets for {', '.join(missing_categories)}. "
                         f"{describe_loaded_categories(fetch_context)}"
                     )
                     traces.append({
                         'step': 'Dataset Fetch',
                         'description': description,
-                        'tool': f"fetch_data ({len(requested_categories)} categories)",
+                        'tool': f"fetch_data ({len(missing_categories)} categories)",
                         'status': 'success'
                     })
                     yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
                     yield ('status', status_payload('Tool', description))
+                    append_tool_note('fetch_data', description)
                     print(f"✅ [AGENT] Data fetched successfully, continuing to next iteration")
                     continue
                 except Exception as exc:
@@ -2594,6 +2638,8 @@ def agent_tool_loop_generator(
                     })
                     yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
                     yield ('status', status_payload('Tool', f'WEB_SEARCH -> {query or "(blank)"}'))
+                    query_label = query if query else "the current topic"
+                    append_tool_note('web_search', f'Completed web search for "{query_label}".')
                     print(f"✅ [AGENT] Web search completed, continuing to next iteration")
                     continue
                 except Exception as exc:

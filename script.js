@@ -225,27 +225,58 @@ function resetImageUploads() {
     const preview = document.getElementById('agent-image-preview');
     if (preview) {
         preview.innerHTML = '';
+        preview.classList.remove('has-items');
+    }
+    updateAttachmentButtonState();
+}
+
+function updateAttachmentButtonState() {
+    const button = document.getElementById('agent-attachment-button');
+    if (!button) {
+        return;
+    }
+    if (agentPendingImages.length) {
+        button.classList.add('has-attachments');
+    } else {
+        button.classList.remove('has-attachments');
     }
 }
 
 function setupImageUpload() {
     const input = document.getElementById('agent-image');
     if (!input) return;
+
+    const button = document.getElementById('agent-attachment-button');
+    if (button) {
+        button.addEventListener('click', () => input.click());
+    }
+
+    updateAttachmentButtonState();
+
     input.addEventListener('change', () => {
         agentPendingImages = Array.from(input.files || []);
         const preview = document.getElementById('agent-image-preview');
-        if (!preview) return;
-        preview.innerHTML = '';
+        if (preview) {
+            preview.innerHTML = '';
+            preview.classList.remove('has-items');
+        }
         if (!agentPendingImages.length) {
+            updateAttachmentButtonState();
             return;
+        }
+        if (preview) {
+            preview.classList.add('has-items');
         }
         agentPendingImages.forEach(file => {
             const item = document.createElement('div');
             item.className = 'image-preview-item';
             const sizeKB = (file.size / 1024).toFixed(1);
             item.textContent = `📎 ${file.name} (${sizeKB} KB)`;
-            preview.appendChild(item);
+            if (preview) {
+                preview.appendChild(item);
+            }
         });
+        updateAttachmentButtonState();
     });
 }
 
