@@ -257,6 +257,11 @@
                     <div class="chat-container">
                         <div class="chat-messages" id="chat-messages"></div>
                         <div class="chat-input">
+                            <div class="chat-attachments">
+                                <label for="agent-image" class="attachment-label">Attach images</label>
+                                <input type="file" id="agent-image" accept="image/*" multiple>
+                                <div id="agent-image-preview" class="image-preview-list"></div>
+                            </div>
                             <textarea id="user-input" placeholder="Ask about AI models, performance, or recommendations..."></textarea>
                             <button onclick="sendMessage()">Send</button>
                         </div>

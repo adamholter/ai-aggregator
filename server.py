@@ -1688,6 +1688,21 @@ def initialize_fetch_context():
         'last_generated_at': None
     }
 
+def rebuild_fetch_context(snapshot):
+    if not isinstance(snapshot, dict):
+        return None
+    metadata = snapshot.get('categories') or []
+    structured = snapshot.get('structured') or {}
+    datasets = snapshot.get('datasets') or {}
+    context = initialize_fetch_context()
+    context['metadata'] = metadata
+    context['structured'] = structured
+    context['datasets'] = datasets
+    markdown = structured.get('markdown_summary')
+    context['markdown_sections'] = [markdown] if markdown else []
+    context['last_generated_at'] = snapshot.get('generated_at') or datetime.utcnow().isoformat()
+    return context
+
 def merge_fetch_context(context, fetch_result):
     context = context or initialize_fetch_context()
     if not isinstance(fetch_result, dict):
@@ -2202,7 +2217,11 @@ def build_agent_prompt_context(user_message, fetch_context, web_context):
         compose_fetch_markdown(fetch_context),
         MAX_PROMPT_MARKDOWN_CHARS
     )
-    structured_json = "Structured JSON omitted to preserve context budget. Refer to the compressed snapshot and markdown summary."
+    structured_json = safe_json_for_prompt(
+        compose_fetch_structured(fetch_context),
+        'FETCH_DATA_JSON',
+        MAX_PROMPT_STRUCTURED_CHARS
+    )
     compressed_snapshot = compose_compressed_datasets(fetch_context)
     compressed_snapshot = truncate_text_for_prompt(
         compressed_snapshot,
@@ -2219,20 +2238,40 @@ def build_agent_prompt_context(user_message, fetch_context, web_context):
         'LOADED_DATASETS': build_loaded_datasets_label(fetch_context)
     }
 
-def build_agent_messages(final_prompt, conversation_history, user_message):
+def build_agent_messages(final_prompt, conversation_history, user_message, user_attachments=None):
     messages = [{
         'role': 'system',
         'content': final_prompt
     }]
 
+    def format_message_content(text, attachments):
+        has_attachments = attachments and isinstance(attachments, list)
+        usable_attachments = [att for att in (attachments or []) if att.get('data')]
+        if not has_attachments or not usable_attachments:
+            return text
+        content_blocks = []
+        if text:
+            content_blocks.append({'type': 'text', 'text': text})
+        for attachment in usable_attachments:
+            content_blocks.append({
+                'type': 'image_url',
+                'image_url': {
+                    'url': attachment.get('data'),
+                    'detail': 'auto'
+                }
+            })
+        return content_blocks
+
     trimmed_history, summary_text = prune_conversation_history(conversation_history or [])
     for entry in trimmed_history:
         role = entry.get('role')
         content = entry.get('content')
+        attachments = entry.get('attachments') if isinstance(entry, dict) else None
         if role in ['user', 'assistant'] and content:
+            payload = format_message_content(content, attachments)
             messages.append({
                 'role': role,
-                'content': content
+                'content': payload
             })
 
     current_user_content = user_message
@@ -2241,7 +2280,7 @@ def build_agent_messages(final_prompt, conversation_history, user_message):
 
     messages.append({
         'role': 'user',
-        'content': current_user_content
+        'content': format_message_content(current_user_content, user_attachments)
     })
     return messages
 
@@ -2299,6 +2338,7 @@ def agent_tool_loop_generator(
     fetch_context,
     web_context,
     initial_categories,
+    user_attachments,
     auth_token,
     theme='light',
     mode='standard',
@@ -2349,9 +2389,6 @@ def agent_tool_loop_generator(
 
         prompt_context = build_agent_prompt_context(user_message, fetch_context, web_context)
         final_prompt = format_prompt(prompt_template, **prompt_context)
-        compressed_snapshot = prompt_context.get('COMPRESSED_DATASETS')
-        if compressed_snapshot:
-            final_prompt = f"{final_prompt}\n\nDATASET SNAPSHOT:\n{compressed_snapshot}"
         if mode_label == 'deep-research':
             final_prompt = (
                 f"{final_prompt}\n\n"
@@ -2372,7 +2409,7 @@ def agent_tool_loop_generator(
             yield ('status', status_payload('Iteration', f'Starting iteration {iteration}/{max_iterations}'))
             
             try:
-                messages = build_agent_messages(final_prompt, conversation_history, user_message)
+                messages = build_agent_messages(final_prompt, conversation_history, user_message, user_attachments=user_attachments)
                 prompt_char_count = estimate_prompt_size(messages)
                 if prompt_char_count > 0:
                     print(f"🧮 [AGENT] Prompt size ~{prompt_char_count:,} characters across {len(messages)} messages")
@@ -2509,9 +2546,6 @@ def agent_tool_loop_generator(
                     prompt_context = build_agent_prompt_context(user_message, fetch_context, web_context)
                     final_prompt = format_prompt(prompt_template, **prompt_context)
                     final_prompt = enforce_prompt_ceiling(final_prompt)
-                    compressed_snapshot = prompt_context.get('COMPRESSED_DATASETS')
-                    if compressed_snapshot:
-                        final_prompt = f"{final_prompt}\n\nDATASET SNAPSHOT:\n{compressed_snapshot}"
                     description = (
                         f"Fetched datasets for {', '.join(requested_categories)}. "
                         f"{describe_loaded_categories(fetch_context)}"
@@ -3479,6 +3513,7 @@ def ai_agent():
         user_message = data.get('message', '')
         stream = bool(data.get('stream', False))
         conversation_history = data.get('conversationHistory', []) or []
+        image_attachments = data.get('imageAttachments', []) or []
         analysis_sequence = get_analysis_sequence_map()
         selected_model = data.get('model') or get_config_value(['agent', 'defaultModel'], 'z-ai/glm-4.5')
 
@@ -3531,8 +3566,18 @@ def ai_agent():
         else:
             fetch_categories = determine_agent_categories(user_message)
         fetch_context = initialize_fetch_context()
-        fetch_result = fetch_data_for_categories(fetch_categories)
-        fetch_context = merge_fetch_context(fetch_context, fetch_result)
+        existing_context_snapshot = data.get('contextSnapshot')
+        reused_existing_context = False
+        if existing_context_snapshot:
+            cached_context = rebuild_fetch_context(existing_context_snapshot)
+            cached_categories = {normalize_category_id(cat.get('id')) for cat in (existing_context_snapshot.get('categories') or [])}
+            required_categories = {normalize_category_id(cat) for cat in fetch_categories}
+            if cached_context and required_categories.issubset(cached_categories):
+                fetch_context = cached_context
+                reused_existing_context = True
+        if not reused_existing_context:
+            fetch_result = fetch_data_for_categories(fetch_categories)
+            fetch_context = merge_fetch_context(fetch_context, fetch_result)
         web_context = initialize_web_context()
         relevant_data = compose_fetch_markdown(fetch_context)
         headers = build_openrouter_headers(user_openrouter_token)
@@ -3609,6 +3654,7 @@ Respond concisely and cite the sources (Conversation History, Database, Web Sear
                         fetch_context,
                         web_context,
                         fetch_categories,
+                        image_attachments,
                         user_openrouter_token,
                         theme=current_theme,
                         mode='deep-research' if deep_research else 'standard',
@@ -3679,9 +3725,35 @@ Respond concisely and cite the sources (Conversation History, Database, Web Sear
                                 final_content = sanitize_quickchart_urls_in_text(final_content or '', current_theme)
                                 final_content, _ = ensure_quickchart_visualization(final_content, current_theme)
                                 print(f"✅ [SERVER] Final content ready: {len(final_content)} chars")
+                                final_traces = event[2] if len(event) > 2 else []
+                                final_fetch_ctx = event[3] if len(event) > 3 else fetch_context
+                                final_web_ctx = event[4] if len(event) > 4 else web_context
                                 if not content_emitted and final_content:
                                     for chunk in iter_text_chunks(final_content):
                                         yield encode_content(chunk)
+                                structured_payload = compose_fetch_structured(final_fetch_ctx)
+                                datasets_payload = compose_fetch_datasets(final_fetch_ctx)
+                                compressed_payload = compose_compressed_datasets(final_fetch_ctx)
+                                snapshot_payload = {
+                                    'generated_at': datetime.utcnow().isoformat(),
+                                    'categories': final_fetch_ctx.get('metadata', []),
+                                    'structured': structured_payload,
+                                    'datasets': datasets_payload
+                                }
+                                final_event_payload = {
+                                    'type': 'final',
+                                    'response': final_content,
+                                    'traces': final_traces,
+                                    'fetch_data': {
+                                        'categories': final_fetch_ctx.get('metadata', []),
+                                        'structured': structured_payload,
+                                        'datasets': datasets_payload
+                                    },
+                                    'compressed_snapshot': compressed_payload,
+                                    'contextSnapshot': snapshot_payload,
+                                    'web_search': final_web_ctx
+                                }
+                                yield f"data: {json.dumps(final_event_payload, ensure_ascii=False)}\n\n".encode('utf-8')
                                 # Ensure proper termination
                                 yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n".encode('utf-8')
                                 return
@@ -3750,6 +3822,7 @@ Respond concisely and cite the sources (Conversation History, Database, Web Sear
             fetch_context,
             web_context,
             fetch_categories,
+            image_attachments,
             user_openrouter_token,
             theme=current_theme,
             mode='deep-research' if deep_research else 'standard',
@@ -3781,13 +3854,23 @@ Respond concisely and cite the sources (Conversation History, Database, Web Sear
         final_content = sanitize_quickchart_urls_in_text(final_content, current_theme)
         final_content, _ = ensure_quickchart_visualization(final_content, current_theme)
 
+        structured_payload = compose_fetch_structured(final_fetch_ctx)
+        datasets_payload = compose_fetch_datasets(final_fetch_ctx)
+        compressed_payload = compose_compressed_datasets(final_fetch_ctx)
         return jsonify({
             'response': final_content,
             'traces': final_traces,
             'fetch_data': {
                 'categories': final_fetch_ctx.get('metadata', []),
-                'structured': compose_fetch_structured(final_fetch_ctx),
-                'datasets': compose_fetch_datasets(final_fetch_ctx)
+                'structured': structured_payload,
+                'datasets': datasets_payload
+            },
+            'compressed_snapshot': compressed_payload,
+            'contextSnapshot': {
+                'generated_at': datetime.utcnow().isoformat(),
+                'categories': final_fetch_ctx.get('metadata', []),
+                'structured': structured_payload,
+                'datasets': datasets_payload
             },
             'web_search': final_web_ctx
         })
@@ -3907,8 +3990,6 @@ Explicitly note when information is not present in the provided datasets."""
             WEB_DATA="Web search was not requested; rely on provided datasets.",
             RELATED_DATA=fetch_markdown
         )
-        if fetch_compressed:
-            analysis_prompt = f"{analysis_prompt}\n\nDATASET SNAPSHOT:\n{fetch_compressed}"
         analysis_prompt = enforce_prompt_ceiling(analysis_prompt)
 
         headers = build_openrouter_headers(user_openrouter_token)

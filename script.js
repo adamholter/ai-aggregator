@@ -126,18 +126,21 @@ function truncateForHistory(content, limit = MAX_AGENT_HISTORY_CHARS) {
     return `${truncated}… [truncated]`;
 }
 
-function pushConversationEntry(role, content) {
+function pushConversationEntry(role, content, attachments = [], options = {}) {
     if (!agentConfig.conversationHistory) {
         agentConfig.conversationHistory = [];
     }
-    agentConfig.conversationHistory.push({
+    const entry = {
         role,
         content: truncateForHistory(content),
+        attachments: attachments && attachments.length ? attachments : undefined,
         timestamp: new Date().toISOString()
-    });
+    };
+    agentConfig.conversationHistory.push(entry);
     if (agentConfig.conversationHistory.length > MAX_AGENT_HISTORY_MESSAGES) {
         agentConfig.conversationHistory = agentConfig.conversationHistory.slice(-MAX_AGENT_HISTORY_MESSAGES);
     }
+    return entry;
 }
 
 let openRouterIndex = null;
@@ -157,6 +160,94 @@ const THEME_LABELS = {
 
 let modelConfig = null;
 let settingsInitialized = false;
+let agentSessionContext = null;
+let agentSessionSnapshot = '';
+let agentPendingImages = [];
+
+function summarizeContextSnapshot(snapshot) {
+    if (!snapshot || typeof snapshot !== 'object') {
+        return '';
+    }
+    try {
+        const categories = (snapshot.categories || []).map(cat => {
+            if (typeof cat === 'string') return cat;
+            if (cat && typeof cat === 'object') {
+                return cat.id || cat.label || '';
+            }
+            return '';
+        }).filter(Boolean);
+        return JSON.stringify({
+            generated_at: snapshot.generated_at || null,
+            categories: categories
+        });
+    } catch (error) {
+        console.warn('Failed to summarize context snapshot', error);
+        return '';
+    }
+}
+
+function readFileAsDataURL(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+    });
+}
+
+async function collectImageAttachments() {
+    if (!agentPendingImages.length) {
+        return [];
+    }
+    const attachments = [];
+    for (const file of agentPendingImages) {
+        try {
+            const dataUrl = await readFileAsDataURL(file);
+            attachments.push({
+                name: file.name,
+                type: file.type,
+                size: file.size,
+                data: dataUrl
+            });
+        } catch (error) {
+            console.error('Failed to read attachment', file.name, error);
+        }
+    }
+    return attachments;
+}
+
+function resetImageUploads() {
+    agentPendingImages = [];
+    const input = document.getElementById('agent-image');
+    if (input) {
+        input.value = '';
+    }
+    const preview = document.getElementById('agent-image-preview');
+    if (preview) {
+        preview.innerHTML = '';
+    }
+}
+
+function setupImageUpload() {
+    const input = document.getElementById('agent-image');
+    if (!input) return;
+    input.addEventListener('change', () => {
+        agentPendingImages = Array.from(input.files || []);
+        const preview = document.getElementById('agent-image-preview');
+        if (!preview) return;
+        preview.innerHTML = '';
+        if (!agentPendingImages.length) {
+            return;
+        }
+        agentPendingImages.forEach(file => {
+            const item = document.createElement('div');
+            item.className = 'image-preview-item';
+            const sizeKB = (file.size / 1024).toFixed(1);
+            item.textContent = `📎 ${file.name} (${sizeKB} KB)`;
+            preview.appendChild(item);
+        });
+    });
+}
 
 // Common words to ignore when matching model names between sources
 const MATCH_EXCLUSION_TOKENS = [
@@ -577,6 +668,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     setupOpenRouterControls();
     populateAgentDropdown();
     loadLLMData(); // Load LLM data by default
+    setupImageUpload();
 });
 
 // Theme management
@@ -1461,14 +1553,32 @@ async function sendMessage() {
         currentHistoryLength: agentConfig.conversationHistory.length
     });
     
+    const attachments = await collectImageAttachments();
+
     // Add user message to chat
     const userMessage = document.createElement('div');
     userMessage.className = 'message user';
-    userMessage.textContent = message;
+    const messageText = document.createElement('div');
+    messageText.className = 'message-text';
+    messageText.textContent = message;
+    userMessage.appendChild(messageText);
+
+    if (attachments.length) {
+        const attachmentList = document.createElement('div');
+        attachmentList.className = 'attachment-preview';
+        attachments.forEach(att => {
+            const item = document.createElement('div');
+            const sizeKB = (att.size / 1024).toFixed(1);
+            item.textContent = `📎 ${att.name} (${sizeKB} KB)`;
+            attachmentList.appendChild(item);
+        });
+        userMessage.appendChild(attachmentList);
+    }
+
     chatMessages.appendChild(userMessage);
     
     // Add to conversation history for context
-    pushConversationEntry('user', message);
+    pushConversationEntry('user', message, attachments);
     
     // Add initial loading indicator
     const loadingMessage = document.createElement('div');
@@ -1490,7 +1600,7 @@ async function sendMessage() {
     try {
         console.log('🤖 [AI Agent] Calling AI agent...');
         // Call AI agent with streaming and context
-        const response = await callGLMAgent(message);
+        const response = await callGLMAgent(message, attachments);
         
         console.log('✅ [AI Agent] AI agent call successful', {
             hasResponse: !!response.response,
@@ -1501,8 +1611,16 @@ async function sendMessage() {
         });
         
         // Add AI response to conversation history
-        if (response && response.response) {
-            pushConversationEntry('assistant', response.response);
+        if (response) {
+            if (response.contextSnapshot) {
+                agentSessionContext = response.contextSnapshot;
+                agentSessionSnapshot = summarizeContextSnapshot(agentSessionContext);
+            }
+            if (response.response) {
+                pushConversationEntry('assistant', response.response);
+                console.log('📚 [AI Agent] Added AI response to conversation history');
+            }
+            resetImageUploads();
             console.log('📚 [AI Agent] Added AI response to conversation history');
         }
         
@@ -1544,6 +1662,9 @@ function clearChatHistory() {
     const chatMessages = document.getElementById('chat-messages');
     chatMessages.innerHTML = '';
     agentConfig.conversationHistory = [];
+    agentSessionContext = null;
+    agentSessionSnapshot = '';
+    resetImageUploads();
     
     // Add a welcome message
     const welcomeMessage = document.createElement('div');
@@ -1567,7 +1688,7 @@ function clearChatHistory() {
 }
 
 // Call AI agent with streaming support
-async function callGLMAgent(userMessage) {
+async function callGLMAgent(userMessage, attachments = []) {
     const callStartTime = Date.now();
     console.log('🚀 [AI Agent] callGLMAgent initiated', {
         messageLength: userMessage.length,
@@ -1577,7 +1698,7 @@ async function callGLMAgent(userMessage) {
     });
     
     return new Promise((resolve, reject) => {
-        handleStreamingWithFetch(userMessage, (result) => {
+        handleStreamingWithFetch(userMessage, attachments, (result) => {
             console.log('✅ [AI Agent] callGLMAgent resolved successfully', {
                 responseLength: result.response ? result.response.length : 0,
                 tracesCount: result.traces ? result.traces.length : 0,
@@ -1596,7 +1717,7 @@ async function callGLMAgent(userMessage) {
 }
 
 // Fallback streaming using fetch
-async function handleStreamingWithFetch(userMessage, resolve, reject) {
+async function handleStreamingWithFetch(userMessage, attachments, resolve, reject) {
     let timeoutId;
     let reader;
     const startTime = Date.now();
@@ -1638,7 +1759,9 @@ async function handleStreamingWithFetch(userMessage, resolve, reject) {
                 message: userMessage,
                 stream: true,
                 model: agentConfig.model,
-                conversationHistory: agentConfig.conversationHistory
+                conversationHistory: agentConfig.conversationHistory,
+                contextSnapshot: agentSessionContext,
+                imageAttachments: attachments
             })
         });
 
@@ -1686,6 +1809,7 @@ async function handleStreamingWithFetch(userMessage, resolve, reject) {
         let eventsReceived = 0;
         let chunksReceived = 0;
         const MAX_EVENTS = 5000;
+        let finalPayload = null;
         
         // Check for stalled connection
         const stallCheckInterval = setInterval(() => {
@@ -1794,7 +1918,11 @@ async function handleStreamingWithFetch(userMessage, resolve, reject) {
                                 totalLines: linesProcessed,
                                 totalElapsed: Date.now() - startTime
                             });
-                            resolve({ response: fixEncodingArtifacts(fullResponse), traces: traces });
+                            const resolvedPayload = finalPayload || {
+                                response: fixEncodingArtifacts(fullResponse),
+                                traces: traces
+                            };
+                            resolve(resolvedPayload);
                             return;
                         }
 
@@ -1845,6 +1973,28 @@ async function handleStreamingWithFetch(userMessage, resolve, reject) {
                                     updateStreamingResponse(fullResponse, traces, statuses);
                                     break;
                                 }
+                                case 'final': {
+                                    const finalResponse = fixEncodingArtifacts(parsed.response || fullResponse);
+                                    if (parsed.traces && Array.isArray(parsed.traces)) {
+                                        traces = parsed.traces;
+                                    }
+                                    fullResponse = finalResponse;
+                                    if (parsed.contextSnapshot) {
+                                        agentSessionContext = parsed.contextSnapshot;
+                                        agentSessionSnapshot = summarizeContextSnapshot(parsed.contextSnapshot);
+                                    }
+                                    const finalStatuses = statuses.slice();
+                                    updateStreamingResponse(finalResponse, traces, finalStatuses);
+                                    finalPayload = {
+                                        response: finalResponse,
+                                        traces: traces,
+                                        fetch_data: parsed.fetch_data || null,
+                                        compressed_snapshot: parsed.compressed_snapshot || '',
+                                        contextSnapshot: parsed.contextSnapshot || null,
+                                        web_search: parsed.web_search || null
+                                    };
+                                    break;
+                                }
                                 case 'done':
                                     clearInterval(stallCheckInterval);
                                     clearTimeout(timeoutId);
@@ -1854,7 +2004,11 @@ async function handleStreamingWithFetch(userMessage, resolve, reject) {
                                         totalElapsed: Date.now() - startTime
                                     });
                                     updateStreamingResponse(fullResponse, traces, statuses);
-                                    resolve({ response: fixEncodingArtifacts(fullResponse), traces: traces });
+                                    const donePayload = finalPayload || {
+                                        response: fixEncodingArtifacts(fullResponse),
+                                        traces: traces
+                                    };
+                                    resolve(donePayload);
                                     return;
                                 case 'error': {
                                     clearInterval(stallCheckInterval);
@@ -1892,8 +2046,12 @@ async function handleStreamingWithFetch(userMessage, resolve, reject) {
                 totalElapsed: Date.now() - startTime
             });
             
-            if (fullResponse || traces.length > 0) {
-                resolve({ response: fixEncodingArtifacts(fullResponse), traces: traces });
+            if (fullResponse || traces.length > 0 || finalPayload) {
+                const fallbackPayload = finalPayload || {
+                    response: fixEncodingArtifacts(fullResponse),
+                    traces: traces
+                };
+                resolve(fallbackPayload);
             } else {
                 reject(new Error('Stream ended without response'));
             }
@@ -1919,12 +2077,12 @@ async function handleStreamingWithFetch(userMessage, resolve, reject) {
             elapsed: Date.now() - startTime,
             phase: 'initialization'
         });
-        handleNonStreamingFallback(userMessage, resolve, reject);
+        handleNonStreamingFallback(userMessage, attachments, resolve, reject);
     }
 }
 
 // Fallback to non-streaming
-async function handleNonStreamingFallback(userMessage, resolve, reject) {
+async function handleNonStreamingFallback(userMessage, attachments, resolve, reject) {
     try {
         const payload = await makeAPICall('/api/ai-agent', null, {
             method: 'POST',
@@ -1933,13 +2091,19 @@ async function handleNonStreamingFallback(userMessage, resolve, reject) {
                 message: userMessage,
                 stream: false,
                 model: agentConfig.model,
-                conversationHistory: agentConfig.conversationHistory
+                conversationHistory: agentConfig.conversationHistory,
+                contextSnapshot: agentSessionContext,
+                imageAttachments: attachments
             })
         });
 
         const sanitizedResponse = payload && typeof payload.response === 'string'
             ? fixEncodingArtifacts(payload.response)
             : '';
+        if (payload && payload.contextSnapshot) {
+            agentSessionContext = payload.contextSnapshot;
+            agentSessionSnapshot = summarizeContextSnapshot(payload.contextSnapshot);
+        }
         updateStreamingResponse(sanitizedResponse, payload?.traces || [], []);
         resolve({
             ...payload,
