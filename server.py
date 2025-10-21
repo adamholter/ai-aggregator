@@ -1177,6 +1177,8 @@ def parse_timestamp(value):
     if not value:
         return None
     try:
+        if isinstance(value, datetime):
+            return value.date().isoformat()
         if isinstance(value, (int, float)):
             return datetime.utcfromtimestamp(value).date().isoformat()
         if isinstance(value, str):
