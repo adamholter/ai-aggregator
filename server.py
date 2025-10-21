@@ -19,6 +19,7 @@ import ast
 import urllib.parse
 from contextlib import contextmanager
 from copy import deepcopy
+from decimal import Decimal
 from collections import defaultdict, deque
 from threading import Lock
 
@@ -1172,112 +1173,163 @@ def format_ratio(value):
     formatted = format_decimal(value, 3)
     return formatted.lstrip('0') if formatted and formatted.startswith('0') else formatted
 
+def parse_timestamp(value):
+    if not value:
+        return None
+    try:
+        if isinstance(value, (int, float)):
+            return datetime.utcfromtimestamp(value).date().isoformat()
+        if isinstance(value, str):
+            try:
+                number = float(value)
+                return datetime.utcfromtimestamp(number).date().isoformat()
+            except ValueError:
+                pass
+            for fmt in ('%Y-%m-%dT%H:%M:%S.%fZ', '%Y-%m-%dT%H:%M:%SZ', '%Y-%m-%dT%H:%M:%S.%f', '%Y-%m-%dT%H:%M:%S'):
+                try:
+                    return datetime.strptime(value, fmt).date().isoformat()
+                except ValueError:
+                    continue
+    except Exception:
+        return None
+    return None
+
+def safe_slug(value, fallback='unknown-model'):
+    if not value:
+        return fallback
+    return str(value)
+
+def extract_price_per_million(value):
+    try:
+        if value in (None, '', '0'):
+            return None
+        number = Decimal(str(value))
+        per_million = number * Decimal(10**6)
+        return f"{per_million:.3f}".rstrip('0').rstrip('.')
+    except Exception:
+        return None
+
 def compress_llm_entry(item):
-    parts = []
-    slug = item.get('slug') or item.get('id') or infer_item_name(item)
+    slug = safe_slug(item.get('slug') or item.get('id') or infer_item_name(item))
     provider = infer_item_provider('llms', item) or 'Unknown'
-    name = infer_item_name(item)
-    parts.append(f"{slug}; {provider}")
-    if slug != name and name:
-        parts[-1] += f" ({name})"
-
-    release_date = item.get('release_date')
-    if release_date:
-        parts.append(release_date)
-
-    perf_segments = []
+    rank = item.get('rank')
+    elo = format_decimal(item.get('elo'))
+    release = item.get('release_date')
+    release_fmt = release or parse_timestamp(release)
+    segments = [f"{slug}; {provider}"]
+    if release_fmt:
+        segments.append(release_fmt)
+    perf = []
     tps = format_decimal(item.get('median_output_tokens_per_second'))
     if tps:
-        perf_segments.append(f"{tps} tps")
+        perf.append(f"Speed {tps} tps")
     ttft = format_decimal(item.get('median_time_to_first_token_seconds'))
     if ttft:
-        perf_segments.append(f"TTFT {ttft}s")
-    ttfa = format_decimal(item.get('median_time_to_first_answer_token'))
-    if ttfa:
-        perf_segments.append(f"TTFA {ttfa}s")
-    if perf_segments:
-        parts.append(f"Perf: {', '.join(perf_segments)}")
-
+        perf.append(f"TTFT {ttft}s")
+    if perf:
+        segments.append(', '.join(perf))
     pricing = item.get('pricing') or {}
-    price_segments = []
+    pr_segments = []
     blended = format_decimal(pricing.get('price_1m_blended_3_to_1'))
     if blended:
-        price_segments.append(f"Blend {blended}")
-    input_price = format_decimal(pricing.get('price_1m_input_tokens'))
-    if input_price:
-        price_segments.append(f"In {input_price}")
-    output_price = format_decimal(pricing.get('price_1m_output_tokens'))
-    if output_price:
-        price_segments.append(f"Out {output_price}")
-    if price_segments:
-        parts.append(f"Price/1M: {', '.join(price_segments)}")
-
-    evaluations = item.get('evaluations') or {}
-    ai_index_segments = []
-    ai_math = format_decimal(evaluations.get('artificial_analysis_math_index'))
-    ai_int = format_decimal(evaluations.get('artificial_analysis_intelligence_index'))
-    ai_code = format_decimal(evaluations.get('artificial_analysis_coding_index'))
-    if ai_math:
-        ai_index_segments.append(f"Math {ai_math}")
-    if ai_int:
-        ai_index_segments.append(f"Int {ai_int}")
-    if ai_code:
-        ai_index_segments.append(f"Code {ai_code}")
-    if ai_index_segments:
-        parts.append(f"AI Index: {', '.join(ai_index_segments)}")
-
-    eval_fields = [
-        ('aime_25', 'AIME25'),
-        ('mmlu_pro', 'MMLU'),
-        ('gpqa', 'GPQA'),
-        ('ifbench', 'IFB'),
-        ('tau2', 'Tau2'),
-        ('livecodebench', 'LCB'),
-        ('lcr', 'LCR'),
-        ('scicode', 'SC'),
-        ('terminalbench_hard', 'TBH'),
-        ('hle', 'HLE'),
-    ]
-    eval_segments = []
-    for key, label in eval_fields:
-        value = evaluations.get(key)
-        formatted = format_ratio(value)
-        if formatted:
-            eval_segments.append(f"{label} {formatted}")
-    if eval_segments:
-        parts.append(f"Evals: {', '.join(eval_segments)}")
-
-    return '; '.join(parts)
+        pr_segments.append(f"Blend {blended}")
+    in_price = format_decimal(pricing.get('price_1m_input_tokens'))
+    if in_price:
+        pr_segments.append(f"In {in_price}")
+    out_price = format_decimal(pricing.get('price_1m_output_tokens'))
+    if out_price:
+        pr_segments.append(f"Out {out_price}")
+    if pr_segments:
+        segments.append(f"Price/1M: {', '.join(pr_segments)}")
+    if rank is not None:
+        segments.append(f"Rank {rank}")
+    if elo:
+        segments.append(f"ELO {elo}")
+    return '; '.join(segments)
 
 def compress_openrouter_entry(item):
-    name = item.get('base_name') or item.get('name') or item.get('id')
+    model_id = safe_slug(item.get('id') or item.get('slug') or item.get('base_name'))
     vendor = item.get('vendor') or infer_item_provider('openrouter', item) or 'Unknown'
+    created = parse_timestamp(item.get('created')) or ''
     context_length = item.get('context_length') or item.get('top_provider', {}).get('context_length')
-    modalities = item.get('architecture', {}).get('modality') or 'n/a'
-
-    parts = [f"{name}; {vendor}"]
-    if context_length:
-        parts.append(f"Context {context_length:,}")
-    parts.append(f"Modalities {modalities}")
-
-    pricing = item.get('pricing') or {}
-    price_segments = []
-    for key, label in [('prompt', 'Prompt'), ('completion', 'Completion'), ('request', 'Request')]:
-        value = pricing.get(key)
-        if value not in (None, '', '0'):
-            price_segments.append(f"{label} {value}")
-    if price_segments:
-        parts.append(f"Price: {', '.join(price_segments)}")
-
-    support = item.get('supported_parameters') or []
-    if support:
-        parts.append(f"Params: {', '.join(support[:6])}")
-
+    context_str = f"Context: {int(context_length):,}" if context_length else ""
+    modality = item.get('architecture', {}).get('modality') or 'text->text'
     description = (item.get('description') or '').replace('\n', ' ').strip()
-    if description:
-        parts.append(f"Desc: {description[:180]}{'…' if len(description) > 180 else ''}")
+    pricing = item.get('pricing') or {}
+    in_price = extract_price_per_million(pricing.get('prompt'))
+    out_price = extract_price_per_million(pricing.get('completion'))
+    price_parts = []
+    if in_price:
+        price_parts.append(f"In {in_price}")
+    if out_price:
+        price_parts.append(f"Out {out_price}")
 
-    return '; '.join(parts)
+    segments = [f"{model_id}; {vendor}"]
+    if created:
+        segments.append(created)
+    if context_str:
+        segments.append(context_str)
+    if modality:
+        segments.append(f"Modality: {modality}")
+    if description:
+        segments.append(f"Desc: {description[:240]}")
+    if price_parts:
+        segments.append(f"Price/1M: {', '.join(price_parts)}")
+    return '; '.join(segments)
+
+def compress_fal_entry(item):
+    model_id = safe_slug(item.get('id'))
+    date = parse_timestamp(item.get('date')) or ''
+    category = item.get('category') or 'n/a'
+    description = (item.get('description') or '').replace('\n', ' ').strip()
+    pricing_text = item.get('pricing') or ''
+    price = None
+    if pricing_text and '$' in pricing_text:
+        part = pricing_text.split('$', 1)[1]
+        number = part.split(None, 1)[0].strip('*').strip()
+        price = f"${number}"
+    license_type = item.get('licenseType') or ''
+    tags = item.get('tags') or []
+    segments = [f"{model_id}; {date}" if date else model_id]
+    segments.append(f"Category: {category}")
+    if description:
+        segments.append(f"Desc: {description[:200]}")
+    if price:
+        segments.append(f"Price: {price}")
+    if license_type:
+        segments.append(f"License: {license_type}")
+    if tags:
+        segments.append(f"Tags: {', '.join(tags[:6])}")
+    return '; '.join(segments)
+
+def compress_replicate_entry(item):
+    model_id = safe_slug(item.get('id'))
+    created = parse_timestamp(item.get('created_at')) or ''
+    category = item.get('category') or 'n/a'
+    description = (item.get('description') or '').replace('\n', ' ').strip()
+    latency = format_decimal(item.get('latency_seconds'))
+    runs = item.get('run_count')
+    segments = [f"{model_id}; {created}" if created else model_id]
+    segments.append(f"Cat: {category}")
+    if description:
+        segments.append(f"Desc: {description[:160]}")
+    if latency:
+        segments.append(f"Latency: {latency}s")
+    if runs is not None:
+        segments.append(f"Runs: {runs}")
+    return '; '.join(segments)
+
+def compress_media_ranking_entry(category_id, item):
+    slug = safe_slug(item.get('slug') or item.get('id') or infer_item_name(item))
+    provider = infer_item_provider(category_id, item) or 'Unknown'
+    rank = item.get('rank')
+    elo = format_decimal(item.get('elo'))
+    segments = [f"{slug}; {provider}"]
+    if rank is not None:
+        segments.append(f"Rank: {rank}")
+    if elo:
+        segments.append(f"ELO: {elo}")
+    return '; '.join(segments)
 
 def compress_generic_entry(category_id, item):
     name = infer_item_name(item)
@@ -1305,18 +1357,31 @@ def format_dataset_entry(category_id, item):
         return compress_llm_entry(item)
     if category_id == 'openrouter':
         return compress_openrouter_entry(item)
+    if category_id == 'fal':
+        return compress_fal_entry(item)
+    if category_id == 'replicate':
+        return compress_replicate_entry(item)
+    if category_id in {
+        'text-to-image',
+        'image-editing',
+        'text-to-speech',
+        'text-to-video',
+        'image-to-video'
+    }:
+        return compress_media_ranking_entry(category_id, item)
     return compress_generic_entry(category_id, item)
 
 def compose_compressed_datasets(fetch_context, max_items=None):
-    if max_items is None:
+    if max_items is None or max_items == 0:
         max_items = MAX_COMPRESSED_ITEMS_PER_CATEGORY
+    if max_items == 0:
+        max_items = None
     metadata = (fetch_context or {}).get('metadata') or []
     datasets = (fetch_context or {}).get('datasets') or {}
     if not metadata or not datasets:
         return "No dataset entries were available."
 
     sections = []
-    total_chars = 0
     for meta in metadata:
         cat_id = meta.get('id')
         label = meta.get('label') or cat_id or 'Category'
@@ -1325,16 +1390,15 @@ def compose_compressed_datasets(fetch_context, max_items=None):
             continue
         header = f"### {label} ({len(items)} entries)"
         sections.append(header)
-        total_chars += len(header) + 1
-        for entry in items[:max_items]:
+        iterable = items if max_items is None else items[:max_items]
+        for entry in iterable:
             line = f"- {format_dataset_entry(cat_id, entry)}"
-            total_chars += len(line) + 1
-            if total_chars > MAX_COMPRESSED_DATASET_CHARS:
-                sections.append('- ... (truncated)')
-                return '\n'.join(sections)
             sections.append(line)
         sections.append('')
-    return '\n'.join(sections).strip()
+    combined = '\n'.join(sections).strip()
+    if len(combined) > MAX_COMPRESSED_DATASET_CHARS:
+        return combined[:MAX_COMPRESSED_DATASET_CHARS].rstrip() + '\n... (truncated)'
+    return combined
 
 def extract_item_identifier(category_id, item):
     if not isinstance(item, dict):
@@ -1744,9 +1808,9 @@ def build_loaded_datasets_label(context):
 
 MAX_PROMPT_MARKDOWN_CHARS = 6000
 MAX_PROMPT_STRUCTURED_CHARS = 9000
-MAX_PROMPT_DATASETS_CHARS = 90000
-MAX_COMPRESSED_DATASET_CHARS = 40000
-MAX_COMPRESSED_ITEMS_PER_CATEGORY = 12
+MAX_PROMPT_DATASETS_CHARS = 240000
+MAX_COMPRESSED_DATASET_CHARS = 240000
+MAX_COMPRESSED_ITEMS_PER_CATEGORY = 0
 MAX_PROMPT_FINAL_CHARS = 60000
 MAX_PROMPT_CATEGORY_SUMMARIES = 5
 MAX_PROMPT_CATEGORY_SUMMARY_CHARS = 480
@@ -2283,6 +2347,9 @@ def agent_tool_loop_generator(
 
         prompt_context = build_agent_prompt_context(user_message, fetch_context, web_context)
         final_prompt = format_prompt(prompt_template, **prompt_context)
+        compressed_snapshot = prompt_context.get('COMPRESSED_DATASETS')
+        if compressed_snapshot:
+            final_prompt = f"{final_prompt}\n\nDATASET SNAPSHOT:\n{compressed_snapshot}"
         if mode_label == 'deep-research':
             final_prompt = (
                 f"{final_prompt}\n\n"
@@ -2440,6 +2507,9 @@ def agent_tool_loop_generator(
                     prompt_context = build_agent_prompt_context(user_message, fetch_context, web_context)
                     final_prompt = format_prompt(prompt_template, **prompt_context)
                     final_prompt = enforce_prompt_ceiling(final_prompt)
+                    compressed_snapshot = prompt_context.get('COMPRESSED_DATASETS')
+                    if compressed_snapshot:
+                        final_prompt = f"{final_prompt}\n\nDATASET SNAPSHOT:\n{compressed_snapshot}"
                     description = (
                         f"Fetched datasets for {', '.join(requested_categories)}. "
                         f"{describe_loaded_categories(fetch_context)}"
@@ -3830,11 +3900,13 @@ Explicitly note when information is not present in the provided datasets."""
             analysis_prompt_template,
             MODEL_DATA_JSON=json.dumps(model_data, ensure_ascii=False, indent=2),
             FETCH_DATA_JSON=fetch_structured_json,
-             COMPRESSED_DATASETS=fetch_compressed,
+            COMPRESSED_DATASETS=fetch_compressed,
             FETCH_DATA_MARKDOWN=fetch_markdown,
             WEB_DATA="Web search was not requested; rely on provided datasets.",
             RELATED_DATA=fetch_markdown
         )
+        if fetch_compressed:
+            analysis_prompt = f"{analysis_prompt}\n\nDATASET SNAPSHOT:\n{fetch_compressed}"
         analysis_prompt = enforce_prompt_ceiling(analysis_prompt)
 
         headers = build_openrouter_headers(user_openrouter_token)
