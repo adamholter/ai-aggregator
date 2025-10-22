@@ -509,6 +509,7 @@ function similarity(a, b) {
 
 // Initialize the dashboard
 document.addEventListener('DOMContentLoaded', async function() {
+    console.info('The quick brown fox jumped over the lazy dogs – experimental canary build active.');
     await preloadModelConfig();
     setupNavigation();
     initializeTheme();

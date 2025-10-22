@@ -34,6 +34,8 @@
             <button class="nav-btn" data-section="fal-models">Fal.ai</button>
             <button class="nav-btn" data-section="replicate-models">Replicate</button>
             <button class="nav-btn" data-section="openrouter-models">OpenRouter</button>
+            <button class="nav-btn" data-section="hype" data-experimental="true" style="display:none;" aria-hidden="true">Hype</button>
+            <button class="nav-btn" data-section="labs" data-experimental="true" style="display:none;" aria-hidden="true">Labs</button>
             <button class="nav-btn" data-section="ai-agent">AI Agent</button>
             <button class="nav-btn" data-section="about">About</button>
         </nav>
@@ -241,6 +243,33 @@
                 <div class="data-container" id="openrouter-models-data"></div>
             </section>
 
+            <!-- Hype Section -->
+            <section id="hype" class="content-section" data-experimental="true" style="display:none;" aria-hidden="true">
+                <div class="section-header">
+                    <h2>Hype Tracker</h2>
+                    <div class="controls">
+                        <button class="refresh-btn" id="hype-refresh">Refresh Feed</button>
+                    </div>
+                </div>
+                <p class="section-note">Pulse-check trending repositories and releases across GitHub, Hugging Face, Replicate, and Reddit.</p>
+                <div class="loading" id="hype-loading">
+                    <div class="loading-spinner"></div>
+                </div>
+                <div class="error" id="hype-error" style="display: none;"></div>
+                <div class="results-info" id="hype-results-info" style="display:none;"></div>
+                <div class="data-container" id="hype-data"></div>
+            </section>
+
+            <!-- Labs Section -->
+            <section id="labs" class="content-section" data-experimental="true" style="display:none;" aria-hidden="true">
+                <div class="section-header">
+                    <h2>Labs Preview</h2>
+                </div>
+                <div class="experimental-placeholder">
+                    <p>Experimental mode unlocks in-progress experiences. Check back soon for new research tools and dashboards.</p>
+                </div>
+            </section>
+
             <!-- AI Agent Section -->
             <section id="ai-agent" class="content-section">
                 <div class="section-header">
@@ -431,6 +460,18 @@
                             <button type="button" class="chart-btn secondary" id="clear-openrouter-key">Remove Key</button>
                             <span class="inline-note">Stored locally in your browser and required for AI Analysis &amp; chat.</span>
                         </div>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h3>Experimental Features</h3>
+                    <div class="form-row toggle-row">
+                        <label for="setting-experimental-mode">Enable Experimental Mode</label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="setting-experimental-mode">
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <p class="help-text">Unlock in-progress tabs like Hype. Changes apply immediately after saving.</p>
                     </div>
                 </div>
 
