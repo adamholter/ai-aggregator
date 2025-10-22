@@ -1070,6 +1070,46 @@ FETCH_DATA_CATEGORY_CONFIG = {
     }
 }
 
+
+def get_agent_tools_schema():
+    return [
+        {
+            'type': 'function',
+            'function': {
+                'name': 'fetch_data',
+                'description': 'Load cached datasets (Artificial Analysis, OpenRouter, fal.ai, Replicate). Provide category ids such as "llms", "openrouter".',
+                'parameters': {
+                    'type': 'object',
+                    'properties': {
+                        'categories': {
+                            'type': 'array',
+                            'items': {'type': 'string'},
+                            'description': 'List of dataset categories to load (e.g. ["llms", "openrouter"]).'
+                        }
+                    },
+                    'required': ['categories']
+                }
+            }
+        },
+        {
+            'type': 'function',
+            'function': {
+                'name': 'web_search',
+                'description': 'Perform a live web search via Perplexity when the datasets are insufficient.',
+                'parameters': {
+                    'type': 'object',
+                    'properties': {
+                        'query': {
+                            'type': 'string',
+                            'description': 'Search query to send to the web search tool.'
+                        }
+                    },
+                    'required': ['query']
+                }
+            }
+        }
+    ]
+
 def normalize_category_id(value):
     if not value:
         return ''
@@ -2546,7 +2586,10 @@ def agent_tool_loop_generator(
                     'model': final_model,
                     'messages': messages,
                     'stream': False,
-                    'max_tokens': 4096
+                    'max_tokens': 4096,
+                    'tools': get_agent_tools_schema(),
+                    'tool_choice': 'auto',
+                    'parallel_tool_calls': False
                 }
                 if final_model == DEEP_RESEARCH_MODEL_ID:
                     payload.setdefault('addons', ['web_search'])
@@ -2558,7 +2601,7 @@ def agent_tool_loop_generator(
                 })
                 print(f"📡 [AGENT] Requesting non-stream completion from OpenRouter...")
 
-                full_text = None
+                full_response = None
                 attempt = 0
                 last_exception = None
                 while attempt < 3:
@@ -2568,7 +2611,7 @@ def agent_tool_loop_generator(
                     try:
                         while True:
                             try:
-                                full_text = future.result(timeout=6)
+                                full_response = future.result(timeout=6)
                                 break
                             except FuturesTimeout:
                                 yield ('status', status_payload('LLM Request', f'Waiting for OpenRouter response (attempt {attempt}/3)...'))
@@ -2594,10 +2637,10 @@ def agent_tool_loop_generator(
                         future.cancel()
                         wait_executor.shutdown(wait=False)
 
-                    if full_text is not None:
+                    if full_response is not None:
                         break
 
-                if full_text is None:
+                if full_response is None:
                     error_message = f"LLM request failed: {last_exception}"
                     print(f"❌ [AGENT] {error_message}")
                     traces.append({
@@ -2611,11 +2654,174 @@ def agent_tool_loop_generator(
                     yield ('error', error_message, traces, fetch_context, web_context)
                     return
 
-                content = full_text or ''
+                choice_payload = full_response.get('choices', [{}])[0]
+                message_payload = choice_payload.get('message', {}) or {}
+                tool_calls = message_payload.get('tool_calls') or []
+                content = message_payload.get('content') or ''
+                finish_reason = choice_payload.get('finish_reason')
+                total_chars = len(content or '')
+                print(f"✅ [AGENT] Received completion ({total_chars} chars)")
+
+                if tool_calls:
+                    handled_tool = False
+                    for call in tool_calls:
+                        function_payload = call.get('function') or {}
+                        tool_name = function_payload.get('name') or ''
+                        arguments_raw = function_payload.get('arguments') or '{}'
+                        try:
+                            tool_args = json.loads(arguments_raw) if arguments_raw else {}
+                        except json.JSONDecodeError:
+                            tool_args = {}
+
+                        if tool_name == 'fetch_data':
+                            requested_categories = tool_args.get('categories') or []
+                            if isinstance(requested_categories, (str, bytes)):
+                                requested_categories = [requested_categories]
+                            try:
+                                categories_payload = json.dumps(requested_categories)
+                            except (TypeError, ValueError):
+                                categories_payload = str(requested_categories)
+
+                            normalized_requested, error = parse_fetch_category_payload(categories_payload)
+                            if error:
+                                print(f"❌ [AGENT] Invalid fetch_data tool request: {error}")
+                                traces.append({
+                                    'step': 'Dataset Fetch',
+                                    'description': f"Invalid fetch_data request: {error}",
+                                    'tool': 'fetch_data (invalid request)',
+                                    'status': 'failed'
+                                })
+                                yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
+                                fail_message = (
+                                    "Unable to complete the request because the agent issued an invalid fetch_data tool call. "
+                                    "Please refine your request."
+                                )
+                                traces.append({
+                                    'step': 'Response Generation',
+                                    'description': 'Stopped due to invalid fetch_data tool call.',
+                                    'tool': model_display,
+                                    'status': 'failed'
+                                })
+                                yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
+                                yield ('final', fail_message, traces, fetch_context, web_context)
+                                return
+
+                            existing_categories = {
+                                normalize_category_id(item.get('id'))
+                                for item in (fetch_context.get('metadata') or [])
+                                if isinstance(item, dict) and item.get('id')
+                            }
+                            missing_categories = [
+                                cat for cat in normalized_requested
+                                if cat not in existing_categories
+                            ]
+
+                            if not missing_categories:
+                                description = (
+                                    f"Datasets already loaded for {', '.join(normalized_requested)}."
+                                )
+                                traces.append({
+                                    'step': 'Dataset Fetch',
+                                    'description': description,
+                                    'tool': f"fetch_data ({len(normalized_requested)} categories)",
+                                    'status': 'success'
+                                })
+                                yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
+                                yield ('status', status_payload('Tool', description))
+                                append_tool_note('fetch_data', description)
+                                print(f"ℹ️ [AGENT] Tool requested datasets already available; skipping fetch.")
+                            else:
+                                print(f"📊 [AGENT] Tool fetching data for categories: {missing_categories}")
+                                fetch_result = fetch_data_for_categories(missing_categories)
+                                fetch_context = merge_fetch_context(fetch_context, fetch_result)
+                                description = (
+                                    f"Fetched datasets for {', '.join(missing_categories)}. "
+                                    f"{describe_loaded_categories(fetch_context)}"
+                                )
+                                traces.append({
+                                    'step': 'Dataset Fetch',
+                                    'description': description,
+                                    'tool': f"fetch_data ({len(missing_categories)} categories)",
+                                    'status': 'success'
+                                })
+                                yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
+                                yield ('status', status_payload('Tool', description))
+                                append_tool_note('fetch_data', description)
+                                print(f"✅ [AGENT] Tool data fetched successfully, continuing")
+
+                            handled_tool = True
+
+                        elif tool_name == 'web_search':
+                            query = tool_args.get('query') or ''
+                            if not query:
+                                error_message = 'Web search tool call missing "query" parameter.'
+                                print(f"❌ [AGENT] {error_message}")
+                                traces.append({
+                                    'step': 'Web Search',
+                                    'description': error_message,
+                                    'tool': 'Web Search',
+                                    'status': 'failed'
+                                })
+                                yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
+                                yield ('final', error_message, traces, fetch_context, web_context)
+                                return
+                            print(f"🔍 [AGENT] Tool initiated web search for: {query}")
+                            try:
+                                web_data, tool_display = perform_web_search(query, analysis_sequence, auth_token)
+                                web_context = add_web_result(web_context, query, web_data, tool_display)
+                                prompt_context = build_agent_prompt_context(user_message, fetch_context, web_context)
+                                final_prompt = format_prompt(prompt_template, **prompt_context)
+                                if mode_label == 'deep-research':
+                                    final_prompt = (
+                                        f"{final_prompt}\n\nDEEP RESEARCH MODE:\n"
+                                        "1. Review the database context above before issuing any additional tool commands.\n"
+                                        "2. Only invoke `WEB_SEARCH` for details that are missing or outdated in the database summary.\n"
+                                        "3. Combine database findings with external research, and cite each source group (Database vs Web Search).\n"
+                                        "4. Summarize key discoveries and note where fresh web research augmented the internal data."
+                                    )
+                                final_prompt = enforce_prompt_ceiling(final_prompt)
+                                traces.append({
+                                    'step': 'Web Search',
+                                    'description': f'Performed live search for "{query}"',
+                                    'tool': tool_display or 'Web Search',
+                                    'status': 'success' if web_data else 'warning'
+                                })
+                                yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
+                                yield ('status', status_payload('Tool', f'WEB_SEARCH -> {query}'))
+                                append_tool_note('web_search', f'Completed web search for "{query}".')
+                                handled_tool = True
+                            except Exception as exc:
+                                print(f"❌ [AGENT] Error processing web_search tool call: {exc}")
+                                traces.append({
+                                    'step': 'Web Search',
+                                    'description': f'Error processing web_search: {exc}',
+                                    'tool': 'Web Search (error)',
+                                    'status': 'failed'
+                                })
+                                yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
+                                yield ('status', status_payload('Tool', f'web_search failed: {exc}'))
+                                yield ('error', f'Error processing web_search tool call: {exc}', traces, fetch_context, web_context)
+                                return
+
+                        else:
+                            print(f"⚠️ [AGENT] Unsupported tool requested: {tool_name}")
+
+                    if handled_tool:
+                        prompt_context = build_agent_prompt_context(user_message, fetch_context, web_context)
+                        final_prompt = format_prompt(prompt_template, **prompt_context)
+                        if mode_label == 'deep-research':
+                            final_prompt = (
+                                f"{final_prompt}\n\nDEEP RESEARCH MODE:\n"
+                                "1. Review the database context above before issuing any additional tool commands.\n"
+                                "2. Only invoke `WEB_SEARCH` for details that are missing or outdated in the database summary.\n"
+                                "3. Combine database findings with external research, and cite each source group (Database vs Web Search).\n"
+                                "4. Summarize key discoveries and note where fresh web research augmented the internal data."
+                            )
+                        final_prompt = enforce_prompt_ceiling(final_prompt)
+                        continue
+
                 content = sanitize_quickchart_urls_in_text(content, theme)
                 content, _ = ensure_quickchart_visualization(content, theme)
-                total_chars = len(content)
-                print(f"✅ [AGENT] Received completion ({total_chars} chars)")
 
                 if content:
                     delivered = 0
@@ -4309,7 +4515,9 @@ Explicitly note when information is not present in the provided datasets."""
                                 sanitized_content = sanitize_quickchart_urls_in_text(full_content, theme)
                                 sanitized_content, _ = ensure_quickchart_visualization(sanitized_content, theme)
                                 try:
-                                    verified_content = fetch_non_stream_content(headers, fallback_payload, theme)
+                                    verified_payload = fetch_non_stream_content(headers, fallback_payload, theme)
+                                    verified_message = verified_payload.get('choices', [{}])[0].get('message', {})
+                                    verified_content = verified_message.get('content') or sanitized_content
                                 except requests.exceptions.RequestException as exc:
                                     print(f"⚠️ [ANALYSIS] Non-stream verification failed: {exc}")
                                     verified_content = sanitized_content
@@ -4354,7 +4562,9 @@ Explicitly note when information is not present in the provided datasets."""
                     traces[-1]['description'] = f'Stream interrupted: {fallback_reason}. Retrying without streaming.'
                     yield emit_traces()
                     try:
-                        fallback_content = fetch_non_stream_content(headers, fallback_payload, theme)
+                        fallback_payload = fetch_non_stream_content(headers, fallback_payload, theme)
+                        fallback_message = fallback_payload.get('choices', [{}])[0].get('message', {})
+                        fallback_content = fallback_message.get('content') or ''
                         traces[-1]['status'] = 'success'
                         traces[-1]['description'] = 'Analysis generated via non-stream fallback.'
                         yield emit_traces()
@@ -5361,7 +5571,7 @@ def append_quickchart_guidance(prompt_template, theme):
 
 
 def fetch_non_stream_content(headers, payload, theme, timeout=180):
-    """Fetch a non-streamed completion and sanitize the response."""
+    """Fetch a non-streamed completion and return the parsed response JSON."""
     response = requests.post(
         f'{OPENROUTER_BASE_URL}/chat/completions',
         headers=headers,
@@ -5378,14 +5588,14 @@ def fetch_non_stream_content(headers, payload, theme, timeout=180):
             response=response
         )
     result = response.json()
-    content = (
-        result.get('choices', [{}])[0]
-        .get('message', {})
-        .get('content') or ''
-    )
-    sanitized = sanitize_quickchart_urls_in_text(content, theme)
-    enhanced, _ = ensure_quickchart_visualization(sanitized, theme)
-    return enhanced
+    message_payload = result.get('choices', [{}])[0].get('message', {})
+    content = message_payload.get('content') or ''
+    if content:
+        sanitized = sanitize_quickchart_urls_in_text(content, theme)
+        enhanced, _ = ensure_quickchart_visualization(sanitized, theme)
+        message_payload['content'] = enhanced
+    result['choices'][0]['message'] = message_payload
+    return result
 
 
 def get_quickchart_url(chart_config, theme='light'):
