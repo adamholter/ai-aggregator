@@ -127,7 +127,9 @@ function fixEncodingArtifacts(text) {
 }
 
 const STREAM_BLOCK_PATTERN = /^(#{1,6}\s|[-*+]\s|```|>|\|)/;
-const RELATIVE_TIME_FORMATTER = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
+const RELATIVE_TIME_FORMATTER = (typeof Intl !== 'undefined' && typeof Intl.RelativeTimeFormat === 'function')
+    ? new Intl.RelativeTimeFormat('en', { numeric: 'auto' })
+    : null;
 
 function escapeHtml(value) {
     return (value == null ? '' : String(value)).replace(/[&<>"']/g, char => ({
@@ -1299,7 +1301,14 @@ function formatRelativeTime(timestamp) {
     for (const range of ranges) {
         if (Math.abs(diffMs) >= range.ms || range.unit === 'second') {
             const value = Math.round(diffMs / range.ms);
-            return RELATIVE_TIME_FORMATTER.format(value, range.unit);
+            if (RELATIVE_TIME_FORMATTER) {
+                return RELATIVE_TIME_FORMATTER.format(value, range.unit);
+            }
+            const unitLabel = value === 1 || value === -1 ? range.unit : `${range.unit}s`;
+            if (value === 0) {
+                return 'just now';
+            }
+            return value > 0 ? `in ${value} ${unitLabel}` : `${Math.abs(value)} ${unitLabel} ago`;
         }
     }
     return '';
