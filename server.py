@@ -976,7 +976,7 @@ FETCH_DATA_CATEGORY_CONFIG = {
         'params': None,
         'cache_keys': lambda: [get_cache_key('llms')],
         'extract': lambda payload: (payload or {}).get('data', []),
-        'limit': 30,
+        'limit': None,
         'source': 'artificial-analysis'
     },
     'openrouter': {
@@ -985,7 +985,7 @@ FETCH_DATA_CATEGORY_CONFIG = {
         'params': None,
         'cache_keys': lambda: [get_cache_key('openrouter_models')],
         'extract': lambda payload: payload if isinstance(payload, list) else (payload or []),
-        'limit': 50,
+        'limit': None,
         'source': 'openrouter'
     },
     'text-to-image': {
@@ -997,7 +997,7 @@ FETCH_DATA_CATEGORY_CONFIG = {
             get_cache_key('text_to_image', {'include_categories': True})
         ],
         'extract': lambda payload: (payload or {}).get('data', []),
-        'limit': 25,
+        'limit': None,
         'source': 'artificial-analysis'
     },
     'image-editing': {
@@ -1009,7 +1009,7 @@ FETCH_DATA_CATEGORY_CONFIG = {
             get_cache_key('image_editing')
         ],
         'extract': lambda payload: (payload or {}).get('data', []),
-        'limit': 20,
+        'limit': None,
         'source': 'artificial-analysis'
     },
     'text-to-speech': {
@@ -1021,7 +1021,7 @@ FETCH_DATA_CATEGORY_CONFIG = {
             get_cache_key('text_to_speech')
         ],
         'extract': lambda payload: (payload or {}).get('data', []),
-        'limit': 20,
+        'limit': None,
         'source': 'artificial-analysis'
     },
     'text-to-video': {
@@ -1033,7 +1033,7 @@ FETCH_DATA_CATEGORY_CONFIG = {
             get_cache_key('text_to_video')
         ],
         'extract': lambda payload: (payload or {}).get('data', []),
-        'limit': 20,
+        'limit': None,
         'source': 'artificial-analysis'
     },
     'image-to-video': {
@@ -1045,7 +1045,7 @@ FETCH_DATA_CATEGORY_CONFIG = {
             get_cache_key('image_to_video')
         ],
         'extract': lambda payload: (payload or {}).get('data', []),
-        'limit': 20,
+        'limit': None,
         'source': 'artificial-analysis'
     },
     'fal': {
@@ -1054,7 +1054,7 @@ FETCH_DATA_CATEGORY_CONFIG = {
         'params': None,
         'cache_keys': lambda: [get_cache_key('fal_models')],
         'extract': lambda payload: payload if isinstance(payload, list) else (payload or []),
-        'limit': 40,
+        'limit': None,
         'source': 'fal.ai'
     },
     'replicate': {
@@ -1063,7 +1063,7 @@ FETCH_DATA_CATEGORY_CONFIG = {
         'params': None,
         'cache_keys': lambda: [get_cache_key('replicate_models')],
         'extract': lambda payload: payload if isinstance(payload, list) else (payload or []),
-        'limit': 40,
+        'limit': None,
         'source': 'replicate'
     }
 }
@@ -1749,7 +1749,7 @@ def fetch_data_for_categories(categories, limit_per_category=None):
             category_id,
             config,
             payload,
-            limit=limit_per_category if limit_per_category is not None else config.get('limit')
+            limit=limit_per_category
         )
 
         if not items:
