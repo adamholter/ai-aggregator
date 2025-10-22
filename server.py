@@ -2714,6 +2714,20 @@ def agent_tool_loop_generator(
                     yield ('status', status_payload('Tool', description))
                     append_tool_note('fetch_data', description)
                     print(f"✅ [AGENT] Data fetched successfully, continuing to next iteration")
+
+                    # Rebuild prompt with the newly loaded datasets before continuing
+                    prompt_context = build_agent_prompt_context(user_message, fetch_context, web_context)
+                    final_prompt = format_prompt(prompt_template, **prompt_context)
+                    if mode_label == 'deep-research':
+                        final_prompt = (
+                            f"{final_prompt}\n\n"
+                            "DEEP RESEARCH MODE:\n"
+                            "1. Review the database context above before issuing any additional tool commands.\n"
+                            "2. Only invoke `WEB_SEARCH` for details that are missing or outdated in the database summary.\n"
+                            "3. Combine database findings with external research, and cite each source group (Database vs Web Search).\n"
+                            "4. Summarize key discoveries and note where fresh web research augmented the internal data."
+                        )
+                    final_prompt = enforce_prompt_ceiling(final_prompt)
                     continue
                 except Exception as exc:
                     print(f"❌ [AGENT] Error processing FETCH_DATA: {exc}")
