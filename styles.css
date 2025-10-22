@@ -437,31 +437,44 @@ body {
 }
 
 .hype-card {
+    position: relative;
     display: flex;
     flex-direction: column;
     gap: 14px;
+    padding-top: 8px;
 }
 
 .hype-card .card-header {
-    display: flex;
-    gap: 16px;
-    align-items: flex-start;
+    position: relative;
+    display: block;
     margin-bottom: 4px;
+    padding-top: 18px;
+}
+
+.hype-card .card-header-content {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
 }
 
 .hype-card .card-rank {
-    font-size: 1.4rem;
+    position: absolute;
+    top: 0;
+    left: 0;
+    font-size: 1.3rem;
     font-weight: 700;
     line-height: 1;
     color: var(--source-hype, var(--button-bg));
-    min-width: 40px;
-    text-align: center;
+}
+
+.hype-card .source-badge {
+    align-self: flex-start;
 }
 
 .hype-card .card-title {
     font-size: 1.05rem;
     font-weight: 600;
-    margin-bottom: 4px;
+    margin: 0;
     color: var(--text-color);
 }
 
@@ -480,7 +493,6 @@ body {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
-    margin-top: 6px;
     font-size: 0.82rem;
     color: var(--info-text);
 }
@@ -513,7 +525,7 @@ body {
     font-size: 0.92rem;
     line-height: 1.6;
     color: var(--text-color);
-    margin-top: 6px;
+    margin: 0;
 }
 
 .hype-card .card-tags {
@@ -765,44 +777,54 @@ body {
 }
 
 .chat-input {
+    position: relative;
     display: flex;
     gap: 10px;
-    align-items: stretch;
+    align-items: center;
 }
 
 .attachment-button {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 44px;
-    min-width: 44px;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    background: var(--input-bg);
+    width: 28px;
+    height: 28px;
+    min-width: 0;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
     color: var(--info-text);
     cursor: pointer;
-    transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+    transition: color 0.2s ease, background 0.2s ease;
+    z-index: 2;
 }
 
 .attachment-button svg {
-    width: 20px;
-    height: 20px;
+    width: 18px;
+    height: 18px;
     fill: currentColor;
+    pointer-events: none;
 }
 
-.attachment-button:hover {
+.attachment-button:hover,
+.attachment-button:focus-visible {
     color: var(--button-bg);
-    border-color: var(--button-bg);
+    background: rgba(59, 130, 246, 0.08);
+    outline: none;
 }
 
 .attachment-button.has-attachments {
     color: var(--button-bg);
-    border-color: var(--button-bg);
-    background: rgba(59, 130, 246, 0.12);
+    background: rgba(59, 130, 246, 0.18);
 }
 
 .image-preview-list {
     margin-top: 8px;
+    margin-left: 44px;
     display: none;
     flex-wrap: wrap;
     gap: 6px;
@@ -832,6 +854,7 @@ body {
 .chat-input textarea {
     flex: 1;
     padding: 12px;
+    padding-left: 52px;
     border: 1px solid var(--border-color);
     border-radius: 4px;
     resize: none;
@@ -839,6 +862,7 @@ body {
     font-size: 0.9rem;
     background: var(--input-bg);
     color: var(--text-color);
+    min-height: 48px;
 }
 
 .chat-input textarea:focus {

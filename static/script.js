@@ -1260,7 +1260,7 @@ function createHypeCard(item, index, fetchedAt) {
     card.innerHTML = `
         <div class="card-header">
             <div class="card-rank">#${index + 1}</div>
-            <div>
+            <div class="card-header-content">
                 <div class="source-badge">Hype Signals</div>
                 <div class="card-title">
                     <a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${name}</a>
