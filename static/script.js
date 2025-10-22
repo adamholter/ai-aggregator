@@ -56,6 +56,7 @@ const THEME_LABELS = {
 let modelConfig = null;
 let settingsInitialized = false;
 let experimentalModeEnabled = false;
+let agentPendingImages = [];
 
 // Common words to ignore when matching model names between sources
 const MATCH_EXCLUSION_TOKENS = [
@@ -281,6 +282,99 @@ function ensureActiveSectionIsAllowed() {
             fallbackButton.click();
         }
     }
+}
+
+function readFileAsDataURL(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+    });
+}
+
+async function collectImageAttachments() {
+    if (!agentPendingImages.length) {
+        return [];
+    }
+    const attachments = [];
+    for (const file of agentPendingImages) {
+        try {
+            const dataUrl = await readFileAsDataURL(file);
+            attachments.push({
+                name: file.name,
+                type: file.type,
+                size: file.size,
+                data: dataUrl
+            });
+        } catch (error) {
+            console.error('Failed to read attachment', file.name, error);
+        }
+    }
+    return attachments;
+}
+
+function resetImageUploads() {
+    agentPendingImages = [];
+    const input = document.getElementById('agent-image');
+    if (input) {
+        input.value = '';
+    }
+    const preview = document.getElementById('agent-image-preview');
+    if (preview) {
+        preview.innerHTML = '';
+        preview.classList.remove('has-items');
+    }
+    updateAttachmentButtonState();
+}
+
+function updateAttachmentButtonState() {
+    const button = document.getElementById('agent-attachment-button');
+    if (!button) return;
+    if (agentPendingImages.length) {
+        button.classList.add('has-attachments');
+    } else {
+        button.classList.remove('has-attachments');
+    }
+}
+
+function setupImageUpload() {
+    const input = document.getElementById('agent-image');
+    if (!input) return;
+
+    const button = document.getElementById('agent-attachment-button');
+    if (button) {
+        button.addEventListener('click', () => input.click());
+    }
+
+    updateAttachmentButtonState();
+
+    input.addEventListener('change', () => {
+        agentPendingImages = Array.from(input.files || []);
+        const preview = document.getElementById('agent-image-preview');
+        if (preview) {
+            preview.innerHTML = '';
+            preview.classList.remove('has-items');
+        }
+
+        if (!agentPendingImages.length) {
+            updateAttachmentButtonState();
+            return;
+        }
+
+        if (preview) {
+            preview.classList.add('has-items');
+            agentPendingImages.forEach(file => {
+                const item = document.createElement('div');
+                item.className = 'image-preview-item';
+                const sizeKB = (file.size / 1024).toFixed(1);
+                item.textContent = `📎 ${file.name} (${sizeKB} KB)`;
+                preview.appendChild(item);
+            });
+        }
+
+        updateAttachmentButtonState();
+    });
 }
 
 function withUserOpenRouterKey(headers = {}) {
@@ -517,6 +611,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     setupOpenRouterControls();
     populateAgentDropdown();
     loadLLMData(); // Load LLM data by default
+    setupImageUpload();
 });
 
 // Theme management
@@ -1257,9 +1352,15 @@ function createHypeCard(item, index, fetchedAt) {
         : '';
     const summaryMarkup = summaryText ? `<div class="card-summary">${escapeHtml(summaryText)}</div>` : '';
 
+    const rankBadge = `
+        <div class="card-rank-badge">
+            <span class="rank-number">#${index + 1}</span>
+            <span class="rank-dot" aria-hidden="true"></span>
+        </div>
+    `;
+
     card.innerHTML = `
         <div class="card-header">
-            <div class="card-rank">#${index + 1}</div>
             <div class="card-header-content">
                 <div class="source-badge">Hype Signals</div>
                 <div class="card-title">
@@ -1267,6 +1368,7 @@ function createHypeCard(item, index, fetchedAt) {
                 </div>
                 ${metaMarkup}
             </div>
+            ${rankBadge}
         </div>
         ${summaryMarkup}
         ${tagMarkup}
@@ -1590,28 +1692,48 @@ async function sendMessage() {
     const userInput = document.getElementById('user-input');
     const chatMessages = document.getElementById('chat-messages');
     const message = userInput.value.trim();
-    
-    if (!message) return;
-    
-    // Add user message to chat
+
+    if (!message) {
+        return;
+    }
+
+    const attachments = await collectImageAttachments();
+
+    // Render user bubble
     const userMessage = document.createElement('div');
     userMessage.className = 'message user';
-    userMessage.textContent = message;
+
+    const messageText = document.createElement('div');
+    messageText.className = 'message-text';
+    messageText.textContent = message;
+    userMessage.appendChild(messageText);
+
+    if (attachments.length) {
+        const attachmentList = document.createElement('div');
+        attachmentList.className = 'attachment-preview';
+        attachments.forEach(att => {
+            const sizeKB = (att.size / 1024).toFixed(1);
+            const item = document.createElement('div');
+            item.textContent = `📎 ${att.name} (${sizeKB} KB)`;
+            attachmentList.appendChild(item);
+        });
+        userMessage.appendChild(attachmentList);
+    }
+
     chatMessages.appendChild(userMessage);
-    
-    // Add to conversation history for context
+
+    // Track conversation history
     agentConfig.conversationHistory.push({
         role: 'user',
         content: message,
+        attachments,
         timestamp: new Date().toISOString()
     });
-    
-    // Keep conversation history to last 10 exchanges to avoid token limits
     if (agentConfig.conversationHistory.length > 20) {
         agentConfig.conversationHistory = agentConfig.conversationHistory.slice(-20);
     }
-    
-    // Add initial loading indicator
+
+    // Add loading indicator for AI response
     const loadingMessage = document.createElement('div');
     loadingMessage.className = 'message ai loading-initial';
     loadingMessage.innerHTML = `
@@ -1621,18 +1743,14 @@ async function sendMessage() {
         </div>
     `;
     chatMessages.appendChild(loadingMessage);
-    
-    // Clear input
+
+    // Reset input
     userInput.value = '';
-    
-    // Scroll to bottom after user message
     chatMessages.scrollTop = chatMessages.scrollHeight;
-    
+
     try {
-        // Call AI agent with streaming and context
-        const response = await callGLMAgent(message);
-        
-        // Add AI response to conversation history
+        const response = await callGLMAgent(message, attachments);
+
         if (response && response.response) {
             agentConfig.conversationHistory.push({
                 role: 'assistant',
@@ -1640,16 +1758,14 @@ async function sendMessage() {
                 timestamp: new Date().toISOString()
             });
         }
-        
-        // Remove streaming class from the final message
+
         const streamingMessage = chatMessages.querySelector('.message.ai.streaming');
         if (streamingMessage) {
             streamingMessage.classList.remove('streaming');
         }
-        
-        // Ensure final scroll to bottom
+
         chatMessages.scrollTop = chatMessages.scrollHeight;
-        
+        resetImageUploads();
     } catch (error) {
         clearAgentLoadingState();
 
@@ -1661,8 +1777,8 @@ async function sendMessage() {
         chatMessages.scrollTop = chatMessages.scrollHeight;
 
         if (!error || !error.__toastHandled) {
-            const message = (error && error.message) ? error.message : 'The AI agent request failed.';
-            showToast(message, 'error');
+            const messageText = (error && error.message) ? error.message : 'The AI agent request failed.';
+            showToast(messageText, 'error');
         }
     }
 }
@@ -1672,6 +1788,7 @@ function clearChatHistory() {
     const chatMessages = document.getElementById('chat-messages');
     chatMessages.innerHTML = '';
     agentConfig.conversationHistory = [];
+    resetImageUploads();
     
     // Add a welcome message
     const welcomeMessage = document.createElement('div');
@@ -1695,14 +1812,14 @@ function clearChatHistory() {
 }
 
 // Call AI agent with streaming support
-async function callGLMAgent(userMessage) {
+async function callGLMAgent(userMessage, attachments = []) {
     return new Promise((resolve, reject) => {
-        handleStreamingWithFetch(userMessage, resolve, reject);
+        handleStreamingWithFetch(userMessage, attachments, resolve, reject);
     });
 }
 
 // Fallback streaming using fetch
-async function handleStreamingWithFetch(userMessage, resolve, reject) {
+async function handleStreamingWithFetch(userMessage, attachments, resolve, reject) {
     try {
         const response = await fetch('/api/ai-agent', {
             method: 'POST',
@@ -1713,7 +1830,8 @@ async function handleStreamingWithFetch(userMessage, resolve, reject) {
                 message: userMessage,
                 stream: true,
                 model: agentConfig.model,
-                conversationHistory: agentConfig.conversationHistory
+                conversationHistory: agentConfig.conversationHistory,
+                imageAttachments: attachments
             })
         });
 
@@ -1800,21 +1918,24 @@ async function handleStreamingWithFetch(userMessage, resolve, reject) {
             reader.cancel();
         }
     } catch (error) {
-        handleNonStreamingFallback(userMessage, resolve, reject);
+        handleNonStreamingFallback(userMessage, attachments, resolve, reject);
     }
 }
 
 // Fallback to non-streaming
-async function handleNonStreamingFallback(userMessage, resolve, reject) {
+async function handleNonStreamingFallback(userMessage, attachments, resolve, reject) {
     try {
-        const response = await makeAPICall('/api/ai-agent', null, {
+        const response = await fetch('/api/ai-agent', {
             method: 'POST',
-            headers: withUserOpenRouterKey({}),
+            headers: withUserOpenRouterKey({
+                'Content-Type': 'application/json'
+            }),
             body: JSON.stringify({
                 message: userMessage,
                 stream: false,
                 model: agentConfig.model,
-                conversationHistory: agentConfig.conversationHistory
+                conversationHistory: agentConfig.conversationHistory,
+                imageAttachments: attachments
             })
         });
 
@@ -1827,7 +1948,6 @@ async function handleNonStreamingFallback(userMessage, resolve, reject) {
                 // Ignore parsing error
             }
 
-            // Handle specific error cases
             if (response.status === 402) {
                 errorMessage = "🔑 OpenRouter API key required. Please add your key in Settings to use AI features.";
             }
@@ -1835,14 +1955,15 @@ async function handleNonStreamingFallback(userMessage, resolve, reject) {
             throw new Error(errorMessage);
         }
 
-        if (response && typeof response.response === 'string') {
-            resolve({
-                ...response,
-                response: fixEncodingArtifacts(response.response)
-            });
-        } else {
-            resolve(response);
-        }
+        const payload = await response.json();
+        const sanitized = payload && typeof payload.response === 'string'
+            ? fixEncodingArtifacts(payload.response)
+            : (payload && payload.response) || '';
+
+        resolve({
+            ...payload,
+            response: sanitized
+        });
     } catch (error) {
         reject(error);
     }

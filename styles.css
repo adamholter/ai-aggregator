@@ -437,34 +437,47 @@ body {
 }
 
 .hype-card {
-    position: relative;
     display: flex;
     flex-direction: column;
     gap: 14px;
-    padding-top: 8px;
 }
 
 .hype-card .card-header {
-    position: relative;
-    display: block;
-    margin-bottom: 4px;
-    padding-top: 18px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 8px;
 }
 
 .hype-card .card-header-content {
     display: flex;
     flex-direction: column;
     gap: 6px;
+    flex: 1;
+    min-width: 0;
 }
 
-.hype-card .card-rank {
-    position: absolute;
-    top: 0;
-    left: 0;
-    font-size: 1.3rem;
-    font-weight: 700;
+.hype-card .card-rank-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: var(--source-hype, var(--button-bg));
+    color: #ffffff;
+    font-size: 0.82rem;
+    font-weight: 600;
     line-height: 1;
-    color: var(--source-hype, var(--button-bg));
+    box-shadow: 0 6px 18px rgba(236, 72, 153, 0.18);
+    white-space: nowrap;
+}
+
+.hype-card .card-rank-badge .rank-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.9);
 }
 
 .hype-card .source-badge {
@@ -870,7 +883,7 @@ body {
     border-color: var(--button-bg);
 }
 
-.chat-input button {
+.chat-input button:not(.attachment-button) {
     background: var(--button-bg);
     color: var(--button-text);
     border: 1px solid var(--button-bg);
@@ -881,7 +894,7 @@ body {
     transition: all 0.2s ease;
 }
 
-.chat-input button:hover {
+.chat-input button:not(.attachment-button):hover {
     background: var(--button-hover-bg);
 }
 
