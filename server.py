@@ -22,6 +22,7 @@ from copy import deepcopy
 from decimal import Decimal
 from collections import defaultdict, deque
 from threading import Lock
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 
 app = Flask(__name__, static_folder='.', static_url_path='')
 CORS(app)
@@ -2556,8 +2557,16 @@ def agent_tool_loop_generator(
                 })
                 print(f"📡 [AGENT] Requesting non-stream completion from OpenRouter...")
 
+                wait_executor = ThreadPoolExecutor(max_workers=1)
+                future = wait_executor.submit(fetch_non_stream_content, headers, payload, theme)
                 try:
-                    full_text = fetch_non_stream_content(headers, payload, theme)
+                    while True:
+                        try:
+                            full_text = future.result(timeout=6)
+                            break
+                        except FuturesTimeout:
+                            yield ('status', status_payload('LLM Request', 'Still waiting for OpenRouter response...'))
+                            continue
                 except requests.exceptions.RequestException as exc:
                     error_message = f'LLM request failed: {exc}'
                     print(f"❌ [AGENT] {error_message}")
@@ -2571,6 +2580,8 @@ def agent_tool_loop_generator(
                     yield ('status', status_payload('LLM Request', f'Error: {exc}'))
                     yield ('error', error_message, traces, fetch_context, web_context)
                     return
+                finally:
+                    wait_executor.shutdown(wait=False)
 
                 content = full_text or ''
                 content = sanitize_quickchart_urls_in_text(content, theme)
