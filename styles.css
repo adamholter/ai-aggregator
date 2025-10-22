@@ -52,6 +52,16 @@
     --error-text: #c62828;
     --info-bg: #f5f5f5;
     --info-text: #666666;
+    --hype-github-bg: rgba(36, 41, 46, 0.12);
+    --hype-github-text: #1f2937;
+    --hype-huggingface-bg: rgba(255, 196, 45, 0.25);
+    --hype-huggingface-text: #92400e;
+    --hype-replicate-bg: rgba(16, 185, 129, 0.18);
+    --hype-replicate-text: #065f46;
+    --hype-reddit-bg: rgba(255, 69, 0, 0.2);
+    --hype-reddit-text: #b91c1c;
+    --hype-default-bg: rgba(148, 163, 184, 0.18);
+    --hype-default-text: #1f2937;
 }
 
 [data-theme="dark"] {
@@ -69,6 +79,16 @@
     --error-text: #ff5252;
     --info-bg: #2a2a2a;
     --info-text: #b0b0b0;
+    --hype-github-bg: rgba(148, 163, 184, 0.18);
+    --hype-github-text: #e2e8f0;
+    --hype-huggingface-bg: rgba(249, 210, 143, 0.22);
+    --hype-huggingface-text: #fde68a;
+    --hype-replicate-bg: rgba(16, 185, 129, 0.28);
+    --hype-replicate-text: #bbf7d0;
+    --hype-reddit-bg: rgba(255, 109, 55, 0.28);
+    --hype-reddit-text: #fecaca;
+    --hype-default-bg: rgba(148, 163, 184, 0.22);
+    --hype-default-text: #e5e7eb;
 }
 
 [data-theme="source"] {
@@ -91,6 +111,16 @@
     --source-replicate: #10b981;
     --source-openrouter: #7c3aed;
     --source-hype: #ec4899;
+    --hype-github-bg: rgba(36, 41, 46, 0.12);
+    --hype-github-text: #1f2937;
+    --hype-huggingface-bg: rgba(255, 196, 45, 0.22);
+    --hype-huggingface-text: #7c2d12;
+    --hype-replicate-bg: rgba(16, 185, 129, 0.18);
+    --hype-replicate-text: #065f46;
+    --hype-reddit-bg: rgba(255, 69, 0, 0.18);
+    --hype-reddit-text: #9a3412;
+    --hype-default-bg: rgba(148, 163, 184, 0.18);
+    --hype-default-text: #1f2937;
 }
 
 body {
@@ -188,6 +218,11 @@ body {
 
 [data-theme="source"] .legend-item[data-source="openrouter"] {
     color: var(--source-openrouter);
+}
+
+.legend-item[data-source="hype"],
+[data-theme="source"] .legend-item[data-source="hype"] {
+    color: var(--source-hype);
 }
 
 /* Theme toggle */
@@ -404,26 +439,34 @@ body {
 .hype-card {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 14px;
 }
 
 .hype-card .card-header {
     display: flex;
     gap: 16px;
     align-items: flex-start;
+    margin-bottom: 4px;
 }
 
 .hype-card .card-rank {
-    font-size: 1.25rem;
+    font-size: 1.4rem;
     font-weight: 700;
     line-height: 1;
     color: var(--source-hype, var(--button-bg));
-    min-width: 36px;
+    min-width: 40px;
     text-align: center;
 }
 
-.hype-card .card-title a {
+.hype-card .card-title {
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin-bottom: 4px;
     color: var(--text-color);
+}
+
+.hype-card .card-title a {
+    color: inherit;
     text-decoration: none;
 }
 
@@ -436,15 +479,41 @@ body {
 .hype-card .card-meta {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
-    font-size: 0.84rem;
+    gap: 8px;
+    margin-top: 6px;
+    font-size: 0.82rem;
     color: var(--info-text);
+}
+
+.hype-card .card-meta .meta-item {
+    position: relative;
+    padding-left: 12px;
+    display: inline-flex;
+    align-items: center;
+    min-height: 18px;
+}
+
+.hype-card .card-meta .meta-item:first-child {
+    padding-left: 0;
+}
+
+.hype-card .card-meta .meta-item:first-child::before {
+    display: none;
+}
+
+.hype-card .card-meta .meta-item::before {
+    content: '•';
+    position: absolute;
+    left: 0;
+    color: var(--info-text);
+    opacity: 0.8;
 }
 
 .hype-card .card-summary {
     font-size: 0.92rem;
     line-height: 1.6;
     color: var(--text-color);
+    margin-top: 6px;
 }
 
 .hype-card .card-tags {
@@ -466,6 +535,39 @@ body {
 
 [data-theme="dark"] .hype-card .card-tag {
     background: rgba(148, 163, 184, 0.12);
+}
+
+.hype-card .card-tag.source-pill {
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 600;
+    border: 1px solid transparent;
+    background: var(--hype-default-bg);
+    color: var(--hype-default-text);
+}
+
+.hype-card .card-tag.source-pill[data-source="github"] {
+    background: var(--hype-github-bg);
+    color: var(--hype-github-text);
+    border-color: rgba(36, 41, 46, 0.06);
+}
+
+.hype-card .card-tag.source-pill[data-source="huggingface"] {
+    background: var(--hype-huggingface-bg);
+    color: var(--hype-huggingface-text);
+    border-color: rgba(217, 119, 6, 0.12);
+}
+
+.hype-card .card-tag.source-pill[data-source="replicate"] {
+    background: var(--hype-replicate-bg);
+    color: var(--hype-replicate-text);
+    border-color: rgba(16, 185, 129, 0.16);
+}
+
+.hype-card .card-tag.source-pill[data-source="reddit"] {
+    background: var(--hype-reddit-bg);
+    color: var(--hype-reddit-text);
+    border-color: rgba(239, 68, 68, 0.18);
 }
 
 .hype-card .card-actions {

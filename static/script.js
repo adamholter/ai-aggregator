@@ -1221,23 +1221,39 @@ function createHypeCard(item, index, fetchedAt) {
     const url = item.url || '#';
     const points = typeof item.stars === 'number' ? `${item.stars} points` : null;
     const username = item.username ? `by ${escapeHtml(item.username)}` : null;
+    const normalizedSource = normalizeHypeSourceId(item.source);
+    if (normalizedSource) {
+        card.setAttribute('data-hype-source', normalizedSource);
+    }
     const sourceLabel = formatHypeSource(item.source);
     const relative = formatRelativeTime(item.created_at || item.inserted_at || item.updated_at || fetchedAt);
 
-    const metaParts = [points, username, sourceLabel, relative].filter(Boolean);
+    const metaParts = [points, username, relative].filter(Boolean);
+    const metaMarkup = metaParts.length
+        ? `<div class="card-meta">${metaParts.map(part => `<span class="meta-item">${escapeHtml(part)}</span>`).join('')}</div>`
+        : '';
+
     const summary = item.summary || item.description || '';
     const summaryText = summary ? truncateText(summary, 240) : '';
     const tags = Array.isArray(item.tags) ? item.tags : [];
     const tagEntries = [];
-    if (sourceLabel) tagEntries.push(`Source: ${sourceLabel}`);
-    if (item.language) tagEntries.push(`Lang: ${item.language}`);
+
+    if (sourceLabel) {
+        tagEntries.push({ type: 'source', value: sourceLabel, id: normalizedSource });
+    }
+    if (item.language) {
+        tagEntries.push({ type: 'meta', value: `Lang: ${item.language}` });
+    }
     tags.forEach(tag => {
-        if (tag) {
-            tagEntries.push(`#${tag}`);
+        const label = typeof tag === 'string' ? tag.trim() : '';
+        if (label) {
+            const normalizedLabel = label.startsWith('#') ? label : `#${label}`;
+            tagEntries.push({ type: 'tag', value: normalizedLabel });
         }
     });
+
     const tagMarkup = tagEntries.length
-        ? `<div class="card-tags">${tagEntries.map(tag => `<span class="card-tag">${escapeHtml(String(tag))}</span>`).join('')}</div>`
+        ? `<div class="card-tags">${tagEntries.map(renderHypeTag).join('')}</div>`
         : '';
     const summaryMarkup = summaryText ? `<div class="card-summary">${escapeHtml(summaryText)}</div>` : '';
 
@@ -1249,7 +1265,7 @@ function createHypeCard(item, index, fetchedAt) {
                 <div class="card-title">
                     <a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${name}</a>
                 </div>
-                <div class="card-meta">${metaParts.map(part => `<span>${escapeHtml(part)}</span>`).join('<span>•</span>')}</div>
+                ${metaMarkup}
             </div>
         </div>
         ${summaryMarkup}
@@ -1263,14 +1279,30 @@ function createHypeCard(item, index, fetchedAt) {
     return card;
 }
 
+function renderHypeTag(entry) {
+    if (!entry || !entry.value) {
+        return '';
+    }
+    if (entry.type === 'source') {
+        const sourceId = normalizeHypeSourceId(entry.id);
+        const pillLabel = `Source: ${entry.value}`;
+        return `<span class="card-tag source-pill" data-source="${escapeHtml(sourceId)}">${escapeHtml(pillLabel)}</span>`;
+    }
+    return `<span class="card-tag">${escapeHtml(String(entry.value))}</span>`;
+}
+
+function normalizeHypeSourceId(source) {
+    if (!source) return '';
+    return String(source).toLowerCase().replace(/[\s_-]+/g, '');
+}
+
 function formatHypeSource(source) {
     if (!source) return '';
-    const normalized = String(source).toLowerCase();
+    const normalized = normalizeHypeSourceId(source);
     switch (normalized) {
         case 'github':
             return 'GitHub';
         case 'huggingface':
-        case 'hugging_face':
             return 'Hugging Face';
         case 'replicate':
             return 'Replicate';
