@@ -1289,6 +1289,22 @@ def extract_price_per_million(value):
     except Exception:
         return None
 
+
+def format_context_length_value(value):
+    try:
+        context = int(value)
+    except (TypeError, ValueError):
+        return None
+    if context >= 1_000_000:
+        scaled = context / 1_000_000
+        display = f"{scaled:.1f}".rstrip('0').rstrip('.')
+        return f"Context: {display}M"
+    if context >= 1_000:
+        scaled = context / 1_000
+        display = f"{scaled:.0f}" if scaled.is_integer() else f"{scaled:.1f}".rstrip('0').rstrip('.')
+        return f"Context: {display}k"
+    return f"Context: {context}"
+
 def compress_llm_entry(item):
     slug = safe_slug(item.get('slug') or item.get('id') or infer_item_name(item))
     provider = infer_item_provider('llms', item) or 'Unknown'
@@ -1332,7 +1348,7 @@ def compress_openrouter_entry(item):
     vendor = item.get('vendor') or infer_item_provider('openrouter', item) or 'Unknown'
     created = parse_timestamp(item.get('created')) or ''
     context_length = item.get('context_length') or item.get('top_provider', {}).get('context_length')
-    context_str = f"Context: {int(context_length):,}" if context_length else ""
+    context_str = format_context_length_value(context_length)
     modality = item.get('architecture', {}).get('modality') or 'text->text'
     description = (item.get('description') or '').replace('\n', ' ').strip()
     pricing = item.get('pricing') or {}
@@ -1367,7 +1383,24 @@ def compress_fal_entry(item):
     if pricing_text and '$' in pricing_text:
         part = pricing_text.split('$', 1)[1]
         number = part.split(None, 1)[0].strip('*').strip()
-        price = f"${number}"
+        unit = ''
+        remainder = part[len(number):].strip()
+        if remainder:
+            lower = remainder.lower()
+            if 'per' in lower:
+                # capture fragment after 'per'
+                fragment = remainder[remainder.lower().find('per'):].split('.', 1)[0].strip()
+                if 'second' in fragment:
+                    unit = '/sec'
+                elif 'minute' in fragment:
+                    unit = '/min'
+                elif 'request' in fragment:
+                    unit = '/req'
+                elif 'image' in fragment:
+                    unit = '/image'
+                else:
+                    unit = f" {fragment}"
+        price = f"${number}{unit}" if unit else f"${number}"
     license_type = item.get('licenseType') or ''
     tags = item.get('tags') or []
     segments = [f"{model_id}; {date}" if date else model_id]
