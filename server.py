@@ -17,6 +17,7 @@ import math
 import re
 import ast
 import urllib.parse
+import time
 from contextlib import contextmanager
 from copy import deepcopy
 from decimal import Decimal
@@ -2557,18 +2558,47 @@ def agent_tool_loop_generator(
                 })
                 print(f"📡 [AGENT] Requesting non-stream completion from OpenRouter...")
 
-                wait_executor = ThreadPoolExecutor(max_workers=1)
-                future = wait_executor.submit(fetch_non_stream_content, headers, payload, theme)
-                try:
-                    while True:
-                        try:
-                            full_text = future.result(timeout=6)
-                            break
-                        except FuturesTimeout:
-                            yield ('status', status_payload('LLM Request', 'Still waiting for OpenRouter response...'))
+                full_text = None
+                attempt = 0
+                last_exception = None
+                while attempt < 3:
+                    attempt += 1
+                    wait_executor = ThreadPoolExecutor(max_workers=1)
+                    future = wait_executor.submit(fetch_non_stream_content, headers, payload, theme)
+                    try:
+                        while True:
+                            try:
+                                full_text = future.result(timeout=6)
+                                break
+                            except FuturesTimeout:
+                                yield ('status', status_payload('LLM Request', f'Waiting for OpenRouter response (attempt {attempt}/3)...'))
+                                continue
+                    except requests.exceptions.HTTPError as exc:
+                        last_exception = exc
+                        status_code = exc.response.status_code if exc.response is not None else None
+                        if status_code and status_code >= 500 and attempt < 3:
+                            yield ('status', status_payload('LLM Request', f'OpenRouter {status_code} error, retrying ({attempt+1}/3)...'))
+                            time.sleep(min(3 * attempt, 6))
                             continue
-                except requests.exceptions.RequestException as exc:
-                    error_message = f'LLM request failed: {exc}'
+                        else:
+                            break
+                    except requests.exceptions.RequestException as exc:
+                        last_exception = exc
+                        if attempt < 3:
+                            yield ('status', status_payload('LLM Request', f'OpenRouter request error, retrying ({attempt+1}/3)...'))
+                            time.sleep(min(3 * attempt, 6))
+                            continue
+                        else:
+                            break
+                    finally:
+                        future.cancel()
+                        wait_executor.shutdown(wait=False)
+
+                    if full_text is not None:
+                        break
+
+                if full_text is None:
+                    error_message = f"LLM request failed: {last_exception}"
                     print(f"❌ [AGENT] {error_message}")
                     traces.append({
                         'step': 'Response Generation',
@@ -2577,11 +2607,9 @@ def agent_tool_loop_generator(
                         'status': 'failed'
                     })
                     yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
-                    yield ('status', status_payload('LLM Request', f'Error: {exc}'))
+                    yield ('status', status_payload('LLM Request', f'Error: {last_exception}'))
                     yield ('error', error_message, traces, fetch_context, web_context)
                     return
-                finally:
-                    wait_executor.shutdown(wait=False)
 
                 content = full_text or ''
                 content = sanitize_quickchart_urls_in_text(content, theme)
