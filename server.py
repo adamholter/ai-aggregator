@@ -4505,29 +4505,44 @@ def get_hype_feed():
         source_tokens = ['github', 'huggingface', 'reddit', 'replicate']
 
     params = {
-        'select': 'name,url,stars,username,source,summary,description,language,created_at,inserted_at,updated_at,tags',
+        'select': 'name,url,stars,username,source,description,created_at,inserted_at',
         'order': 'stars.desc.nullslast',
         'limit': str(limit),
-        'source': f"in.({','.join(source_tokens)})",
-        'created_at': f'gt.{since_iso}',
-        'inserted_at': f'gt.{since_iso}'
+        'source': f"in.({','.join(source_tokens)})"
     }
+    if window_days:
+        params['created_at'] = f'gt.{since_iso}'
+        params['inserted_at'] = f'gt.{since_iso}'
 
     try:
         headers = _build_hype_headers()
-        response = requests.get(
-            HYPE_SUPABASE_URL,
-            headers=headers,
-            params=params,
-            timeout=HYPE_SUPABASE_TIMEOUT_SECONDS
-        )
-        response.raise_for_status()
-        raw_payload = response.json()
-        if isinstance(raw_payload, dict) and raw_payload.get('message'):
-            return jsonify({'error': 'Hype feed upstream error', 'details': raw_payload.get('message')}), 502
-        if not isinstance(raw_payload, list):
-            raw_payload = []
-        items = [_normalize_hype_item(item) for item in raw_payload]
+        def fetch_feed(query_params):
+            response = requests.get(
+                HYPE_SUPABASE_URL,
+                headers=headers,
+                params=query_params,
+                timeout=HYPE_SUPABASE_TIMEOUT_SECONDS
+            )
+            response.raise_for_status()
+            raw = response.json()
+            if isinstance(raw, dict) and raw.get('message'):
+                raise requests.exceptions.HTTPError(raw.get('message'), response=response)
+            if not isinstance(raw, list):
+                return []
+            return [_normalize_hype_item(item) for item in raw]
+
+        items = fetch_feed(params)
+        if not items and window_days:
+            params.pop('created_at', None)
+            params.pop('inserted_at', None)
+            items = fetch_feed(params)
+    except requests.exceptions.HTTPError as exc:
+        status = exc.response.status_code if exc.response is not None else 502
+        try:
+            error_text = exc.response.text if exc.response is not None else ''
+        except Exception:
+            error_text = ''
+        return jsonify({'error': 'Failed to fetch hype feed', 'details': error_text or str(exc)}), status
     except RuntimeError as exc:
         return jsonify({'error': str(exc)}), 503
     except ValueError as exc:
