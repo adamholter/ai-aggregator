@@ -90,6 +90,7 @@
     --source-fal: #f59e0b;
     --source-replicate: #10b981;
     --source-openrouter: #7c3aed;
+    --source-hype: #ec4899;
 }
 
 body {
@@ -400,6 +401,92 @@ body {
     color: var(--text-color);
 }
 
+.hype-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.hype-card .card-header {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+}
+
+.hype-card .card-rank {
+    font-size: 1.25rem;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--source-hype, var(--button-bg));
+    min-width: 36px;
+    text-align: center;
+}
+
+.hype-card .card-title a {
+    color: var(--text-color);
+    text-decoration: none;
+}
+
+.hype-card .card-title a:hover,
+.hype-card .card-title a:focus-visible {
+    color: var(--button-bg);
+    text-decoration: underline;
+}
+
+.hype-card .card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    font-size: 0.84rem;
+    color: var(--info-text);
+}
+
+.hype-card .card-summary {
+    font-size: 0.92rem;
+    line-height: 1.6;
+    color: var(--text-color);
+}
+
+.hype-card .card-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.hype-card .card-tag {
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: var(--info-bg);
+    color: var(--info-text);
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+[data-theme="dark"] .hype-card .card-tag {
+    background: rgba(148, 163, 184, 0.12);
+}
+
+.hype-card .card-actions {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.hype-card .card-actions a {
+    text-decoration: none;
+}
+
+.hype-card .card-badge {
+    font-size: 0.78rem;
+    color: var(--info-text);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
 .model-creator {
     color: var(--info-text);
     font-size: 0.85rem;
@@ -445,6 +532,14 @@ body {
 
 [data-theme="source"] .model-card[data-source="openrouter"] .source-badge {
     color: var(--source-openrouter);
+}
+
+[data-theme="source"] .model-card[data-source="hype"] {
+    border-top-color: var(--source-hype);
+}
+
+[data-theme="source"] .model-card[data-source="hype"] .source-badge {
+    color: var(--source-hype);
 }
 
 /* Model stats */
@@ -1277,6 +1372,26 @@ body {
     margin-bottom: 20px;
 }
 
+.form-row.toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.form-row.toggle-row > label {
+    margin-bottom: 0;
+}
+
+.form-row.toggle-row .toggle-switch {
+    margin-left: auto;
+}
+
+.form-row.toggle-row .help-text {
+    flex-basis: 100%;
+    margin-top: 8px;
+}
+
 .form-row label {
     display: block;
     margin-bottom: 8px;
@@ -1292,6 +1407,57 @@ body {
     line-height: 1.4;
 }
 
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 46px;
+    height: 24px;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--border-color);
+    border-radius: 999px;
+    transition: background-color 0.2s ease;
+}
+
+.toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: var(--card-bg);
+    border-radius: 50%;
+    transition: transform 0.2s ease;
+    box-shadow: 0 2px 4px rgba(15, 23, 42, 0.15);
+}
+
+.toggle-switch input:checked + .toggle-slider {
+    background-color: var(--button-bg);
+}
+
+.toggle-switch input:checked + .toggle-slider:before {
+    transform: translateX(22px);
+}
+
+.toggle-switch input:focus-visible + .toggle-slider {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
 .api-key-actions {
     display: flex;
     align-items: center;
@@ -1302,6 +1468,23 @@ body {
 
 .api-key-actions .inline-note {
     font-size: 12px;
+    color: var(--info-text);
+}
+
+.section-note {
+    margin: 0 0 16px 0;
+    font-size: 14px;
+    color: var(--info-text);
+    line-height: 1.5;
+}
+
+.experimental-placeholder {
+    border: 1px dashed var(--border-color);
+    border-radius: 12px;
+    padding: 24px;
+    background: var(--card-bg);
+    font-size: 14px;
+    line-height: 1.6;
     color: var(--info-text);
 }
 

@@ -41,6 +41,13 @@ DEEP_RESEARCH_MODEL_ID = 'openai/o4-mini-deep-research'
 MAX_REPLICATE_MODELS = max(int(os.environ.get('MAX_REPLICATE_MODELS', '60')), 1)
 MAX_REPLICATE_TOTAL = max(int(os.environ.get('MAX_REPLICATE_TOTAL', '250')), MAX_REPLICATE_MODELS)
 MAX_REPLICATE_PAGES = max(int(os.environ.get('MAX_REPLICATE_PAGES', '5')), 1)
+HYPE_SUPABASE_URL = (os.environ.get('HYPE_SUPABASE_URL') or 'https://chhtbdfienvbfdvdmdoa.supabase.co/rest/v1/repositories').strip()
+HYPE_SUPABASE_SOURCES = (os.environ.get('HYPE_SUPABASE_SOURCES') or 'github,huggingface,reddit,replicate').strip()
+HYPE_SUPABASE_API_KEY = (os.environ.get('HYPE_SUPABASE_API_KEY') or '').strip()
+HYPE_SUPABASE_BEARER = (os.environ.get('HYPE_SUPABASE_BEARER') or HYPE_SUPABASE_API_KEY).strip()
+HYPE_SUPABASE_TIMEOUT_SECONDS = max(int(os.environ.get('HYPE_SUPABASE_TIMEOUT_SECONDS', '15')), 1)
+HYPE_LOOKBACK_DAYS_DEFAULT = max(int(os.environ.get('HYPE_LOOKBACK_DAYS', '14')), 1)
+HYPE_MAX_LIMIT = max(int(os.environ.get('HYPE_MAX_LIMIT', '120')), 1)
 
 OPENROUTER_KEY_REQUIRED_MESSAGE = (
     'An OpenRouter API key is required for this feature. Add your key in Settings to continue.'
@@ -60,6 +67,7 @@ def _warn_if_missing(name, value):
 _warn_if_missing('ARTIFICIAL_ANALYSIS_API_KEY', ARTIFICIAL_ANALYSIS_API_KEY)
 _warn_if_missing('OPENROUTER_API_KEY', OPENROUTER_API_KEY)
 _warn_if_missing('REPLICATE_API_KEY', REPLICATE_API_KEY)
+_warn_if_missing('HYPE_SUPABASE_API_KEY', HYPE_SUPABASE_API_KEY)
 
 
 class MissingOpenRouterKeyError(Exception):
@@ -148,6 +156,76 @@ def build_openrouter_headers(token):
 def openrouter_key_required_response():
     """Standard JSON response when a user OpenRouter key is required."""
     return jsonify({'error': OPENROUTER_KEY_REQUIRED_MESSAGE}), 402
+
+
+def _format_bearer_token(token):
+    token = (token or '').strip()
+    if not token:
+        return ''
+    if token.lower().startswith('bearer '):
+        return token
+    return f'Bearer {token}'
+
+
+def _parse_hype_tags(raw_tags):
+    if isinstance(raw_tags, list):
+        return [str(tag).strip() for tag in raw_tags if str(tag).strip()]
+    if isinstance(raw_tags, str):
+        candidate = raw_tags.strip()
+        if not candidate:
+            return []
+        try:
+            decoded = json.loads(candidate)
+            if isinstance(decoded, list):
+                return [str(tag).strip() for tag in decoded if str(tag).strip()]
+        except json.JSONDecodeError:
+            pass
+        return [segment.strip() for segment in candidate.split(',') if segment.strip()]
+    return []
+
+
+def _coerce_int(value):
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        try:
+            return int(float(value))
+        except (TypeError, ValueError):
+            return None
+
+
+def _normalize_hype_item(entry):
+    if not isinstance(entry, dict):
+        return {}
+    stars = _coerce_int(entry.get('stars') or entry.get('score'))
+    return {
+        'name': entry.get('name') or entry.get('title') or entry.get('repository_name'),
+        'url': entry.get('url') or entry.get('link'),
+        'stars': stars if stars is not None else 0,
+        'username': entry.get('username') or entry.get('owner') or entry.get('author'),
+        'source': entry.get('source'),
+        'summary': entry.get('summary'),
+        'description': entry.get('description'),
+        'language': entry.get('language') or entry.get('primary_language'),
+        'tags': _parse_hype_tags(entry.get('tags')),
+        'created_at': entry.get('created_at'),
+        'inserted_at': entry.get('inserted_at'),
+        'updated_at': entry.get('updated_at')
+    }
+
+
+def _build_hype_headers():
+    api_key = HYPE_SUPABASE_API_KEY
+    bearer = _format_bearer_token(HYPE_SUPABASE_BEARER)
+    if not api_key or not bearer:
+        raise RuntimeError('Hype feed credentials are not configured.')
+    return {
+        'apikey': api_key,
+        'Authorization': bearer,
+        'Accept': 'application/json'
+    }
 
 # Model configuration
 MODEL_CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'config', 'model_config.json')
@@ -4399,6 +4477,75 @@ def get_openrouter_models():
         return jsonify({'error': f'Failed to fetch OpenRouter models: {exc}'}), 500
     except Exception as exc:
         return jsonify({'error': f'Error processing OpenRouter models: {exc}'}), 500
+
+
+@app.route('/api/hype', methods=['GET'])
+def get_hype_feed():
+    """Proxy trending repository data for the experimental Hype dashboard."""
+    if not HYPE_SUPABASE_API_KEY or not HYPE_SUPABASE_BEARER:
+        return jsonify({'error': 'Hype feed is not configured.'}), 503
+
+    try:
+        limit = int(request.args.get('limit', HYPE_MAX_LIMIT))
+    except (TypeError, ValueError):
+        limit = HYPE_MAX_LIMIT
+    limit = max(1, min(limit, HYPE_MAX_LIMIT))
+
+    try:
+        window_days = int(request.args.get('window_days', HYPE_LOOKBACK_DAYS_DEFAULT))
+    except (TypeError, ValueError):
+        window_days = HYPE_LOOKBACK_DAYS_DEFAULT
+    window_days = max(1, min(window_days, 365))
+
+    cutoff = datetime.utcnow() - timedelta(days=window_days)
+    since_iso = cutoff.replace(microsecond=0).isoformat() + 'Z'
+
+    source_tokens = [segment.strip() for segment in HYPE_SUPABASE_SOURCES.split(',') if segment.strip()]
+    if not source_tokens:
+        source_tokens = ['github', 'huggingface', 'reddit', 'replicate']
+
+    params = {
+        'select': 'name,url,stars,username,source,summary,description,language,created_at,inserted_at,updated_at,tags',
+        'order': 'stars.desc.nullslast',
+        'limit': str(limit),
+        'source': f"in.({','.join(source_tokens)})",
+        'created_at': f'gt.{since_iso}',
+        'inserted_at': f'gt.{since_iso}'
+    }
+
+    try:
+        headers = _build_hype_headers()
+        response = requests.get(
+            HYPE_SUPABASE_URL,
+            headers=headers,
+            params=params,
+            timeout=HYPE_SUPABASE_TIMEOUT_SECONDS
+        )
+        response.raise_for_status()
+        raw_payload = response.json()
+        if isinstance(raw_payload, dict) and raw_payload.get('message'):
+            return jsonify({'error': 'Hype feed upstream error', 'details': raw_payload.get('message')}), 502
+        if not isinstance(raw_payload, list):
+            raw_payload = []
+        items = [_normalize_hype_item(item) for item in raw_payload]
+    except RuntimeError as exc:
+        return jsonify({'error': str(exc)}), 503
+    except ValueError as exc:
+        return jsonify({'error': 'Failed to parse hype feed response', 'details': str(exc)}), 502
+    except requests.exceptions.RequestException as exc:
+        return jsonify({'error': 'Failed to fetch hype feed', 'details': str(exc)}), 502
+
+    payload = {
+        'items': items,
+        'count': len(items),
+        'fetched_at': datetime.utcnow().replace(microsecond=0).isoformat() + 'Z',
+        'meta': {
+            'limit': limit,
+            'window_days': window_days,
+            'sources': ','.join(source_tokens)
+        }
+    }
+    return jsonify(payload), 200
 
 @app.route('/api/fetch-data', methods=['POST'])
 def fetch_data_api():

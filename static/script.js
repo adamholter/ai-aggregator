@@ -14,7 +14,8 @@ let cachedData = {
     imageToVideo: null,
     falModels: null,
     replicateModels: null,
-    openRouterModels: null
+    openRouterModels: null,
+    hype: null
 };
 
 // Store raw data for filtering
@@ -27,7 +28,8 @@ let rawData = {
     imageToVideo: null,
     falModels: null,
     replicateModels: null,
-    openRouterModels: null
+    openRouterModels: null,
+    hype: null
 };
 
 // AI Agent configuration
@@ -42,6 +44,7 @@ const modelMatchCache = new Map();
 const analysisCache = new Map();
 const openRouterMatchCache = new Map();
 const USER_OPENROUTER_KEY_STORAGE = 'dashboard-user-openrouter-key';
+const EXPERIMENTAL_MODE_STORAGE_KEY = 'dashboard-experimental-mode';
 
 const THEME_SEQUENCE = ['light', 'dark', 'source'];
 const THEME_LABELS = {
@@ -52,6 +55,7 @@ const THEME_LABELS = {
 
 let modelConfig = null;
 let settingsInitialized = false;
+let experimentalModeEnabled = false;
 
 // Common words to ignore when matching model names between sources
 const MATCH_EXCLUSION_TOKENS = [
@@ -123,6 +127,7 @@ function fixEncodingArtifacts(text) {
 }
 
 const STREAM_BLOCK_PATTERN = /^(#{1,6}\s|[-*+]\s|```|>|\|)/;
+const RELATIVE_TIME_FORMATTER = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
 
 function escapeHtml(value) {
     return (value == null ? '' : String(value)).replace(/[&<>"']/g, char => ({
@@ -227,6 +232,52 @@ function setUserOpenRouterKey(value) {
         }
     } catch (error) {
         console.warn('Unable to persist OpenRouter key:', error);
+    }
+}
+
+function getStoredExperimentalMode() {
+    try {
+        return localStorage.getItem(EXPERIMENTAL_MODE_STORAGE_KEY) === 'true';
+    } catch (error) {
+        console.warn('Unable to read experimental mode preference:', error);
+        return false;
+    }
+}
+
+function persistExperimentalMode(enabled) {
+    try {
+        if (enabled) {
+            localStorage.setItem(EXPERIMENTAL_MODE_STORAGE_KEY, 'true');
+        } else {
+            localStorage.removeItem(EXPERIMENTAL_MODE_STORAGE_KEY);
+        }
+    } catch (error) {
+        console.warn('Unable to store experimental mode preference:', error);
+    }
+}
+
+function applyExperimentalMode(enabled) {
+    experimentalModeEnabled = Boolean(enabled);
+    document.documentElement.classList.toggle('experimental-mode', experimentalModeEnabled);
+
+    const experimentalElements = document.querySelectorAll('[data-experimental="true"]');
+    experimentalElements.forEach(element => {
+        element.setAttribute('aria-hidden', experimentalModeEnabled ? 'false' : 'true');
+        element.style.display = experimentalModeEnabled ? '' : 'none';
+    });
+
+    if (!experimentalModeEnabled) {
+        ensureActiveSectionIsAllowed();
+    }
+}
+
+function ensureActiveSectionIsAllowed() {
+    const activeButton = document.querySelector('.nav-btn.active');
+    if (activeButton && activeButton.dataset.experimental === 'true') {
+        const fallbackButton = Array.from(document.querySelectorAll('.nav-btn')).find(btn => btn.dataset.experimental !== 'true') || document.querySelector('.nav-btn');
+        if (fallbackButton && fallbackButton !== activeButton) {
+            fallbackButton.click();
+        }
     }
 }
 
@@ -633,6 +684,13 @@ function loadSectionData(section) {
                 loadOpenRouterModelsData();
             } else {
                 filterOpenRouterModelsData();
+            }
+            break;
+        case 'hype':
+            if (!cachedData.hype) {
+                loadHypeData();
+            } else {
+                displayHypeItems(cachedData.hype);
             }
             break;
     }
@@ -1083,6 +1141,168 @@ function displayOpenRouterModelsData(models) {
     models.forEach(model => {
         container.appendChild(createOpenRouterCard(model));
     });
+}
+
+async function loadHypeData(forceRefresh = false) {
+    const loadingElement = document.getElementById('hype-loading');
+    const errorElement = document.getElementById('hype-error');
+    const dataElement = document.getElementById('hype-data');
+
+    if (!loadingElement || !errorElement || !dataElement) {
+        return;
+    }
+
+    if (cachedData.hype && !forceRefresh) {
+        displayHypeItems(cachedData.hype);
+        return;
+    }
+
+    try {
+        loadingElement.style.display = 'flex';
+        errorElement.style.display = 'none';
+        dataElement.innerHTML = '';
+
+        const data = await makeAPICall('/api/hype', null);
+        cachedData.hype = data;
+        rawData.hype = Array.isArray(data?.items) ? data.items : [];
+
+        displayHypeItems(data);
+    } catch (error) {
+        errorElement.textContent = `Failed to load hype feed: ${error.message}`;
+        errorElement.style.display = 'block';
+    } finally {
+        loadingElement.style.display = 'none';
+    }
+}
+
+function displayHypeItems(payload) {
+    const container = document.getElementById('hype-data');
+    if (!container) return;
+
+    const items = Array.isArray(payload?.items) ? payload.items : Array.isArray(payload) ? payload : [];
+    const fetchedAt = payload?.fetched_at;
+    const resultsInfo = document.getElementById('hype-results-info');
+
+    container.innerHTML = '';
+
+    if (!items.length) {
+        container.innerHTML = '<div class="empty-state">No hype items available yet. Try refreshing in a bit.</div>';
+        if (resultsInfo) {
+            resultsInfo.style.display = 'none';
+            resultsInfo.textContent = '';
+        }
+        return;
+    }
+
+    items.forEach((item, index) => {
+        container.appendChild(createHypeCard(item, index, fetchedAt));
+    });
+
+    if (resultsInfo) {
+        const summary = [`${items.length} trending projects`];
+        const relativeFetched = formatRelativeTime(fetchedAt);
+        if (relativeFetched) {
+            summary.push(`fetched ${relativeFetched}`);
+        }
+        resultsInfo.textContent = summary.join(' · ');
+        resultsInfo.style.display = 'block';
+    }
+}
+
+function createHypeCard(item, index, fetchedAt) {
+    const card = document.createElement('div');
+    card.className = 'model-card hype-card';
+    card.dataset.source = 'hype';
+
+    const name = escapeHtml(item.name || 'Untitled project');
+    const url = item.url || '#';
+    const points = typeof item.stars === 'number' ? `${item.stars} points` : null;
+    const username = item.username ? `by ${escapeHtml(item.username)}` : null;
+    const sourceLabel = formatHypeSource(item.source);
+    const relative = formatRelativeTime(item.created_at || item.inserted_at || item.updated_at || fetchedAt);
+
+    const metaParts = [points, username, sourceLabel, relative].filter(Boolean);
+    const summary = item.summary || item.description || '';
+    const summaryText = summary ? truncateText(summary, 240) : '';
+    const tags = Array.isArray(item.tags) ? item.tags : [];
+    const tagEntries = [];
+    if (sourceLabel) tagEntries.push(`Source: ${sourceLabel}`);
+    if (item.language) tagEntries.push(`Lang: ${item.language}`);
+    tags.forEach(tag => {
+        if (tag) {
+            tagEntries.push(`#${tag}`);
+        }
+    });
+    const tagMarkup = tagEntries.length
+        ? `<div class="card-tags">${tagEntries.map(tag => `<span class="card-tag">${escapeHtml(String(tag))}</span>`).join('')}</div>`
+        : '';
+    const summaryMarkup = summaryText ? `<div class="card-summary">${escapeHtml(summaryText)}</div>` : '';
+
+    card.innerHTML = `
+        <div class="card-header">
+            <div class="card-rank">#${index + 1}</div>
+            <div>
+                <div class="source-badge">Hype Signals</div>
+                <div class="card-title">
+                    <a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${name}</a>
+                </div>
+                <div class="card-meta">${metaParts.map(part => `<span>${escapeHtml(part)}</span>`).join('<span>•</span>')}</div>
+            </div>
+        </div>
+        ${summaryMarkup}
+        ${tagMarkup}
+        <div class="card-actions">
+            <a class="chart-btn secondary" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">Open Link</a>
+            ${relative ? `<span class="card-badge">Updated ${escapeHtml(relative)}</span>` : ''}
+        </div>
+    `;
+
+    return card;
+}
+
+function formatHypeSource(source) {
+    if (!source) return '';
+    const normalized = String(source).toLowerCase();
+    switch (normalized) {
+        case 'github':
+            return 'GitHub';
+        case 'huggingface':
+        case 'hugging_face':
+            return 'Hugging Face';
+        case 'replicate':
+            return 'Replicate';
+        case 'reddit':
+            return 'Reddit';
+        default:
+            return source;
+    }
+}
+
+function formatRelativeTime(timestamp) {
+    if (!timestamp) return '';
+    const date = new Date(timestamp);
+    if (Number.isNaN(date.getTime())) {
+        return '';
+    }
+    const now = Date.now();
+    const diffMs = date.getTime() - now;
+    const ranges = [
+        { unit: 'year', ms: 1000 * 60 * 60 * 24 * 365 },
+        { unit: 'month', ms: 1000 * 60 * 60 * 24 * 30 },
+        { unit: 'week', ms: 1000 * 60 * 60 * 24 * 7 },
+        { unit: 'day', ms: 1000 * 60 * 60 * 24 },
+        { unit: 'hour', ms: 1000 * 60 * 60 },
+        { unit: 'minute', ms: 1000 * 60 },
+        { unit: 'second', ms: 1000 }
+    ];
+
+    for (const range of ranges) {
+        if (Math.abs(diffMs) >= range.ms || range.unit === 'second') {
+            const value = Math.round(diffMs / range.ms);
+            return RELATIVE_TIME_FORMATTER.format(value, range.unit);
+        }
+    }
+    return '';
 }
 
 function formatContextLength(contextLength) {
@@ -3622,6 +3842,22 @@ document.addEventListener('DOMContentLoaded', function() {
     setupModelDropdown('setting-analysis-model', 'analysis-model-dropdown');
     setupModelDropdown('setting-fallback-models', 'fallback-models-dropdown');
     setupModelDropdown('setting-available-models', 'available-models-dropdown');
+
+    applyExperimentalMode(getStoredExperimentalMode());
+
+    const hypeRefreshButton = document.getElementById('hype-refresh');
+    if (hypeRefreshButton) {
+        hypeRefreshButton.addEventListener('click', async () => {
+            hypeRefreshButton.disabled = true;
+            try {
+                await loadHypeData(true);
+            } catch (error) {
+                console.error('Failed to refresh hype feed:', error);
+            } finally {
+                hypeRefreshButton.disabled = false;
+            }
+        });
+    }
     
     // Initialize agent dropdown on page load
     setTimeout(() => {
@@ -3692,11 +3928,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 const analysisModel = document.getElementById('setting-analysis-model').value;
                 const fallbackModelsString = selectedFallbackModels.map(m => m.id).join(', ');
                 const availableModelsString = selectedAvailableModels.map(m => m.id).join(', ');
+                const experimentalToggle = document.getElementById('setting-experimental-mode');
                 
                 if (speedModel) localStorage.setItem('dashboard-speed-model', speedModel);
                 if (analysisModel) localStorage.setItem('dashboard-analysis-model', analysisModel);
                 if (fallbackModelsString) localStorage.setItem('dashboard-fallback-models', fallbackModelsString);
                 if (availableModelsString) localStorage.setItem('dashboard-available-models', availableModelsString);
+
+                if (experimentalToggle) {
+                    const enabled = experimentalToggle.checked;
+                    persistExperimentalMode(enabled);
+                    applyExperimentalMode(enabled);
+                }
 
                 // Update agent dropdown with new available models
                 populateAgentDropdown();
@@ -3771,6 +4014,15 @@ function loadSavedSettings() {
     if (fallbackIds.length) {
         selectedFallbackModels = fallbackIds.map(buildModelEntry);
         updateFallbackModelsDisplay();
+    }
+
+    const experimentalToggle = document.getElementById('setting-experimental-mode');
+    if (experimentalToggle) {
+        const storedMode = getStoredExperimentalMode();
+        experimentalToggle.checked = storedMode;
+        if (experimentalModeEnabled !== storedMode) {
+            applyExperimentalMode(storedMode);
+        }
     }
 
     refreshOpenRouterKeyField();
