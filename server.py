@@ -33,6 +33,8 @@ CORS(app)
 app.config['JSON_AS_ASCII'] = False
 app.config['JSONIFY_MIMETYPE'] = 'application/json; charset=utf-8'
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 # API Configuration
 ARTIFICIAL_ANALYSIS_API_KEY = (os.environ.get('ARTIFICIAL_ANALYSIS_API_KEY') or '').strip()
 OPENROUTER_API_KEY = (os.environ.get('OPENROUTER_API_KEY') or '').strip()
@@ -58,6 +60,10 @@ BLOG_POSTS_TIMEOUT_SECONDS = max(int(os.environ.get('BLOG_POSTS_TIMEOUT_SECONDS'
 BLOG_POSTS_CACHE_MINUTES = max(int(os.environ.get('BLOG_POSTS_CACHE_MINUTES', '15')), 1)
 BLOG_POSTS_CACHE_DURATION = timedelta(minutes=BLOG_POSTS_CACHE_MINUTES)
 BLOG_POSTS_READING_WPM = max(int(os.environ.get('BLOG_POSTS_READING_WPM', '220')), 60)
+FALLBACK_CATEGORY_FILES = {
+    'fal': os.path.join(BASE_DIR, 'data', 'fallback', 'fal_models.json'),
+    'replicate': os.path.join(BASE_DIR, 'data', 'fallback', 'replicate_models.json')
+}
 
 OPENROUTER_KEY_REQUIRED_MESSAGE = (
     'An OpenRouter API key is required for this feature. Add your key in Settings to continue.'
@@ -1365,6 +1371,25 @@ def _safe_int(value, default=0):
         return default
 
 
+def load_category_fallback(category_id):
+    path = FALLBACK_CATEGORY_FILES.get(category_id)
+    if not path:
+        return None
+    try:
+        with open(path, 'r', encoding='utf-8') as handle:
+            payload = json.load(handle)
+            if isinstance(payload, dict):
+                items = payload.get('items') or payload.get('data')
+                return items if isinstance(items, list) else payload
+            if isinstance(payload, list):
+                return payload
+    except FileNotFoundError:
+        return None
+    except Exception as exc:
+        print(f"WARNING: Failed to load fallback data for category '{category_id}': {exc}")
+    return None
+
+
 def _strip_wp_html(value):
     if not value:
         return ''
@@ -2102,8 +2127,6 @@ def fetch_data_for_categories(categories, limit_per_category=None, recency=None)
 
         try:
             _, _, payload = load_category_payload(category_id)
-            if payload is None:
-                continue
 
             items = extract_category_items(
                 category_id,
@@ -2113,6 +2136,13 @@ def fetch_data_for_categories(categories, limit_per_category=None, recency=None)
             )
 
             items = filter_items_by_recency(items, recency)
+            fallback_used = False
+
+            if not items:
+                fallback_items = load_category_fallback(category_id)
+                if fallback_items:
+                    items = filter_items_by_recency(fallback_items, recency)
+                    fallback_used = True
 
             if not items:
                 continue
@@ -2124,6 +2154,8 @@ def fetch_data_for_categories(categories, limit_per_category=None, recency=None)
                 'items': len(items) if isinstance(items, list) else len(items),
                 'source': config.get('source', '')
             })
+            if fallback_used:
+                errors.append({'category': category_id, 'warning': 'Using cached fallback dataset.'})
         except Exception as exc:
             print(f"WARNING: Failed to load category '{category_id}': {exc}")
             errors.append({'category': category_id, 'error': str(exc)})

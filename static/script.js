@@ -1775,13 +1775,11 @@ function createBlogCard(post) {
     const relativePublished = formatRelativeTime(post?.date || post?.date_gmt || post?.modified);
     const publishedTs = getBlogTimestamp(post);
     const publishedDate = publishedTs ? new Date(publishedTs).toLocaleDateString() : '';
-    const author = typeof post?.author === 'string' && post.author.trim() ? `By ${post.author.trim()}` : '';
     const readingMinutes = typeof post?.reading_time_minutes === 'number' && post.reading_time_minutes > 0
         ? `${post.reading_time_minutes} min read`
         : '';
 
     const metaParts = [];
-    if (author) metaParts.push(author);
     if (relativePublished) {
         metaParts.push(relativePublished);
     } else if (publishedDate) {
@@ -1797,13 +1795,6 @@ function createBlogCard(post) {
         : '';
     const summaryMarkup = excerpt
         ? `<div class="card-summary">${escapeHtml(excerpt)}</div>`
-        : '';
-
-    const featuredImage = typeof post?.featured_image === 'string' && post.featured_image.trim()
-        ? post.featured_image.trim()
-        : '';
-    const imageMarkup = featuredImage
-        ? `<div class="card-media"><img src="${escapeHtml(featuredImage)}" alt="" loading="lazy" decoding="async"></div>`
         : '';
 
     const tagEntries = [];
@@ -1848,7 +1839,6 @@ function createBlogCard(post) {
                 ${metaMarkup}
             </div>
         </div>
-        ${imageMarkup}
         ${summaryMarkup}
         ${tagMarkup}
         <div class="card-actions">
@@ -2150,10 +2140,12 @@ function createLatestCard(item) {
         ? `<div class="card-meta">${metaParts.join('')}</div>`
         : '';
 
+    const badgeLabel = sourceLabel || 'Latest';
+
     card.innerHTML = `
         <div class="card-header">
             <div class="card-header-content">
-                <div class="source-badge">Latest</div>
+                <div class="source-badge">${escapeHtml(badgeLabel)}</div>
                 <div class="card-title">
                     ${item.url ? `<a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">${title}</a>` : title}
                 </div>
