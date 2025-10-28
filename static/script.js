@@ -49,7 +49,6 @@ const analysisCache = new Map();
 const openRouterMatchCache = new Map();
 const USER_OPENROUTER_KEY_STORAGE = 'dashboard-user-openrouter-key';
 const EXPERIMENTAL_MODE_STORAGE_KEY = 'dashboard-experimental-mode';
-const LATEST_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 const THEME_SEQUENCE = ['light', 'dark', 'source'];
 const THEME_LABELS = {
@@ -68,6 +67,8 @@ const BLOG_INITIAL_PAGE_SIZE = 10;
 const BLOG_FULL_PAGE_SIZE = 100;
 const BLOG_FULL_MAX_PAGES = 5;
 let blogPrefetching = false;
+let latestTimeframe = 'day';
+let latestMetadata = null;
 
 // Common words to ignore when matching model names between sources
 const MATCH_EXCLUSION_TOKENS = [
@@ -802,6 +803,10 @@ function ensureExperimentalSections() {
             <div class="section-header">
                 <h2>Latest 24h Activity</h2>
                 <div class="controls">
+                    <select id="latest-timeframe" aria-label="Latest feed timeframe">
+                        <option value="day" selected>Last 24 hours</option>
+                        <option value="week">Last 7 days</option>
+                    </select>
                     <button class="refresh-btn" id="latest-refresh">Refresh Feed</button>
                 </div>
             </div>
@@ -1926,137 +1931,6 @@ function renderBlogTag(entry) {
     return `<span class="card-tag tag-pill">#${escapeHtml(normalized)}</span>`;
 }
 
-async function ensureLatestDependencies(forceRefresh = false) {
-    await Promise.all([
-        fetchAndCacheOpenRouterModels(forceRefresh),
-        fetchFalModelsData(forceRefresh),
-        fetchReplicateModelsData(forceRefresh),
-        fetchBlogPostsData(forceRefresh),
-        fetchHypeData(forceRefresh)
-    ]);
-}
-
-function coerceTimestampMs(value) {
-    if (value === undefined || value === null) {
-        return null;
-    }
-    if (typeof value === 'number' && Number.isFinite(value)) {
-        return value > 1e12 ? value : value * 1000;
-    }
-    if (value instanceof Date) {
-        return value.getTime();
-    }
-    if (typeof value === 'string') {
-        const trimmed = value.trim();
-        if (!trimmed) return null;
-        const numeric = Number(trimmed);
-        if (!Number.isNaN(numeric) && Number.isFinite(numeric)) {
-            return numeric > 1e12 ? numeric : numeric * 1000;
-        }
-        const parsed = Date.parse(trimmed);
-        return Number.isNaN(parsed) ? null : parsed;
-    }
-    return null;
-}
-
-function buildLatestFeedItems() {
-    const cutoff = Date.now() - LATEST_WINDOW_MS;
-    const items = [];
-
-    const openrouterModels = cachedData.openRouterModels || [];
-    openrouterModels.forEach(model => {
-        const timestamp = coerceTimestampMs(model.created || model.created_at || model.updated_at);
-        if (!timestamp || timestamp < cutoff) return;
-        const title = getOpenRouterCardTitle(model);
-        const description = typeof model.description === 'string' ? model.description : '';
-        const url = model.url || (model.id ? `https://openrouter.ai/models/${encodeURIComponent(model.id)}` : '');
-        items.push({
-            id: `openrouter:${model.id || title}`,
-            source: 'openrouter',
-            title,
-            description,
-            url,
-            timestamp,
-            badge: model.vendor || '',
-            actionLabel: 'View on OpenRouter'
-        });
-    });
-
-    const blogPosts = Array.isArray(cachedData.blog?.posts) ? cachedData.blog.posts : [];
-    blogPosts.forEach(post => {
-        const timestamp = coerceTimestampMs(post.date || post.date_gmt || post.modified);
-        if (!timestamp || timestamp < cutoff) return;
-        items.push({
-            id: `blog:${post.id || post.slug || post.link}`,
-            source: 'blog',
-            title: post.title || 'Untitled Post',
-            description: post.excerpt || '',
-            url: post.link || '',
-            timestamp,
-            badge: post.reading_time_minutes ? `${post.reading_time_minutes} min read` : '',
-            actionLabel: 'Read Post'
-        });
-    });
-
-    const replicateModels = cachedData.replicateModels || [];
-    replicateModels.forEach(model => {
-        const timestamp = coerceTimestampMs(model.created_at || model.published_at || model.updated_at);
-        if (!timestamp || timestamp < cutoff) return;
-        const url = model.url || (model.owner && model.name ? `https://replicate.com/${model.owner}/${model.name}` : '');
-        items.push({
-            id: `replicate:${model.id || `${model.owner}/${model.name}`}`,
-            source: 'replicate',
-            title: model.name || 'Replicate Model',
-            description: model.description || '',
-            url,
-            timestamp,
-            badge: model.owner ? `by ${model.owner}` : '',
-            actionLabel: 'View on Replicate'
-        });
-    });
-
-    const hypeItems = Array.isArray(cachedData.hype?.items)
-        ? cachedData.hype.items
-        : Array.isArray(cachedData.hype) ? cachedData.hype : [];
-    hypeItems.forEach(item => {
-        const timestamp = coerceTimestampMs(item.updated_at || item.inserted_at || item.created_at);
-        if (!timestamp || timestamp < cutoff) return;
-        const summary = item.summary || item.description || '';
-        items.push({
-            id: `hype:${item.url || item.name}`,
-            source: 'hype',
-            title: item.name || 'Trending project',
-            description: summary,
-            url: item.url || '',
-            timestamp,
-            badge: formatHypeSource(item.source),
-            actionLabel: 'Open Link',
-            tags: Array.isArray(item.tags) ? item.tags : []
-        });
-    });
-
-    const falModels = cachedData.falModels || [];
-    falModels.forEach(model => {
-        const timestamp = coerceTimestampMs(model.date || model.updated_at);
-        if (!timestamp || timestamp < cutoff) return;
-        const url = model.modelUrl || '';
-        items.push({
-            id: `fal:${model.id || model.title}`,
-            source: 'fal',
-            title: model.title || 'fal.ai Release',
-            description: model.shortDescription || model.description || '',
-            url,
-            timestamp,
-            badge: model.category || '',
-            actionLabel: 'View on fal.ai',
-            tags: Array.isArray(model.tags) ? model.tags : []
-        });
-    });
-
-    items.sort((a, b) => b.timestamp - a.timestamp);
-    return items;
-}
-
 async function loadLatestFeed(forceRefresh = false) {
     const loadingElement = document.getElementById('latest-loading');
     const errorElement = document.getElementById('latest-error');
@@ -2076,27 +1950,15 @@ async function loadLatestFeed(forceRefresh = false) {
             resultsInfo.textContent = '';
         }
 
-        await ensureLatestDependencies(forceRefresh);
+        const params = new URLSearchParams({ timeframe: latestTimeframe });
         if (forceRefresh) {
-            if (rawData.openRouterModels) {
-                filterOpenRouterModelsData();
-            }
-            if (rawData.falModels) {
-                filterFalModelsData();
-            }
-            if (rawData.replicateModels) {
-                filterReplicateModelsData();
-            }
-            if (cachedData.hype) {
-                displayHypeItems(cachedData.hype);
-            }
-            if (cachedData.blog) {
-                displayBlogPosts(cachedData.blog);
-            }
+            params.set('cache_bust', 'true');
         }
-        const items = buildLatestFeedItems();
+        const data = await makeAPICall(`/latest?${params.toString()}`, null);
+        const items = Array.isArray(data?.items) ? data.items : [];
         cachedData.latest = items;
         rawData.latest = items;
+        latestMetadata = data || null;
         displayLatestFeed(items);
     } catch (error) {
         const message = error?.message || String(error);
@@ -2116,8 +1978,10 @@ function displayLatestFeed(items) {
 
     container.innerHTML = '';
 
+    const windowLabel = latestMetadata?.window_label || (latestTimeframe === 'week' ? 'Last 7 days' : 'Last 24 hours');
+
     if (!items || !items.length) {
-        container.innerHTML = '<div class="empty-state">No updates in the last 24 hours. Check back soon!</div>';
+        container.innerHTML = `<div class="empty-state">No updates in the ${escapeHtml(windowLabel.toLowerCase())}. Check back soon!</div>`;
         if (resultsInfo) {
             resultsInfo.style.display = 'none';
             resultsInfo.textContent = '';
@@ -2130,7 +1994,12 @@ function displayLatestFeed(items) {
     });
 
     if (resultsInfo) {
-        resultsInfo.textContent = `Showing ${items.length} updates from the last 24 hours`;
+        const total = items.length;
+        const sources = latestMetadata?.sources || {};
+        const sourceSummary = Object.keys(sources).length
+            ? ` · Sources: ${Object.entries(sources).map(([key, count]) => `${key} (${count})`).join(', ')}`
+            : '';
+        resultsInfo.textContent = `${total} updates · ${windowLabel}${sourceSummary}`;
         resultsInfo.style.display = 'block';
     }
 }
@@ -2177,13 +2046,16 @@ function createLatestCard(item) {
     card.className = 'model-card latest-card';
     card.dataset.source = item.source || 'latest';
 
-    const sourceLabel = formatLatestSourceLabel(item.source);
+    const sourceLabel = item.source_label || formatLatestSourceLabel(item.source);
     const relative = formatRelativeTime(item.timestamp);
-    const description = item.description ? truncateText(item.description, 260) : '';
+    const excerptRaw = typeof item.excerpt === 'string' && item.excerpt.trim()
+        ? item.excerpt.trim()
+        : (item.description || '');
+    const description = excerptRaw ? truncateText(excerptRaw, 260) : '';
     const title = item.title ? escapeHtml(item.title) : 'Recent Update';
     const badge = item.badge ? `<span class="card-badge">${escapeHtml(item.badge)}</span>` : '';
     const tagsMarkup = renderLatestTags(item.tags);
-    const actionLabel = item.actionLabel || 'Open Link';
+    const actionLabel = item.action_label || item.actionLabel || 'Open Link';
     const linkMarkup = item.url
         ? `<a class="chart-btn secondary" href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">`
             + `${escapeHtml(actionLabel)}</a>`
@@ -4819,6 +4691,15 @@ document.addEventListener('DOMContentLoaded', function() {
             } finally {
                 latestRefreshButton.disabled = false;
             }
+        });
+    }
+
+    const latestTimeframeSelect = document.getElementById('latest-timeframe');
+    if (latestTimeframeSelect) {
+        latestTimeframe = latestTimeframeSelect.value || 'day';
+        latestTimeframeSelect.addEventListener('change', () => {
+            latestTimeframe = latestTimeframeSelect.value || 'day';
+            loadLatestFeed(true);
         });
     }
 

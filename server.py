@@ -1626,6 +1626,25 @@ def fetch_blog_posts(force_refresh=False, per_page_override=None, max_pages_over
     return payload
 
 
+def load_category_items_simple(category_id):
+    category_id, config = resolve_category_config(category_id)
+    if not config:
+        return []
+    try:
+        _, _, payload = load_category_payload(category_id)
+        items = extract_category_items(category_id, config, payload)
+        if items:
+            return items
+    except Exception as exc:
+        print(f"WARNING: load_category_items_simple failed for '{category_id}': {exc}")
+    fallback = load_category_fallback(category_id)
+    if isinstance(fallback, list):
+        return fallback
+    if isinstance(fallback, dict):
+        return list(fallback.values())
+    return []
+
+
 def coerce_to_datetime(value):
     if not value:
         return None
@@ -5176,7 +5195,6 @@ def get_cached_model_analysis():
 def get_cached_model_analysis_legacy():
     return get_cached_model_analysis()
 
-
 def _handle_model_match_post():
     data = request.get_json(silent=True) or {}
     source = (data.get('source') or '').lower().strip()
@@ -5267,20 +5285,23 @@ def get_openrouter_models():
         return jsonify({'error': f'Error processing OpenRouter models: {exc}'}), 500
 
 
-@app.route('/api/hype', methods=['GET'])
-def get_hype_feed():
-    """Proxy trending repository data for the experimental Hype dashboard."""
+def fetch_hype_feed_payload(limit=None, window_days=None):
+    """Fetch hype feed data from Supabase with optional window and limit settings."""
     if not HYPE_SUPABASE_API_KEY or not HYPE_SUPABASE_BEARER:
-        return jsonify({'error': 'Hype feed is not configured.'}), 503
+        raise RuntimeError('Hype feed is not configured.')
 
+    if limit is None:
+        limit = HYPE_MAX_LIMIT
     try:
-        limit = int(request.args.get('limit', HYPE_MAX_LIMIT))
+        limit = int(limit)
     except (TypeError, ValueError):
         limit = HYPE_MAX_LIMIT
     limit = max(1, min(limit, HYPE_MAX_LIMIT))
 
+    if window_days is None:
+        window_days = HYPE_LOOKBACK_DAYS_DEFAULT
     try:
-        window_days = int(request.args.get('window_days', HYPE_LOOKBACK_DAYS_DEFAULT))
+        window_days = int(window_days)
     except (TypeError, ValueError):
         window_days = HYPE_LOOKBACK_DAYS_DEFAULT
     window_days = max(1, min(window_days, 365))
@@ -5302,23 +5323,24 @@ def get_hype_feed():
         params['created_at'] = f'gt.{since_iso}'
         params['inserted_at'] = f'gt.{since_iso}'
 
-    try:
-        headers = _build_hype_headers()
-        def fetch_feed(query_params):
-            response = requests.get(
-                HYPE_SUPABASE_URL,
-                headers=headers,
-                params=query_params,
-                timeout=HYPE_SUPABASE_TIMEOUT_SECONDS
-            )
-            response.raise_for_status()
-            raw = response.json()
-            if isinstance(raw, dict) and raw.get('message'):
-                raise requests.exceptions.HTTPError(raw.get('message'), response=response)
-            if not isinstance(raw, list):
-                return []
-            return [_normalize_hype_item(item) for item in raw]
+    headers = _build_hype_headers()
 
+    def fetch_feed(query_params):
+        response = requests.get(
+            HYPE_SUPABASE_URL,
+            headers=headers,
+            params=query_params,
+            timeout=HYPE_SUPABASE_TIMEOUT_SECONDS
+        )
+        response.raise_for_status()
+        raw = response.json()
+        if isinstance(raw, dict) and raw.get('message'):
+            raise requests.exceptions.HTTPError(raw.get('message'), response=response)
+        if not isinstance(raw, list):
+            return []
+        return [_normalize_hype_item(item) for item in raw]
+
+    try:
         items = fetch_feed(params)
         if not items and window_days:
             params.pop('created_at', None)
@@ -5330,15 +5352,17 @@ def get_hype_feed():
             error_text = exc.response.text if exc.response is not None else ''
         except Exception:
             error_text = ''
-        return jsonify({'error': 'Failed to fetch hype feed', 'details': error_text or str(exc)}), status
-    except RuntimeError as exc:
-        return jsonify({'error': str(exc)}), 503
-    except ValueError as exc:
-        return jsonify({'error': 'Failed to parse hype feed response', 'details': str(exc)}), 502
-    except requests.exceptions.RequestException as exc:
-        return jsonify({'error': 'Failed to fetch hype feed', 'details': str(exc)}), 502
+        raise requests.exceptions.HTTPError(json.dumps({
+            'error': 'Failed to fetch hype feed',
+            'details': error_text or str(exc),
+            'status': status
+        })) from exc
+    except RuntimeError:
+        raise
+    except (ValueError, requests.exceptions.RequestException) as exc:
+        raise RuntimeError(f'Failed to fetch hype feed: {exc}') from exc
 
-    payload = {
+    return {
         'items': items,
         'count': len(items),
         'fetched_at': datetime.utcnow().replace(microsecond=0).isoformat() + 'Z',
@@ -5348,7 +5372,230 @@ def get_hype_feed():
             'sources': ','.join(source_tokens)
         }
     }
+
+
+@app.route('/api/hype', methods=['GET'])
+def get_hype_feed():
+    """Proxy trending repository data for the experimental Hype dashboard."""
+    try:
+        payload = fetch_hype_feed_payload(
+            limit=request.args.get('limit', HYPE_MAX_LIMIT),
+            window_days=request.args.get('window_days', HYPE_LOOKBACK_DAYS_DEFAULT)
+        )
+    except RuntimeError as exc:
+        return jsonify({'error': str(exc)}), 503
+    except requests.exceptions.HTTPError as exc:
+        try:
+            details = json.loads(str(exc))
+            message = details.get('details') or str(exc)
+            status = details.get('status') or 502
+            return jsonify({'error': 'Failed to fetch hype feed', 'details': message}), status
+        except Exception:
+            return jsonify({'error': 'Failed to fetch hype feed', 'details': str(exc)}), 502
+
     return jsonify(payload), 200
+
+
+def _coerce_timestamp_utc(value):
+    dt = coerce_to_datetime(value)
+    if not dt:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    else:
+        dt = dt.astimezone(timezone.utc)
+    return dt
+
+
+def _truncate_text(value, limit=260):
+    if not value:
+        return ''
+    text = str(value)
+    if len(text) <= limit:
+        return text
+    return text[:limit - 1].rstrip() + '…'
+
+
+def _format_hype_source_label(source):
+    if not source:
+        return 'Hype Signal'
+    normalized = str(source).strip().lower()
+    mapping = {
+        'github': 'GitHub',
+        'huggingface': 'Hugging Face',
+        'replicate': 'Replicate',
+        'reddit': 'Reddit'
+    }
+    return mapping.get(normalized, str(source))
+
+
+def generate_latest_feed_payload(timeframe='day', force_refresh=False):
+    normalized = str(timeframe or 'day').strip().lower()
+    if normalized in {'week', 'weeks', '7d', '7day', '7days'}:
+        normalized = 'week'
+    else:
+        normalized = 'day'
+
+    window_hours = 24 if normalized == 'day' else 24 * 7
+    cutoff = datetime.utcnow().replace(tzinfo=timezone.utc) - timedelta(hours=window_hours)
+
+    entries = []
+    source_counts = defaultdict(int)
+
+    def append_entry(entry):
+        if not entry or 'timestamp_dt' not in entry:
+            return
+        entries.append(entry)
+        source_counts[entry.get('source', 'unknown')] += 1
+
+    # Blog posts
+    try:
+        blog_payload = fetch_blog_posts(
+            force_refresh=force_refresh,
+            per_page_override=50 if window_hours <= 24 else BLOG_POSTS_PER_PAGE,
+            max_pages_override=3 if window_hours <= 24 else BLOG_POSTS_MAX_PAGES
+        )
+        for post in blog_payload.get('posts', []):
+            dt = _coerce_timestamp_utc(post.get('date') or post.get('date_gmt') or post.get('modified'))
+            if not dt or dt < cutoff:
+                continue
+            append_entry({
+                'id': f"blog:{post.get('id') or post.get('slug') or post.get('link')}",
+                'title': post.get('title') or 'Untitled Post',
+                'source': 'blog',
+                'source_label': 'Blog Post',
+                'excerpt': _truncate_text(post.get('excerpt') or ''),
+                'timestamp_dt': dt,
+                'url': post.get('link') or '',
+                'badge': f"{post.get('reading_time_minutes')} min read" if post.get('reading_time_minutes') else '',
+                'tags': post.get('tags') or []
+            })
+    except Exception as exc:
+        print(f"WARNING: Failed to aggregate blog posts for latest feed: {exc}")
+
+    # Hype
+    try:
+        hype_window_days = 7 if window_hours > 48 else 2
+        hype_payload = fetch_hype_feed_payload(limit=HYPE_MAX_LIMIT, window_days=hype_window_days)
+        for item in hype_payload.get('items', []):
+            dt = _coerce_timestamp_utc(item.get('updated_at') or item.get('inserted_at') or item.get('created_at'))
+            if not dt or dt < cutoff:
+                continue
+            label = _format_hype_source_label(item.get('source'))
+            append_entry({
+                'id': f"hype:{item.get('url') or item.get('name')}",
+                'title': item.get('name') or 'Trending Project',
+                'source': 'hype',
+                'source_label': f"Hype – {label}",
+                'excerpt': _truncate_text(item.get('summary') or item.get('description') or ''),
+                'timestamp_dt': dt,
+                'url': item.get('url') or '',
+                'badge': label,
+                'tags': item.get('tags') or []
+            })
+    except Exception as exc:
+        print(f"WARNING: Failed to aggregate hype feed for latest feed: {exc}")
+
+    # OpenRouter models
+    try:
+        models = load_openrouter_models(force_refresh=force_refresh)
+        for model in models or []:
+            created_value = model.get('created') or model.get('created_at') or model.get('updated_at')
+            dt = _coerce_timestamp_utc(created_value)
+            if not dt or dt < cutoff:
+                continue
+            description = model.get('description') or ''
+            url = model.get('url') or ''
+            if not url and model.get('id'):
+                url = f"https://openrouter.ai/models/{model['id']}"
+            append_entry({
+                'id': f"openrouter:{model.get('id') or model.get('name')}",
+                'title': model.get('name') or model.get('id') or 'OpenRouter Model',
+                'source': 'openrouter',
+                'source_label': 'OpenRouter Model',
+                'excerpt': _truncate_text(description),
+                'timestamp_dt': dt,
+                'url': url,
+                'badge': model.get('vendor') or '',
+                'tags': model.get('tags') or []
+            })
+    except Exception as exc:
+        print(f"WARNING: Failed to aggregate OpenRouter models for latest feed: {exc}")
+
+    # Replicate models
+    try:
+        replicate_items = load_category_items_simple('replicate')
+        for model in replicate_items:
+            dt = _coerce_timestamp_utc(model.get('created_at') or model.get('published_at'))
+            if not dt or dt < cutoff:
+                continue
+            append_entry({
+                'id': f"replicate:{model.get('id') or model.get('name')}",
+                'title': model.get('name') or 'Replicate Model',
+                'source': 'replicate',
+                'source_label': 'Replicate Model',
+                'excerpt': _truncate_text(model.get('description') or ''),
+                'timestamp_dt': dt,
+                'url': model.get('url') or '',
+                'badge': model.get('owner') or '',
+                'tags': model.get('tags') or []
+            })
+    except Exception as exc:
+        print(f"WARNING: Failed to aggregate Replicate models for latest feed: {exc}")
+
+    # fal.ai models
+    try:
+        fal_items = load_category_items_simple('fal')
+        for model in fal_items:
+            dt = _coerce_timestamp_utc(model.get('date') or model.get('updated_at'))
+            if not dt or dt < cutoff:
+                continue
+            append_entry({
+                'id': f"fal:{model.get('id') or model.get('title')}",
+                'title': model.get('title') or 'fal.ai Release',
+                'source': 'fal',
+                'source_label': 'fal.ai Release',
+                'excerpt': _truncate_text(model.get('shortDescription') or model.get('description') or ''),
+                'timestamp_dt': dt,
+                'url': model.get('modelUrl') or '',
+                'badge': model.get('category') or '',
+                'tags': model.get('tags') or []
+            })
+    except Exception as exc:
+        print(f"WARNING: Failed to aggregate fal.ai models for latest feed: {exc}")
+
+    entries.sort(key=lambda entry: entry['timestamp_dt'], reverse=True)
+    for entry in entries:
+        dt = entry.pop('timestamp_dt')
+        entry['timestamp'] = dt.replace(microsecond=0).isoformat().replace('+00:00', 'Z')
+
+    max_items = 150
+    entries = entries[:max_items]
+
+    payload = {
+        'timeframe': normalized,
+        'window_hours': window_hours,
+        'window_label': 'Last 24 hours' if normalized == 'day' else 'Last 7 days',
+        'generated_at': datetime.utcnow().replace(microsecond=0).isoformat() + 'Z',
+        'count': len(entries),
+        'sources': dict(source_counts),
+        'items': entries
+    }
+    return payload
+
+
+@app.route('/latest', methods=['GET'])
+def latest_feed():
+    timeframe = request.args.get('timeframe', 'day')
+    force_refresh = request.args.get('cache_bust', 'false').lower() == 'true'
+    try:
+        payload = generate_latest_feed_payload(timeframe=timeframe, force_refresh=force_refresh)
+        return jsonify(payload)
+    except RuntimeError as exc:
+        return jsonify({'error': str(exc)}), 503
+    except Exception as exc:
+        print(f"ERROR: Failed to build latest feed: {exc}")
+        return jsonify({'error': 'Failed to build latest feed', 'details': str(exc)}), 500
 
 
 @app.route('/api/blog-posts', methods=['GET'])
