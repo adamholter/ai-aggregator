@@ -1,37 +1,25 @@
-# Stream Stability Handoff
+## Reset Checklist
+- Review `server.py`, focusing on the agent tool loop (`agent_tool_loop_generator`), `fetch_data_for_categories`, and the new blog helpers near the top (pagination + WP transforms).
+- Skim `static/index.html` and `static/script.js` for the experimental tabs (Hype + new Blog tab), plus cached data structures and sorting logic.
 
-## What’s Wrong
-Multi-step conversations still break: after the first reply the agent keeps re-issuing `FETCH_DATA` commands, loses track of prior answers, and never produces a follow-up response. The previous attempt to reuse cached datasets regressed, so the chat effectively restarts every turn instead of building on the history.
+## Outstanding Issues
+1. **Agent Response Parsing Failure**  
+   - Trace snapshot:  
+     ```
+     data: {"type": "traces", "traces": [
+       {"step": "Dataset Fetch", "description": "Loaded datasets: ...", "tool": "fetch_data (7 categories)", "status": "success"},
+       {"step": "Response Generation", "description": "Failed to parse language model response.", "tool": "Gemini 2.5 Flash Lite Preview", "status": "failed"}]}
+     data: {"type": "status", "status": {"stage": "LLM Request", "message": "Parsing error: not enough values to unpack (expected 3, got 2)", ...}}
+     data: {"type": "error", "error": "Failed to parse language model response: not enough values to unpack (expected 3, got 2)"}
+     ```
+   - Root cause suspected in tool-call handling: OpenRouter is returning a tool-call payload that our parser doesn’t understand. Verify `fetch_non_stream_content` return shape, `tool_calls` unpacking, and the fallback section for unsupported tools.
+   - Reproduce by asking the agent for “Best LLMs” with experimental mode enabled; ensure the loop properly re-prompts after executing `FETCH_DATA`.
 
-## What I Changed
-- Added `ensure_quickchart_visualization` utilities so table-only responses get a QuickChart appended when possible.
-- Hardened fallback logic: if the non-stream retry fails we emit an SSE `error` event immediately. Non-stream responses are chunked manually to preserve progressive updates.
-- Updated sandbox harness (`sandbox/stream-debug/run_batch.py`) to re-run regression prompts after the change.
+2. **Blog Tab Hidden / Incomplete**  
+   - Experimental mode should expose a “Blog” tab that fetches posts from `https://adam.holter.com/wp-json/wp/v2/posts?page=1&per_page=100` (paginate additional pages).  
+   - Current state: nav button added, but no client fetch logic yet; tab doesn’t appear because experimental toggle suppresses all `[data-experimental]` elements by default. After implementing the fetch/display logic in `static/script.js`, confirm `applyExperimentalMode` reveals both Hype and Blog tabs.
 
-## How to Finish/Fix
-1. **Trim agent prompts before calling OpenRouter.**
-   - Implement conversation-history summarisation or a hard cut (keep latest N messages).
-   - Compress dataset summaries; consider passing only the relevant slice for the asked category.
-   - Target: total prompt + expected completion < 200k tokens.
-2. **Handle SSE errors on the client.**
-   - Update `script.js` streaming handler to listen for `type: "error"` and surface a toast + reset the spinner.
-3. **Add automated tests.**
-   - Extend `sandbox/stream-debug` to include multi-turn prompts and verify the response is delivered + UI-friendly error on failure.
-   - Optional: add a playwright smoke test hitting the hosted version.
-4. **(Optional) Cache/snapshot known-chart prompts.** If the same QuickChart isn’t required to be regenerated, reuse existing stored charts to reduce payload size.
-
-## Commit/Lint Recipe
-```bash
-# from repo root
-python3 -m py_compile server.py
-python3 sandbox/stream-debug/run_batch.py  # sanity checks
-npm run lint        # if front-end linting enabled
-npm test            # placeholder for UI tests when added
-```
-
-## Status Summary
-- Backend now guarantees a complete response or emits an explicit error; no silent hangs.
-- Large prompts still push OpenRouter over its context window in follow-up requests; UI doesn’t expose the error to users yet.
-- Next engineer should start with prompt slimming & front-end error surface adjustments.
-
-_Last user report:_ follow-up prompt triggered `LLM request failed: ... maximum context length 200000 tokens`, causing the UI to hang because the frontend ignores the SSE error.
+## Next Steps
+1. Fix tool-call parsing in the agent loop so OpenRouter responses never trigger the unpack error.
+2. Implement the blog fetch pipeline (client-side request + optional server proxy) and render cards similar to Hype.
+3. Retest experimental mode end-to-end (agent + Hype + Blog).

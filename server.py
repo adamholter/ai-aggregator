@@ -20,6 +20,7 @@ import urllib.parse
 import time
 from contextlib import contextmanager
 from copy import deepcopy
+from html import unescape
 from decimal import Decimal
 from collections import defaultdict, deque
 from threading import Lock
@@ -50,6 +51,13 @@ HYPE_SUPABASE_BEARER = (os.environ.get('HYPE_SUPABASE_BEARER') or HYPE_SUPABASE_
 HYPE_SUPABASE_TIMEOUT_SECONDS = max(int(os.environ.get('HYPE_SUPABASE_TIMEOUT_SECONDS', '15')), 1)
 HYPE_LOOKBACK_DAYS_DEFAULT = max(int(os.environ.get('HYPE_LOOKBACK_DAYS', '14')), 1)
 HYPE_MAX_LIMIT = max(int(os.environ.get('HYPE_MAX_LIMIT', '120')), 1)
+BLOG_POSTS_API_URL = (os.environ.get('BLOG_POSTS_API_URL') or 'https://adam.holter.com/wp-json/wp/v2/posts').strip()
+BLOG_POSTS_PER_PAGE = max(int(os.environ.get('BLOG_POSTS_PER_PAGE', '100')), 1)
+BLOG_POSTS_MAX_PAGES = max(int(os.environ.get('BLOG_POSTS_MAX_PAGES', '5')), 1)
+BLOG_POSTS_TIMEOUT_SECONDS = max(int(os.environ.get('BLOG_POSTS_TIMEOUT_SECONDS', '12')), 1)
+BLOG_POSTS_CACHE_MINUTES = max(int(os.environ.get('BLOG_POSTS_CACHE_MINUTES', '15')), 1)
+BLOG_POSTS_CACHE_DURATION = timedelta(minutes=BLOG_POSTS_CACHE_MINUTES)
+BLOG_POSTS_READING_WPM = max(int(os.environ.get('BLOG_POSTS_READING_WPM', '220')), 60)
 
 OPENROUTER_KEY_REQUIRED_MESSAGE = (
     'An OpenRouter API key is required for this feature. Add your key in Settings to continue.'
@@ -59,6 +67,12 @@ RATE_LIMIT_WINDOW_SECONDS = max(int(os.environ.get('RATE_LIMIT_WINDOW_SECONDS', 
 RATE_LIMIT_MAX_REQUESTS = max(int(os.environ.get('RATE_LIMIT_MAX_REQUESTS', '180')), 1)
 _rate_limit_records = defaultdict(deque)
 _rate_limit_lock = Lock()
+_BLOG_POSTS_CACHE = {
+    'timestamp': None,
+    'payload': None
+}
+_BLOG_HTML_TAG_PATTERN = re.compile(r'<[^>]+>')
+_BLOG_WHITESPACE_PATTERN = re.compile(r'\s+')
 
 
 def _warn_if_missing(name, value):
@@ -1344,6 +1358,220 @@ def normalize_recency_value(value):
     return None, f"Invalid recency value '{value}'. Use day, week, month, or year."
 
 
+def _safe_int(value, default=0):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _strip_wp_html(value):
+    if not value:
+        return ''
+    cleaned = _BLOG_HTML_TAG_PATTERN.sub(' ', str(value))
+    cleaned = _BLOG_WHITESPACE_PATTERN.sub(' ', cleaned)
+    return unescape(cleaned).strip()
+
+
+def _extract_wp_terms(term_groups):
+    categories = []
+    tags = []
+    if not isinstance(term_groups, list):
+        return categories, tags
+
+    seen_categories = set()
+    seen_tags = set()
+
+    for group in term_groups:
+        if not isinstance(group, list):
+            continue
+        for term in group:
+            if not isinstance(term, dict):
+                continue
+            taxonomy = term.get('taxonomy')
+            raw_name = term.get('name')
+            name = _strip_wp_html(raw_name)
+            if not name:
+                continue
+            normalized_key = name.lower()
+            if taxonomy == 'category':
+                if normalized_key not in seen_categories:
+                    categories.append(name)
+                    seen_categories.add(normalized_key)
+            elif taxonomy == 'post_tag':
+                if normalized_key not in seen_tags:
+                    tags.append(name)
+                    seen_tags.add(normalized_key)
+    return categories, tags
+
+
+def _extract_wp_author_name(embedded):
+    authors = embedded.get('author')
+    if isinstance(authors, list):
+        for author in authors:
+            if isinstance(author, dict):
+                name = author.get('name')
+                if name:
+                    return str(name).strip()
+    return ''
+
+
+def _extract_wp_featured_image(embedded):
+    media_list = embedded.get('wp:featuredmedia')
+    if not isinstance(media_list, list):
+        return ''
+    for media in media_list:
+        if not isinstance(media, dict):
+            continue
+        primary = media.get('source_url')
+        if primary:
+            return primary
+        media_details = media.get('media_details')
+        if isinstance(media_details, dict):
+            sizes = media_details.get('sizes')
+            if isinstance(sizes, dict):
+                for size_data in sizes.values():
+                    if isinstance(size_data, dict):
+                        candidate = size_data.get('source_url')
+                        if candidate:
+                            return candidate
+    return ''
+
+
+def _estimate_blog_reading_minutes(html_content):
+    if not html_content:
+        return None, 0
+    text = _strip_wp_html(html_content)
+    if not text:
+        return None, 0
+    words = re.findall(r'\w+', text)
+    word_count = len(words)
+    if word_count == 0:
+        return None, 0
+    minutes = max(1, math.ceil(word_count / BLOG_POSTS_READING_WPM))
+    return minutes, word_count
+
+
+def _normalize_blog_post(entry):
+    if not isinstance(entry, dict):
+        return None
+
+    embedded = entry.get('_embedded') or {}
+    categories, tags = _extract_wp_terms(embedded.get('wp:term'))
+    author_name = _extract_wp_author_name(embedded)
+    featured_image = _extract_wp_featured_image(embedded)
+
+    title_html = (entry.get('title') or {}).get('rendered')
+    excerpt_html = (entry.get('excerpt') or {}).get('rendered')
+    content_html = (entry.get('content') or {}).get('rendered')
+
+    title_text = _strip_wp_html(title_html) or 'Untitled Post'
+    excerpt_text = _strip_wp_html(excerpt_html)
+    content_text = _strip_wp_html(content_html)
+    if not excerpt_text and content_text:
+        excerpt_text = content_text
+    if excerpt_text:
+        excerpt_text = excerpt_text[:580].strip()
+        if len(excerpt_text) > 320:
+            excerpt_text = excerpt_text[:317].rstrip() + '...'
+
+    reading_minutes, word_count = _estimate_blog_reading_minutes(content_html)
+
+    return {
+        'id': entry.get('id'),
+        'slug': entry.get('slug'),
+        'title': title_text,
+        'excerpt': excerpt_text,
+        'link': entry.get('link'),
+        'date': entry.get('date'),
+        'date_gmt': entry.get('date_gmt'),
+        'modified': entry.get('modified'),
+        'author': author_name,
+        'categories': categories,
+        'tags': tags,
+        'featured_image': featured_image,
+        'reading_time_minutes': reading_minutes,
+        'word_count': word_count or None
+    }
+
+
+def fetch_blog_posts(force_refresh=False):
+    if not BLOG_POSTS_API_URL:
+        raise RuntimeError('Blog posts API URL is not configured.')
+
+    cached = _BLOG_POSTS_CACHE
+    if (
+        not force_refresh
+        and cached.get('payload')
+        and cached.get('timestamp')
+        and datetime.utcnow() - cached['timestamp'] < BLOG_POSTS_CACHE_DURATION
+    ):
+        return cached['payload']
+
+    posts = []
+    total_pages = 0
+    total_posts = 0
+    per_page = BLOG_POSTS_PER_PAGE
+
+    with requests.Session() as session:
+        current_page = 1
+        while current_page <= BLOG_POSTS_MAX_PAGES:
+            params = {
+                'page': current_page,
+                'per_page': per_page,
+                'orderby': 'date',
+                'order': 'desc',
+                '_embed': 'author,wp:term,wp:featuredmedia'
+            }
+            response = session.get(
+                BLOG_POSTS_API_URL,
+                params=params,
+                timeout=BLOG_POSTS_TIMEOUT_SECONDS
+            )
+            response.raise_for_status()
+
+            if current_page == 1:
+                total_pages = _safe_int(response.headers.get('X-WP-TotalPages'))
+                total_posts = _safe_int(response.headers.get('X-WP-Total'))
+                if total_pages:
+                    total_pages = min(total_pages, BLOG_POSTS_MAX_PAGES)
+
+            page_items = response.json()
+            if not isinstance(page_items, list) or not page_items:
+                break
+
+            for entry in page_items:
+                normalized = _normalize_blog_post(entry)
+                if normalized:
+                    posts.append(normalized)
+
+            if total_pages and current_page >= total_pages:
+                break
+            if len(page_items) < per_page:
+                break
+
+            current_page += 1
+
+    fetched_at = datetime.utcnow().replace(microsecond=0).isoformat() + 'Z'
+    payload = {
+        'posts': posts,
+        'count': len(posts),
+        'fetched_at': fetched_at,
+        'meta': {
+            'api_url': BLOG_POSTS_API_URL,
+            'per_page': per_page,
+            'max_pages': BLOG_POSTS_MAX_PAGES,
+            'pages_fetched': min(current_page, BLOG_POSTS_MAX_PAGES),
+            'total_pages': total_pages or min(current_page, BLOG_POSTS_MAX_PAGES),
+            'total_posts': total_posts or len(posts)
+        }
+    }
+
+    _BLOG_POSTS_CACHE['timestamp'] = datetime.utcnow()
+    _BLOG_POSTS_CACHE['payload'] = payload
+    return payload
+
+
 def coerce_to_datetime(value):
     if not value:
         return None
@@ -2541,31 +2769,71 @@ def build_agent_messages(final_prompt, conversation_history, user_message, user_
 
 def parse_fetch_category_payload(payload):
     if payload is None:
-        return [], 'No categories were provided.'
-    text = payload.strip()
-    parsed = None
-    if not text:
-        return [], 'No categories were provided.'
-    try:
-        parsed = json.loads(text)
-    except (ValueError, json.JSONDecodeError):
-        tokens = [token.strip().strip('\"\'') for token in text.split(',') if token.strip()]
-        if tokens:
-            parsed = tokens
+        return [], None, 'No categories were provided.'
+
+    recency_filter = None
+    parsed = payload
+
+    if isinstance(payload, bytes):
+        try:
+            parsed = payload.decode('utf-8')
+        except Exception:
+            parsed = payload.decode('utf-8', errors='ignore')
+
     if isinstance(parsed, str):
-        parsed = [parsed]
-    if not isinstance(parsed, (list, tuple, set)):
-        return [], 'Categories must be provided as a JSON array or comma-separated list.'
+        text = parsed.strip()
+        if not text:
+            return [], None, 'No categories were provided.'
+        try:
+            parsed = json.loads(text)
+        except (ValueError, json.JSONDecodeError):
+            tokens = [token.strip() for token in text.split(',') if token.strip()]
+            category_tokens = []
+            for token in tokens:
+                cleaned = token.strip().strip('\"\'')
+                lower = cleaned.lower()
+                if lower.startswith('recency=') or lower.startswith('recency:'):
+                    _, recency_value = re.split(r'[:=]', cleaned, 1)
+                    normalized_recency, recency_error = normalize_recency_value(recency_value.strip().strip('\"\''))
+                    if recency_error:
+                        return [], None, recency_error
+                    recency_filter = normalized_recency
+                else:
+                    category_tokens.append(cleaned)
+            if category_tokens:
+                parsed = category_tokens
+            else:
+                parsed = text
+
+    if isinstance(parsed, dict):
+        categories_raw = parsed.get('categories', parsed.get('category'))
+        recency_value = parsed.get('recency') if 'recency' in parsed else parsed.get('recency_filter')
+        if recency_value is not None:
+            normalized_recency, recency_error = normalize_recency_value(recency_value)
+            if recency_error:
+                return [], None, recency_error
+            recency_filter = normalized_recency
+    else:
+        categories_raw = parsed
+
+    if isinstance(categories_raw, str):
+        categories_raw = [categories_raw]
+    elif isinstance(categories_raw, (tuple, set)):
+        categories_raw = list(categories_raw)
+
+    if not isinstance(categories_raw, list):
+        return [], recency_filter, 'Categories must be provided as a JSON array or comma-separated list.'
+
     normalized = []
     seen = set()
-    for item in parsed:
+    for item in categories_raw:
         normalized_id = normalize_category_id(item)
         if normalized_id and normalized_id not in seen:
             normalized.append(normalized_id)
             seen.add(normalized_id)
     if not normalized:
-        return [], 'No valid categories were recognized.'
-    return normalized, None
+        return [], recency_filter, 'No valid categories were recognized.'
+    return normalized, recency_filter, None
 
 def iter_text_chunks(value, chunk_size=600):
     if not value:
@@ -2780,12 +3048,11 @@ def agent_tool_loop_generator(
                             requested_categories = tool_args.get('categories') or []
                             if isinstance(requested_categories, (str, bytes)):
                                 requested_categories = [requested_categories]
-                            try:
-                                categories_payload = json.dumps(requested_categories)
-                            except (TypeError, ValueError):
-                                categories_payload = str(requested_categories)
-
-                            normalized_requested, recency_filter, error = parse_fetch_category_payload(categories_payload)
+                            parser_payload = {
+                                'categories': requested_categories,
+                                'recency': tool_args.get('recency') or tool_args.get('recency_filter')
+                            }
+                            normalized_requested, recency_filter, error = parse_fetch_category_payload(parser_payload)
                             if error:
                                 print(f"❌ [AGENT] Invalid fetch_data tool request: {error}")
                                 traces.append({
@@ -5005,6 +5272,41 @@ def get_hype_feed():
         }
     }
     return jsonify(payload), 200
+
+
+@app.route('/api/blog-posts', methods=['GET'])
+def get_blog_posts():
+    """Fetch and normalize blog posts for the experimental Blog dashboard."""
+    if not BLOG_POSTS_API_URL:
+        return jsonify({'error': 'Blog feed is not configured.'}), 503
+
+    force_refresh = request.args.get('cache_bust', 'false').lower() == 'true'
+    try:
+        payload = fetch_blog_posts(force_refresh=force_refresh)
+        response = jsonify(payload)
+        response.status_code = 200
+        response.headers.update({
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+        })
+        return response
+    except requests.exceptions.HTTPError as exc:
+        status = exc.response.status_code if exc.response is not None else 502
+        details = ''
+        try:
+            details = exc.response.text if exc.response is not None else ''
+        except Exception:
+            details = ''
+        return jsonify({'error': 'Failed to fetch blog posts', 'details': details or str(exc)}), status
+    except ValueError as exc:
+        return jsonify({'error': 'Failed to parse blog posts response', 'details': str(exc)}), 502
+    except requests.exceptions.RequestException as exc:
+        return jsonify({'error': 'Failed to fetch blog posts', 'details': str(exc)}), 502
+    except RuntimeError as exc:
+        return jsonify({'error': str(exc)}), 503
+    except Exception as exc:
+        return jsonify({'error': f'Error fetching blog posts: {exc}'}), 500
 
 @app.route('/api/fetch-data', methods=['POST'])
 def fetch_data_api():

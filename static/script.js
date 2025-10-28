@@ -15,7 +15,8 @@ let cachedData = {
     falModels: null,
     replicateModels: null,
     openRouterModels: null,
-    hype: null
+    hype: null,
+    blog: null
 };
 
 // Store raw data for filtering
@@ -29,7 +30,8 @@ let rawData = {
     falModels: null,
     replicateModels: null,
     openRouterModels: null,
-    hype: null
+    hype: null,
+    blog: null
 };
 
 // AI Agent configuration
@@ -57,6 +59,7 @@ let modelConfig = null;
 let settingsInitialized = false;
 let experimentalModeEnabled = false;
 let hypeSortMode = 'newest';
+let blogSortMode = 'newest';
 let agentPendingImages = [];
 
 // Common words to ignore when matching model names between sources
@@ -803,6 +806,13 @@ function loadSectionData(section) {
                 displayHypeItems(cachedData.hype);
             }
             break;
+        case 'blog':
+            if (!cachedData.blog) {
+                loadBlogPosts();
+            } else {
+                displayBlogPosts(cachedData.blog);
+            }
+            break;
     }
 }
 
@@ -1490,6 +1500,220 @@ function formatRelativeTime(timestamp) {
         }
     }
     return '';
+}
+
+async function loadBlogPosts(forceRefresh = false) {
+    const loadingElement = document.getElementById('blog-loading');
+    const errorElement = document.getElementById('blog-error');
+    const dataElement = document.getElementById('blog-data');
+
+    if (!loadingElement || !errorElement || !dataElement) {
+        return;
+    }
+
+    if (cachedData.blog && !forceRefresh) {
+        displayBlogPosts(cachedData.blog);
+        return;
+    }
+
+    try {
+        loadingElement.style.display = 'flex';
+        errorElement.style.display = 'none';
+        dataElement.innerHTML = '';
+
+        const data = await makeAPICall('/api/blog-posts', null);
+        cachedData.blog = data;
+        rawData.blog = Array.isArray(data?.posts) ? data.posts : [];
+        displayBlogPosts(data);
+    } catch (error) {
+        const message = error?.message || String(error);
+        errorElement.textContent = `Failed to load blog posts: ${message}`;
+        errorElement.style.display = 'block';
+    } finally {
+        loadingElement.style.display = 'none';
+    }
+}
+
+function displayBlogPosts(payload) {
+    const container = document.getElementById('blog-data');
+    if (!container) return;
+
+    const posts = Array.isArray(payload?.posts) ? payload.posts : Array.isArray(payload) ? payload : [];
+    const resultsInfo = document.getElementById('blog-results-info');
+
+    container.innerHTML = '';
+
+    if (!posts.length) {
+        container.innerHTML = '<div class="empty-state">No blog posts available yet. Check back soon.</div>';
+        if (resultsInfo) {
+            resultsInfo.style.display = 'none';
+            resultsInfo.textContent = '';
+        }
+        return;
+    }
+
+    const sortedPosts = sortBlogPosts(posts, blogSortMode);
+    sortedPosts.forEach(post => {
+        container.appendChild(createBlogCard(post));
+    });
+
+    if (resultsInfo) {
+        const summaryParts = [];
+        const totalKnown = Number(payload?.meta?.total_posts);
+        if (Number.isFinite(totalKnown) && totalKnown > 0) {
+            summaryParts.push(`${sortedPosts.length} of ${totalKnown} posts`);
+        } else {
+            summaryParts.push(`${sortedPosts.length} posts`);
+        }
+        const relativeFetched = formatRelativeTime(payload?.fetched_at);
+        if (relativeFetched) {
+            summaryParts.push(`fetched ${relativeFetched}`);
+        }
+        summaryParts.push(blogSortMode === 'oldest' ? 'sorted oldest first' : 'sorted newest first');
+        resultsInfo.textContent = summaryParts.join(' · ');
+        resultsInfo.style.display = 'block';
+    }
+}
+
+function getBlogTimestamp(post) {
+    if (!post || typeof post !== 'object') {
+        return 0;
+    }
+    const candidates = [post.date, post.date_gmt, post.modified];
+    for (const candidate of candidates) {
+        if (!candidate) continue;
+        const parsed = Date.parse(candidate);
+        if (!Number.isNaN(parsed)) {
+            return parsed;
+        }
+    }
+    return 0;
+}
+
+function sortBlogPosts(posts, mode) {
+    if (!Array.isArray(posts)) {
+        return [];
+    }
+    const sorted = [...posts].sort((a, b) => getBlogTimestamp(b) - getBlogTimestamp(a));
+    if (mode === 'oldest') {
+        sorted.reverse();
+    }
+    return sorted;
+}
+
+function createBlogCard(post) {
+    const card = document.createElement('div');
+    card.className = 'model-card blog-card';
+    card.dataset.source = 'blog';
+
+    const href = typeof post?.link === 'string' && post.link ? post.link : '#';
+    const titleText = typeof post?.title === 'string' && post.title.trim()
+        ? post.title.trim()
+        : 'Untitled Post';
+    const relativePublished = formatRelativeTime(post?.date || post?.date_gmt || post?.modified);
+    const publishedTs = getBlogTimestamp(post);
+    const publishedDate = publishedTs ? new Date(publishedTs).toLocaleDateString() : '';
+    const author = typeof post?.author === 'string' && post.author.trim() ? `By ${post.author.trim()}` : '';
+    const readingMinutes = typeof post?.reading_time_minutes === 'number' && post.reading_time_minutes > 0
+        ? `${post.reading_time_minutes} min read`
+        : '';
+
+    const metaParts = [];
+    if (author) metaParts.push(author);
+    if (relativePublished) {
+        metaParts.push(relativePublished);
+    } else if (publishedDate) {
+        metaParts.push(publishedDate);
+    }
+
+    const metaMarkup = metaParts.length
+        ? `<div class="card-meta">${metaParts.map(part => `<span class="meta-item">${escapeHtml(part)}</span>`).join('')}</div>`
+        : '';
+
+    const excerpt = typeof post?.excerpt === 'string' && post.excerpt.trim()
+        ? truncateText(post.excerpt.trim(), 260)
+        : '';
+    const summaryMarkup = excerpt
+        ? `<div class="card-summary">${escapeHtml(excerpt)}</div>`
+        : '';
+
+    const featuredImage = typeof post?.featured_image === 'string' && post.featured_image.trim()
+        ? post.featured_image.trim()
+        : '';
+    const imageMarkup = featuredImage
+        ? `<div class="card-media"><img src="${escapeHtml(featuredImage)}" alt="" loading="lazy" decoding="async"></div>`
+        : '';
+
+    const tagEntries = [];
+    const seen = new Set();
+    const categories = Array.isArray(post?.categories) ? post.categories : [];
+    categories.forEach(category => {
+        if (typeof category !== 'string') return;
+        const label = category.trim();
+        if (!label) return;
+        const key = `category:${label.toLowerCase()}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        tagEntries.push({ type: 'category', value: label });
+    });
+
+    const tags = Array.isArray(post?.tags) ? post.tags : [];
+    tags.forEach(tag => {
+        if (typeof tag !== 'string') return;
+        const cleaned = tag.trim().replace(/^#/, '').trim();
+        if (!cleaned) return;
+        const key = `tag:${cleaned.toLowerCase()}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        tagEntries.push({ type: 'tag', value: cleaned });
+    });
+
+    const tagMarkup = tagEntries.length
+        ? `<div class="card-tags">${tagEntries.map(renderBlogTag).join('')}</div>`
+        : '';
+
+    const badgeMarkup = readingMinutes
+        ? `<span class="card-badge">${escapeHtml(readingMinutes)}</span>`
+        : '';
+
+    card.innerHTML = `
+        <div class="card-header">
+            <div class="card-header-content">
+                <div class="source-badge">Blog</div>
+                <div class="card-title">
+                    <a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(titleText)}</a>
+                </div>
+                ${metaMarkup}
+            </div>
+        </div>
+        ${imageMarkup}
+        ${summaryMarkup}
+        ${tagMarkup}
+        <div class="card-actions">
+            <a class="chart-btn secondary" href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">Read Post</a>
+            ${badgeMarkup}
+        </div>
+    `;
+
+    return card;
+}
+
+function renderBlogTag(entry) {
+    if (!entry || !entry.value) {
+        return '';
+    }
+    const value = String(entry.value).trim();
+    if (!value) {
+        return '';
+    }
+    if (entry.type === 'category') {
+        return `<span class="card-tag category-tag">${escapeHtml(value)}</span>`;
+    }
+    const normalized = value.startsWith('#') ? value.slice(1).trim() : value;
+    if (!normalized) {
+        return '';
+    }
+    return `<span class="card-tag tag-pill">#${escapeHtml(normalized)}</span>`;
 }
 
 function formatContextLength(contextLength) {
@@ -4061,6 +4285,33 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.error('Failed to refresh hype feed:', error);
             } finally {
                 hypeRefreshButton.disabled = false;
+            }
+        });
+    }
+
+    const blogRefreshButton = document.getElementById('blog-refresh');
+    if (blogRefreshButton) {
+        blogRefreshButton.addEventListener('click', async () => {
+            blogRefreshButton.disabled = true;
+            try {
+                await loadBlogPosts(true);
+            } catch (error) {
+                console.error('Failed to refresh blog posts:', error);
+            } finally {
+                blogRefreshButton.disabled = false;
+            }
+        });
+    }
+
+    const blogSortSelect = document.getElementById('blog-sort');
+    if (blogSortSelect) {
+        if (blogSortSelect.value) {
+            blogSortMode = blogSortSelect.value;
+        }
+        blogSortSelect.addEventListener('change', () => {
+            blogSortMode = blogSortSelect.value;
+            if (cachedData.blog) {
+                displayBlogPosts(cachedData.blog);
             }
         });
     }
