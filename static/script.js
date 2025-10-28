@@ -784,6 +784,7 @@ function ensureExperimentalSections() {
     if (!main) return;
 
     if (!document.getElementById('blog')) {
+        // Inject blog section dynamically when the HTML template hasn't been updated yet.
         const section = document.createElement('section');
         section.id = 'blog';
         section.className = 'content-section';
