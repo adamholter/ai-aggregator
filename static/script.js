@@ -64,6 +64,10 @@ let experimentalModeEnabled = false;
 let hypeSortMode = 'newest';
 let blogSortMode = 'newest';
 let agentPendingImages = [];
+const BLOG_INITIAL_PAGE_SIZE = 10;
+const BLOG_FULL_PAGE_SIZE = 100;
+const BLOG_FULL_MAX_PAGES = 5;
+let blogPrefetching = false;
 
 // Common words to ignore when matching model names between sources
 const MATCH_EXCLUSION_TOKENS = [
@@ -1655,14 +1659,30 @@ function formatRelativeTime(timestamp) {
     return '';
 }
 
-async function fetchBlogPostsData(forceRefresh = false) {
-    if (cachedData.blog && !forceRefresh) {
+async function fetchBlogPostsData(forceRefresh = false, options = {}) {
+    const { perPage, maxPages, skipCache } = options;
+    if (!forceRefresh && !perPage && cachedData.blog) {
         return cachedData.blog;
     }
-    const url = forceRefresh ? '/api/blog-posts?cache_bust=true' : '/api/blog-posts';
+
+    const params = new URLSearchParams();
+    if (forceRefresh) {
+        params.set('cache_bust', 'true');
+    }
+    if (perPage) {
+        params.set('per_page', perPage);
+    }
+    if (maxPages) {
+        params.set('max_pages', maxPages);
+    }
+    const url = params.toString() ? `/api/blog-posts?${params}` : '/api/blog-posts';
     const data = await makeAPICall(url, null);
-    cachedData.blog = data;
-    rawData.blog = Array.isArray(data?.posts) ? data.posts : [];
+
+    if (!skipCache) {
+        cachedData.blog = data;
+        rawData.blog = Array.isArray(data?.posts) ? data.posts : [];
+    }
+
     return data;
 }
 
@@ -1677,6 +1697,9 @@ async function loadBlogPosts(forceRefresh = false) {
 
     if (cachedData.blog && !forceRefresh) {
         displayBlogPosts(cachedData.blog);
+        if (!cachedData.blog?.meta?.complete) {
+            setTimeout(() => prefetchRemainingBlogPosts(), 250);
+        }
         return;
     }
 
@@ -1685,14 +1708,49 @@ async function loadBlogPosts(forceRefresh = false) {
         errorElement.style.display = 'none';
         dataElement.innerHTML = '';
 
-        const data = await fetchBlogPostsData(forceRefresh);
+        const data = await fetchBlogPostsData(forceRefresh, {
+            perPage: BLOG_INITIAL_PAGE_SIZE,
+            maxPages: 1
+        });
         displayBlogPosts(data);
+        if (!data?.meta?.complete) {
+            setTimeout(() => prefetchRemainingBlogPosts(), 250);
+        }
     } catch (error) {
         const message = error?.message || String(error);
         errorElement.textContent = `Failed to load blog posts: ${message}`;
         errorElement.style.display = 'block';
     } finally {
         loadingElement.style.display = 'none';
+    }
+}
+
+async function prefetchRemainingBlogPosts() {
+    if (blogPrefetching) {
+        return;
+    }
+    blogPrefetching = true;
+    try {
+        const data = await fetchBlogPostsData(true, {
+            perPage: BLOG_FULL_PAGE_SIZE,
+            maxPages: BLOG_FULL_MAX_PAGES,
+            skipCache: true
+        });
+        if (!data || !Array.isArray(data.posts)) {
+            return;
+        }
+        const existingPosts = Array.isArray(cachedData.blog?.posts) ? cachedData.blog.posts : [];
+        const hasMore = data.posts.length > existingPosts.length;
+        const newlyComplete = Boolean(data.meta?.complete) && !cachedData.blog?.meta?.complete;
+        if (hasMore || newlyComplete) {
+            cachedData.blog = data;
+            rawData.blog = data.posts;
+            displayBlogPosts(data);
+        }
+    } catch (error) {
+        console.warn('Failed to prefetch blog posts:', error);
+    } finally {
+        blogPrefetching = false;
     }
 }
 

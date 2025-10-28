@@ -1520,7 +1520,7 @@ def _normalize_blog_post(entry):
     }
 
 
-def fetch_blog_posts(force_refresh=False):
+def fetch_blog_posts(force_refresh=False, per_page_override=None, max_pages_override=None):
     if not BLOG_POSTS_API_URL:
         raise RuntimeError('Blog posts API URL is not configured.')
 
@@ -1533,14 +1533,29 @@ def fetch_blog_posts(force_refresh=False):
     ):
         return cached['payload']
 
+    per_page = per_page_override if per_page_override is not None else BLOG_POSTS_PER_PAGE
+    per_page = max(1, min(per_page, 100))
+
+    max_pages = max_pages_override if max_pages_override is not None else BLOG_POSTS_MAX_PAGES
+    max_pages = max(1, min(max_pages, BLOG_POSTS_MAX_PAGES))
+
     posts = []
     total_pages = 0
     total_posts = 0
-    per_page = BLOG_POSTS_PER_PAGE
+    pages_fetched = 0
+    more_available = False
+
+    api_url = BLOG_POSTS_API_URL
+    if not api_url.endswith('/'):
+        api_url = f"{api_url}/"
 
     with requests.Session() as session:
+        session.headers.update({
+            'Accept': 'application/json',
+            'User-Agent': 'ai-dashboard/1.0 (+https://adam.holter.com)'
+        })
         current_page = 1
-        while current_page <= BLOG_POSTS_MAX_PAGES:
+        while current_page <= max_pages:
             params = {
                 'page': current_page,
                 'per_page': per_page,
@@ -1549,7 +1564,7 @@ def fetch_blog_posts(force_refresh=False):
                 '_embed': 'author,wp:term,wp:featuredmedia'
             }
             response = session.get(
-                BLOG_POSTS_API_URL,
+                api_url,
                 params=params,
                 timeout=BLOG_POSTS_TIMEOUT_SECONDS
             )
@@ -1570,12 +1585,26 @@ def fetch_blog_posts(force_refresh=False):
                 if normalized:
                     posts.append(normalized)
 
-            if total_pages and current_page >= total_pages:
+            pages_fetched += 1
+
+            # Determine whether more pages are available from the source
+            has_more_server = False
+            if total_pages:
+                has_more_server = current_page < total_pages
+            else:
+                has_more_server = len(page_items) == per_page
+
+            # If we've reached the max pages limit but the server still has more, note availability
+            if current_page >= max_pages and has_more_server:
+                more_available = True
                 break
-            if len(page_items) < per_page:
+
+            if not has_more_server:
+                more_available = False
                 break
 
             current_page += 1
+            more_available = has_more_server
 
     fetched_at = datetime.utcnow().replace(microsecond=0).isoformat() + 'Z'
     payload = {
@@ -1586,9 +1615,12 @@ def fetch_blog_posts(force_refresh=False):
             'api_url': BLOG_POSTS_API_URL,
             'per_page': per_page,
             'max_pages': BLOG_POSTS_MAX_PAGES,
-            'pages_fetched': min(current_page, BLOG_POSTS_MAX_PAGES),
-            'total_pages': total_pages or min(current_page, BLOG_POSTS_MAX_PAGES),
-            'total_posts': total_posts or len(posts)
+            'pages_fetched': pages_fetched,
+            'total_pages': total_pages or pages_fetched,
+            'total_posts': total_posts or len(posts),
+            'per_page': per_page,
+            'requested_max_pages': max_pages,
+            'complete': not more_available
         }
     }
 
@@ -5313,8 +5345,22 @@ def get_blog_posts():
         return jsonify({'error': 'Blog feed is not configured.'}), 503
 
     force_refresh = request.args.get('cache_bust', 'false').lower() == 'true'
+    per_page_override = request.args.get('per_page')
+    max_pages_override = request.args.get('max_pages')
     try:
-        payload = fetch_blog_posts(force_refresh=force_refresh)
+        per_page_override = int(per_page_override) if per_page_override is not None else None
+    except (TypeError, ValueError):
+        per_page_override = None
+    try:
+        max_pages_override = int(max_pages_override) if max_pages_override is not None else None
+    except (TypeError, ValueError):
+        max_pages_override = None
+    try:
+        payload = fetch_blog_posts(
+            force_refresh=force_refresh,
+            per_page_override=per_page_override,
+            max_pages_override=max_pages_override
+        )
         response = jsonify(payload)
         response.status_code = 200
         response.headers.update({
