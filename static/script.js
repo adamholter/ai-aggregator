@@ -609,6 +609,8 @@ function similarity(a, b) {
 document.addEventListener('DOMContentLoaded', async function() {
     console.info('The quick brown fox jumped over the lazy dogs – experimental canary build active.');
     await preloadModelConfig();
+    ensureExperimentalSections();
+    ensureExperimentalNavButtons();
     setupNavigation();
     initializeTheme();
     applyAgentDefaults();
@@ -616,6 +618,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     populateAgentDropdown();
     loadLLMData(); // Load LLM data by default
     setupImageUpload();
+    applyExperimentalMode(getStoredExperimentalMode());
 
     const hypeSortSelect = document.getElementById('hype-sort');
     if (hypeSortSelect) {
@@ -744,6 +747,78 @@ function mergeSelectedModelsFromCatalog(catalog) {
 }
 
 // Setup navigation functionality
+function ensureExperimentalNavButtons() {
+    const nav = document.querySelector('.navigation');
+    if (!nav) return;
+
+    const ensureButton = (section, label) => {
+        let button = nav.querySelector(`.nav-btn[data-section="${section}"]`);
+        if (!button) {
+            button = document.createElement('button');
+            button.className = 'nav-btn';
+            button.dataset.section = section;
+            button.dataset.experimental = 'true';
+            button.textContent = label;
+            button.style.display = 'none';
+            button.setAttribute('aria-hidden', 'true');
+            const anchor = nav.querySelector('.nav-btn[data-section="ai-agent"]');
+            if (anchor) {
+                nav.insertBefore(button, anchor);
+            } else {
+                nav.appendChild(button);
+            }
+        } else if (button.dataset.experimental !== 'true') {
+            button.dataset.experimental = 'true';
+        }
+        if (!button.hasAttribute('aria-hidden')) {
+            button.setAttribute('aria-hidden', experimentalModeEnabled ? 'false' : 'true');
+        }
+    };
+
+    ensureButton('hype', 'Hype');
+    ensureButton('blog', 'Blog');
+}
+
+function ensureExperimentalSections() {
+    const main = document.querySelector('.main-content');
+    if (!main) return;
+
+    if (!document.getElementById('blog')) {
+        const section = document.createElement('section');
+        section.id = 'blog';
+        section.className = 'content-section';
+        section.dataset.experimental = 'true';
+        section.style.display = 'none';
+        section.setAttribute('aria-hidden', 'true');
+        section.innerHTML = `
+            <div class="section-header">
+                <h2>Latest Blog Posts</h2>
+                <div class="controls">
+                    <select id="blog-sort" aria-label="Sort blog posts">
+                        <option value="newest" selected>Newest</option>
+                        <option value="oldest">Oldest</option>
+                    </select>
+                    <button class="refresh-btn" id="blog-refresh">Refresh Posts</button>
+                </div>
+            </div>
+            <p class="section-note">Experimental feed direct from adam.holter.com.</p>
+            <div class="loading" id="blog-loading">
+                <div class="loading-spinner"></div>
+            </div>
+            <div class="error" id="blog-error" style="display: none;"></div>
+            <div class="results-info" id="blog-results-info" style="display:none;"></div>
+            <div class="data-container" id="blog-data"></div>
+        `;
+
+        const textToImage = document.getElementById('text-to-image');
+        if (textToImage && textToImage.parentNode === main) {
+            main.insertBefore(section, textToImage);
+        } else {
+            main.appendChild(section);
+        }
+    }
+}
+
 function setupNavigation() {
     const navButtons = document.querySelectorAll('.nav-btn');
     const sections = document.querySelectorAll('.content-section');
