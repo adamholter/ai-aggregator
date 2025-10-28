@@ -16,7 +16,8 @@ let cachedData = {
     replicateModels: null,
     openRouterModels: null,
     hype: null,
-    blog: null
+    blog: null,
+    latest: null
 };
 
 // Store raw data for filtering
@@ -31,7 +32,8 @@ let rawData = {
     replicateModels: null,
     openRouterModels: null,
     hype: null,
-    blog: null
+    blog: null,
+    latest: null
 };
 
 // AI Agent configuration
@@ -47,6 +49,7 @@ const analysisCache = new Map();
 const openRouterMatchCache = new Map();
 const USER_OPENROUTER_KEY_STORAGE = 'dashboard-user-openrouter-key';
 const EXPERIMENTAL_MODE_STORAGE_KEY = 'dashboard-experimental-mode';
+const LATEST_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 const THEME_SEQUENCE = ['light', 'dark', 'source'];
 const THEME_LABELS = {
@@ -776,12 +779,49 @@ function ensureExperimentalNavButtons() {
     };
 
     ensureButton('hype', 'Hype');
+    ensureButton('latest', 'Latest');
     ensureButton('blog', 'Blog');
 }
 
 function ensureExperimentalSections() {
     const main = document.querySelector('.main-content');
     if (!main) return;
+
+    if (!document.getElementById('latest')) {
+        const section = document.createElement('section');
+        section.id = 'latest';
+        section.className = 'content-section';
+        section.dataset.experimental = 'true';
+        section.style.display = 'none';
+        section.setAttribute('aria-hidden', 'true');
+        section.innerHTML = `
+            <div class="section-header">
+                <h2>Latest 24h Activity</h2>
+                <div class="controls">
+                    <button class="refresh-btn" id="latest-refresh">Refresh Feed</button>
+                </div>
+            </div>
+            <p class="section-note">Experimental aggregation of updates from Blog, Hype Signals, OpenRouter, Replicate, and fal.ai within the last 24 hours.</p>
+            <div class="loading" id="latest-loading">
+                <div class="loading-spinner"></div>
+            </div>
+            <div class="error" id="latest-error" style="display: none;"></div>
+            <div class="results-info" id="latest-results-info" style="display:none;"></div>
+            <div class="data-container" id="latest-data"></div>
+        `;
+
+        const blogSection = document.getElementById('blog');
+        if (blogSection && blogSection.parentNode === main) {
+            main.insertBefore(section, blogSection);
+        } else {
+            const textToImage = document.getElementById('text-to-image');
+            if (textToImage && textToImage.parentNode === main) {
+                main.insertBefore(section, textToImage);
+            } else {
+                main.appendChild(section);
+            }
+        }
+    }
 
     if (!document.getElementById('blog')) {
         // Inject blog section dynamically when the HTML template hasn't been updated yet.
@@ -880,6 +920,13 @@ function loadSectionData(section) {
                 loadHypeData();
             } else {
                 displayHypeItems(cachedData.hype);
+            }
+            break;
+        case 'latest':
+            if (!cachedData.latest) {
+                loadLatestFeed();
+            } else {
+                displayLatestFeed(cachedData.latest);
             }
             break;
         case 'blog':
@@ -1138,8 +1185,19 @@ async function loadImageToVideoData() {
     }
 }
 
+async function fetchFalModelsData(forceRefresh = false) {
+    if (cachedData.falModels && !forceRefresh) {
+        return cachedData.falModels;
+    }
+    const url = forceRefresh ? '/api/fal-models?cache_bust=true' : '/api/fal-models';
+    const data = await makeAPICall(url, null);
+    cachedData.falModels = data;
+    rawData.falModels = data;
+    return data;
+}
+
 // Load Fal.ai Models data
-async function loadFalModelsData() {
+async function loadFalModelsData(forceRefresh = false) {
     const loadingElement = document.getElementById('fal-models-loading');
     const errorElement = document.getElementById('fal-models-error');
     const dataElement = document.getElementById('fal-models-data');
@@ -1149,9 +1207,7 @@ async function loadFalModelsData() {
         errorElement.style.display = 'none';
         dataElement.innerHTML = '';
 
-        const data = await makeAPICall('/api/fal-models', null);
-        cachedData.falModels = data;
-        rawData.falModels = data;
+        await fetchFalModelsData(forceRefresh);
         
         filterFalModelsData();
         loadingElement.style.display = 'none';
@@ -1162,8 +1218,19 @@ async function loadFalModelsData() {
     }
 }
 
+async function fetchReplicateModelsData(forceRefresh = false) {
+    if (cachedData.replicateModels && !forceRefresh) {
+        return cachedData.replicateModels;
+    }
+    const url = forceRefresh ? '/api/replicate-models?cache_bust=true' : '/api/replicate-models';
+    const data = await makeAPICall(url, null);
+    cachedData.replicateModels = data;
+    rawData.replicateModels = data;
+    return data;
+}
+
 // Load Replicate Models data
-async function loadReplicateModelsData() {
+async function loadReplicateModelsData(forceRefresh = false) {
     const loadingElement = document.getElementById('replicate-models-loading');
     const errorElement = document.getElementById('replicate-models-error');
     const dataElement = document.getElementById('replicate-models-data');
@@ -1173,9 +1240,7 @@ async function loadReplicateModelsData() {
         errorElement.style.display = 'none';
         dataElement.innerHTML = '';
 
-        const data = await makeAPICall('/api/replicate-models', null);
-        cachedData.replicateModels = data;
-        rawData.replicateModels = data;
+        await fetchReplicateModelsData(forceRefresh);
         
         filterReplicateModelsData();
         loadingElement.style.display = 'none';
@@ -1186,8 +1251,12 @@ async function loadReplicateModelsData() {
     }
 }
 
-async function fetchAndCacheOpenRouterModels() {
-    const data = await makeAPICall('/api/openrouter-models', null);
+async function fetchAndCacheOpenRouterModels(forceRefresh = false) {
+    if (cachedData.openRouterModels && !forceRefresh) {
+        return cachedData.openRouterModels;
+    }
+    const url = forceRefresh ? '/api/openrouter-models?cache_bust=true' : '/api/openrouter-models';
+    const data = await makeAPICall(url, null);
     openRouterModels = Array.isArray(data) ? data : [];
     cachedData.openRouterModels = openRouterModels;
     rawData.openRouterModels = openRouterModels;
@@ -1218,7 +1287,7 @@ async function ensureOpenRouterDataLoaded() {
 }
 
 // Load OpenRouter models data
-async function loadOpenRouterModelsData() {
+async function loadOpenRouterModelsData(forceRefresh = false) {
     const loadingElement = document.getElementById('openrouter-models-loading');
     const errorElement = document.getElementById('openrouter-models-error');
     const dataElement = document.getElementById('openrouter-models-data');
@@ -1228,7 +1297,7 @@ async function loadOpenRouterModelsData() {
         errorElement.style.display = 'none';
         dataElement.innerHTML = '';
 
-        await fetchAndCacheOpenRouterModels();
+        await fetchAndCacheOpenRouterModels(forceRefresh);
         populateOpenRouterVendorFilter(openRouterModels);
         filterOpenRouterModelsData();
         loadingElement.style.display = 'none';
@@ -1339,6 +1408,17 @@ function displayOpenRouterModelsData(models) {
     });
 }
 
+async function fetchHypeData(forceRefresh = false) {
+    if (cachedData.hype && !forceRefresh) {
+        return cachedData.hype;
+    }
+    const url = forceRefresh ? '/api/hype?cache_bust=true' : '/api/hype';
+    const data = await makeAPICall(url, null);
+    cachedData.hype = data;
+    rawData.hype = Array.isArray(data?.items) ? data.items : [];
+    return data;
+}
+
 async function loadHypeData(forceRefresh = false) {
     const loadingElement = document.getElementById('hype-loading');
     const errorElement = document.getElementById('hype-error');
@@ -1358,10 +1438,7 @@ async function loadHypeData(forceRefresh = false) {
         errorElement.style.display = 'none';
         dataElement.innerHTML = '';
 
-        const data = await makeAPICall('/api/hype', null);
-        cachedData.hype = data;
-        rawData.hype = Array.isArray(data?.items) ? data.items : [];
-
+        const data = await fetchHypeData(forceRefresh);
         displayHypeItems(data);
     } catch (error) {
         errorElement.textContent = `Failed to load hype feed: ${error.message}`;
@@ -1578,6 +1655,17 @@ function formatRelativeTime(timestamp) {
     return '';
 }
 
+async function fetchBlogPostsData(forceRefresh = false) {
+    if (cachedData.blog && !forceRefresh) {
+        return cachedData.blog;
+    }
+    const url = forceRefresh ? '/api/blog-posts?cache_bust=true' : '/api/blog-posts';
+    const data = await makeAPICall(url, null);
+    cachedData.blog = data;
+    rawData.blog = Array.isArray(data?.posts) ? data.posts : [];
+    return data;
+}
+
 async function loadBlogPosts(forceRefresh = false) {
     const loadingElement = document.getElementById('blog-loading');
     const errorElement = document.getElementById('blog-error');
@@ -1597,9 +1685,7 @@ async function loadBlogPosts(forceRefresh = false) {
         errorElement.style.display = 'none';
         dataElement.innerHTML = '';
 
-        const data = await makeAPICall('/api/blog-posts', null);
-        cachedData.blog = data;
-        rawData.blog = Array.isArray(data?.posts) ? data.posts : [];
+        const data = await fetchBlogPostsData(forceRefresh);
         displayBlogPosts(data);
     } catch (error) {
         const message = error?.message || String(error);
@@ -1790,6 +1876,299 @@ function renderBlogTag(entry) {
         return '';
     }
     return `<span class="card-tag tag-pill">#${escapeHtml(normalized)}</span>`;
+}
+
+async function ensureLatestDependencies(forceRefresh = false) {
+    await Promise.all([
+        fetchAndCacheOpenRouterModels(forceRefresh),
+        fetchFalModelsData(forceRefresh),
+        fetchReplicateModelsData(forceRefresh),
+        fetchBlogPostsData(forceRefresh),
+        fetchHypeData(forceRefresh)
+    ]);
+}
+
+function coerceTimestampMs(value) {
+    if (value === undefined || value === null) {
+        return null;
+    }
+    if (typeof value === 'number' && Number.isFinite(value)) {
+        return value > 1e12 ? value : value * 1000;
+    }
+    if (value instanceof Date) {
+        return value.getTime();
+    }
+    if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (!trimmed) return null;
+        const numeric = Number(trimmed);
+        if (!Number.isNaN(numeric) && Number.isFinite(numeric)) {
+            return numeric > 1e12 ? numeric : numeric * 1000;
+        }
+        const parsed = Date.parse(trimmed);
+        return Number.isNaN(parsed) ? null : parsed;
+    }
+    return null;
+}
+
+function buildLatestFeedItems() {
+    const cutoff = Date.now() - LATEST_WINDOW_MS;
+    const items = [];
+
+    const openrouterModels = cachedData.openRouterModels || [];
+    openrouterModels.forEach(model => {
+        const timestamp = coerceTimestampMs(model.created || model.created_at || model.updated_at);
+        if (!timestamp || timestamp < cutoff) return;
+        const title = getOpenRouterCardTitle(model);
+        const description = typeof model.description === 'string' ? model.description : '';
+        const url = model.url || (model.id ? `https://openrouter.ai/models/${encodeURIComponent(model.id)}` : '');
+        items.push({
+            id: `openrouter:${model.id || title}`,
+            source: 'openrouter',
+            title,
+            description,
+            url,
+            timestamp,
+            badge: model.vendor || '',
+            actionLabel: 'View on OpenRouter'
+        });
+    });
+
+    const blogPosts = Array.isArray(cachedData.blog?.posts) ? cachedData.blog.posts : [];
+    blogPosts.forEach(post => {
+        const timestamp = coerceTimestampMs(post.date || post.date_gmt || post.modified);
+        if (!timestamp || timestamp < cutoff) return;
+        items.push({
+            id: `blog:${post.id || post.slug || post.link}`,
+            source: 'blog',
+            title: post.title || 'Untitled Post',
+            description: post.excerpt || '',
+            url: post.link || '',
+            timestamp,
+            badge: post.reading_time_minutes ? `${post.reading_time_minutes} min read` : '',
+            actionLabel: 'Read Post'
+        });
+    });
+
+    const replicateModels = cachedData.replicateModels || [];
+    replicateModels.forEach(model => {
+        const timestamp = coerceTimestampMs(model.created_at || model.published_at || model.updated_at);
+        if (!timestamp || timestamp < cutoff) return;
+        const url = model.url || (model.owner && model.name ? `https://replicate.com/${model.owner}/${model.name}` : '');
+        items.push({
+            id: `replicate:${model.id || `${model.owner}/${model.name}`}`,
+            source: 'replicate',
+            title: model.name || 'Replicate Model',
+            description: model.description || '',
+            url,
+            timestamp,
+            badge: model.owner ? `by ${model.owner}` : '',
+            actionLabel: 'View on Replicate'
+        });
+    });
+
+    const hypeItems = Array.isArray(cachedData.hype?.items)
+        ? cachedData.hype.items
+        : Array.isArray(cachedData.hype) ? cachedData.hype : [];
+    hypeItems.forEach(item => {
+        const timestamp = coerceTimestampMs(item.updated_at || item.inserted_at || item.created_at);
+        if (!timestamp || timestamp < cutoff) return;
+        const summary = item.summary || item.description || '';
+        items.push({
+            id: `hype:${item.url || item.name}`,
+            source: 'hype',
+            title: item.name || 'Trending project',
+            description: summary,
+            url: item.url || '',
+            timestamp,
+            badge: formatHypeSource(item.source),
+            actionLabel: 'Open Link',
+            tags: Array.isArray(item.tags) ? item.tags : []
+        });
+    });
+
+    const falModels = cachedData.falModels || [];
+    falModels.forEach(model => {
+        const timestamp = coerceTimestampMs(model.date || model.updated_at);
+        if (!timestamp || timestamp < cutoff) return;
+        const url = model.modelUrl || '';
+        items.push({
+            id: `fal:${model.id || model.title}`,
+            source: 'fal',
+            title: model.title || 'fal.ai Release',
+            description: model.shortDescription || model.description || '',
+            url,
+            timestamp,
+            badge: model.category || '',
+            actionLabel: 'View on fal.ai',
+            tags: Array.isArray(model.tags) ? model.tags : []
+        });
+    });
+
+    items.sort((a, b) => b.timestamp - a.timestamp);
+    return items;
+}
+
+async function loadLatestFeed(forceRefresh = false) {
+    const loadingElement = document.getElementById('latest-loading');
+    const errorElement = document.getElementById('latest-error');
+    const dataElement = document.getElementById('latest-data');
+    const resultsInfo = document.getElementById('latest-results-info');
+
+    if (!loadingElement || !errorElement || !dataElement) {
+        return;
+    }
+
+    try {
+        loadingElement.style.display = 'flex';
+        errorElement.style.display = 'none';
+        dataElement.innerHTML = '';
+        if (resultsInfo) {
+            resultsInfo.style.display = 'none';
+            resultsInfo.textContent = '';
+        }
+
+        await ensureLatestDependencies(forceRefresh);
+        if (forceRefresh) {
+            if (rawData.openRouterModels) {
+                filterOpenRouterModelsData();
+            }
+            if (rawData.falModels) {
+                filterFalModelsData();
+            }
+            if (rawData.replicateModels) {
+                filterReplicateModelsData();
+            }
+            if (cachedData.hype) {
+                displayHypeItems(cachedData.hype);
+            }
+            if (cachedData.blog) {
+                displayBlogPosts(cachedData.blog);
+            }
+        }
+        const items = buildLatestFeedItems();
+        cachedData.latest = items;
+        rawData.latest = items;
+        displayLatestFeed(items);
+    } catch (error) {
+        const message = error?.message || String(error);
+        errorElement.textContent = `Failed to load latest activity: ${message}`;
+        errorElement.style.display = 'block';
+    } finally {
+        loadingElement.style.display = 'none';
+    }
+}
+
+function displayLatestFeed(items) {
+    const container = document.getElementById('latest-data');
+    const resultsInfo = document.getElementById('latest-results-info');
+    if (!container) {
+        return;
+    }
+
+    container.innerHTML = '';
+
+    if (!items || !items.length) {
+        container.innerHTML = '<div class="empty-state">No updates in the last 24 hours. Check back soon!</div>';
+        if (resultsInfo) {
+            resultsInfo.style.display = 'none';
+            resultsInfo.textContent = '';
+        }
+        return;
+    }
+
+    items.forEach(item => {
+        container.appendChild(createLatestCard(item));
+    });
+
+    if (resultsInfo) {
+        resultsInfo.textContent = `Showing ${items.length} updates from the last 24 hours`;
+        resultsInfo.style.display = 'block';
+    }
+}
+
+function formatLatestSourceLabel(source) {
+    switch (source) {
+        case 'openrouter':
+            return 'OpenRouter Model';
+        case 'blog':
+            return 'Blog Post';
+        case 'replicate':
+            return 'Replicate Model';
+        case 'hype':
+            return 'Hype Signal';
+        case 'fal':
+            return 'fal.ai Release';
+        default:
+            return '';
+    }
+}
+
+function renderLatestTags(tags) {
+    if (!Array.isArray(tags) || !tags.length) {
+        return '';
+    }
+    const unique = [];
+    const seen = new Set();
+    tags.forEach(tag => {
+        const label = typeof tag === 'string' ? tag.trim() : '';
+        if (!label) return;
+        const normalized = label.toLowerCase();
+        if (seen.has(normalized)) return;
+        seen.add(normalized);
+        unique.push(label.startsWith('#') ? label : `#${label}`);
+    });
+    if (!unique.length) {
+        return '';
+    }
+    return `<div class="card-tags">${unique.map(tag => `<span class="card-tag tag-pill">${escapeHtml(tag)}</span>`).join('')}</div>`;
+}
+
+function createLatestCard(item) {
+    const card = document.createElement('div');
+    card.className = 'model-card latest-card';
+    card.dataset.source = item.source || 'latest';
+
+    const sourceLabel = formatLatestSourceLabel(item.source);
+    const relative = formatRelativeTime(item.timestamp);
+    const description = item.description ? truncateText(item.description, 260) : '';
+    const title = item.title ? escapeHtml(item.title) : 'Recent Update';
+    const badge = item.badge ? `<span class="card-badge">${escapeHtml(item.badge)}</span>` : '';
+    const tagsMarkup = renderLatestTags(item.tags);
+    const actionLabel = item.actionLabel || 'Open Link';
+    const linkMarkup = item.url
+        ? `<a class="chart-btn secondary" href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">`
+            + `${escapeHtml(actionLabel)}</a>`
+        : '';
+
+    const metaParts = [
+        sourceLabel ? `<span class="meta-item">${escapeHtml(sourceLabel)}</span>` : '',
+        relative ? `<span class="meta-item">${escapeHtml(relative)}</span>` : ''
+    ].filter(Boolean);
+
+    const metaMarkup = metaParts.length
+        ? `<div class="card-meta">${metaParts.join('')}</div>`
+        : '';
+
+    card.innerHTML = `
+        <div class="card-header">
+            <div class="card-header-content">
+                <div class="source-badge">Latest</div>
+                <div class="card-title">
+                    ${item.url ? `<a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">${title}</a>` : title}
+                </div>
+                ${metaMarkup}
+            </div>
+        </div>
+        ${description ? `<div class="card-summary">${escapeHtml(description)}</div>` : ''}
+        ${tagsMarkup}
+        <div class="card-actions">
+            ${linkMarkup}
+            ${badge}
+        </div>
+    `;
+
+    return card;
 }
 
 function formatContextLength(contextLength) {
@@ -4375,6 +4754,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.error('Failed to refresh blog posts:', error);
             } finally {
                 blogRefreshButton.disabled = false;
+            }
+        });
+    }
+
+    const latestRefreshButton = document.getElementById('latest-refresh');
+    if (latestRefreshButton) {
+        latestRefreshButton.addEventListener('click', async () => {
+            latestRefreshButton.disabled = true;
+            try {
+                await loadLatestFeed(true);
+            } catch (error) {
+                console.error('Failed to refresh latest feed:', error);
+            } finally {
+                latestRefreshButton.disabled = false;
             }
         });
     }

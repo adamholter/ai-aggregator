@@ -36,6 +36,7 @@
             <button class="nav-btn" data-section="replicate-models">Replicate</button>
             <button class="nav-btn" data-section="openrouter-models">OpenRouter</button>
             <button class="nav-btn" data-section="hype" data-experimental="true" style="display:none;" aria-hidden="true">Hype</button>
+            <button class="nav-btn" data-section="latest" data-experimental="true" style="display:none;" aria-hidden="true">Latest</button>
             <button class="nav-btn" data-section="blog" data-experimental="true" style="display:none;" aria-hidden="true">Blog</button>
             <button class="nav-btn" data-section="ai-agent">AI Agent</button>
             <button class="nav-btn" data-section="about">About</button>
@@ -63,6 +64,23 @@
                 <div class="error" id="llms-error" style="display: none;"></div>
                 <div class="results-info" id="llms-results-info"></div>
                 <div class="data-container" id="llms-data"></div>
+            </section>
+
+            <!-- Latest Section -->
+            <section id="latest" class="content-section" data-experimental="true" style="display:none;" aria-hidden="true">
+                <div class="section-header">
+                    <h2>Latest 24h Activity</h2>
+                    <div class="controls">
+                        <button class="refresh-btn" id="latest-refresh">Refresh Feed</button>
+                    </div>
+                </div>
+                <p class="section-note">Experimental aggregation of Blog, Hype, OpenRouter, Replicate, and fal.ai updates from the last 24 hours.</p>
+                <div class="loading" id="latest-loading">
+                    <div class="loading-spinner"></div>
+                </div>
+                <div class="error" id="latest-error" style="display: none;"></div>
+                <div class="results-info" id="latest-results-info" style="display:none;"></div>
+                <div class="data-container" id="latest-data"></div>
             </section>
 
             <!-- Blog Section -->
