@@ -3,7 +3,7 @@ from flask_cors import CORS
 import argparse
 import requests
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import os
 import subprocess
 import tempfile
@@ -1077,7 +1077,7 @@ def get_agent_tools_schema():
             'type': 'function',
             'function': {
                 'name': 'fetch_data',
-                'description': 'Load cached datasets (Artificial Analysis, OpenRouter, fal.ai, Replicate). Provide category ids such as "llms", "openrouter".',
+                'description': 'Load cached datasets (Artificial Analysis, OpenRouter, fal.ai, Replicate). Provide category ids such as "llms", "openrouter". Optionally include a recency window (day, week, month, year).',
                 'parameters': {
                     'type': 'object',
                     'properties': {
@@ -1085,6 +1085,11 @@ def get_agent_tools_schema():
                             'type': 'array',
                             'items': {'type': 'string'},
                             'description': 'List of dataset categories to load (e.g. ["llms", "openrouter"]).'
+                        },
+                        'recency': {
+                            'type': 'string',
+                            'enum': ['day', 'week', 'month', 'year'],
+                            'description': 'Optional recency window for the datasets.'
                         }
                     },
                     'required': ['categories']
@@ -1315,6 +1320,89 @@ def parse_timestamp(value):
     except Exception:
         return None
     return None
+
+
+RECENCY_WINDOWS = {
+    'day': timedelta(days=1),
+    'week': timedelta(weeks=1),
+    'month': timedelta(days=30),
+    'year': timedelta(days=365)
+}
+
+
+def normalize_recency_value(value):
+    if value is None:
+        return None, None
+    try:
+        normalized = str(value).strip().lower()
+    except Exception:
+        return None, "Invalid recency value."
+    if not normalized:
+        return None, None
+    if normalized in RECENCY_WINDOWS:
+        return normalized, None
+    return None, f"Invalid recency value '{value}'. Use day, week, month, or year."
+
+
+def coerce_to_datetime(value):
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, (int, float)):
+        number = float(value)
+        if number > 1e12:
+            number = number / 1000.0
+        try:
+            return datetime.utcfromtimestamp(number)
+        except Exception:
+            return None
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+        if text.isdigit():
+            return coerce_to_datetime(float(text))
+        iso_candidate = text.replace('Z', '+00:00') if text.endswith('Z') else text
+        try:
+            dt = datetime.fromisoformat(iso_candidate)
+            return dt if dt.tzinfo is None else dt.astimezone(timezone.utc).replace(tzinfo=None)
+        except Exception:
+            pass
+        for fmt in ('%Y-%m-%d %H:%M:%S', '%Y/%m/%d %H:%M:%S', '%Y-%m-%d'):
+            try:
+                return datetime.strptime(text, fmt)
+            except ValueError:
+                continue
+    return None
+
+
+def extract_item_timestamp(item):
+    if not isinstance(item, dict):
+        return None
+    candidate_keys = [
+        'inserted_at', 'updated_at', 'created_at', 'created', 'date', 'updated',
+        'last_updated', 'timestamp', 'fetched_at', 'published_at', 'released_at'
+    ]
+    for key in candidate_keys:
+        if key in item:
+            dt = coerce_to_datetime(item.get(key))
+            if dt:
+                return dt
+    return None
+
+
+def filter_items_by_recency(items, recency):
+    if not recency or recency not in RECENCY_WINDOWS:
+        return items
+    cutoff = datetime.utcnow() - RECENCY_WINDOWS[recency]
+    filtered = []
+    for item in items or []:
+        timestamp = extract_item_timestamp(item)
+        if timestamp and timestamp < cutoff:
+            continue
+        filtered.append(item)
+    return filtered
 
 def safe_slug(value, fallback='unknown-model'):
     if not value:
@@ -1769,13 +1857,14 @@ Rules:
         print(f"WARNING: fetch-data summarizer failed ({exc}); using fallback.")
         return build_fetch_data_fallback(metadata, datasets)
 
-def fetch_data_for_categories(categories, limit_per_category=None):
+def fetch_data_for_categories(categories, limit_per_category=None, recency=None):
     if not isinstance(categories, (list, tuple, set)):
         categories = [categories]
 
     datasets = {}
     metadata = []
     seen = set()
+    errors = []
 
     for category in categories:
         category_id, config = resolve_category_config(category)
@@ -1783,36 +1872,46 @@ def fetch_data_for_categories(categories, limit_per_category=None):
             continue
         seen.add(category_id)
 
-        _, _, payload = load_category_payload(category_id)
-        if payload is None:
+        try:
+            _, _, payload = load_category_payload(category_id)
+            if payload is None:
+                continue
+
+            items = extract_category_items(
+                category_id,
+                config,
+                payload,
+                limit=limit_per_category
+            )
+
+            items = filter_items_by_recency(items, recency)
+
+            if not items:
+                continue
+
+            datasets[category_id] = items
+            metadata.append({
+                'id': category_id,
+                'label': config.get('label', category_id.title()),
+                'items': len(items) if isinstance(items, list) else len(items),
+                'source': config.get('source', '')
+            })
+        except Exception as exc:
+            print(f"WARNING: Failed to load category '{category_id}': {exc}")
+            errors.append({'category': category_id, 'error': str(exc)})
             continue
-
-        items = extract_category_items(
-            category_id,
-            config,
-            payload,
-            limit=limit_per_category
-        )
-
-        if not items:
-            continue
-
-        datasets[category_id] = items
-        metadata.append({
-            'id': category_id,
-            'label': config.get('label', category_id.title()),
-            'items': len(items) if isinstance(items, list) else len(items),
-            'source': config.get('source', '')
-        })
 
     if not datasets:
-        return {
+        result = {
             'categories': [],
             'structured': {},
             'markdown': 'No datasets were available for the requested categories.',
             'datasets': {},
             'generated_at': datetime.now().isoformat()
         }
+        if errors:
+            result['errors'] = errors
+        return result
 
     structured = run_fetch_data_summarizer(metadata, datasets)
     markdown = ''
@@ -1821,13 +1920,16 @@ def fetch_data_for_categories(categories, limit_per_category=None):
     if not markdown:
         markdown = build_fetch_data_markdown(metadata, structured if isinstance(structured, dict) else {}, datasets)
 
-    return {
+    result = {
         'categories': metadata,
         'structured': structured if isinstance(structured, dict) else {},
         'markdown': markdown,
         'datasets': datasets,
         'generated_at': datetime.now().isoformat()
     }
+    if errors:
+        result['errors'] = errors
+    return result
 
 def initialize_fetch_context():
     return {
@@ -2495,7 +2597,8 @@ def agent_tool_loop_generator(
     auth_token,
     theme='light',
     mode='standard',
-    max_iterations=6
+    max_iterations=6,
+    default_recency=None
 ):
     print(f"🔧 [AGENT] Starting tool loop generator")
     print(f"📝 [AGENT] User message: {user_message[:100]}{'...' if len(user_message) > 100 else ''}")
@@ -2682,7 +2785,7 @@ def agent_tool_loop_generator(
                             except (TypeError, ValueError):
                                 categories_payload = str(requested_categories)
 
-                            normalized_requested, error = parse_fetch_category_payload(categories_payload)
+                            normalized_requested, recency_filter, error = parse_fetch_category_payload(categories_payload)
                             if error:
                                 print(f"❌ [AGENT] Invalid fetch_data tool request: {error}")
                                 traces.append({
@@ -2706,6 +2809,10 @@ def agent_tool_loop_generator(
                                 yield ('final', fail_message, traces, fetch_context, web_context)
                                 return
 
+                            effective_recency = recency_filter or default_recency
+                            if effective_recency:
+                                print(f"📅 [AGENT] Applying recency filter: {effective_recency}")
+
                             existing_categories = {
                                 normalize_category_id(item.get('id'))
                                 for item in (fetch_context.get('metadata') or [])
@@ -2715,6 +2822,9 @@ def agent_tool_loop_generator(
                                 cat for cat in normalized_requested
                                 if cat not in existing_categories
                             ]
+
+                            if effective_recency:
+                                missing_categories = normalized_requested
 
                             if not missing_categories:
                                 description = (
@@ -2732,7 +2842,7 @@ def agent_tool_loop_generator(
                                 print(f"ℹ️ [AGENT] Tool requested datasets already available; skipping fetch.")
                             else:
                                 print(f"📊 [AGENT] Tool fetching data for categories: {missing_categories}")
-                                fetch_result = fetch_data_for_categories(missing_categories)
+                                fetch_result = fetch_data_for_categories(missing_categories, recency=effective_recency)
                                 fetch_context = merge_fetch_context(fetch_context, fetch_result)
                                 description = (
                                     f"Fetched datasets for {', '.join(missing_categories)}. "
@@ -2820,6 +2930,19 @@ def agent_tool_loop_generator(
                         final_prompt = enforce_prompt_ceiling(final_prompt)
                         continue
 
+                if tool_calls and not handled_tool:
+                    error_message = 'Agent requested an unsupported tool. Please refine the query.'
+                    print(f"⚠️ [AGENT] {error_message}")
+                    traces.append({
+                        'step': 'Response Generation',
+                        'description': error_message,
+                        'tool': model_display,
+                        'status': 'failed'
+                    })
+                    yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
+                    yield ('error', error_message, traces, fetch_context, web_context)
+                    return
+
                 content = sanitize_quickchart_urls_in_text(content, theme)
                 content, _ = ensure_quickchart_visualization(content, theme)
 
@@ -2888,7 +3011,7 @@ def agent_tool_loop_generator(
                 print(f"📊 [AGENT] Processing FETCH_DATA command")
                 try:
                     categories_payload = normalized_content.split(':', 1)[1].strip()
-                    requested_categories, error = parse_fetch_category_payload(categories_payload)
+                    requested_categories, recency_filter, error = parse_fetch_category_payload(categories_payload)
                     if error:
                         print(f"❌ [AGENT] Invalid fetch_data request: {error}")
                         traces.append({
@@ -2916,6 +3039,10 @@ def agent_tool_loop_generator(
                         normalize_category_id(cat) for cat in (requested_categories or [])
                         if normalize_category_id(cat)
                     ]
+                    effective_recency = recency_filter or default_recency
+                    if effective_recency:
+                        print(f"📅 [AGENT] Applying recency filter: {effective_recency}")
+
                     existing_categories = {
                         normalize_category_id(item.get('id'))
                         for item in (fetch_context.get('metadata') or [])
@@ -2925,6 +3052,9 @@ def agent_tool_loop_generator(
                         cat for cat in normalized_requested
                         if cat not in existing_categories
                     ]
+
+                    if effective_recency:
+                        missing_categories = normalized_requested
 
                     if not missing_categories:
                         description = (
@@ -2943,7 +3073,7 @@ def agent_tool_loop_generator(
                         continue
 
                     print(f"📊 [AGENT] Fetching data for categories: {missing_categories}")
-                    fetch_result = fetch_data_for_categories(missing_categories)
+                    fetch_result = fetch_data_for_categories(missing_categories, recency=effective_recency)
                     fetch_context = merge_fetch_context(fetch_context, fetch_result)
                     description = (
                         f"Fetched datasets for {', '.join(missing_categories)}. "
@@ -3498,23 +3628,34 @@ def get_fal_models():
         page = 1
         max_pages = 20  # Safety limit to prevent infinite loops
         
+        encountered_error = None
         while page <= max_pages:
             url = f"https://fal.ai/api/models?page={page}&sort=recent"
-            response = requests.get(url, timeout=15)
-            response.raise_for_status()
-            
+            try:
+                response = requests.get(url, timeout=15)
+                response.raise_for_status()
+            except requests.exceptions.RequestException as exc:
+                encountered_error = exc
+                print(f"WARNING: Failed to fetch fal.ai page {page}: {exc}")
+                break
+
             data = response.json()
             models = data.get('items', [])
-            
-            # If no models on this page, we've reached the end
+
             if not models:
                 break
-                
+
             all_models.extend(models)
             print(f"Fetched page {page} of fal.ai models: {len(models)} models")
             page += 1
-        
-        print(f"Total fal.ai models fetched: {len(all_models)} from {page-1} pages")
+
+        if encountered_error and not all_models:
+            raise encountered_error
+
+        if encountered_error:
+            print(f"WARNING: Using partial fal.ai dataset after error: {encountered_error}")
+
+        print(f"Total fal.ai models fetched: {len(all_models)} from {max(page-1, 0)} pages")
         
         # Process and standardize the model data
         processed_models = []
@@ -3972,6 +4113,12 @@ def ai_agent():
         if deep_research:
             final_model = DEEP_RESEARCH_MODEL_ID
 
+        recency_filter = None
+        if 'recency' in data and data.get('recency') is not None:
+            recency_filter, recency_error = normalize_recency_value(data.get('recency'))
+            if recency_error:
+                return jsonify({'error': recency_error}), 400
+
         if not user_message:
             return jsonify({'error': 'Message is required'}), 400
 
@@ -3984,7 +4131,7 @@ def ai_agent():
         fetch_context = initialize_fetch_context()
         existing_context_snapshot = data.get('contextSnapshot')
         reused_existing_context = False
-        if existing_context_snapshot:
+        if existing_context_snapshot and recency_filter is None:
             cached_context = rebuild_fetch_context(existing_context_snapshot)
             cached_categories = {normalize_category_id(cat.get('id')) for cat in (existing_context_snapshot.get('categories') or [])}
             required_categories = {normalize_category_id(cat) for cat in fetch_categories}
@@ -3992,7 +4139,7 @@ def ai_agent():
                 fetch_context = cached_context
                 reused_existing_context = True
         if not reused_existing_context:
-            fetch_result = fetch_data_for_categories(fetch_categories)
+            fetch_result = fetch_data_for_categories(fetch_categories, recency=recency_filter)
             fetch_context = merge_fetch_context(fetch_context, fetch_result)
         web_context = initialize_web_context()
         relevant_data = compose_fetch_markdown(fetch_context)
@@ -4008,7 +4155,7 @@ def ai_agent():
         default_final_prompt = """You are an AI model analysis expert. You can call tools to gather data before responding.
 
 TOOLS AVAILABLE:
-- fetch_data(categories: list[str]) -> Loads cached datasets (Artificial Analysis, OpenRouter, fal.ai, Replicate). Request it by replying exactly with `FETCH_DATA: [\"llms\", \"openrouter\"]`.
+- fetch_data(categories: list[str], recency?: "day"|"week"|"month"|"year") -> Loads cached datasets (Artificial Analysis, OpenRouter, fal.ai, Replicate). Example: `FETCH_DATA: {\"categories\":[\"llms\",\"openrouter\"],\"recency\":\"week\"}` (omit recency to include all data).
 - ask_perplexity(query: str) -> Live web search for missing information. Request it by replying exactly with `WEB_SEARCH: <query>`.
 
 Current User Question: "{USER_MESSAGE}"
@@ -4074,7 +4221,8 @@ Respond concisely and cite the sources (Conversation History, Database, Web Sear
                         user_openrouter_token,
                         theme=current_theme,
                         mode='deep-research' if deep_research else 'standard',
-                        max_iterations=8 if deep_research else 6
+                        max_iterations=8 if deep_research else 6,
+                        default_recency=recency_filter
                     )
                     print(f"✅ [SERVER] Generator created successfully")
                     
@@ -4865,6 +5013,7 @@ def fetch_data_api():
         data = request.get_json(silent=True) or {}
         categories = data.get('categories') or []
         limit = data.get('limit')
+        recency_input = data.get('recency')
 
         if not isinstance(categories, (list, tuple)) or not categories:
             return jsonify({'error': 'At least one category is required.'}), 400
@@ -4873,7 +5022,13 @@ def fetch_data_api():
         if isinstance(limit, int) and limit > 0:
             limit_value = limit
 
-        result = fetch_data_for_categories(categories, limit_value)
+        recency_filter = None
+        if recency_input is not None:
+            recency_filter, recency_error = normalize_recency_value(recency_input)
+            if recency_error:
+                return jsonify({'error': recency_error}), 400
+
+        result = fetch_data_for_categories(categories, limit_value, recency_filter)
         return jsonify(result)
     except Exception as exc:
         print(f"ERROR: fetch-data tool failed: {exc}")
