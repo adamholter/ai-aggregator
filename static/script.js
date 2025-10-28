@@ -56,6 +56,7 @@ const THEME_LABELS = {
 let modelConfig = null;
 let settingsInitialized = false;
 let experimentalModeEnabled = false;
+let hypeSortMode = 'newest';
 let agentPendingImages = [];
 
 // Common words to ignore when matching model names between sources
@@ -612,6 +613,17 @@ document.addEventListener('DOMContentLoaded', async function() {
     populateAgentDropdown();
     loadLLMData(); // Load LLM data by default
     setupImageUpload();
+
+    const hypeSortSelect = document.getElementById('hype-sort');
+    if (hypeSortSelect) {
+        hypeSortMode = hypeSortSelect.value || 'newest';
+        hypeSortSelect.addEventListener('change', () => {
+            hypeSortMode = hypeSortSelect.value || 'newest';
+            if (cachedData.hype) {
+                displayHypeItems(cachedData.hype);
+            }
+        });
+    }
 });
 
 // Theme management
@@ -1292,7 +1304,9 @@ function displayHypeItems(payload) {
         return;
     }
 
-    items.forEach((item, index) => {
+    const sortedItems = sortHypeItems(items, hypeSortMode);
+
+    sortedItems.forEach((item, index) => {
         container.appendChild(createHypeCard(item, index, fetchedAt));
     });
 
@@ -1302,9 +1316,38 @@ function displayHypeItems(payload) {
         if (relativeFetched) {
             summary.push(`fetched ${relativeFetched}`);
         }
+        summary.push(hypeSortMode === 'newest' ? 'sorted by newest first' : 'sorted by rank');
         resultsInfo.textContent = summary.join(' · ');
         resultsInfo.style.display = 'block';
     }
+}
+
+function sortHypeItems(items, mode) {
+    if (!Array.isArray(items)) {
+        return [];
+    }
+    const sorted = [...items];
+    if (mode === 'newest') {
+        sorted.sort((a, b) => getHypeTimestamp(b) - getHypeTimestamp(a));
+    } else {
+        sorted.sort((a, b) => (b.stars || 0) - (a.stars || 0));
+    }
+    return sorted;
+}
+
+function getHypeTimestamp(item) {
+    if (!item || typeof item !== 'object') {
+        return 0;
+    }
+    const candidates = [item.inserted_at, item.created_at, item.updated_at, item.date];
+    for (const candidate of candidates) {
+        if (!candidate) continue;
+        const parsed = Date.parse(candidate);
+        if (!Number.isNaN(parsed)) {
+            return parsed;
+        }
+    }
+    return 0;
 }
 
 function createHypeCard(item, index, fetchedAt) {
