@@ -1558,10 +1558,7 @@ def fetch_blog_posts(force_refresh=False, per_page_override=None, max_pages_over
         while current_page <= max_pages:
             params = {
                 'page': current_page,
-                'per_page': per_page,
-                'orderby': 'date',
-                'order': 'desc',
-                '_embed': 'author,wp:term,wp:featuredmedia'
+                'per_page': per_page
             }
             response = session.get(
                 api_url,
@@ -2965,7 +2962,9 @@ def agent_tool_loop_generator(
                 'content': f"[{tool_name}] {message}",
                 'metadata': {'tool': tool_name}
             })
-        
+
+        redundant_fetch_attempts = defaultdict(int)
+
         traces = []
         normalized_initial = [
             normalize_category_id(cat)
@@ -3161,6 +3160,8 @@ def agent_tool_loop_generator(
                                 description = (
                                     f"Datasets already loaded for {', '.join(normalized_requested)}."
                                 )
+                                redundant_key = (tuple(sorted(normalized_requested)), effective_recency or 'all')
+                                redundant_fetch_attempts[redundant_key] += 1
                                 traces.append({
                                     'step': 'Dataset Fetch',
                                     'description': description,
@@ -3171,6 +3172,18 @@ def agent_tool_loop_generator(
                                 yield ('status', status_payload('Tool', description))
                                 append_tool_note('fetch_data', description)
                                 print(f"ℹ️ [AGENT] Tool requested datasets already available; skipping fetch.")
+
+                                if redundant_fetch_attempts[redundant_key] >= 1:
+                                    caution_note = (
+                                        "IMPORTANT: The datasets for "
+                                        f"{', '.join(normalized_requested)} are already loaded. Focus on synthesizing the answer "
+                                        "from the existing context and do not call fetch_data for these categories again."
+                                    )
+                                    append_tool_note('system', caution_note)
+                                    prompt_context = build_agent_prompt_context(user_message, fetch_context, web_context)
+                                    final_prompt = format_prompt(prompt_template, **prompt_context)
+                                    final_prompt = enforce_prompt_ceiling(f"{final_prompt}\n\n{caution_note}")
+                                continue
                             else:
                                 print(f"📊 [AGENT] Tool fetching data for categories: {missing_categories}")
                                 fetch_result = fetch_data_for_categories(missing_categories, recency=effective_recency)
