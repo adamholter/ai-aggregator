@@ -793,7 +793,51 @@ function ensureExperimentalSections() {
     const main = document.querySelector('.main-content');
     if (!main) return;
 
-    if (!document.getElementById('latest')) {
+    const ensureLatestControls = (section) => {
+        if (!section) return;
+        const controls = section.querySelector('.controls');
+        if (!controls) return;
+
+        let timeframeSelect = section.querySelector('#latest-timeframe');
+        if (!timeframeSelect) {
+            timeframeSelect = document.createElement('select');
+            timeframeSelect.id = 'latest-timeframe';
+            timeframeSelect.setAttribute('aria-label', 'Latest feed timeframe');
+            timeframeSelect.innerHTML = `
+                <option value="day" selected>Last 24 hours</option>
+                <option value="week">Last 7 days</option>
+            `;
+            controls.insertBefore(timeframeSelect, controls.firstChild);
+        }
+
+        let includeCheckbox = section.querySelector('#latest-include-hype');
+        if (!includeCheckbox) {
+            const label = document.createElement('label');
+            label.className = 'toggle-option';
+            includeCheckbox = document.createElement('input');
+            includeCheckbox.type = 'checkbox';
+            includeCheckbox.id = 'latest-include-hype';
+            const span = document.createElement('span');
+            span.textContent = 'Include Hype';
+            label.appendChild(includeCheckbox);
+            label.appendChild(span);
+
+            const refreshButton = controls.querySelector('#latest-refresh');
+            if (refreshButton) {
+                controls.insertBefore(label, refreshButton);
+            } else {
+                controls.appendChild(label);
+            }
+        }
+
+        const note = section.querySelector('.section-note');
+        if (note) {
+            note.textContent = 'Experimental aggregation of Blog, OpenRouter, Replicate, and fal.ai updates from the selected window. Toggle Hype to blend in community buzz.';
+        }
+    };
+
+    const existingLatest = document.getElementById('latest');
+    if (!existingLatest) {
         const section = document.createElement('section');
         section.id = 'latest';
         section.className = 'content-section';
@@ -804,18 +848,10 @@ function ensureExperimentalSections() {
             <div class="section-header">
                 <h2>Latest 24h Activity</h2>
                 <div class="controls">
-                    <select id="latest-timeframe" aria-label="Latest feed timeframe">
-                        <option value="day" selected>Last 24 hours</option>
-                        <option value="week">Last 7 days</option>
-                    </select>
-                    <label class="toggle-option" style="display:flex;align-items:center;gap:6px;">
-                        <input type="checkbox" id="latest-include-hype">
-                        <span>Include Hype</span>
-                    </label>
                     <button class="refresh-btn" id="latest-refresh">Refresh Feed</button>
                 </div>
             </div>
-            <p class="section-note">Experimental aggregation of updates from Blog, OpenRouter, Replicate, and fal.ai within the selected window. Toggle Hype to blend in community buzz.</p>
+            <p class="section-note">Experimental aggregation of Blog, OpenRouter, Replicate, and fal.ai updates from the selected window. Toggle Hype to blend in community buzz.</p>
             <div class="loading" id="latest-loading">
                 <div class="loading-spinner"></div>
             </div>
@@ -835,6 +871,9 @@ function ensureExperimentalSections() {
                 main.appendChild(section);
             }
         }
+        ensureLatestControls(section);
+    } else {
+        ensureLatestControls(existingLatest);
     }
 
     if (!document.getElementById('blog')) {
