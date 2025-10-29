@@ -326,6 +326,22 @@ body {
     flex-wrap: wrap;
 }
 
+.controls .toggle-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85rem;
+    color: var(--info-text);
+    user-select: none;
+}
+
+.controls .toggle-option input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--button-bg);
+    cursor: pointer;
+}
+
 .controls input[type="text"] {
     padding: 8px 12px;
     border: 1px solid var(--border-color);
