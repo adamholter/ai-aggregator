@@ -5429,7 +5429,7 @@ def _format_hype_source_label(source):
     return mapping.get(normalized, str(source))
 
 
-def generate_latest_feed_payload(timeframe='day', force_refresh=False):
+def generate_latest_feed_payload(timeframe='day', force_refresh=False, include_hype=False):
     normalized = str(timeframe or 'day').strip().lower()
     if normalized in {'week', 'weeks', '7d', '7day', '7days'}:
         normalized = 'week'
@@ -5474,27 +5474,28 @@ def generate_latest_feed_payload(timeframe='day', force_refresh=False):
         print(f"WARNING: Failed to aggregate blog posts for latest feed: {exc}")
 
     # Hype
-    try:
-        hype_window_days = 7 if window_hours > 48 else 2
-        hype_payload = fetch_hype_feed_payload(limit=HYPE_MAX_LIMIT, window_days=hype_window_days)
-        for item in hype_payload.get('items', []):
-            dt = _coerce_timestamp_utc(item.get('updated_at') or item.get('inserted_at') or item.get('created_at'))
-            if not dt or dt < cutoff:
-                continue
-            label = _format_hype_source_label(item.get('source'))
-            append_entry({
-                'id': f"hype:{item.get('url') or item.get('name')}",
-                'title': item.get('name') or 'Trending Project',
-                'source': 'hype',
-                'source_label': f"Hype – {label}",
-                'excerpt': _truncate_text(item.get('summary') or item.get('description') or ''),
-                'timestamp_dt': dt,
-                'url': item.get('url') or '',
-                'badge': label,
-                'tags': item.get('tags') or []
-            })
-    except Exception as exc:
-        print(f"WARNING: Failed to aggregate hype feed for latest feed: {exc}")
+    if include_hype:
+        try:
+            hype_window_days = 7 if window_hours > 48 else 2
+            hype_payload = fetch_hype_feed_payload(limit=HYPE_MAX_LIMIT, window_days=hype_window_days)
+            for item in hype_payload.get('items', []):
+                dt = _coerce_timestamp_utc(item.get('updated_at') or item.get('inserted_at') or item.get('created_at'))
+                if not dt or dt < cutoff:
+                    continue
+                label = _format_hype_source_label(item.get('source'))
+                append_entry({
+                    'id': f"hype:{item.get('url') or item.get('name')}",
+                    'title': item.get('name') or 'Trending Project',
+                    'source': 'hype',
+                    'source_label': f"Hype – {label}",
+                    'excerpt': _truncate_text(item.get('summary') or item.get('description') or ''),
+                    'timestamp_dt': dt,
+                    'url': item.get('url') or '',
+                    'badge': label,
+                    'tags': item.get('tags') or []
+                })
+        except Exception as exc:
+            print(f"WARNING: Failed to aggregate hype feed for latest feed: {exc}")
 
     # OpenRouter models
     try:
@@ -5579,6 +5580,7 @@ def generate_latest_feed_payload(timeframe='day', force_refresh=False):
         'generated_at': datetime.utcnow().replace(microsecond=0).isoformat() + 'Z',
         'count': len(entries),
         'sources': dict(source_counts),
+        'include_hype': bool(include_hype),
         'items': entries
     }
     return payload
@@ -5588,8 +5590,13 @@ def generate_latest_feed_payload(timeframe='day', force_refresh=False):
 def latest_feed():
     timeframe = request.args.get('timeframe', 'day')
     force_refresh = request.args.get('cache_bust', 'false').lower() == 'true'
+    include_hype = request.args.get('include_hype', 'false').lower() in {'1', 'true', 'yes', 'on'}
     try:
-        payload = generate_latest_feed_payload(timeframe=timeframe, force_refresh=force_refresh)
+        payload = generate_latest_feed_payload(
+            timeframe=timeframe,
+            force_refresh=force_refresh,
+            include_hype=include_hype
+        )
         return jsonify(payload)
     except RuntimeError as exc:
         return jsonify({'error': str(exc)}), 503

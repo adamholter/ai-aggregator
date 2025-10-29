@@ -68,6 +68,7 @@ const BLOG_FULL_PAGE_SIZE = 100;
 const BLOG_FULL_MAX_PAGES = 5;
 let blogPrefetching = false;
 let latestTimeframe = 'day';
+let latestIncludeHype = false;
 let latestMetadata = null;
 
 // Common words to ignore when matching model names between sources
@@ -807,10 +808,14 @@ function ensureExperimentalSections() {
                         <option value="day" selected>Last 24 hours</option>
                         <option value="week">Last 7 days</option>
                     </select>
+                    <label class="toggle-option" style="display:flex;align-items:center;gap:6px;">
+                        <input type="checkbox" id="latest-include-hype">
+                        <span>Include Hype</span>
+                    </label>
                     <button class="refresh-btn" id="latest-refresh">Refresh Feed</button>
                 </div>
             </div>
-            <p class="section-note">Experimental aggregation of updates from Blog, Hype Signals, OpenRouter, Replicate, and fal.ai within the last 24 hours.</p>
+            <p class="section-note">Experimental aggregation of updates from Blog, OpenRouter, Replicate, and fal.ai within the selected window. Toggle Hype to blend in community buzz.</p>
             <div class="loading" id="latest-loading">
                 <div class="loading-spinner"></div>
             </div>
@@ -1951,6 +1956,9 @@ async function loadLatestFeed(forceRefresh = false) {
         }
 
         const params = new URLSearchParams({ timeframe: latestTimeframe });
+        if (latestIncludeHype) {
+            params.set('include_hype', 'true');
+        }
         if (forceRefresh) {
             params.set('cache_bust', 'true');
         }
@@ -1979,9 +1987,11 @@ function displayLatestFeed(items) {
     container.innerHTML = '';
 
     const windowLabel = latestMetadata?.window_label || (latestTimeframe === 'week' ? 'Last 7 days' : 'Last 24 hours');
+    const hypeIncluded = latestMetadata?.include_hype || latestIncludeHype;
 
     if (!items || !items.length) {
-        container.innerHTML = `<div class="empty-state">No updates in the ${escapeHtml(windowLabel.toLowerCase())}. Check back soon!</div>`;
+        const hypeNote = hypeIncluded ? ' including Hype sources' : '';
+        container.innerHTML = `<div class="empty-state">No updates in the ${escapeHtml(windowLabel.toLowerCase())}${escapeHtml(hypeNote)}. Check back soon!</div>`;
         if (resultsInfo) {
             resultsInfo.style.display = 'none';
             resultsInfo.textContent = '';
@@ -1999,7 +2009,8 @@ function displayLatestFeed(items) {
         const sourceSummary = Object.keys(sources).length
             ? ` · Sources: ${Object.entries(sources).map(([key, count]) => `${key} (${count})`).join(', ')}`
             : '';
-        resultsInfo.textContent = `${total} updates · ${windowLabel}${sourceSummary}`;
+        const hypeSummary = hypeIncluded ? ' · Hype included' : ' · Hype excluded';
+        resultsInfo.textContent = `${total} updates · ${windowLabel}${hypeSummary}${sourceSummary}`;
         resultsInfo.style.display = 'block';
     }
 }
@@ -4699,6 +4710,15 @@ document.addEventListener('DOMContentLoaded', function() {
         latestTimeframe = latestTimeframeSelect.value || 'day';
         latestTimeframeSelect.addEventListener('change', () => {
             latestTimeframe = latestTimeframeSelect.value || 'day';
+            loadLatestFeed(true);
+        });
+    }
+
+    const latestIncludeHypeCheckbox = document.getElementById('latest-include-hype');
+    if (latestIncludeHypeCheckbox) {
+        latestIncludeHype = latestIncludeHypeCheckbox.checked;
+        latestIncludeHypeCheckbox.addEventListener('change', () => {
+            latestIncludeHype = latestIncludeHypeCheckbox.checked;
             loadLatestFeed(true);
         });
     }

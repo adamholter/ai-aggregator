@@ -76,10 +76,14 @@
                             <option value="day" selected>Last 24 hours</option>
                             <option value="week">Last 7 days</option>
                         </select>
+                        <label class="toggle-option" style="display:flex;align-items:center;gap:6px;">
+                            <input type="checkbox" id="latest-include-hype">
+                            <span>Include Hype</span>
+                        </label>
                         <button class="refresh-btn" id="latest-refresh">Refresh Feed</button>
                     </div>
                 </div>
-                <p class="section-note">Experimental aggregation of Blog, Hype, OpenRouter, Replicate, and fal.ai updates from the last 24 hours.</p>
+                <p class="section-note">Experimental aggregation of Blog, OpenRouter, Replicate, and fal.ai updates from the selected window. Enable Hype to blend in community buzz.</p>
                 <div class="loading" id="latest-loading">
                     <div class="loading-spinner"></div>
                 </div>
