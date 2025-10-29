@@ -70,6 +70,62 @@ let blogPrefetching = false;
 let latestTimeframe = 'day';
 let latestIncludeHype = false;
 let latestMetadata = null;
+let latestControlsWired = false;
+
+function getLatestControls() {
+    const section = document.getElementById('latest');
+    return {
+        section,
+        timeframeSelect: section ? section.querySelector('#latest-timeframe') : document.getElementById('latest-timeframe'),
+        includeCheckbox: section ? section.querySelector('#latest-include-hype') : document.getElementById('latest-include-hype'),
+        refreshButton: section ? section.querySelector('#latest-refresh') : document.getElementById('latest-refresh'),
+        header: section ? section.querySelector('.section-header h2') : null
+    };
+}
+
+function syncLatestControls() {
+    const { timeframeSelect, includeCheckbox } = getLatestControls();
+    if (timeframeSelect) {
+        const current = timeframeSelect.value;
+        if (current !== latestTimeframe) {
+            timeframeSelect.value = latestTimeframe;
+        }
+    }
+    if (includeCheckbox) {
+        includeCheckbox.checked = Boolean(latestIncludeHype);
+    }
+}
+
+function ensureLatestControlListeners() {
+    const { timeframeSelect, includeCheckbox } = getLatestControls();
+    if (timeframeSelect && timeframeSelect.dataset.listenerAttached !== 'true') {
+        timeframeSelect.addEventListener('change', () => {
+            latestTimeframe = timeframeSelect.value || 'day';
+            syncLatestControls();
+            loadLatestFeed(true);
+        });
+        timeframeSelect.dataset.listenerAttached = 'true';
+    }
+    if (includeCheckbox && includeCheckbox.dataset.listenerAttached !== 'true') {
+        includeCheckbox.addEventListener('change', () => {
+            latestIncludeHype = includeCheckbox.checked;
+            syncLatestControls();
+            loadLatestFeed(true);
+        });
+        includeCheckbox.dataset.listenerAttached = 'true';
+    }
+    syncLatestControls();
+    latestControlsWired = Boolean(timeframeSelect || includeCheckbox);
+}
+
+function updateLatestHeading() {
+    const { header } = getLatestControls();
+    if (header) {
+        const windowLabel = latestMetadata?.window_label
+            || (latestTimeframe === 'week' ? 'Last 7 days' : 'Last 24 hours');
+        header.textContent = `Latest Activity (${windowLabel})`;
+    }
+}
 
 // Common words to ignore when matching model names between sources
 const MATCH_EXCLUSION_TOKENS = [
@@ -834,6 +890,7 @@ function ensureExperimentalSections() {
         if (note) {
             note.textContent = 'Experimental aggregation of Blog, OpenRouter, Replicate, and fal.ai updates from the selected window. Toggle Hype to blend in community buzz.';
         }
+        ensureLatestControlListeners();
     };
 
     const existingLatest = document.getElementById('latest');
@@ -875,6 +932,8 @@ function ensureExperimentalSections() {
     } else {
         ensureLatestControls(existingLatest);
     }
+
+    ensureLatestControlListeners();
 
     if (!document.getElementById('blog')) {
         // Inject blog section dynamically when the HTML template hasn't been updated yet.
@@ -2006,6 +2065,10 @@ async function loadLatestFeed(forceRefresh = false) {
         cachedData.latest = items;
         rawData.latest = items;
         latestMetadata = data || null;
+        if (typeof latestMetadata?.include_hype === 'boolean') {
+            latestIncludeHype = latestMetadata.include_hype;
+        }
+        ensureLatestControlListeners();
         displayLatestFeed(items);
     } catch (error) {
         const message = error?.message || String(error);
@@ -2027,6 +2090,9 @@ function displayLatestFeed(items) {
 
     const windowLabel = latestMetadata?.window_label || (latestTimeframe === 'week' ? 'Last 7 days' : 'Last 24 hours');
     const hypeIncluded = latestMetadata?.include_hype || latestIncludeHype;
+
+    updateLatestHeading();
+    syncLatestControls();
 
     if (!items || !items.length) {
         const hypeNote = hypeIncluded ? ' including Hype sources' : '';
@@ -4744,23 +4810,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    const latestTimeframeSelect = document.getElementById('latest-timeframe');
-    if (latestTimeframeSelect) {
-        latestTimeframe = latestTimeframeSelect.value || 'day';
-        latestTimeframeSelect.addEventListener('change', () => {
-            latestTimeframe = latestTimeframeSelect.value || 'day';
-            loadLatestFeed(true);
-        });
-    }
-
-    const latestIncludeHypeCheckbox = document.getElementById('latest-include-hype');
-    if (latestIncludeHypeCheckbox) {
-        latestIncludeHype = latestIncludeHypeCheckbox.checked;
-        latestIncludeHypeCheckbox.addEventListener('change', () => {
-            latestIncludeHype = latestIncludeHypeCheckbox.checked;
-            loadLatestFeed(true);
-        });
-    }
+    ensureLatestControlListeners();
 
     const blogSortSelect = document.getElementById('blog-sort');
     if (blogSortSelect) {

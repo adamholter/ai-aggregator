@@ -333,6 +333,7 @@ body {
     font-size: 0.85rem;
     color: var(--info-text);
     user-select: none;
+    cursor: pointer;
 }
 
 .controls .toggle-option input[type="checkbox"] {
