@@ -65,6 +65,10 @@ FALLBACK_CATEGORY_FILES = {
     'replicate': os.path.join(BASE_DIR, 'data', 'fallback', 'replicate_models.json')
 }
 
+GOOGLE_SHEETS_API_KEY = (os.environ.get('GOOGLE_SHEETS_API_KEY') or '').strip()
+MONITOR_SHEET_ID = (os.environ.get('MONITOR_SHEET_ID') or '1Dg58BUnlBwREG__ls6qcUrj3PHE9LMAOvQMZGesQI84').strip()
+MONITOR_SHEET_RANGE = os.environ.get('MONITOR_SHEET_RANGE', 'Data for Dashboard!A:D').strip()
+
 OPENROUTER_KEY_REQUIRED_MESSAGE = (
     'An OpenRouter API key is required for this feature. Add your key in Settings to continue.'
 )
@@ -79,6 +83,12 @@ _BLOG_POSTS_CACHE = {
 }
 _BLOG_HTML_TAG_PATTERN = re.compile(r'<[^>]+>')
 _BLOG_WHITESPACE_PATTERN = re.compile(r'\s+')
+
+_MONITOR_CACHE = {
+    'timestamp': None,
+    'payload': None
+}
+MONITOR_CACHE_TTL = timedelta(minutes=15)
 
 
 def _warn_if_missing(name, value):
@@ -5565,12 +5575,23 @@ def generate_latest_feed_payload(timeframe='day', force_refresh=False, include_h
     except Exception as exc:
         print(f"WARNING: Failed to aggregate fal.ai models for latest feed: {exc}")
 
+    # Monitor sheet entries
+    try:
+        monitor_items = load_monitor_feed(force_refresh=force_refresh, limit=10 if window_hours <= 24 else 100)
+        for entry in monitor_items:
+            dt = entry.get('timestamp_dt')
+            if not dt or dt < cutoff:
+                continue
+            append_entry(entry)
+    except Exception as exc:
+        print(f"WARNING: Failed to aggregate monitor feed for latest feed: {exc}")
+
     entries.sort(key=lambda entry: entry['timestamp_dt'], reverse=True)
     for entry in entries:
         dt = entry.pop('timestamp_dt')
         entry['timestamp'] = dt.replace(microsecond=0).isoformat().replace('+00:00', 'Z')
 
-    max_items = 150
+    max_items = 150 if window_hours > 24 else 50
     entries = entries[:max_items]
 
     payload = {
@@ -6908,3 +6929,27 @@ if __name__ == '__main__':
     debug_mode = args.debug or os.environ.get('FLASK_DEBUG', 'false').lower() in ('1', 'true', 'yes')
     print(f"Starting server on {host}:{port} (debug={debug_mode})")
     app.run(debug=debug_mode, host=host, port=port)
+def _build_monitor_entry(row):
+    if not isinstance(row, list) or len(row) < 2:
+        return None
+    timestamp_raw = row[0] if len(row) >= 1 else ''
+    title = row[1] if len(row) >= 2 else ''
+    url = row[2] if len(row) >= 3 else ''
+    excerpt = row[3] if len(row) >= 4 else ''
+
+    dt = _coerce_timestamp_utc(timestamp_raw)
+    if not dt:
+        return None
+
+    return {
+        'id': f"monitor:{hash((timestamp_raw, title, url))}",
+        'title': title or 'Monitor Update',
+        'source': 'monitor',
+        'source_label': 'Monitor Feed',
+        'excerpt': _truncate_text(excerpt, 280),
+        'timestamp_dt': dt,
+        'timestamp': dt.replace(microsecond=0).isoformat().replace('+00:00', 'Z'),
+        'url': url or '',
+        'badge': 'Monitor',
+        'tags': []
+    }
