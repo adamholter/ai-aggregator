@@ -3,6 +3,8 @@ from flask_cors import CORS
 import argparse
 import requests
 import json
+import csv
+import io
 from datetime import datetime, timedelta, timezone
 import os
 import subprocess
@@ -68,6 +70,7 @@ FALLBACK_CATEGORY_FILES = {
 GOOGLE_SHEETS_API_KEY = (os.environ.get('GOOGLE_SHEETS_API_KEY') or '').strip()
 MONITOR_SHEET_ID = (os.environ.get('MONITOR_SHEET_ID') or '1Dg58BUnlBwREG__ls6qcUrj3PHE9LMAOvQMZGesQI84').strip()
 MONITOR_SHEET_RANGE = os.environ.get('MONITOR_SHEET_RANGE', 'Data for Dashboard!A:D').strip()
+MONITOR_SHEET_GID = (os.environ.get('MONITOR_SHEET_GID') or '435981851').strip()
 
 OPENROUTER_KEY_REQUIRED_MESSAGE = (
     'An OpenRouter API key is required for this feature. Add your key in Settings to continue.'
@@ -5455,8 +5458,9 @@ def generate_latest_feed_payload(timeframe='day', force_refresh=False, include_h
     def append_entry(entry):
         if not entry or 'timestamp_dt' not in entry:
             return
-        entries.append(entry)
-        source_counts[entry.get('source', 'unknown')] += 1
+        copied = dict(entry)
+        entries.append(copied)
+        source_counts[copied.get('source', 'unknown')] += 1
 
     # Blog posts
     try:
@@ -5624,6 +5628,31 @@ def latest_feed():
     except Exception as exc:
         print(f"ERROR: Failed to build latest feed: {exc}")
         return jsonify({'error': 'Failed to build latest feed', 'details': str(exc)}), 500
+
+
+@app.route('/api/monitor', methods=['GET'])
+def monitor_feed_api():
+    cache_bust = request.args.get('cache_bust', 'false').lower() == 'true'
+    limit_param = request.args.get('limit')
+    limit = None
+    if limit_param is not None:
+        try:
+            limit = int(limit_param)
+        except (TypeError, ValueError):
+            limit = None
+    try:
+        items = load_monitor_feed(force_refresh=cache_bust, limit=limit, sanitize=True)
+        response = {
+            'items': items,
+            'count': len(items),
+            'generated_at': datetime.utcnow().replace(microsecond=0).isoformat() + 'Z'
+        }
+        return jsonify(response)
+    except RuntimeError as exc:
+        return jsonify({'error': str(exc)}), 503
+    except Exception as exc:
+        print(f"ERROR: Failed to fetch monitor feed: {exc}")
+        return jsonify({'error': 'Failed to fetch monitor feed', 'details': str(exc)}), 500
 
 
 @app.route('/api/blog-posts', methods=['GET'])
@@ -6953,3 +6982,71 @@ def _build_monitor_entry(row):
         'badge': 'Monitor',
         'tags': []
     }
+
+
+def _fetch_monitor_rows(force_refresh=False):
+    if GOOGLE_SHEETS_API_KEY:
+        encoded_range = urllib.parse.quote(MONITOR_SHEET_RANGE, safe='!')
+        url = (
+            f'https://sheets.googleapis.com/v4/spreadsheets/{MONITOR_SHEET_ID}/values/'
+            f'{encoded_range}?majorDimension=ROWS&key={GOOGLE_SHEETS_API_KEY}'
+        )
+        response = requests.get(url, timeout=15)
+        response.raise_for_status()
+        payload = response.json()
+        values = payload.get('values') or []
+        return values
+
+    if not MONITOR_SHEET_GID:
+        raise RuntimeError('Monitor sheet GID is required when no Google Sheets API key is provided.')
+
+    csv_url = (
+        f'https://docs.google.com/spreadsheets/d/{MONITOR_SHEET_ID}/export?format=csv&gid={MONITOR_SHEET_GID}'
+    )
+    response = requests.get(csv_url, timeout=15)
+    response.raise_for_status()
+    csv_buffer = io.StringIO(response.text)
+    reader = csv.reader(csv_buffer)
+    return list(reader)
+
+
+def load_monitor_feed(force_refresh=False, limit=None, sanitize=False):
+    now = datetime.utcnow()
+    cached_payload = _MONITOR_CACHE.get('payload')
+    cached_timestamp = _MONITOR_CACHE.get('timestamp')
+
+    if (
+        not force_refresh
+        and cached_payload is not None
+        and cached_timestamp is not None
+        and now - cached_timestamp < MONITOR_CACHE_TTL
+    ):
+        entries = cached_payload
+    else:
+        rows = _fetch_monitor_rows(force_refresh=force_refresh)
+        entries = []
+        for row in rows[1:]:  # skip header
+            entry = _build_monitor_entry(row)
+            if entry:
+                entries.append(entry)
+        entries.sort(key=lambda item: item['timestamp_dt'], reverse=True)
+        _MONITOR_CACHE['payload'] = entries
+        _MONITOR_CACHE['timestamp'] = datetime.utcnow()
+
+    result = entries
+    if limit is not None:
+        try:
+            limit_value = int(limit)
+            if limit_value >= 0:
+                result = entries[:limit_value]
+        except (TypeError, ValueError):
+            pass
+
+    if sanitize:
+        sanitized = []
+        for entry in result:
+            cleaned = {k: v for k, v in entry.items() if k != 'timestamp_dt'}
+            sanitized.append(cleaned)
+        return sanitized
+
+    return result

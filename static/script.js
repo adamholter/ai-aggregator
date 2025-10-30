@@ -17,7 +17,8 @@ let cachedData = {
     openRouterModels: null,
     hype: null,
     blog: null,
-    latest: null
+    latest: null,
+    monitor: null
 };
 
 // Store raw data for filtering
@@ -33,7 +34,8 @@ let rawData = {
     openRouterModels: null,
     hype: null,
     blog: null,
-    latest: null
+    latest: null,
+    monitor: null
 };
 
 // AI Agent configuration
@@ -842,6 +844,7 @@ function ensureExperimentalNavButtons() {
 
     ensureButton('hype', 'Hype');
     ensureButton('latest', 'Latest');
+    ensureButton('monitor', 'Monitor');
     ensureButton('blog', 'Blog');
 }
 
@@ -903,7 +906,7 @@ function ensureExperimentalSections() {
         section.setAttribute('aria-hidden', 'true');
         section.innerHTML = `
             <div class="section-header">
-                <h2>Latest 24h Activity</h2>
+                <h2>Latest Activity (Last 24 hours)</h2>
                 <div class="controls">
                     <button class="refresh-btn" id="latest-refresh">Refresh Feed</button>
                 </div>
@@ -934,6 +937,37 @@ function ensureExperimentalSections() {
     }
 
     ensureLatestControlListeners();
+
+    if (!document.getElementById('monitor')) {
+        const section = document.createElement('section');
+        section.id = 'monitor';
+        section.className = 'content-section';
+        section.dataset.experimental = 'true';
+        section.style.display = 'none';
+        section.setAttribute('aria-hidden', 'true');
+        section.innerHTML = `
+            <div class="section-header">
+                <h2>Monitor Feed</h2>
+                <div class="controls">
+                    <button class="refresh-btn" id="monitor-refresh">Refresh Monitor</button>
+                </div>
+            </div>
+            <p class="section-note">Auto-compiles updates from MatVid Pro’s Discord channel and Adam’s personal X feed.</p>
+            <div class="loading" id="monitor-loading">
+                <div class="loading-spinner"></div>
+            </div>
+            <div class="error" id="monitor-error" style="display: none;"></div>
+            <div class="results-info" id="monitor-results-info" style="display:none;"></div>
+            <div class="data-container" id="monitor-data"></div>
+        `;
+
+        const blogSection = document.getElementById('blog');
+        if (blogSection && blogSection.parentNode === main) {
+            main.insertBefore(section, blogSection);
+        } else {
+            main.appendChild(section);
+        }
+    }
 
     if (!document.getElementById('blog')) {
         // Inject blog section dynamically when the HTML template hasn't been updated yet.
@@ -1039,6 +1073,13 @@ function loadSectionData(section) {
                 loadLatestFeed();
             } else {
                 displayLatestFeed(cachedData.latest);
+            }
+            break;
+        case 'monitor':
+            if (!cachedData.monitor) {
+                loadMonitorFeed();
+            } else {
+                displayMonitorItems(cachedData.monitor);
             }
             break;
         case 'blog':
@@ -2132,6 +2173,8 @@ function formatLatestSourceLabel(source) {
             return 'Hype Signal';
         case 'fal':
             return 'fal.ai Release';
+        case 'monitor':
+            return 'Monitor Feed';
         default:
             return '';
     }
@@ -2203,6 +2246,110 @@ function createLatestCard(item) {
         <div class="card-actions">
             ${linkMarkup}
             ${badge}
+        </div>
+    `;
+
+    return card;
+}
+
+async function loadMonitorFeed(forceRefresh = false) {
+    const loadingElement = document.getElementById('monitor-loading');
+    const errorElement = document.getElementById('monitor-error');
+    const dataElement = document.getElementById('monitor-data');
+    const resultsInfo = document.getElementById('monitor-results-info');
+
+    if (!loadingElement || !errorElement || !dataElement) {
+        return;
+    }
+
+    try {
+        loadingElement.style.display = 'flex';
+        errorElement.style.display = 'none';
+        dataElement.innerHTML = '';
+        if (resultsInfo) {
+            resultsInfo.style.display = 'none';
+            resultsInfo.textContent = '';
+        }
+
+        const params = new URLSearchParams();
+        if (forceRefresh) {
+            params.set('cache_bust', 'true');
+        }
+        const data = await makeAPICall(`/api/monitor${params.toString() ? `?${params.toString()}` : ''}`, null);
+        const items = Array.isArray(data?.items) ? data.items : [];
+        cachedData.monitor = items;
+        rawData.monitor = items;
+        displayMonitorItems(items);
+
+        if (resultsInfo) {
+            const summaryParts = [];
+            if (data?.count != null) {
+                summaryParts.push(`${data.count} updates`);
+            }
+            if (data?.generated_at) {
+                const relative = formatRelativeTime(data.generated_at);
+                if (relative) {
+                    summaryParts.push(`refreshed ${relative}`);
+                }
+            }
+            resultsInfo.textContent = summaryParts.length ? summaryParts.join(' · ') : 'Monitor feed updates';
+            resultsInfo.style.display = 'block';
+        }
+    } catch (error) {
+        const message = error?.message || String(error);
+        errorElement.textContent = `Failed to load monitor feed: ${message}`;
+        errorElement.style.display = 'block';
+    } finally {
+        loadingElement.style.display = 'none';
+    }
+}
+
+function displayMonitorItems(items) {
+    const container = document.getElementById('monitor-data');
+    if (!container) {
+        return;
+    }
+
+    container.innerHTML = '';
+    if (!items || !items.length) {
+        container.innerHTML = '<div class="empty-state">No monitor updates available yet. Check back soon.</div>';
+        return;
+    }
+
+    items.forEach(item => {
+        container.appendChild(createMonitorCard(item));
+    });
+}
+
+function createMonitorCard(item) {
+    const card = document.createElement('div');
+    card.className = 'model-card latest-card';
+    card.dataset.source = 'monitor';
+
+    const title = item.title ? escapeHtml(item.title) : 'Monitor Update';
+    const relative = formatRelativeTime(item.timestamp);
+    const excerpt = item.excerpt ? escapeHtml(item.excerpt) : '';
+    const url = item.url ? escapeHtml(item.url) : '';
+
+    const metaParts = [];
+    if (relative) {
+        metaParts.push(`<span class="meta-item">${escapeHtml(relative)}</span>`);
+    }
+    const metaMarkup = metaParts.length ? `<div class="card-meta">${metaParts.join('')}</div>` : '';
+
+    card.innerHTML = `
+        <div class="card-header">
+            <div class="card-header-content">
+                <div class="source-badge">Monitor</div>
+                <div class="card-title">
+                    ${url ? `<a href="${url}" target="_blank" rel="noopener noreferrer">${title}</a>` : title}
+                </div>
+                ${metaMarkup}
+            </div>
+        </div>
+        ${excerpt ? `<div class="card-summary">${excerpt}</div>` : ''}
+        <div class="card-actions">
+            ${url ? `<a class="chart-btn secondary" href="${url}" target="_blank" rel="noopener noreferrer">Open Source</a>` : ''}
         </div>
     `;
 
@@ -4812,6 +4959,20 @@ document.addEventListener('DOMContentLoaded', function() {
 
     ensureLatestControlListeners();
 
+    const monitorRefreshButton = document.getElementById('monitor-refresh');
+    if (monitorRefreshButton) {
+        monitorRefreshButton.addEventListener('click', async () => {
+            monitorRefreshButton.disabled = true;
+            try {
+                await loadMonitorFeed(true);
+            } catch (error) {
+                console.error('Failed to refresh monitor feed:', error);
+            } finally {
+                monitorRefreshButton.disabled = false;
+            }
+        });
+    }
+
     const blogSortSelect = document.getElementById('blog-sort');
     if (blogSortSelect) {
         if (blogSortSelect.value) {
@@ -5000,3 +5161,4 @@ window.removeFallbackModel = removeFallbackModel;
 window.removeAvailableModel = removeAvailableModel;
 window.clearChatHistory = clearChatHistory;
 window.updateAgentModel = updateAgentModel;
+window.loadMonitorFeed = loadMonitorFeed;
