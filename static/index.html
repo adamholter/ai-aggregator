@@ -22,6 +22,7 @@
                 <span class="legend-item" data-source="replicate"><span class="legend-dot"></span>Replicate</span>
                 <span class="legend-item" data-source="openrouter"><span class="legend-dot"></span>OpenRouter</span>
                 <span class="legend-item" data-source="hype"><span class="legend-dot"></span>Hype Signals</span>
+                <span class="legend-item" data-source="monitor"><span class="legend-dot"></span>Monitor Feed</span>
                 <span class="legend-item" data-source="blog"><span class="legend-dot"></span>Blog</span>
             </div>
         </header>
@@ -40,7 +41,7 @@
             <button class="nav-btn" data-section="latest" data-experimental="true" style="display:none;" aria-hidden="true">Latest</button>
             <button class="nav-btn" data-section="monitor" data-experimental="true" style="display:none;" aria-hidden="true">Monitor</button>
             <button class="nav-btn" data-section="blog" data-experimental="true" style="display:none;" aria-hidden="true">Blog</button>
-            <button class="nav-btn" data-section="ai-agent">AI Agent</button>
+            <button class="nav-btn" data-section="ai-agent" data-experimental="true" style="display:none;" aria-hidden="true">AI Agent</button>
             <button class="nav-btn" data-section="about">About</button>
         </nav>
 
@@ -332,7 +333,7 @@
             </section>
 
             <!-- AI Agent Section -->
-            <section id="ai-agent" class="content-section">
+            <section id="ai-agent" class="content-section" data-experimental="true" style="display:none;" aria-hidden="true">
                 <div class="section-header">
                     <h2>AI Analysis Agent</h2>
                     <div class="controls">
@@ -341,6 +342,7 @@
                         </select>
                         <button id="clear-chat" onclick="clearChatHistory()" class="chart-btn secondary" style="margin-left: 8px;">Clear Chat</button>
                     </div>
+                    <div class="agent-warning experimental-warning">⚠️ Experimental mode: the agent still has known bugs and intermittent tool-call failures.</div>
                     <div class="agent-warning" id="agent-model-guidance" style="display: none;"></div>
                 </div>
                 <div class="ai-agent-container">

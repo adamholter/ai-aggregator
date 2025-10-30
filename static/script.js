@@ -2211,7 +2211,7 @@ function createLatestCard(item) {
         ? item.excerpt.trim()
         : (item.description || '');
     const description = excerptRaw ? truncateText(excerptRaw, 260) : '';
-    const title = item.title ? escapeHtml(item.title) : 'Recent Update';
+    const titleText = item.title ? escapeHtml(item.title) : 'Recent Update';
     const badge = item.badge ? `<span class="card-badge">${escapeHtml(item.badge)}</span>` : '';
     const tagsMarkup = renderLatestTags(item.tags);
     const actionLabel = item.action_label || item.actionLabel || 'Open Link';
@@ -2236,7 +2236,7 @@ function createLatestCard(item) {
             <div class="card-header-content">
                 <div class="source-badge">${escapeHtml(badgeLabel)}</div>
                 <div class="card-title">
-                    ${item.url ? `<a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">${title}</a>` : title}
+                    ${item.url ? `<a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">${titleText}</a>` : `<span class="title-text">${titleText}</span>`}
                 </div>
                 ${metaMarkup}
             </div>

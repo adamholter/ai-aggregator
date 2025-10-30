@@ -63,6 +63,7 @@
     --hype-default-bg: rgba(148, 163, 184, 0.18);
     --hype-default-text: #1f2937;
     --source-blog: #f97316;
+    --source-monitor: #0f766e;
 }
 
 [data-theme="dark"] {
@@ -91,6 +92,7 @@
     --hype-default-bg: rgba(148, 163, 184, 0.22);
     --hype-default-text: #e5e7eb;
     --source-blog: #fb923c;
+    --source-monitor: #2dd4bf;
 }
 
 [data-theme="source"] {
@@ -114,6 +116,7 @@
     --source-openrouter: #7c3aed;
     --source-hype: #ec4899;
     --source-blog: #f97316;
+    --source-monitor: #0d9488;
     --hype-github-bg: rgba(36, 41, 46, 0.12);
     --hype-github-text: #1f2937;
     --hype-huggingface-bg: rgba(255, 196, 45, 0.22);
@@ -225,6 +228,14 @@ body {
 
 [data-theme="source"] .legend-item[data-source="blog"] {
     color: var(--source-blog);
+}
+
+[data-theme="source"] .legend-item[data-source="monitor"] {
+    color: var(--source-monitor);
+}
+
+.legend-item[data-source="monitor"] {
+    color: var(--source-monitor);
 }
 
 .legend-item[data-source="hype"],
@@ -802,6 +813,12 @@ body {
     text-decoration: none;
 }
 
+.latest-card .card-title .title-text {
+    font-weight: 600;
+    color: var(--text-color);
+    display: inline-block;
+}
+
 .latest-card .card-title a:hover,
 .latest-card .card-title a:focus-visible {
     color: var(--button-bg);
@@ -814,6 +831,7 @@ body {
     gap: 8px;
     font-size: 0.82rem;
     color: var(--info-text);
+    margin-top: 4px;
 }
 
 .latest-card .card-meta .meta-item {
@@ -841,6 +859,7 @@ body {
     font-size: 0.92rem;
     line-height: 1.6;
     color: var(--info-text);
+    margin-top: 6px;
 }
 
 .latest-card .card-tags {
@@ -870,6 +889,7 @@ body {
     align-items: center;
     gap: 12px;
     flex-wrap: wrap;
+    margin-top: 6px;
 }
 
 .latest-card .card-badge {
@@ -949,6 +969,14 @@ body {
 
 [data-theme="source"] .model-card[data-source="blog"] .source-badge {
     color: var(--source-blog);
+}
+
+[data-theme="source"] .model-card[data-source="monitor"] {
+    border-top-color: var(--source-monitor);
+}
+
+[data-theme="source"] .model-card[data-source="monitor"] .source-badge {
+    color: var(--source-monitor);
 }
 
 /* Model stats */
@@ -2959,6 +2987,15 @@ body {
     color: #92400e;
     font-size: 0.9rem;
     line-height: 1.4;
+}
+
+.experimental-warning {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(245, 158, 11, 0.18);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    color: #b45309;
 }
 
 .agent-warning.expensive {
