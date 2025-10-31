@@ -3018,6 +3018,7 @@ def agent_tool_loop_generator(
             )
         traces.append(dataset_trace)
         print(f"📊 [AGENT] Initial trace created, yielding...")
+        yield ('context', summarize_fetch_context(fetch_context), fetch_context, web_context)
         yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
         yield ('status', status_payload('Datasets', dataset_trace['description'] or 'No datasets loaded'))
         print(f"✅ [AGENT] Initial trace yielded successfully")
@@ -3230,6 +3231,7 @@ def agent_tool_loop_generator(
                                     'tool': f"fetch_data ({len(missing_categories)} categories)",
                                     'status': 'success'
                                 })
+                                yield ('context', summarize_fetch_context(fetch_context), fetch_context, web_context)
                                 yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
                                 yield ('status', status_payload('Tool', description))
                                 append_tool_note('fetch_data', description)
@@ -3479,6 +3481,7 @@ def agent_tool_loop_generator(
                         'tool': f"fetch_data ({len(missing_categories)} categories)",
                         'status': 'success'
                     })
+                    yield ('context', summarize_fetch_context(fetch_context), fetch_context, web_context)
                     yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
                     yield ('status', status_payload('Tool', description))
                     append_tool_note('fetch_data', description)
@@ -4597,6 +4600,9 @@ Respond concisely and cite the sources (Conversation History, Database, Web Sear
 
         def encode_status(status_payload):
             return f"data: {json.dumps({'type': 'status', 'status': status_payload}, ensure_ascii=False)}\n\n".encode('utf-8')
+
+        def encode_context(context_payload):
+            return f"data: {json.dumps({'type': 'context', 'context': context_payload}, ensure_ascii=False)}\n\n".encode('utf-8')
         if stream:
             def generate_stream():
                 try:
@@ -4670,6 +4676,10 @@ Respond concisely and cite the sources (Conversation History, Database, Web Sear
                                 if chunk_payload:
                                     content_emitted = True
                                     yield encode_content(chunk_payload)
+                            elif kind == 'context':
+                                context_payload = event[1] if len(event) > 1 else {}
+                                print(f"🗂️ [SERVER] Context update sent with {len(context_payload.get('categories', []))} categories")
+                                yield encode_context(context_payload)
                             elif kind == 'error':
                                 error_message = event[1] if len(event) > 1 else 'Unknown error'
                                 traces_snapshot = event[2] if len(event) > 2 else []
@@ -6999,6 +7009,28 @@ def _build_monitor_entry(row):
         'url': url or '',
         'badge': 'Monitor',
         'tags': []
+    }
+
+
+def summarize_fetch_context(context):
+    context = context or {}
+    metadata = context.get('metadata') or []
+    summary = []
+    for entry in metadata:
+        if not isinstance(entry, dict):
+            continue
+        summary.append({
+            'id': entry.get('id'),
+            'label': entry.get('label'),
+            'count': entry.get('items'),
+            'source': entry.get('source')
+        })
+    structured = context.get('structured') or {}
+    highlights = structured.get('highlights') if isinstance(structured, dict) else []
+    return {
+        'categories': summary,
+        'highlights': highlights or [],
+        'last_generated_at': context.get('last_generated_at') or datetime.utcnow().isoformat()
     }
 
 

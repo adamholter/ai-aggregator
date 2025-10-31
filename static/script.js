@@ -2331,11 +2331,11 @@ function createMonitorCard(item) {
     const excerpt = item.excerpt ? escapeHtml(item.excerpt) : '';
     const url = item.url ? escapeHtml(item.url) : '';
 
-    const metaParts = [];
+    const metaParts = [`<span class="meta-item">Monitor Feed</span>`];
     if (relative) {
         metaParts.push(`<span class="meta-item">${escapeHtml(relative)}</span>`);
     }
-    const metaMarkup = metaParts.length ? `<div class="card-meta">${metaParts.join('')}</div>` : '';
+    const metaMarkup = `<div class="card-meta">${metaParts.join('')}</div>`;
 
     card.innerHTML = `
         <div class="card-header">
@@ -2794,6 +2794,16 @@ async function handleStreamingWithFetch(userMessage, attachments, resolve, rejec
                                 case 'traces':
                                     traces = parsed.traces;
                                     break;
+                                case 'context': {
+                                    if (parsed.context) {
+                                        console.groupCollapsed('Agent context update');
+                                        console.log('Loaded categories:', parsed.context.categories || []);
+                                        console.log('Highlights:', parsed.context.highlights || []);
+                                        console.log('Generated at:', parsed.context.last_generated_at);
+                                        console.groupEnd();
+                                    }
+                                    break;
+                                }
                                 case 'content': {
                                     const sanitizedChunk = fixEncodingArtifacts(parsed.content);
                                     fullResponse = appendStreamChunk(fullResponse, sanitizedChunk);
