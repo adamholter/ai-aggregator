@@ -3291,6 +3291,24 @@ def agent_tool_loop_generator(
 
                         else:
                             print(f"⚠️ [AGENT] Unsupported tool requested: {tool_name}")
+                            unsupported_note = (
+                                "Unsupported tool command received. Only `fetch_data` and `web_search` are available. "
+                                "Use the loaded datasets to respond, or request `WEB_SEARCH` if absolutely necessary."
+                            )
+                            traces.append({
+                                'step': 'Response Generation',
+                                'description': unsupported_note,
+                                'tool': tool_name or 'Unknown Tool',
+                                'status': 'warning'
+                            })
+                            yield ('traces', [dict(item) if isinstance(item, dict) else item for item in traces], fetch_context, web_context)
+                            append_tool_note('system', unsupported_note)
+                            prompt_context = build_agent_prompt_context(user_message, fetch_context, web_context)
+                            final_prompt = format_prompt(prompt_template, **prompt_context)
+                            final_prompt = enforce_prompt_ceiling(
+                                f"{final_prompt}\n\nREMINDER: Do not invoke unsupported tools. Provide the final answer using the datasets above."
+                            )
+                            handled_tool = True
 
                     if handled_tool:
                         prompt_context = build_agent_prompt_context(user_message, fetch_context, web_context)
