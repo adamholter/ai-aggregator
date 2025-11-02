@@ -6229,11 +6229,25 @@ def _agent_exp_allowed_categories(experimental_mode):
 def _agent_exp_normalize_content(content):
     if isinstance(content, str):
         return content
+    if isinstance(content, dict):
+        if isinstance(content.get('text'), str):
+            return content['text']
+        if isinstance(content.get('content'), str):
+            return content['content']
+        blocks = content.get('parts') or content.get('segments')
+        if isinstance(blocks, list):
+            return _agent_exp_normalize_content(blocks)
     if isinstance(content, list):
         parts = []
         for block in content:
-            if isinstance(block, dict) and block.get('type') == 'text':
-                parts.append(block.get('text') or '')
+            if isinstance(block, dict):
+                text_value = block.get('text')
+                if isinstance(text_value, str):
+                    parts.append(text_value)
+                elif isinstance(text_value, list):
+                    parts.append(_agent_exp_normalize_content(text_value))
+                elif isinstance(block.get('content'), str):
+                    parts.append(block['content'])
         return ''.join(parts)
     if content is None:
         return ''

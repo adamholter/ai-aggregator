@@ -752,6 +752,12 @@ body {
     margin-left: auto;
 }
 
+.message.user .response-content,
+.message.user .response-content *,
+.message.user .message-text {
+    color: inherit;
+}
+
 .message.ai {
     background: var(--info-bg);
     color: var(--text-color);
