@@ -1001,7 +1001,13 @@ FETCH_DATA_CATEGORY_ALIASES = {
     'fal_models': 'fal',
     'replicate': 'replicate',
     'replicate-models': 'replicate',
-    'replicate_models': 'replicate'
+    'replicate_models': 'replicate',
+    'hype': 'hype',
+    'blog': 'blog',
+    'blogs': 'blog',
+    'latest': 'latest',
+    'monitor': 'monitor',
+    'news': 'latest'
 }
 
 FETCH_DATA_CATEGORY_CONFIG = {
@@ -1100,8 +1106,255 @@ FETCH_DATA_CATEGORY_CONFIG = {
         'extract': lambda payload: payload if isinstance(payload, list) else (payload or []),
         'limit': None,
         'source': 'replicate'
+    },
+    'latest': {
+        'label': 'Latest Activity Feed',
+        'custom_loader': 'latest',
+        'extract': lambda payload: (payload or {}).get('items', []) if isinstance(payload, dict) else (payload or []),
+        'limit': None,
+        'source': 'latest'
+    },
+    'hype': {
+        'label': 'Hype Signals',
+        'custom_loader': 'hype',
+        'extract': lambda payload: (payload or {}).get('items', []) if isinstance(payload, dict) else (payload or []),
+        'limit': None,
+        'source': 'hype'
+    },
+    'blog': {
+        'label': 'Blog Posts',
+        'custom_loader': 'blog',
+        'extract': lambda payload: (payload or {}).get('posts', []) if isinstance(payload, dict) else (payload or []),
+        'limit': None,
+        'source': 'blog'
+    },
+    'monitor': {
+        'label': 'Monitor Feed',
+        'custom_loader': 'monitor',
+        'extract': lambda payload: (payload or {}).get('items', []) if isinstance(payload, dict) else (payload or []),
+        'limit': None,
+        'source': 'monitor'
     }
 }
+
+CUSTOM_CATEGORY_LOADERS = {}
+
+AGENT_EXP_DEFAULT_MODEL = 'x-ai/grok-4-fast'
+AGENT_EXP_DEFAULT_LIMIT = 50
+
+AGENT_EXP_CORE_TABS = [
+    {
+        'id': 'llms',
+        'label': 'LLM Leaderboard',
+        'description': 'Frontier LLM benchmarks (intelligence, coding, speed, pricing).',
+        'guidance': 'Use for general LLM comparisons, rankings, and pricing questions.'
+    },
+    {
+        'id': 'openrouter',
+        'label': 'OpenRouter Catalogue',
+        'description': 'Live OpenRouter model directory with pricing, context windows, and provider metadata.',
+        'guidance': 'Look up availability, costs, or provider-specific capabilities.'
+    },
+    {
+        'id': 'text-to-image',
+        'label': 'Text-to-Image Leaderboard',
+        'description': 'Image generation rankings from Artificial Analysis.',
+        'guidance': 'Reach for image creation questions or comparisons.'
+    },
+    {
+        'id': 'image-editing',
+        'label': 'Image Editing Leaderboard',
+        'description': 'Image editing tools with ELO/Rank metrics.',
+        'guidance': 'Use when editing or transformation is requested.'
+    },
+    {
+        'id': 'text-to-speech',
+        'label': 'Text-to-Speech Leaderboard',
+        'description': 'Speech synthesis quality and latency benchmarks.',
+        'guidance': 'Best for voice generation or TTS model hunting.'
+    },
+    {
+        'id': 'text-to-video',
+        'label': 'Text-to-Video Leaderboard',
+        'description': 'Text-to-video models ranked by recency and performance.',
+        'guidance': 'Use for video generation needs.'
+    },
+    {
+        'id': 'image-to-video',
+        'label': 'Image-to-Video Leaderboard',
+        'description': 'Image-to-video conversion standings.',
+        'guidance': 'Pick when starting with still frames that need animation.'
+    },
+    {
+        'id': 'fal',
+        'label': 'fal.ai Catalogue',
+        'description': 'fal.ai releases with categories, pricing, and freshness.',
+        'guidance': 'Use when fal.ai availability or updates are relevant.'
+    },
+    {
+        'id': 'replicate',
+        'label': 'Replicate Catalogue',
+        'description': 'Curated Replicate models with run counts and latency.',
+        'guidance': 'Use for Replicate-specific deployments or comparisons.'
+    }
+]
+
+AGENT_EXP_EXPERIMENTAL_TABS = [
+    {
+        'id': 'latest',
+        'label': 'Latest Activity',
+        'description': 'Cross-source digest (blog, Hype, OpenRouter, Replicate, fal.ai).',
+        'guidance': 'Use timeframe=day for daily pulse or week for broader news; include_hype=true to blend Hype signals.'
+    },
+    {
+        'id': 'hype',
+        'label': 'Hype Signals',
+        'description': 'Community buzz from GitHub, Hugging Face, Reddit, Replicate.',
+        'guidance': 'Use for community momentum, trending repos, or social buzz.'
+    },
+    {
+        'id': 'monitor',
+        'label': 'Monitor Feed',
+        'description': 'Social/content monitoring stream (MatVid/X).',
+        'guidance': 'Use when looking for rapid-fire social updates or short-form content references.'
+    },
+    {
+        'id': 'blog',
+        'label': 'Blog Posts',
+        'description': "Adam Holter's long-form posts with summaries and reading time.",
+        'guidance': 'Reference for narrative context, commentary, or supporting analysis.'
+    }
+]
+
+
+def get_agent_exp_tools_schema():
+    return [
+        {
+            'type': 'function',
+            'function': {
+                'name': 'fetch_data',
+                'description': (
+                    'Load cached dashboard datasets. Provide the desired tab ids in `categories` '
+                    '(e.g. ["llms","openrouter"]). Optional `limit` defaults to 50 per tab; set to null to receive full data. '
+                    'Use `timeframe` (day|week|month|year) when recency matters and `include_hype=true` to sprinkle Hype signals into Latest.'
+                ),
+                'parameters': {
+                    'type': 'object',
+                    'properties': {
+                        'categories': {
+                            'type': 'array',
+                            'items': {'type': 'string'},
+                            'description': 'List of tab ids to fetch (see tab playbook in the system prompt).'
+                        },
+                        'limit': {
+                            'type': ['integer', 'null'],
+                            'minimum': 1,
+                            'description': 'Maximum rows per category. Defaults to 50 when omitted; set to null to disable the cap.'
+                        },
+                        'timeframe': {
+                            'type': 'string',
+                            'enum': ['day', 'week', 'month', 'year'],
+                            'description': 'Recency window for time-sensitive tabs (e.g., Latest=week for news, day for hot launches).'
+                        },
+                        'recency': {
+                            'type': 'string',
+                            'enum': ['day', 'week', 'month', 'year'],
+                            'description': 'Alias for timeframe; kept for backward compatibility.'
+                        },
+                        'include_hype': {
+                            'type': 'boolean',
+                            'description': 'Blend Hype signals into the Latest feed when true.'
+                        }
+                    },
+                    'required': ['categories']
+                }
+            }
+        },
+        {
+            'type': 'function',
+            'function': {
+                'name': 'ask_perplexity',
+                'description': 'Proxy a realtime search via perplexity/sonar-pro-search. The query must be a natural language question.',
+                'parameters': {
+                    'type': 'object',
+                    'properties': {
+                        'query': {
+                            'type': 'string',
+                            'description': 'Web research question to forward to Perplexity.'
+                        }
+                    },
+                    'required': ['query']
+                }
+            }
+        }
+    ]
+
+
+def _format_tab_lines(tab_entries):
+    lines = []
+    for entry in tab_entries:
+        label = entry.get('label') or entry['id'].title()
+        description = entry.get('description', '')
+        guidance = entry.get('guidance', '')
+        bullet = f"- **{label}** (`{entry['id']}`): {description}"
+        if guidance:
+            bullet += f" — {guidance}"
+        lines.append(bullet)
+    return '\n'.join(lines)
+
+
+def build_agent_exp_system_prompt(experimental_mode, default_limit=AGENT_EXP_DEFAULT_LIMIT):
+    tab_entries = list(AGENT_EXP_CORE_TABS)
+    if experimental_mode:
+        tab_entries.extend(AGENT_EXP_EXPERIMENTAL_TABS)
+
+    tab_lines = _format_tab_lines(tab_entries)
+    experimental_note = (
+        "Experimental tabs (Hype, Monitor, Blog, Latest) are enabled. Use them deliberately when the request needs community buzz, social updates, or narrative context."
+        if experimental_mode else
+        "Experimental tabs are disabled for this session; stay within the core leaderboards unless the user explicitly toggles experimental mode."
+    )
+
+    return f"""You are Agent EXP inside the AI Model Research Dashboard. You operate strictly on fetched datasets and live research.
+
+DATA REPRESENTATION
+- Every `fetch_data` call returns an authoritative package: category metadata, structured JSON summaries, markdown highlights, and a compressed table snapshot optimised for tokens. Treat these as ground truth.
+- The compressed tables condense key columns; inspect them before asking for more context.
+
+TOOLS
+1. `fetch_data(categories, limit?, timeframe?, include_hype?)`
+   • Default limit is {default_limit} rows per tab when omitted; set `limit=null` to stream everything.
+   • `timeframe`/`recency` accepts `day|week|month|year`. Use `week` for Latest news recaps, `day` for hot launches, etc.
+   • `include_hype=true` blends Hype signals into the Latest tab when you need community sentiment.
+2. `ask_perplexity(query)`
+   • Runs perplexity/sonar-pro-search with a dashboard-specific system prompt. Its built-in knowledge is stale—cite these results as **Web Search**.
+
+TAB PLAYBOOK
+{tab_lines}
+
+{experimental_note}
+
+OPERATING RULES
+- Always load relevant tabs with `fetch_data` before answering. Layer additional calls if you need more categories or a wider timeframe.
+- Treat dashboard datasets as the primary source and cite them as **Database**. Cite Perplexity results as **Web Search**.
+- Your own training knowledge is considered outdated—do not rely on it without verification.
+- Keep responses concise, structured, and grounded in the provided material. Surface the most relevant metrics, pricing, and comparisons for the user’s task."""
+
+
+def build_agent_exp_messages(system_prompt, conversation_history, user_message):
+    messages = [{'role': 'system', 'content': system_prompt}]
+
+    history = conversation_history or []
+    # Keep only the most recent 10 exchanges to control context size.
+    trimmed_history = history[-10:]
+    for entry in trimmed_history:
+        role = entry.get('role')
+        content = entry.get('content')
+        if role in {'user', 'assistant'} and content:
+            messages.append({'role': role, 'content': content})
+
+    messages.append({'role': 'user', 'content': user_message})
+    return messages
 
 
 def get_agent_tools_schema():
@@ -1260,10 +1513,19 @@ def infer_item_provider(category_id, item):
     if category_id == 'openrouter':
         return item.get('vendor') or ''
     if category_id == 'fal':
-        group = item.get('group') or {}
-        return group.get('name') or 'fal.ai'
+       group = item.get('group') or {}
+       return group.get('name') or 'fal.ai'
     if category_id == 'replicate':
-        return item.get('owner') or 'Replicate'
+       return item.get('owner') or 'Replicate'
+    if category_id == 'blog':
+        author = item.get('author')
+        return author or 'Blog'
+    if category_id == 'hype':
+        return item.get('source_label') or item.get('source') or 'Hype Signals'
+    if category_id == 'monitor':
+        return item.get('source_label') or 'Monitor Feed'
+    if category_id == 'latest':
+        return item.get('source_label') or item.get('source') or 'Latest Feed'
     creator = item.get('model_creator') or {}
     return creator.get('name') or ''
 
@@ -1307,6 +1569,20 @@ def infer_item_metrics(category_id, item):
             metrics['run_count'] = item['run_count']
         if item.get('latency_seconds') is not None:
             metrics['latency_s'] = item['latency_seconds']
+    elif category_id == 'blog':
+        if item.get('reading_time_minutes') is not None:
+            metrics['read_min'] = item['reading_time_minutes']
+        if item.get('word_count') is not None:
+            metrics['words'] = item['word_count']
+    elif category_id == 'hype':
+        if item.get('stars') is not None:
+            metrics['stars'] = item['stars']
+    elif category_id == 'monitor':
+        if item.get('badge'):
+            metrics['badge'] = item['badge']
+    elif category_id == 'latest':
+        if item.get('badge'):
+            metrics['badge'] = item['badge']
     else:
         if item.get('elo') is not None:
             metrics['elo'] = item['elo']
@@ -2171,23 +2447,56 @@ Rules:
         print(f"WARNING: fetch-data summarizer failed ({exc}); using fallback.")
         return build_fetch_data_fallback(metadata, datasets)
 
-def fetch_data_for_categories(categories, limit_per_category=None, recency=None):
+def fetch_data_for_categories(categories, limit_per_category=None, recency=None, timeframe=None, include_hype=None, options=None):
     if not isinstance(categories, (list, tuple, set)):
         categories = [categories]
+
+    options = options or {}
+    normalized_categories = []
+    for cat in categories:
+        normalized = normalize_category_id(cat)
+        if normalized and normalized not in normalized_categories:
+            normalized_categories.append(normalized)
+
+    effective_recency = recency
+    if effective_recency is None and timeframe in RECENCY_WINDOWS:
+        effective_recency = timeframe
 
     datasets = {}
     metadata = []
     seen = set()
     errors = []
 
-    for category in categories:
+    for category in normalized_categories:
         category_id, config = resolve_category_config(category)
         if not category_id or category_id in seen or not config:
             continue
         seen.add(category_id)
 
         try:
-            _, _, payload = load_category_payload(category_id)
+            payload = None
+            loader_metadata = {}
+            custom_loader_key = config.get('custom_loader')
+            loader = CUSTOM_CATEGORY_LOADERS.get(custom_loader_key) if custom_loader_key else None
+
+            if loader:
+                loader_result = loader({
+                    'category_id': category_id,
+                    'limit': limit_per_category,
+                    'recency': recency,
+                    'timeframe': timeframe,
+                    'effective_recency': effective_recency,
+                    'include_hype': include_hype,
+                    'category_list': list(normalized_categories),
+                    'options': options
+                })
+                if isinstance(loader_result, tuple) and len(loader_result) == 2:
+                    payload, loader_metadata = loader_result
+                else:
+                    payload = loader_result
+                    loader_metadata = {}
+            else:
+                _, _, payload = load_category_payload(category_id)
 
             items = extract_category_items(
                 category_id,
@@ -2196,25 +2505,34 @@ def fetch_data_for_categories(categories, limit_per_category=None, recency=None)
                 limit=limit_per_category
             )
 
-            items = filter_items_by_recency(items, recency)
+            items = filter_items_by_recency(items, effective_recency)
             fallback_used = False
 
-            if not items:
+            if not items and not loader:
                 fallback_items = load_category_fallback(category_id)
                 if fallback_items:
-                    items = filter_items_by_recency(fallback_items, recency)
+                    items = filter_items_by_recency(fallback_items, effective_recency)
                     fallback_used = True
 
             if not items:
                 continue
 
             datasets[category_id] = items
-            metadata.append({
+            metadata_entry = {
                 'id': category_id,
                 'label': config.get('label', category_id.title()),
                 'items': len(items) if isinstance(items, list) else len(items),
                 'source': config.get('source', '')
-            })
+            }
+            if limit_per_category is not None:
+                metadata_entry['limit'] = limit_per_category
+            if timeframe:
+                metadata_entry['timeframe'] = timeframe
+            if isinstance(loader_metadata, dict):
+                for key, value in loader_metadata.items():
+                    if value is not None and key not in metadata_entry:
+                        metadata_entry[key] = value
+            metadata.append(metadata_entry)
             if fallback_used:
                 errors.append({'category': category_id, 'warning': 'Using cached fallback dataset.'})
         except Exception as exc:
@@ -5639,6 +5957,147 @@ def generate_latest_feed_payload(timeframe='day', force_refresh=False, include_h
     return payload
 
 
+def _agent_exp_loader_latest(options):
+    timeframe = options.get('timeframe') or 'day'
+    include_hype = bool(options.get('include_hype'))
+    limit = options.get('limit')
+    force_refresh = bool(options.get('options', {}).get('cache_bust'))
+
+    payload = generate_latest_feed_payload(
+        timeframe=timeframe,
+        force_refresh=force_refresh,
+        include_hype=include_hype
+    )
+
+    items = list(payload.get('items') or [])
+    limit_value = None
+    if limit is not None:
+        try:
+            limit_value = int(limit)
+        except (TypeError, ValueError):
+            limit_value = None
+    if limit_value is not None and limit_value >= 0:
+        items = items[:limit_value]
+
+    result = dict(payload)
+    result['items'] = items
+    result['count'] = len(items)
+
+    metadata = {
+        'window_label': payload.get('window_label'),
+        'include_hype': include_hype,
+        'timeframe': result.get('timeframe')
+    }
+    if limit_value is not None:
+        metadata['limit'] = limit_value
+
+    return result, metadata
+
+
+def _agent_exp_loader_hype(options):
+    limit = options.get('limit')
+    timeframe = options.get('timeframe')
+    limit_value = None
+    if limit is not None:
+        try:
+            limit_value = int(limit)
+        except (TypeError, ValueError):
+            limit_value = None
+    window_days = None
+    if timeframe in {'day', 'week', 'month', 'year'}:
+        mapping = {'day': 2, 'week': 7, 'month': 30, 'year': 365}
+        window_days = mapping.get(timeframe)
+
+    payload = fetch_hype_feed_payload(
+        limit=limit_value if limit_value is not None else 50,
+        window_days=window_days
+    )
+    items = list(payload.get('items') or [])
+    if limit_value is not None and limit_value >= 0:
+        items = items[:limit_value]
+
+    result = dict(payload)
+    result['items'] = items
+    result['count'] = len(items)
+
+    meta = payload.get('meta') or {}
+    metadata = {
+        'window_days': window_days or meta.get('window_days'),
+        'sources': meta.get('sources')
+    }
+    if limit_value is not None:
+        metadata['limit'] = limit_value
+
+    return result, metadata
+
+
+def _agent_exp_loader_blog(options):
+    limit = options.get('limit')
+    force_refresh = bool(options.get('options', {}).get('cache_bust'))
+    payload = fetch_blog_posts(force_refresh=force_refresh)
+
+    posts = list(payload.get('posts') or [])
+    limit_value = None
+    if limit is not None:
+        try:
+            limit_value = int(limit)
+        except (TypeError, ValueError):
+            limit_value = None
+    if limit_value is not None and limit_value >= 0:
+        posts = posts[:limit_value]
+
+    result = dict(payload)
+    result['posts'] = posts
+    result['count'] = len(posts)
+
+    metadata = {
+        'total_posts_available': len(payload.get('posts') or [])
+    }
+    if limit_value is not None:
+        metadata['limit'] = limit_value
+
+    return result, metadata
+
+
+def _agent_exp_loader_monitor(options):
+    limit = options.get('limit')
+    force_refresh = bool(options.get('options', {}).get('cache_bust'))
+    limit_value = None
+    if limit is not None:
+        try:
+            limit_value = int(limit)
+        except (TypeError, ValueError):
+            limit_value = None
+
+    items = load_monitor_feed(
+        force_refresh=force_refresh,
+        limit=limit_value,
+        sanitize=True
+    )
+
+    if limit_value is not None and limit_value >= 0:
+        items = items[:limit_value]
+
+    result = {
+        'items': items,
+        'count': len(items),
+        'generated_at': datetime.utcnow().replace(microsecond=0).isoformat() + 'Z'
+    }
+    metadata = {}
+    if limit_value is not None:
+        metadata['limit'] = limit_value
+
+    return result, metadata
+
+
+CUSTOM_CATEGORY_LOADERS.update({
+    'latest': _agent_exp_loader_latest,
+    'hype': _agent_exp_loader_hype,
+    'blog': _agent_exp_loader_blog,
+    'monitor': _agent_exp_loader_monitor
+})
+
+
 @app.route('/latest', methods=['GET'])
 def latest_feed():
     timeframe = request.args.get('timeframe', 'day')
@@ -5759,6 +6218,372 @@ def fetch_data_api():
         print(f"ERROR: fetch-data tool failed: {exc}")
         return jsonify({'error': 'Failed to fetch dataset summaries'}), 500
 
+
+def _agent_exp_allowed_categories(experimental_mode):
+    allowed = {entry['id'] for entry in AGENT_EXP_CORE_TABS}
+    if experimental_mode:
+        allowed.update(entry['id'] for entry in AGENT_EXP_EXPERIMENTAL_TABS)
+    return allowed
+
+
+def _agent_exp_normalize_content(content):
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for block in content:
+            if isinstance(block, dict) and block.get('type') == 'text':
+                parts.append(block.get('text') or '')
+        return ''.join(parts)
+    if content is None:
+        return ''
+    return str(content)
+
+
+def _agent_exp_stream_chunks(text, chunk_size=640):
+    if not text:
+        yield ''
+        return
+    start = 0
+    length = len(text)
+    while start < length:
+        end = min(length, start + chunk_size)
+        yield text[start:end]
+        start = end
+
+
+def _agent_exp_parse_limit(tool_args):
+    if 'limit' not in tool_args:
+        return AGENT_EXP_DEFAULT_LIMIT, True
+    raw_limit = tool_args.get('limit')
+    if raw_limit is None:
+        return None, False
+    try:
+        limit_value = int(raw_limit)
+        if limit_value <= 0:
+            return None, False
+        return limit_value, False
+    except (TypeError, ValueError):
+        raise ValueError(f"Invalid limit value '{raw_limit}'. Provide a positive integer or null.")
+
+
+def _agent_exp_parse_recency(tool_args, label):
+    if label not in tool_args:
+        return None
+    normalized, error = normalize_recency_value(tool_args.get(label))
+    if error:
+        raise ValueError(error)
+    return normalized
+
+
+def _agent_exp_execute_fetch(tool_args, experimental_mode):
+    categories_raw = tool_args.get('categories')
+    if isinstance(categories_raw, str):
+        categories_raw = [categories_raw]
+    if not isinstance(categories_raw, list) or not categories_raw:
+        raise ValueError('fetch_data requires a non-empty `categories` array.')
+
+    normalized = []
+    for item in categories_raw:
+        cid = normalize_category_id(item)
+        if cid:
+            normalized.append(cid)
+    if not normalized:
+        raise ValueError('No valid categories were provided to fetch_data.')
+
+    allowed = _agent_exp_allowed_categories(experimental_mode)
+    requested = [cid for cid in normalized if cid in allowed]
+    rejected = [cid for cid in normalized if cid not in allowed]
+    if not requested:
+        raise ValueError('Requested categories are not available in the current mode.')
+
+    limit_value, used_default_limit = _agent_exp_parse_limit(tool_args)
+    timeframe_value = _agent_exp_parse_recency(tool_args, 'timeframe')
+    recency_value = _agent_exp_parse_recency(tool_args, 'recency')
+    if timeframe_value is None:
+        timeframe_value = recency_value
+    include_hype = bool(tool_args.get('include_hype'))
+
+    fetch_result = fetch_data_for_categories(
+        requested,
+        limit_per_category=limit_value,
+        recency=recency_value,
+        timeframe=timeframe_value,
+        include_hype=include_hype,
+        options=tool_args
+    )
+
+    context = rebuild_fetch_context(fetch_result)
+    compressed_snapshot = compose_compressed_datasets(context)
+
+    tool_payload = {
+        'categories': fetch_result.get('categories', []),
+        'structured': fetch_result.get('structured', {}),
+        'markdown': fetch_result.get('markdown', ''),
+        'compressed': compressed_snapshot,
+        'datasets': fetch_result.get('datasets', {}),
+        'generated_at': fetch_result.get('generated_at')
+    }
+    if rejected:
+        tool_payload['rejected_categories'] = rejected
+    if fetch_result.get('errors'):
+        tool_payload['errors'] = fetch_result['errors']
+
+    datasets_summary = [
+        {
+            'id': entry.get('id'),
+            'label': entry.get('label'),
+            'items': entry.get('items'),
+            'source': entry.get('source')
+        }
+        for entry in (fetch_result.get('categories') or [])
+        if isinstance(entry, dict)
+    ]
+
+    log_entry = {
+        'type': 'tool',
+        'tool': 'fetch_data',
+        'status': 'ok',
+        'args': {
+            'categories': requested,
+            'limit': limit_value if limit_value is not None else 'all',
+            'used_default_limit': used_default_limit,
+            'timeframe': timeframe_value,
+            'recency': recency_value,
+            'include_hype': include_hype
+        },
+        'datasets': datasets_summary
+    }
+    if rejected:
+        log_entry['rejected_categories'] = rejected
+    if fetch_result.get('errors'):
+        log_entry['warnings'] = fetch_result['errors']
+
+    print(f"🛠️ [Agent EXP] fetch_data categories={requested} limit={log_entry['args']['limit']} timeframe={timeframe_value or recency_value} rejected={rejected}")
+
+    return json.dumps(tool_payload, ensure_ascii=False), log_entry
+
+
+def _agent_exp_execute_perplexity(tool_args, auth_token):
+    query = (tool_args.get('query') or '').strip()
+    if not query:
+        raise ValueError('ask_perplexity requires a `query` string.')
+
+    headers = build_openrouter_headers(auth_token)
+    system_prompt = (
+        "You are performing realtime research inside the AI Model Research Dashboard. "
+        "Assume your internal training data is outdated; rely entirely on live search results. "
+        "Prioritise factual, recent findings and cite sources explicitly."
+    )
+
+    payload = {
+        'model': 'perplexity/sonar-pro-search',
+        'messages': [
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': query}
+        ],
+        'temperature': 0.2,
+        'max_tokens': 900
+    }
+
+    response = requests.post(
+        f'{OPENROUTER_BASE_URL}/chat/completions',
+        headers=headers,
+        json=payload,
+        timeout=60
+    )
+    response.raise_for_status()
+    data = response.json()
+    content = data.get('choices', [{}])[0].get('message', {}).get('content') or ''
+
+    print(f"🔍 [Agent EXP] ask_perplexity query='{query}'")
+
+    tool_payload = {
+        'query': query,
+        'model': 'perplexity/sonar-pro-search',
+        'response': content
+    }
+    log_entry = {
+        'type': 'tool',
+        'tool': 'ask_perplexity',
+        'status': 'ok',
+        'args': {'query': query},
+        'model': 'perplexity/sonar-pro-search'
+    }
+    return json.dumps(tool_payload, ensure_ascii=False), log_entry
+
+
+def agent_exp_session(auth_token, user_message, conversation_history, model_id, experimental_mode):
+    headers = build_openrouter_headers(auth_token)
+    system_prompt = build_agent_exp_system_prompt(experimental_mode)
+    messages = build_agent_exp_messages(system_prompt, conversation_history, user_message)
+    model_label = get_model_display_name(model_id)
+
+    max_iterations = 6
+    iteration = 0
+    while iteration < max_iterations:
+        iteration += 1
+        yield {
+            'type': 'status',
+            'stage': 'llm_request',
+            'message': f'Calling {model_label} (iteration {iteration})'
+        }
+
+        payload = {
+            'model': model_id,
+            'messages': messages,
+            'tools': get_agent_exp_tools_schema(),
+            'tool_choice': 'auto',
+            'parallel_tool_calls': False,
+            'stream': False,
+            'max_output_tokens': 2048
+        }
+
+        try:
+            response = requests.post(
+                f'{OPENROUTER_BASE_URL}/chat/completions',
+                headers=headers,
+                json=payload,
+                timeout=90
+            )
+            response.raise_for_status()
+        except requests.exceptions.HTTPError as exc:
+            message = f'OpenRouter request failed: {exc}'
+            print(f"❌ [Agent EXP] {message}")
+            yield {'type': 'error', 'error': message}
+            return
+        except requests.exceptions.RequestException as exc:
+            message = f'OpenRouter request error: {exc}'
+            print(f"❌ [Agent EXP] {message}")
+            yield {'type': 'error', 'error': message}
+            return
+
+        payload_json = response.json()
+        choice = (payload_json.get('choices') or [{}])[0]
+        message = choice.get('message') or {}
+        tool_calls = message.get('tool_calls') or []
+
+        if tool_calls:
+            assistant_tool_message = {
+                'role': 'assistant',
+                'content': message.get('content') or '',
+                'tool_calls': tool_calls
+            }
+            messages.append(assistant_tool_message)
+
+            for call in tool_calls:
+                function_payload = call.get('function') or {}
+                tool_name = function_payload.get('name')
+                raw_arguments = function_payload.get('arguments') or '{}'
+                try:
+                    tool_args = json.loads(raw_arguments) if isinstance(raw_arguments, str) else raw_arguments
+                except json.JSONDecodeError:
+                    tool_args = {}
+
+                try:
+                    if tool_name == 'fetch_data':
+                        tool_content, log_entry = _agent_exp_execute_fetch(tool_args or {}, experimental_mode)
+                    elif tool_name == 'ask_perplexity':
+                        tool_content, log_entry = _agent_exp_execute_perplexity(tool_args or {}, auth_token)
+                    else:
+                        raise ValueError(f"Unsupported tool '{tool_name}' requested.")
+                    log_entry.setdefault('type', 'tool')
+                except Exception as exc:
+                    error_message = str(exc)
+                    print(f"❌ [Agent EXP] Tool '{tool_name}' failed: {error_message}")
+                    tool_content = json.dumps({'error': error_message}, ensure_ascii=False)
+                    log_entry = {
+                        'type': 'tool',
+                        'tool': tool_name or 'unknown',
+                        'status': 'error',
+                        'error': error_message,
+                        'args': tool_args
+                    }
+
+                messages.append({
+                    'role': 'tool',
+                    'name': tool_name,
+                    'tool_call_id': call.get('id'),
+                    'content': tool_content
+                })
+                yield log_entry
+            continue
+
+        final_text = _agent_exp_normalize_content(message.get('content'))
+        if not final_text:
+            final_text = ''
+
+        for chunk in _agent_exp_stream_chunks(final_text):
+            yield {'type': 'content', 'content': chunk}
+        yield {'type': 'done'}
+        return
+
+    yield {'type': 'error', 'error': 'Exceeded maximum tool iterations.'}
+
+
+@app.route('/api/agent-exp', methods=['POST'])
+def agent_exp_endpoint():
+    try:
+        auth_token = require_user_openrouter_token()
+    except MissingOpenRouterKeyError:
+        return openrouter_key_required_response()
+
+    data = request.get_json(force=True, silent=True) or {}
+    user_message = (data.get('message') or '').strip()
+    if not user_message:
+        return jsonify({'error': 'Message is required.'}), 400
+
+    model_id = (data.get('model') or AGENT_EXP_DEFAULT_MODEL).strip() or AGENT_EXP_DEFAULT_MODEL
+    experimental_mode = bool(
+        data.get('experimental')
+        or data.get('experimentalMode')
+        or data.get('experimental_mode')
+    )
+    conversation = (
+        data.get('conversation')
+        or data.get('history')
+        or data.get('conversationHistory')
+        or []
+    )
+    if not isinstance(conversation, list):
+        conversation = []
+
+    stream = bool(data.get('stream', True))
+
+    print(f"🚀 [Agent EXP] message='{user_message[:80]}' model={model_id} experimental={experimental_mode} stream={stream}")
+
+    if not stream:
+        final_response = ''
+        events = []
+        for event in agent_exp_session(auth_token, user_message, conversation, model_id, experimental_mode):
+            events.append(event)
+            if event.get('type') == 'content':
+                final_response += event.get('content', '')
+            if event.get('type') == 'error':
+                return jsonify({'error': event.get('error'), 'events': events}), 500
+        return jsonify({
+            'response': final_response,
+            'events': events
+        })
+
+    def event_stream():
+        try:
+            for event in agent_exp_session(auth_token, user_message, conversation, model_id, experimental_mode):
+                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        except Exception as exc:
+            message = f'Agent EXP failed: {exc}'
+            print(f"❌ [Agent EXP] {message}")
+            error_event = {'type': 'error', 'error': 'Agent EXP encountered an unexpected error.'}
+            yield f"data: {json.dumps(error_event, ensure_ascii=False)}\n\n"
+            yield "data: {\"type\": \"done\"}\n\n"
+
+    sse_headers = {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no'
+    }
+    return Response(stream_with_context(event_stream()), mimetype='text/event-stream', headers=sse_headers)
 @app.route('/api/intelligent-query', methods=['POST'])
 def intelligent_query():
     """Use configured model to intelligently process large datasets."""

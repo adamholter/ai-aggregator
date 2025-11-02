@@ -41,6 +41,7 @@
             <button class="nav-btn" data-section="latest" data-experimental="true" style="display:none;" aria-hidden="true">Latest</button>
             <button class="nav-btn" data-section="monitor" data-experimental="true" style="display:none;" aria-hidden="true">Monitor</button>
             <button class="nav-btn" data-section="blog" data-experimental="true" style="display:none;" aria-hidden="true">Blog</button>
+            <button class="nav-btn" data-section="agent-exp" data-experimental="true" style="display:none;" aria-hidden="true">Agent EXP</button>
             <button class="nav-btn" data-section="ai-agent" data-experimental="true" style="display:none;" aria-hidden="true">AI Agent</button>
             <button class="nav-btn" data-section="about">About</button>
         </nav>
@@ -361,6 +362,30 @@
                         <div id="agent-image-preview" class="image-preview-list"></div>
                     </div>
                 </div>
+            </section>
+
+            <!-- Agent EXP Section -->
+            <section id="agent-exp" class="content-section" data-experimental="true" style="display:none;" aria-hidden="true">
+                <div class="section-header">
+                    <h2>Agent EXP</h2>
+                    <div class="controls">
+                        <select id="agent-exp-model" aria-label="Agent EXP model selector">
+                            <option value="" disabled>Loading models...</option>
+                        </select>
+                        <button id="agent-exp-clear" type="button" class="chart-btn secondary" style="margin-left: 8px;">Clear Chat</button>
+                    </div>
+                    <div class="agent-warning experimental-warning">⚡ Experimental OpenRouter chatbot powered by Grok with dashboard data + Perplexity tools.</div>
+                </div>
+                <div class="ai-agent-container agent-exp-container">
+                    <div class="chat-container">
+                        <div class="chat-messages" id="agent-exp-messages"></div>
+                        <form id="agent-exp-form" class="chat-input">
+                            <textarea id="agent-exp-input" placeholder="Ask about models, launches, pricing, or benchmarks..."></textarea>
+                            <button type="submit">Send</button>
+                        </form>
+                    </div>
+                </div>
+                <div class="agent-exp-status" id="agent-exp-status" aria-live="polite"></div>
             </section>
 
             <!-- About Section -->

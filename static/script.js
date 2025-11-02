@@ -45,6 +45,16 @@ let agentConfig = {
     conversationHistory: [] // For context memory
 };
 
+const AGENT_EXP_MODEL_STORAGE_KEY = 'dashboard-agent-exp-model';
+const AGENT_EXP_DEFAULT_MODEL = 'x-ai/grok-4-fast';
+let agentExpState = {
+    model: AGENT_EXP_DEFAULT_MODEL,
+    conversation: [],
+    streaming: false,
+    streamBuffer: '',
+    activeMessage: null
+};
+
 let openRouterIndex = null;
 const modelMatchCache = new Map();
 const analysisCache = new Map();
@@ -677,12 +687,13 @@ document.addEventListener('DOMContentLoaded', async function() {
     console.info('The quick brown fox jumped over the lazy dogs – experimental canary build active.');
     await preloadModelConfig();
     ensureExperimentalSections();
-    ensureExperimentalNavButtons();
-    setupNavigation();
-    initializeTheme();
-    applyAgentDefaults();
-    setupOpenRouterControls();
-    populateAgentDropdown();
+   ensureExperimentalNavButtons();
+   setupNavigation();
+   initializeTheme();
+   applyAgentDefaults();
+   setupOpenRouterControls();
+   populateAgentDropdown();
+    initializeAgentExp();
     loadLLMData(); // Load LLM data by default
     setupImageUpload();
     applyExperimentalMode(getStoredExperimentalMode());
@@ -846,6 +857,7 @@ function ensureExperimentalNavButtons() {
     ensureButton('latest', 'Latest');
     ensureButton('monitor', 'Monitor');
     ensureButton('blog', 'Blog');
+    ensureButton('agent-exp', 'Agent EXP');
 }
 
 function ensureExperimentalSections() {
@@ -1088,6 +1100,9 @@ function loadSectionData(section) {
             } else {
                 displayBlogPosts(cachedData.blog);
             }
+            break;
+        case 'agent-exp':
+            focusAgentExpInput();
             break;
     }
 }
@@ -1453,6 +1468,7 @@ async function loadOpenRouterModelsData(forceRefresh = false) {
         await fetchAndCacheOpenRouterModels(forceRefresh);
         populateOpenRouterVendorFilter(openRouterModels);
         filterOpenRouterModelsData();
+        populateAgentExpModels();
         loadingElement.style.display = 'none';
         if (dataElement) {
             dataElement.classList.add('loaded');
@@ -2713,6 +2729,485 @@ function clearChatHistory() {
     chatMessages.appendChild(welcomeMessage);
     
     chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+// Agent EXP (experimental Grok-powered chatbot)
+function initializeAgentExp() {
+    const modelSelect = document.getElementById('agent-exp-model');
+    const form = document.getElementById('agent-exp-form');
+    if (!modelSelect || !form) {
+        return;
+    }
+
+    const storedModel = localStorage.getItem(AGENT_EXP_MODEL_STORAGE_KEY);
+    if (storedModel) {
+        agentExpState.model = storedModel;
+    }
+
+    populateAgentExpModels();
+
+    if (modelSelect.value !== agentExpState.model) {
+        modelSelect.value = agentExpState.model;
+    }
+
+    modelSelect.addEventListener('change', () => {
+        const nextValue = modelSelect.value;
+        if (!nextValue) {
+            return;
+        }
+        agentExpState.model = nextValue;
+        localStorage.setItem(AGENT_EXP_MODEL_STORAGE_KEY, nextValue);
+        setAgentExpStatus(`Using ${nextValue}`);
+    });
+
+    form.addEventListener('submit', sendAgentExpMessage);
+
+    const clearButton = document.getElementById('agent-exp-clear');
+    if (clearButton) {
+        clearButton.addEventListener('click', clearAgentExpHistory);
+    }
+
+    const input = document.getElementById('agent-exp-input');
+    if (input) {
+        input.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                form.requestSubmit();
+            }
+        });
+    }
+
+    renderAgentExpWelcome();
+}
+
+function getAgentExpModelOptions() {
+    const entries = new Map();
+    const addEntry = (id, label) => {
+        if (!id || entries.has(id)) {
+            return;
+        }
+        entries.set(id, label || id);
+    };
+
+    addEntry(AGENT_EXP_DEFAULT_MODEL);
+    if (agentConfig && agentConfig.model) {
+        addEntry(agentConfig.model);
+    }
+
+    const agentSettings = (modelConfig && modelConfig.agent) || {};
+    (agentSettings.availableModels || []).forEach(id => addEntry(id));
+    (agentSettings.fallbackModels || []).forEach(id => addEntry(id));
+
+    if (cachedData.openRouterModels && Array.isArray(cachedData.openRouterModels)) {
+        cachedData.openRouterModels.slice(0, 30).forEach(model => {
+            addEntry(model.id, model.name || model.id);
+        });
+    }
+
+    return Array.from(entries.entries());
+}
+
+function populateAgentExpModels() {
+    const modelSelect = document.getElementById('agent-exp-model');
+    if (!modelSelect) {
+        return;
+    }
+
+    const choices = getAgentExpModelOptions();
+    modelSelect.innerHTML = '';
+
+    choices.forEach(([id, label]) => {
+        const option = document.createElement('option');
+        option.value = id;
+        const info = typeof getAgentModelInfo === 'function' ? getAgentModelInfo(id) : null;
+        option.textContent = (info && (info.name || info.displayName)) || label || id;
+        modelSelect.appendChild(option);
+    });
+
+    if (choices.length === 0) {
+        const fallbackOption = document.createElement('option');
+        fallbackOption.value = AGENT_EXP_DEFAULT_MODEL;
+        fallbackOption.textContent = AGENT_EXP_DEFAULT_MODEL;
+        modelSelect.appendChild(fallbackOption);
+        agentExpState.model = AGENT_EXP_DEFAULT_MODEL;
+    }
+
+    if (!choices.find(([id]) => id === agentExpState.model)) {
+        agentExpState.model = choices.length ? choices[0][0] : AGENT_EXP_DEFAULT_MODEL;
+    }
+
+    modelSelect.value = agentExpState.model;
+    localStorage.setItem(AGENT_EXP_MODEL_STORAGE_KEY, agentExpState.model);
+}
+
+function renderAgentExpWelcome() {
+    const container = document.getElementById('agent-exp-messages');
+    if (!container || container.dataset.welcomeRendered === 'true') {
+        return;
+    }
+
+    const welcome = document.createElement('div');
+    welcome.className = 'message ai';
+    welcome.innerHTML = `
+        <div class="response-content">
+            <p>👋 <strong>Welcome to Agent EXP.</strong> This lightweight Grok-powered agent can pull live dashboard datasets and run Perplexity searches.</p>
+            <p>Try asking for <em>fal.ai image models</em>, <em>fresh leaderboard changes</em>, or <em>pricing comparisons</em>.</p>
+        </div>
+    `;
+    container.appendChild(welcome);
+    container.dataset.welcomeRendered = 'true';
+    scrollAgentExpToBottom();
+}
+
+function clearAgentExpHistory(event) {
+    if (event) {
+        event.preventDefault();
+    }
+    const container = document.getElementById('agent-exp-messages');
+    if (container) {
+        container.innerHTML = '';
+        delete container.dataset.welcomeRendered;
+    }
+    agentExpState.conversation = [];
+    agentExpState.streamBuffer = '';
+    agentExpState.activeMessage = null;
+    agentExpState.streaming = false;
+    setAgentExpStatus('');
+    renderAgentExpWelcome();
+}
+
+function appendAgentExpMessage(role, content, options = {}) {
+    const container = document.getElementById('agent-exp-messages');
+    if (!container) {
+        return null;
+    }
+
+    const message = document.createElement('div');
+    message.className = `message ${role}`;
+    if (options.streaming) {
+        message.classList.add('streaming');
+    }
+
+    const responseContent = document.createElement('div');
+    responseContent.className = 'response-content';
+    if (content) {
+        responseContent.innerHTML = renderAgentExpMarkdown(content);
+    } else if (options.streaming) {
+        responseContent.innerHTML = '<div class="typing-indicator">Thinking...</div>';
+    }
+    message.appendChild(responseContent);
+    container.appendChild(message);
+    scrollAgentExpToBottom();
+    return message;
+}
+
+function renderAgentExpMarkdown(markdown) {
+    if (!markdown) {
+        return '';
+    }
+    let sanitized = typeof fixEncodingArtifacts === 'function' ? fixEncodingArtifacts(markdown) : markdown;
+    if (typeof marked !== 'undefined' && marked.parse) {
+        try {
+            return marked.parse(sanitized);
+        } catch (error) {
+            console.warn('Marked.js failed, using fallback markdown renderer.', error);
+        }
+    }
+    return simpleMarkdownToHtml(sanitized);
+}
+
+function setAgentExpStatus(message, isError = false) {
+    const status = document.getElementById('agent-exp-status');
+    if (!status) {
+        return;
+    }
+    if (!message) {
+        status.textContent = '';
+        status.classList.remove('error');
+        return;
+    }
+    status.textContent = message;
+    status.classList.toggle('error', Boolean(isError));
+}
+
+function pushAgentExpHistory(entry) {
+    agentExpState.conversation.push(entry);
+    if (agentExpState.conversation.length > 10) {
+        agentExpState.conversation = agentExpState.conversation.slice(-10);
+    }
+}
+
+function scrollAgentExpToBottom() {
+    const container = document.getElementById('agent-exp-messages');
+    if (!container) {
+        return;
+    }
+    container.scrollTop = container.scrollHeight;
+}
+
+function focusAgentExpInput() {
+    const input = document.getElementById('agent-exp-input');
+    if (input && typeof input.focus === 'function') {
+        setTimeout(() => input.focus(), 50);
+    }
+}
+
+async function sendAgentExpMessage(event) {
+    event.preventDefault();
+    if (agentExpState.streaming) {
+        showToast('Please wait for the current response to finish.', 'info');
+        return;
+    }
+
+    const input = document.getElementById('agent-exp-input');
+    if (!input) {
+        return;
+    }
+    const message = input.value.trim();
+    if (!message) {
+        return;
+    }
+
+    if (!getUserOpenRouterKey()) {
+        showToast('🔑 Add your OpenRouter key in Settings to chat with Agent EXP.', 'warning');
+        setAgentExpStatus('Add your OpenRouter key in Settings to talk to Agent EXP.', true);
+        return;
+    }
+
+    appendAgentExpMessage('user', message);
+    pushAgentExpHistory({ role: 'user', content: message });
+    input.value = '';
+    scrollAgentExpToBottom();
+
+    try {
+        await streamAgentExpResponse(message);
+    } catch (error) {
+        const errorMessage = error && error.message ? error.message : 'Agent EXP request failed.';
+        setAgentExpStatus(errorMessage, true);
+        showToast(errorMessage, 'error');
+    }
+}
+
+async function streamAgentExpResponse(message) {
+    const form = document.getElementById('agent-exp-form');
+    const submitButton = form ? form.querySelector('button[type="submit"]') : null;
+
+    agentExpState.streamBuffer = '';
+    agentExpState.streaming = true;
+
+    if (submitButton) {
+        submitButton.disabled = true;
+    }
+
+    const assistantMessage = appendAgentExpMessage('ai', '', { streaming: true });
+    const responseContent = assistantMessage ? assistantMessage.querySelector('.response-content') : null;
+    agentExpState.activeMessage = assistantMessage;
+    setAgentExpStatus(`Calling ${agentExpState.model}...`);
+
+    try {
+        const response = await fetch('/api/agent-exp', {
+            method: 'POST',
+            headers: withUserOpenRouterKey({
+                'Content-Type': 'application/json'
+            }),
+            body: JSON.stringify({
+                message,
+                model: agentExpState.model,
+                conversation: agentExpState.conversation,
+                experimental: getStoredExperimentalMode(),
+                stream: true
+            })
+        });
+
+        if (!response.ok) {
+            let errorMessage = `HTTP error ${response.status}`;
+            try {
+                const payload = await response.json();
+                errorMessage = payload.error || payload.message || errorMessage;
+            } catch (parseError) {
+                // ignore
+            }
+            if (response.status === 402) {
+                errorMessage = "🔑 OpenRouter API key required. Please add your key in Settings to use Agent EXP.";
+            }
+            throw new Error(errorMessage);
+        }
+
+        const reader = response.body && response.body.getReader ? response.body.getReader() : null;
+        if (!reader) {
+            throw new Error('Response body is not readable');
+        }
+
+        const decoder = new TextDecoder('utf-8');
+        let buffer = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) {
+                break;
+            }
+
+            buffer += decoder.decode(value, { stream: true });
+
+            let newlineIndex = buffer.indexOf('\n');
+            while (newlineIndex !== -1) {
+                const line = buffer.slice(0, newlineIndex).trim();
+                buffer = buffer.slice(newlineIndex + 1);
+                if (line) {
+                    processAgentExpLine(line, assistantMessage, responseContent);
+                }
+                newlineIndex = buffer.indexOf('\n');
+            }
+        }
+
+        const remaining = buffer.trim();
+        if (remaining) {
+            processAgentExpLine(remaining, assistantMessage, responseContent);
+        }
+    } catch (error) {
+        const errorMessage = error && error.message ? error.message : 'Agent EXP streaming failed.';
+        setAgentExpStatus(errorMessage, true);
+        if (assistantMessage && responseContent) {
+            assistantMessage.classList.remove('streaming');
+            responseContent.innerHTML = `<div class="error-content">❌ ${errorMessage}</div>`;
+        }
+        agentExpState.activeMessage = null;
+        agentExpState.streaming = false;
+        agentExpState.streamBuffer = '';
+        throw error;
+    } finally {
+        if (submitButton) {
+            submitButton.disabled = false;
+        }
+    }
+}
+
+function processAgentExpLine(line, assistantMessage, responseContent) {
+    if (!line.startsWith('data:')) {
+        return;
+    }
+    const payload = line.slice(5).trim();
+    if (!payload || payload === '[DONE]') {
+        return;
+    }
+    let event;
+    try {
+        event = JSON.parse(payload);
+    } catch (error) {
+        return;
+    }
+    handleAgentExpEvent(event, assistantMessage, responseContent);
+}
+
+function handleAgentExpEvent(event, assistantMessage, responseContent) {
+    if (!event || typeof event !== 'object') {
+        return;
+    }
+
+    switch (event.type) {
+        case 'status':
+            if (event.message) {
+                setAgentExpStatus(event.message);
+            }
+            break;
+        case 'tool':
+            renderAgentExpToolLog(event, assistantMessage);
+            if (event.tool === 'fetch_data') {
+                const dataLabels = (event.datasets || []).map(entry => entry.label || entry.id).join(', ');
+                if (dataLabels) {
+                    setAgentExpStatus(`Loaded datasets: ${dataLabels}`);
+                }
+            }
+            break;
+        case 'content': {
+            const chunk = event.content || '';
+            agentExpState.streamBuffer += chunk;
+            if (responseContent) {
+                responseContent.innerHTML = renderAgentExpMarkdown(agentExpState.streamBuffer);
+            }
+            scrollAgentExpToBottom();
+            break;
+        }
+        case 'error':
+            setAgentExpStatus(event.error || 'Agent EXP encountered an error.', true);
+            if (assistantMessage) {
+                assistantMessage.classList.remove('streaming');
+            }
+            if (responseContent) {
+                responseContent.innerHTML = `<div class="error-content">❌ ${event.error || 'Agent EXP encountered an error.'}</div>`;
+            }
+            agentExpState.activeMessage = null;
+            agentExpState.streaming = false;
+            agentExpState.streamBuffer = '';
+            break;
+        case 'done': {
+            if (assistantMessage) {
+                assistantMessage.classList.remove('streaming');
+            }
+            const finalText = agentExpState.streamBuffer ? fixEncodingArtifacts(agentExpState.streamBuffer.trim()) : '';
+            if (responseContent) {
+                responseContent.innerHTML = finalText ? renderAgentExpMarkdown(finalText) : '<div class="response-content">No response generated.</div>';
+            }
+            if (finalText) {
+                pushAgentExpHistory({ role: 'assistant', content: finalText });
+            }
+            setAgentExpStatus('');
+            agentExpState.activeMessage = null;
+            agentExpState.streaming = false;
+            agentExpState.streamBuffer = '';
+            scrollAgentExpToBottom();
+            break;
+        }
+    }
+}
+
+function renderAgentExpToolLog(event, assistantMessage) {
+    if (!assistantMessage) {
+        return;
+    }
+    let container = assistantMessage.querySelector('.agent-exp-tools');
+    if (!container) {
+        container = document.createElement('div');
+        container.className = 'agent-exp-tools';
+        assistantMessage.insertBefore(container, assistantMessage.firstChild);
+    }
+
+    const row = document.createElement('div');
+    row.className = 'agent-exp-tool-row';
+    if (event.status === 'error') {
+        row.classList.add('error');
+    }
+
+    const parts = [];
+    if (event.tool === 'fetch_data') {
+        const categories = (event.args && event.args.categories) ? event.args.categories.join(', ') : 'no categories';
+        parts.push(`fetch_data → ${categories}`);
+        if (event.args && event.args.limit !== undefined) {
+            parts.push(`limit: ${event.args.limit}`);
+        }
+        if (event.args && event.args.timeframe) {
+            parts.push(`timeframe: ${event.args.timeframe}`);
+        }
+        if (event.datasets && event.datasets.length) {
+            const counts = event.datasets.map(entry => `${entry.label || entry.id} (${entry.items ?? 0})`).join(', ');
+            if (counts) {
+                parts.push(counts);
+            }
+        }
+    } else if (event.tool === 'ask_perplexity') {
+        const query = event.args && event.args.query ? event.args.query : 'query';
+        parts.push(`ask_perplexity → ${query}`);
+    } else if (event.tool) {
+        parts.push(`${event.tool} invoked`);
+    }
+
+    if (event.error) {
+        parts.push(`⚠️ ${event.error}`);
+    }
+
+    row.textContent = parts.join(' · ');
+    container.appendChild(row);
+    scrollAgentExpToBottom();
 }
 
 // Call AI agent with streaming support

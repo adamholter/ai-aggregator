@@ -14,7 +14,11 @@ let cachedData = {
     imageToVideo: null,
     falModels: null,
     replicateModels: null,
-    openRouterModels: null
+    openRouterModels: null,
+    hype: null,
+    blog: null,
+    latest: null,
+    monitor: null
 };
 
 // Store raw data for filtering
@@ -27,129 +31,36 @@ let rawData = {
     imageToVideo: null,
     falModels: null,
     replicateModels: null,
-    openRouterModels: null
+    openRouterModels: null,
+    hype: null,
+    blog: null,
+    latest: null,
+    monitor: null
 };
 
 // AI Agent configuration
 let agentConfig = {
-    model: 'google/gemini-2.5-flash-lite-preview-09-2025',
+    model: 'z-ai/glm-4.5',
     availableModels: [], // Will be populated from settings
     conversationHistory: [] // For context memory
 };
 
-const AGENT_MODEL_INFO = {
-    'google/gemini-2.5-flash-lite-preview-09-2025': {
-        displayName: 'Google Gemini 2.5 Flash Lite',
-        optionLabel: 'Google Gemini 2.5 Flash Lite (default)',
-        costTier: 'moderate',
-        warning: 'Fast high-context baseline; recommended starting point.',
-        context: 'high'
-    },
-    'openai/gpt-5-nano': {
-        displayName: 'OpenAI GPT-5 Nano',
-        optionLabel: 'OpenAI GPT-5 Nano (cheapest)',
-        costTier: 'low',
-        warning: 'Cheapest high-context option but slower responses.',
-        context: 'high'
-    },
-    'x-ai/grok-4-fast': {
-        displayName: 'xAI Grok 4 Fast',
-        optionLabel: 'xAI Grok 4 Fast (fast)',
-        costTier: 'moderate',
-        warning: 'High-context with faster throughput; monitor costs.',
-        context: 'high'
-    },
-    'google/gemini-2.5-flash-preview-09-2025': {
-        displayName: 'Google Gemini 2.5 Flash',
-        optionLabel: 'Google Gemini 2.5 Flash (fast, pricier)',
-        costTier: 'moderate',
-        warning: 'Faster variant with higher per-token cost.',
-        context: 'high'
-    },
-    'google/gemini-2.5-pro': {
-        displayName: 'Google Gemini 2.5 Pro',
-        optionLabel: 'Google Gemini 2.5 Pro (very expensive)',
-        costTier: 'expensive',
-        warning: 'Extremely expensive high-context model; use sparingly.',
-        context: 'high'
-    },
-    'openai/gpt-4.1-mini': {
-        displayName: 'OpenAI GPT-4.1 Mini',
-        optionLabel: 'OpenAI GPT-4.1 Mini',
-        costTier: 'moderate',
-        warning: 'Balanced option with strong performance and cost.',
-        context: 'high'
-    },
-    'openai/gpt-5-mini': {
-        displayName: 'OpenAI GPT-5 Mini',
-        optionLabel: 'OpenAI GPT-5 Mini (expensive)',
-        costTier: 'expensive',
-        warning: 'Premium high-context model with significant cost.',
-        context: 'high'
-    },
-    'openai/gpt-5': {
-        displayName: 'OpenAI GPT-5',
-        optionLabel: 'OpenAI GPT-5 (flagship, very expensive)',
-        costTier: 'expensive',
-        warning: 'Flagship high-context model. Expect very high spend.',
-        context: 'high'
-    }
+const AGENT_EXP_MODEL_STORAGE_KEY = 'dashboard-agent-exp-model';
+const AGENT_EXP_DEFAULT_MODEL = 'x-ai/grok-4-fast';
+let agentExpState = {
+    model: AGENT_EXP_DEFAULT_MODEL,
+    conversation: [],
+    streaming: false,
+    streamBuffer: '',
+    activeMessage: null
 };
-
-function getAgentModelInfo(modelId) {
-    return AGENT_MODEL_INFO[modelId] || null;
-}
-
-function applyAgentModelInfo(entry) {
-    const info = getAgentModelInfo(entry.id) || {};
-    const displayName = info.displayName || entry.name || entry.id;
-    const optionLabel = info.optionLabel || displayName;
-    return {
-        ...entry,
-        name: displayName,
-        displayName,
-        optionLabel,
-        warning: info.warning || '',
-        costTier: info.costTier || 'unknown',
-        context: info.context || 'high'
-    };
-}
-
-function truncateForHistory(content, limit = MAX_AGENT_HISTORY_CHARS) {
-    if (!content || typeof content !== 'string') {
-        return content || '';
-    }
-    if (content.length <= limit) {
-        return content;
-    }
-    const truncated = content.slice(0, limit).trimEnd();
-    return `${truncated}… [truncated]`;
-}
-
-function pushConversationEntry(role, content, attachments = [], options = {}) {
-    if (!agentConfig.conversationHistory) {
-        agentConfig.conversationHistory = [];
-    }
-    const entry = {
-        role,
-        content: truncateForHistory(content),
-        attachments: attachments && attachments.length ? attachments : undefined,
-        timestamp: new Date().toISOString()
-    };
-    agentConfig.conversationHistory.push(entry);
-    if (agentConfig.conversationHistory.length > MAX_AGENT_HISTORY_MESSAGES) {
-        agentConfig.conversationHistory = agentConfig.conversationHistory.slice(-MAX_AGENT_HISTORY_MESSAGES);
-    }
-    return entry;
-}
 
 let openRouterIndex = null;
 const modelMatchCache = new Map();
 const analysisCache = new Map();
 const openRouterMatchCache = new Map();
 const USER_OPENROUTER_KEY_STORAGE = 'dashboard-user-openrouter-key';
-const MAX_AGENT_HISTORY_MESSAGES = 12;
-const MAX_AGENT_HISTORY_CHARS = 1200;
+const EXPERIMENTAL_MODE_STORAGE_KEY = 'dashboard-experimental-mode';
 
 const THEME_SEQUENCE = ['light', 'dark', 'source'];
 const THEME_LABELS = {
@@ -160,124 +71,72 @@ const THEME_LABELS = {
 
 let modelConfig = null;
 let settingsInitialized = false;
-let agentSessionContext = null;
-let agentSessionSnapshot = '';
+let experimentalModeEnabled = false;
+let hypeSortMode = 'newest';
+let blogSortMode = 'newest';
 let agentPendingImages = [];
+const BLOG_INITIAL_PAGE_SIZE = 10;
+const BLOG_FULL_PAGE_SIZE = 100;
+const BLOG_FULL_MAX_PAGES = 5;
+let blogPrefetching = false;
+let latestTimeframe = 'day';
+let latestIncludeHype = false;
+let latestMetadata = null;
+let latestControlsWired = false;
 
-function summarizeContextSnapshot(snapshot) {
-    if (!snapshot || typeof snapshot !== 'object') {
-        return '';
+function getLatestControls() {
+    const section = document.getElementById('latest');
+    return {
+        section,
+        timeframeSelect: section ? section.querySelector('#latest-timeframe') : document.getElementById('latest-timeframe'),
+        includeCheckbox: section ? section.querySelector('#latest-include-hype') : document.getElementById('latest-include-hype'),
+        refreshButton: section ? section.querySelector('#latest-refresh') : document.getElementById('latest-refresh'),
+        header: section ? section.querySelector('.section-header h2') : null
+    };
+}
+
+function syncLatestControls() {
+    const { timeframeSelect, includeCheckbox } = getLatestControls();
+    if (timeframeSelect) {
+        const current = timeframeSelect.value;
+        if (current !== latestTimeframe) {
+            timeframeSelect.value = latestTimeframe;
+        }
     }
-    try {
-        const categories = (snapshot.categories || []).map(cat => {
-            if (typeof cat === 'string') return cat;
-            if (cat && typeof cat === 'object') {
-                return cat.id || cat.label || '';
-            }
-            return '';
-        }).filter(Boolean);
-        return JSON.stringify({
-            generated_at: snapshot.generated_at || null,
-            categories: categories
+    if (includeCheckbox) {
+        includeCheckbox.checked = Boolean(latestIncludeHype);
+    }
+}
+
+function ensureLatestControlListeners() {
+    const { timeframeSelect, includeCheckbox } = getLatestControls();
+    if (timeframeSelect && timeframeSelect.dataset.listenerAttached !== 'true') {
+        timeframeSelect.addEventListener('change', () => {
+            latestTimeframe = timeframeSelect.value || 'day';
+            syncLatestControls();
+            loadLatestFeed(true);
         });
-    } catch (error) {
-        console.warn('Failed to summarize context snapshot', error);
-        return '';
+        timeframeSelect.dataset.listenerAttached = 'true';
     }
-}
-
-function readFileAsDataURL(file) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = () => reject(reader.error);
-        reader.readAsDataURL(file);
-    });
-}
-
-async function collectImageAttachments() {
-    if (!agentPendingImages.length) {
-        return [];
-    }
-    const attachments = [];
-    for (const file of agentPendingImages) {
-        try {
-            const dataUrl = await readFileAsDataURL(file);
-            attachments.push({
-                name: file.name,
-                type: file.type,
-                size: file.size,
-                data: dataUrl
-            });
-        } catch (error) {
-            console.error('Failed to read attachment', file.name, error);
-        }
-    }
-    return attachments;
-}
-
-function resetImageUploads() {
-    agentPendingImages = [];
-    const input = document.getElementById('agent-image');
-    if (input) {
-        input.value = '';
-    }
-    const preview = document.getElementById('agent-image-preview');
-    if (preview) {
-        preview.innerHTML = '';
-        preview.classList.remove('has-items');
-    }
-    updateAttachmentButtonState();
-}
-
-function updateAttachmentButtonState() {
-    const button = document.getElementById('agent-attachment-button');
-    if (!button) {
-        return;
-    }
-    if (agentPendingImages.length) {
-        button.classList.add('has-attachments');
-    } else {
-        button.classList.remove('has-attachments');
-    }
-}
-
-function setupImageUpload() {
-    const input = document.getElementById('agent-image');
-    if (!input) return;
-
-    const button = document.getElementById('agent-attachment-button');
-    if (button) {
-        button.addEventListener('click', () => input.click());
-    }
-
-    updateAttachmentButtonState();
-
-    input.addEventListener('change', () => {
-        agentPendingImages = Array.from(input.files || []);
-        const preview = document.getElementById('agent-image-preview');
-        if (preview) {
-            preview.innerHTML = '';
-            preview.classList.remove('has-items');
-        }
-        if (!agentPendingImages.length) {
-            updateAttachmentButtonState();
-            return;
-        }
-        if (preview) {
-            preview.classList.add('has-items');
-        }
-        agentPendingImages.forEach(file => {
-            const item = document.createElement('div');
-            item.className = 'image-preview-item';
-            const sizeKB = (file.size / 1024).toFixed(1);
-            item.textContent = `📎 ${file.name} (${sizeKB} KB)`;
-            if (preview) {
-                preview.appendChild(item);
-            }
+    if (includeCheckbox && includeCheckbox.dataset.listenerAttached !== 'true') {
+        includeCheckbox.addEventListener('change', () => {
+            latestIncludeHype = includeCheckbox.checked;
+            syncLatestControls();
+            loadLatestFeed(true);
         });
-        updateAttachmentButtonState();
-    });
+        includeCheckbox.dataset.listenerAttached = 'true';
+    }
+    syncLatestControls();
+    latestControlsWired = Boolean(timeframeSelect || includeCheckbox);
+}
+
+function updateLatestHeading() {
+    const { header } = getLatestControls();
+    if (header) {
+        const windowLabel = latestMetadata?.window_label
+            || (latestTimeframe === 'week' ? 'Last 7 days' : 'Last 24 hours');
+        header.textContent = `Latest Activity (${windowLabel})`;
+    }
 }
 
 // Common words to ignore when matching model names between sources
@@ -350,8 +209,9 @@ function fixEncodingArtifacts(text) {
 }
 
 const STREAM_BLOCK_PATTERN = /^(#{1,6}\s|[-*+]\s|```|>|\|)/;
-
-const MAX_AGENT_STATUS_ENTRIES = 20;
+const RELATIVE_TIME_FORMATTER = (typeof Intl !== 'undefined' && typeof Intl.RelativeTimeFormat === 'function')
+    ? new Intl.RelativeTimeFormat('en', { numeric: 'auto' })
+    : null;
 
 function escapeHtml(value) {
     return (value == null ? '' : String(value)).replace(/[&<>"']/g, char => ({
@@ -365,10 +225,7 @@ function escapeHtml(value) {
 
 function showToast(message, type = 'error', duration = 5000) {
     const container = document.getElementById('toast-container');
-    if (!container) {
-        console.warn('⚠️ [Toast] No toast container found');
-        return;
-    }
+    if (!container) return;
 
     const toast = document.createElement('div');
     toast.className = 'toast';
@@ -398,6 +255,7 @@ function showToast(message, type = 'error', duration = 5000) {
     }
 
     container.appendChild(toast);
+
     if (duration > 0) {
         window.setTimeout(dismiss, duration);
     }
@@ -405,21 +263,16 @@ function showToast(message, type = 'error', duration = 5000) {
 
 function clearAgentLoadingState() {
     const chatMessages = document.getElementById('chat-messages');
-    if (!chatMessages) {
-        console.warn('⚠️ [AI Agent] chat-messages container not found while clearing state');
-        return;
-    }
+    if (!chatMessages) return;
 
     const loadingIndicator = chatMessages.querySelector('.message.ai.loading-initial');
     if (loadingIndicator) {
         loadingIndicator.remove();
-        console.log('🧹 [AI Agent] Removed loading indicator');
     }
 
     const streamingMessage = chatMessages.querySelector('.message.ai.streaming');
     if (streamingMessage) {
         chatMessages.removeChild(streamingMessage);
-        console.log('🧹 [AI Agent] Removed streaming message during cleanup');
     }
 }
 
@@ -464,6 +317,145 @@ function setUserOpenRouterKey(value) {
     } catch (error) {
         console.warn('Unable to persist OpenRouter key:', error);
     }
+}
+
+function getStoredExperimentalMode() {
+    try {
+        return localStorage.getItem(EXPERIMENTAL_MODE_STORAGE_KEY) === 'true';
+    } catch (error) {
+        console.warn('Unable to read experimental mode preference:', error);
+        return false;
+    }
+}
+
+function persistExperimentalMode(enabled) {
+    try {
+        if (enabled) {
+            localStorage.setItem(EXPERIMENTAL_MODE_STORAGE_KEY, 'true');
+        } else {
+            localStorage.removeItem(EXPERIMENTAL_MODE_STORAGE_KEY);
+        }
+    } catch (error) {
+        console.warn('Unable to store experimental mode preference:', error);
+    }
+}
+
+function applyExperimentalMode(enabled) {
+    experimentalModeEnabled = Boolean(enabled);
+    document.documentElement.classList.toggle('experimental-mode', experimentalModeEnabled);
+
+    const experimentalElements = document.querySelectorAll('[data-experimental="true"]');
+    experimentalElements.forEach(element => {
+        element.setAttribute('aria-hidden', experimentalModeEnabled ? 'false' : 'true');
+        element.style.display = experimentalModeEnabled ? '' : 'none';
+    });
+
+    if (!experimentalModeEnabled) {
+        ensureActiveSectionIsAllowed();
+    }
+}
+
+function ensureActiveSectionIsAllowed() {
+    const activeButton = document.querySelector('.nav-btn.active');
+    if (activeButton && activeButton.dataset.experimental === 'true') {
+        const fallbackButton = Array.from(document.querySelectorAll('.nav-btn')).find(btn => btn.dataset.experimental !== 'true') || document.querySelector('.nav-btn');
+        if (fallbackButton && fallbackButton !== activeButton) {
+            fallbackButton.click();
+        }
+    }
+}
+
+function readFileAsDataURL(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+    });
+}
+
+async function collectImageAttachments() {
+    if (!agentPendingImages.length) {
+        return [];
+    }
+    const attachments = [];
+    for (const file of agentPendingImages) {
+        try {
+            const dataUrl = await readFileAsDataURL(file);
+            attachments.push({
+                name: file.name,
+                type: file.type,
+                size: file.size,
+                data: dataUrl
+            });
+        } catch (error) {
+            console.error('Failed to read attachment', file.name, error);
+        }
+    }
+    return attachments;
+}
+
+function resetImageUploads() {
+    agentPendingImages = [];
+    const input = document.getElementById('agent-image');
+    if (input) {
+        input.value = '';
+    }
+    const preview = document.getElementById('agent-image-preview');
+    if (preview) {
+        preview.innerHTML = '';
+        preview.classList.remove('has-items');
+    }
+    updateAttachmentButtonState();
+}
+
+function updateAttachmentButtonState() {
+    const button = document.getElementById('agent-attachment-button');
+    if (!button) return;
+    if (agentPendingImages.length) {
+        button.classList.add('has-attachments');
+    } else {
+        button.classList.remove('has-attachments');
+    }
+}
+
+function setupImageUpload() {
+    const input = document.getElementById('agent-image');
+    if (!input) return;
+
+    const button = document.getElementById('agent-attachment-button');
+    if (button) {
+        button.addEventListener('click', () => input.click());
+    }
+
+    updateAttachmentButtonState();
+
+    input.addEventListener('change', () => {
+        agentPendingImages = Array.from(input.files || []);
+        const preview = document.getElementById('agent-image-preview');
+        if (preview) {
+            preview.innerHTML = '';
+            preview.classList.remove('has-items');
+        }
+
+        if (!agentPendingImages.length) {
+            updateAttachmentButtonState();
+            return;
+        }
+
+        if (preview) {
+            preview.classList.add('has-items');
+            agentPendingImages.forEach(file => {
+                const item = document.createElement('div');
+                item.className = 'image-preview-item';
+                const sizeKB = (file.size / 1024).toFixed(1);
+                item.textContent = `📎 ${file.name} (${sizeKB} KB)`;
+                preview.appendChild(item);
+            });
+        }
+
+        updateAttachmentButtonState();
+    });
 }
 
 function withUserOpenRouterKey(headers = {}) {
@@ -692,14 +684,30 @@ function similarity(a, b) {
 
 // Initialize the dashboard
 document.addEventListener('DOMContentLoaded', async function() {
+    console.info('The quick brown fox jumped over the lazy dogs – experimental canary build active.');
     await preloadModelConfig();
-    setupNavigation();
-    initializeTheme();
-    applyAgentDefaults();
-    setupOpenRouterControls();
-    populateAgentDropdown();
+    ensureExperimentalSections();
+   ensureExperimentalNavButtons();
+   setupNavigation();
+   initializeTheme();
+   applyAgentDefaults();
+   setupOpenRouterControls();
+   populateAgentDropdown();
+    initializeAgentExp();
     loadLLMData(); // Load LLM data by default
     setupImageUpload();
+    applyExperimentalMode(getStoredExperimentalMode());
+
+    const hypeSortSelect = document.getElementById('hype-sort');
+    if (hypeSortSelect) {
+        hypeSortMode = hypeSortSelect.value || 'newest';
+        hypeSortSelect.addEventListener('change', () => {
+            hypeSortMode = hypeSortSelect.value || 'newest';
+            if (cachedData.hype) {
+                displayHypeItems(cachedData.hype);
+            }
+        });
+    }
 });
 
 // Theme management
@@ -765,7 +773,7 @@ function applyAgentDefaults() {
     if (!localStorage.getItem('dashboard-available-models') && selectedAvailableModels.length === 0) {
         const defaultIds = agentSettings.availableModels || [];
         if (defaultIds.length) {
-            selectedAvailableModels = defaultIds.map(id => applyAgentModelInfo({ id, name: id }));
+            selectedAvailableModels = defaultIds.map(id => ({ id, name: id }));
             updateAvailableModelsDisplay();
         }
     }
@@ -773,7 +781,7 @@ function applyAgentDefaults() {
     if (!localStorage.getItem('dashboard-fallback-models') && selectedFallbackModels.length === 0) {
         const fallbackIds = agentSettings.fallbackModels || [];
         if (fallbackIds.length) {
-            selectedFallbackModels = fallbackIds.map(id => applyAgentModelInfo({ id, name: id }));
+            selectedFallbackModels = fallbackIds.map(id => ({ id, name: id }));
             updateFallbackModelsDisplay();
         }
     }
@@ -781,8 +789,6 @@ function applyAgentDefaults() {
     if (openRouterModels.length) {
         mergeSelectedModelsFromCatalog(openRouterModels);
     }
-
-    updateAgentModelWarning();
 }
 
 function mergeSelectedModelsFromCatalog(catalog) {
@@ -795,14 +801,14 @@ function mergeSelectedModelsFromCatalog(catalog) {
     const enhance = (entry) => {
         const catalogModel = mapById.get(entry.id);
         if (!catalogModel) {
-            return applyAgentModelInfo(entry);
+            return entry;
         }
-        return applyAgentModelInfo({
+        return {
             ...entry,
             name: catalogModel.name || entry.name || entry.id,
             vendor: catalogModel.vendor || entry.vendor || '',
             pricing: catalogModel.pricing || entry.pricing || null
-        });
+        };
     };
 
     if (selectedAvailableModels.length) {
@@ -819,6 +825,199 @@ function mergeSelectedModelsFromCatalog(catalog) {
 }
 
 // Setup navigation functionality
+function ensureExperimentalNavButtons() {
+    const nav = document.querySelector('.navigation');
+    if (!nav) return;
+
+    const ensureButton = (section, label) => {
+        let button = nav.querySelector(`.nav-btn[data-section="${section}"]`);
+        if (!button) {
+            button = document.createElement('button');
+            button.className = 'nav-btn';
+            button.dataset.section = section;
+            button.dataset.experimental = 'true';
+            button.textContent = label;
+            button.style.display = 'none';
+            button.setAttribute('aria-hidden', 'true');
+            const anchor = nav.querySelector('.nav-btn[data-section="ai-agent"]');
+            if (anchor) {
+                nav.insertBefore(button, anchor);
+            } else {
+                nav.appendChild(button);
+            }
+        } else if (button.dataset.experimental !== 'true') {
+            button.dataset.experimental = 'true';
+        }
+        if (!button.hasAttribute('aria-hidden')) {
+            button.setAttribute('aria-hidden', experimentalModeEnabled ? 'false' : 'true');
+        }
+    };
+
+    ensureButton('hype', 'Hype');
+    ensureButton('latest', 'Latest');
+    ensureButton('monitor', 'Monitor');
+    ensureButton('blog', 'Blog');
+    ensureButton('agent-exp', 'Agent EXP');
+}
+
+function ensureExperimentalSections() {
+    const main = document.querySelector('.main-content');
+    if (!main) return;
+
+    const ensureLatestControls = (section) => {
+        if (!section) return;
+        const controls = section.querySelector('.controls');
+        if (!controls) return;
+
+        let timeframeSelect = section.querySelector('#latest-timeframe');
+        if (!timeframeSelect) {
+            timeframeSelect = document.createElement('select');
+            timeframeSelect.id = 'latest-timeframe';
+            timeframeSelect.setAttribute('aria-label', 'Latest feed timeframe');
+            timeframeSelect.innerHTML = `
+                <option value="day" selected>Last 24 hours</option>
+                <option value="week">Last 7 days</option>
+            `;
+            controls.insertBefore(timeframeSelect, controls.firstChild);
+        }
+
+        let includeCheckbox = section.querySelector('#latest-include-hype');
+        if (!includeCheckbox) {
+            const label = document.createElement('label');
+            label.className = 'toggle-option';
+            includeCheckbox = document.createElement('input');
+            includeCheckbox.type = 'checkbox';
+            includeCheckbox.id = 'latest-include-hype';
+            const span = document.createElement('span');
+            span.textContent = 'Include Hype';
+            label.appendChild(includeCheckbox);
+            label.appendChild(span);
+
+            const refreshButton = controls.querySelector('#latest-refresh');
+            if (refreshButton) {
+                controls.insertBefore(label, refreshButton);
+            } else {
+                controls.appendChild(label);
+            }
+        }
+
+        const note = section.querySelector('.section-note');
+        if (note) {
+            note.textContent = 'Experimental aggregation of Blog, OpenRouter, Replicate, and fal.ai updates from the selected window. Toggle Hype to blend in community buzz.';
+        }
+        ensureLatestControlListeners();
+    };
+
+    const existingLatest = document.getElementById('latest');
+    if (!existingLatest) {
+        const section = document.createElement('section');
+        section.id = 'latest';
+        section.className = 'content-section';
+        section.dataset.experimental = 'true';
+        section.style.display = 'none';
+        section.setAttribute('aria-hidden', 'true');
+        section.innerHTML = `
+            <div class="section-header">
+                <h2>Latest Activity (Last 24 hours)</h2>
+                <div class="controls">
+                    <button class="refresh-btn" id="latest-refresh">Refresh Feed</button>
+                </div>
+            </div>
+            <p class="section-note">Experimental aggregation of Blog, OpenRouter, Replicate, and fal.ai updates from the selected window. Toggle Hype to blend in community buzz.</p>
+            <div class="loading" id="latest-loading">
+                <div class="loading-spinner"></div>
+            </div>
+            <div class="error" id="latest-error" style="display: none;"></div>
+            <div class="results-info" id="latest-results-info" style="display:none;"></div>
+            <div class="data-container" id="latest-data"></div>
+        `;
+
+        const blogSection = document.getElementById('blog');
+        if (blogSection && blogSection.parentNode === main) {
+            main.insertBefore(section, blogSection);
+        } else {
+            const textToImage = document.getElementById('text-to-image');
+            if (textToImage && textToImage.parentNode === main) {
+                main.insertBefore(section, textToImage);
+            } else {
+                main.appendChild(section);
+            }
+        }
+        ensureLatestControls(section);
+    } else {
+        ensureLatestControls(existingLatest);
+    }
+
+    ensureLatestControlListeners();
+
+    if (!document.getElementById('monitor')) {
+        const section = document.createElement('section');
+        section.id = 'monitor';
+        section.className = 'content-section';
+        section.dataset.experimental = 'true';
+        section.style.display = 'none';
+        section.setAttribute('aria-hidden', 'true');
+        section.innerHTML = `
+            <div class="section-header">
+                <h2>Monitor Feed</h2>
+                <div class="controls">
+                    <button class="refresh-btn" id="monitor-refresh">Refresh Monitor</button>
+                </div>
+            </div>
+            <p class="section-note">Auto-compiles updates from MatVid Pro’s Discord channel and Adam’s personal X feed.</p>
+            <div class="loading" id="monitor-loading">
+                <div class="loading-spinner"></div>
+            </div>
+            <div class="error" id="monitor-error" style="display: none;"></div>
+            <div class="results-info" id="monitor-results-info" style="display:none;"></div>
+            <div class="data-container" id="monitor-data"></div>
+        `;
+
+        const blogSection = document.getElementById('blog');
+        if (blogSection && blogSection.parentNode === main) {
+            main.insertBefore(section, blogSection);
+        } else {
+            main.appendChild(section);
+        }
+    }
+
+    if (!document.getElementById('blog')) {
+        // Inject blog section dynamically when the HTML template hasn't been updated yet.
+        const section = document.createElement('section');
+        section.id = 'blog';
+        section.className = 'content-section';
+        section.dataset.experimental = 'true';
+        section.style.display = 'none';
+        section.setAttribute('aria-hidden', 'true');
+        section.innerHTML = `
+            <div class="section-header">
+                <h2>Latest Blog Posts</h2>
+                <div class="controls">
+                    <select id="blog-sort" aria-label="Sort blog posts">
+                        <option value="newest" selected>Newest</option>
+                        <option value="oldest">Oldest</option>
+                    </select>
+                    <button class="refresh-btn" id="blog-refresh">Refresh Posts</button>
+                </div>
+            </div>
+            <p class="section-note">Experimental feed direct from adam.holter.com.</p>
+            <div class="loading" id="blog-loading">
+                <div class="loading-spinner"></div>
+            </div>
+            <div class="error" id="blog-error" style="display: none;"></div>
+            <div class="results-info" id="blog-results-info" style="display:none;"></div>
+            <div class="data-container" id="blog-data"></div>
+        `;
+
+        const textToImage = document.getElementById('text-to-image');
+        if (textToImage && textToImage.parentNode === main) {
+            main.insertBefore(section, textToImage);
+        } else {
+            main.appendChild(section);
+        }
+    }
+}
+
 function setupNavigation() {
     const navButtons = document.querySelectorAll('.nav-btn');
     const sections = document.querySelectorAll('.content-section');
@@ -873,6 +1072,37 @@ function loadSectionData(section) {
             } else {
                 filterOpenRouterModelsData();
             }
+            break;
+        case 'hype':
+            if (!cachedData.hype) {
+                loadHypeData();
+            } else {
+                displayHypeItems(cachedData.hype);
+            }
+            break;
+        case 'latest':
+            if (!cachedData.latest) {
+                loadLatestFeed();
+            } else {
+                displayLatestFeed(cachedData.latest);
+            }
+            break;
+        case 'monitor':
+            if (!cachedData.monitor) {
+                loadMonitorFeed();
+            } else {
+                displayMonitorItems(cachedData.monitor);
+            }
+            break;
+        case 'blog':
+            if (!cachedData.blog) {
+                loadBlogPosts();
+            } else {
+                displayBlogPosts(cachedData.blog);
+            }
+            break;
+        case 'agent-exp':
+            focusAgentExpInput();
             break;
     }
 }
@@ -1123,8 +1353,19 @@ async function loadImageToVideoData() {
     }
 }
 
+async function fetchFalModelsData(forceRefresh = false) {
+    if (cachedData.falModels && !forceRefresh) {
+        return cachedData.falModels;
+    }
+    const url = forceRefresh ? '/api/fal-models?cache_bust=true' : '/api/fal-models';
+    const data = await makeAPICall(url, null);
+    cachedData.falModels = data;
+    rawData.falModels = data;
+    return data;
+}
+
 // Load Fal.ai Models data
-async function loadFalModelsData() {
+async function loadFalModelsData(forceRefresh = false) {
     const loadingElement = document.getElementById('fal-models-loading');
     const errorElement = document.getElementById('fal-models-error');
     const dataElement = document.getElementById('fal-models-data');
@@ -1134,9 +1375,7 @@ async function loadFalModelsData() {
         errorElement.style.display = 'none';
         dataElement.innerHTML = '';
 
-        const data = await makeAPICall('/api/fal-models', null);
-        cachedData.falModels = data;
-        rawData.falModels = data;
+        await fetchFalModelsData(forceRefresh);
         
         filterFalModelsData();
         loadingElement.style.display = 'none';
@@ -1147,8 +1386,19 @@ async function loadFalModelsData() {
     }
 }
 
+async function fetchReplicateModelsData(forceRefresh = false) {
+    if (cachedData.replicateModels && !forceRefresh) {
+        return cachedData.replicateModels;
+    }
+    const url = forceRefresh ? '/api/replicate-models?cache_bust=true' : '/api/replicate-models';
+    const data = await makeAPICall(url, null);
+    cachedData.replicateModels = data;
+    rawData.replicateModels = data;
+    return data;
+}
+
 // Load Replicate Models data
-async function loadReplicateModelsData() {
+async function loadReplicateModelsData(forceRefresh = false) {
     const loadingElement = document.getElementById('replicate-models-loading');
     const errorElement = document.getElementById('replicate-models-error');
     const dataElement = document.getElementById('replicate-models-data');
@@ -1158,9 +1408,7 @@ async function loadReplicateModelsData() {
         errorElement.style.display = 'none';
         dataElement.innerHTML = '';
 
-        const data = await makeAPICall('/api/replicate-models', null);
-        cachedData.replicateModels = data;
-        rawData.replicateModels = data;
+        await fetchReplicateModelsData(forceRefresh);
         
         filterReplicateModelsData();
         loadingElement.style.display = 'none';
@@ -1171,8 +1419,12 @@ async function loadReplicateModelsData() {
     }
 }
 
-async function fetchAndCacheOpenRouterModels() {
-    const data = await makeAPICall('/api/openrouter-models', null);
+async function fetchAndCacheOpenRouterModels(forceRefresh = false) {
+    if (cachedData.openRouterModels && !forceRefresh) {
+        return cachedData.openRouterModels;
+    }
+    const url = forceRefresh ? '/api/openrouter-models?cache_bust=true' : '/api/openrouter-models';
+    const data = await makeAPICall(url, null);
     openRouterModels = Array.isArray(data) ? data : [];
     cachedData.openRouterModels = openRouterModels;
     rawData.openRouterModels = openRouterModels;
@@ -1203,7 +1455,7 @@ async function ensureOpenRouterDataLoaded() {
 }
 
 // Load OpenRouter models data
-async function loadOpenRouterModelsData() {
+async function loadOpenRouterModelsData(forceRefresh = false) {
     const loadingElement = document.getElementById('openrouter-models-loading');
     const errorElement = document.getElementById('openrouter-models-error');
     const dataElement = document.getElementById('openrouter-models-data');
@@ -1213,9 +1465,10 @@ async function loadOpenRouterModelsData() {
         errorElement.style.display = 'none';
         dataElement.innerHTML = '';
 
-        await fetchAndCacheOpenRouterModels();
+        await fetchAndCacheOpenRouterModels(forceRefresh);
         populateOpenRouterVendorFilter(openRouterModels);
         filterOpenRouterModelsData();
+        populateAgentExpModels();
         loadingElement.style.display = 'none';
         if (dataElement) {
             dataElement.classList.add('loaded');
@@ -1322,6 +1575,798 @@ function displayOpenRouterModelsData(models) {
     models.forEach(model => {
         container.appendChild(createOpenRouterCard(model));
     });
+}
+
+async function fetchHypeData(forceRefresh = false) {
+    if (cachedData.hype && !forceRefresh) {
+        return cachedData.hype;
+    }
+    const url = forceRefresh ? '/api/hype?cache_bust=true' : '/api/hype';
+    const data = await makeAPICall(url, null);
+    cachedData.hype = data;
+    rawData.hype = Array.isArray(data?.items) ? data.items : [];
+    return data;
+}
+
+async function loadHypeData(forceRefresh = false) {
+    const loadingElement = document.getElementById('hype-loading');
+    const errorElement = document.getElementById('hype-error');
+    const dataElement = document.getElementById('hype-data');
+
+    if (!loadingElement || !errorElement || !dataElement) {
+        return;
+    }
+
+    if (cachedData.hype && !forceRefresh) {
+        displayHypeItems(cachedData.hype);
+        return;
+    }
+
+    try {
+        loadingElement.style.display = 'flex';
+        errorElement.style.display = 'none';
+        dataElement.innerHTML = '';
+
+        const data = await fetchHypeData(forceRefresh);
+        displayHypeItems(data);
+    } catch (error) {
+        errorElement.textContent = `Failed to load hype feed: ${error.message}`;
+        errorElement.style.display = 'block';
+    } finally {
+        loadingElement.style.display = 'none';
+    }
+}
+
+function displayHypeItems(payload) {
+    const container = document.getElementById('hype-data');
+    if (!container) return;
+
+    const items = Array.isArray(payload?.items) ? payload.items : Array.isArray(payload) ? payload : [];
+    const fetchedAt = payload?.fetched_at;
+    const resultsInfo = document.getElementById('hype-results-info');
+
+    container.innerHTML = '';
+
+    if (!items.length) {
+        container.innerHTML = '<div class="empty-state">No hype items available yet. Try refreshing in a bit.</div>';
+        if (resultsInfo) {
+            resultsInfo.style.display = 'none';
+            resultsInfo.textContent = '';
+        }
+        return;
+    }
+
+    const sortedItems = sortHypeItems(items, hypeSortMode);
+
+    sortedItems.forEach((item, index) => {
+        container.appendChild(createHypeCard(item, index, fetchedAt));
+    });
+
+    if (resultsInfo) {
+        const summary = [`${items.length} trending projects`];
+        const relativeFetched = formatRelativeTime(fetchedAt);
+        if (relativeFetched) {
+            summary.push(`fetched ${relativeFetched}`);
+        }
+        summary.push(hypeSortMode === 'newest' ? 'sorted by newest first' : 'sorted by rank');
+        resultsInfo.textContent = summary.join(' · ');
+        resultsInfo.style.display = 'block';
+    }
+}
+
+function sortHypeItems(items, mode) {
+    if (!Array.isArray(items)) {
+        return [];
+    }
+    const sorted = [...items];
+    if (mode === 'newest') {
+        sorted.sort((a, b) => getHypeTimestamp(b) - getHypeTimestamp(a));
+    } else {
+        sorted.sort((a, b) => (b.stars || 0) - (a.stars || 0));
+    }
+    return sorted;
+}
+
+function getHypeTimestamp(item) {
+    if (!item || typeof item !== 'object') {
+        return 0;
+    }
+    const candidates = [item.inserted_at, item.created_at, item.updated_at, item.date];
+    for (const candidate of candidates) {
+        if (!candidate) continue;
+        const parsed = Date.parse(candidate);
+        if (!Number.isNaN(parsed)) {
+            return parsed;
+        }
+    }
+    return 0;
+}
+
+function createHypeCard(item, index, fetchedAt) {
+    const card = document.createElement('div');
+    card.className = 'model-card hype-card';
+    card.dataset.source = 'hype';
+
+    const name = escapeHtml(item.name || 'Untitled project');
+    const url = item.url || '#';
+    const points = typeof item.stars === 'number' ? `${item.stars} points` : null;
+    const username = item.username ? `by ${escapeHtml(item.username)}` : null;
+    const normalizedSource = normalizeHypeSourceId(item.source);
+    if (normalizedSource) {
+        card.setAttribute('data-hype-source', normalizedSource);
+    }
+    const sourceLabel = formatHypeSource(item.source);
+    const relative = formatRelativeTime(item.created_at || item.inserted_at || item.updated_at || fetchedAt);
+
+    const metaParts = [points, username, relative].filter(Boolean);
+    const metaMarkup = metaParts.length
+        ? `<div class="card-meta">${metaParts.map(part => `<span class="meta-item">${escapeHtml(part)}</span>`).join('')}</div>`
+        : '';
+
+    const summary = item.summary || item.description || '';
+    const summaryText = summary ? truncateText(summary, 240) : '';
+    const tags = Array.isArray(item.tags) ? item.tags : [];
+    const tagEntries = [];
+
+    if (sourceLabel) {
+        tagEntries.push({ type: 'source', value: sourceLabel, id: normalizedSource });
+    }
+    if (item.language) {
+        tagEntries.push({ type: 'meta', value: `Lang: ${item.language}` });
+    }
+    tags.forEach(tag => {
+        const label = typeof tag === 'string' ? tag.trim() : '';
+        if (label) {
+            const normalizedLabel = label.startsWith('#') ? label : `#${label}`;
+            tagEntries.push({ type: 'tag', value: normalizedLabel });
+        }
+    });
+
+    const tagMarkup = tagEntries.length
+        ? `<div class="card-tags">${tagEntries.map(renderHypeTag).join('')}</div>`
+        : '';
+    const summaryMarkup = summaryText ? `<div class="card-summary">${escapeHtml(summaryText)}</div>` : '';
+
+    const rankBadge = `
+        <div class="card-rank-badge">
+            <span class="rank-number">#${index + 1}</span>
+            <span class="rank-dot" aria-hidden="true"></span>
+        </div>
+    `;
+
+    card.innerHTML = `
+        <div class="card-header">
+            <div class="card-header-content">
+                <div class="source-badge">Hype Signals</div>
+                <div class="card-title">
+                    <a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${name}</a>
+                </div>
+                ${metaMarkup}
+            </div>
+            ${rankBadge}
+        </div>
+        ${summaryMarkup}
+        ${tagMarkup}
+        <div class="card-actions">
+            <a class="chart-btn secondary" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">Open Link</a>
+            ${relative ? `<span class="card-badge">Updated ${escapeHtml(relative)}</span>` : ''}
+        </div>
+    `;
+
+    return card;
+}
+
+function renderHypeTag(entry) {
+    if (!entry || !entry.value) {
+        return '';
+    }
+    if (entry.type === 'source') {
+        const sourceId = normalizeHypeSourceId(entry.id);
+        const pillLabel = `Source: ${entry.value}`;
+        return `<span class="card-tag source-pill" data-source="${escapeHtml(sourceId)}">${escapeHtml(pillLabel)}</span>`;
+    }
+    return `<span class="card-tag">${escapeHtml(String(entry.value))}</span>`;
+}
+
+function normalizeHypeSourceId(source) {
+    if (!source) return '';
+    return String(source).toLowerCase().replace(/[\s_-]+/g, '');
+}
+
+function formatHypeSource(source) {
+    if (!source) return '';
+    const normalized = normalizeHypeSourceId(source);
+    switch (normalized) {
+        case 'github':
+            return 'GitHub';
+        case 'huggingface':
+            return 'Hugging Face';
+        case 'replicate':
+            return 'Replicate';
+        case 'reddit':
+            return 'Reddit';
+        default:
+            return source;
+    }
+}
+
+function formatRelativeTime(timestamp) {
+    if (!timestamp) return '';
+    const date = new Date(timestamp);
+    if (Number.isNaN(date.getTime())) {
+        return '';
+    }
+    const now = Date.now();
+    const diffMs = date.getTime() - now;
+    const ranges = [
+        { unit: 'year', ms: 1000 * 60 * 60 * 24 * 365 },
+        { unit: 'month', ms: 1000 * 60 * 60 * 24 * 30 },
+        { unit: 'week', ms: 1000 * 60 * 60 * 24 * 7 },
+        { unit: 'day', ms: 1000 * 60 * 60 * 24 },
+        { unit: 'hour', ms: 1000 * 60 * 60 },
+        { unit: 'minute', ms: 1000 * 60 },
+        { unit: 'second', ms: 1000 }
+    ];
+
+    for (const range of ranges) {
+        if (Math.abs(diffMs) >= range.ms || range.unit === 'second') {
+            const value = Math.round(diffMs / range.ms);
+            if (RELATIVE_TIME_FORMATTER) {
+                return RELATIVE_TIME_FORMATTER.format(value, range.unit);
+            }
+            const unitLabel = value === 1 || value === -1 ? range.unit : `${range.unit}s`;
+            if (value === 0) {
+                return 'just now';
+            }
+            return value > 0 ? `in ${value} ${unitLabel}` : `${Math.abs(value)} ${unitLabel} ago`;
+        }
+    }
+    return '';
+}
+
+async function fetchBlogPostsData(forceRefresh = false, options = {}) {
+    const { perPage, maxPages, skipCache } = options;
+    if (!forceRefresh && !perPage && cachedData.blog) {
+        return cachedData.blog;
+    }
+
+    const params = new URLSearchParams();
+    if (forceRefresh) {
+        params.set('cache_bust', 'true');
+    }
+    if (perPage) {
+        params.set('per_page', perPage);
+    }
+    if (maxPages) {
+        params.set('max_pages', maxPages);
+    }
+    const url = params.toString() ? `/api/blog-posts?${params}` : '/api/blog-posts';
+    const data = await makeAPICall(url, null);
+
+    if (!skipCache) {
+        cachedData.blog = data;
+        rawData.blog = Array.isArray(data?.posts) ? data.posts : [];
+    }
+
+    return data;
+}
+
+async function loadBlogPosts(forceRefresh = false) {
+    const loadingElement = document.getElementById('blog-loading');
+    const errorElement = document.getElementById('blog-error');
+    const dataElement = document.getElementById('blog-data');
+
+    if (!loadingElement || !errorElement || !dataElement) {
+        return;
+    }
+
+    if (cachedData.blog && !forceRefresh) {
+        displayBlogPosts(cachedData.blog);
+        if (!cachedData.blog?.meta?.complete) {
+            setTimeout(() => prefetchRemainingBlogPosts(), 250);
+        }
+        return;
+    }
+
+    try {
+        loadingElement.style.display = 'flex';
+        errorElement.style.display = 'none';
+        dataElement.innerHTML = '';
+
+        const data = await fetchBlogPostsData(forceRefresh, {
+            perPage: BLOG_INITIAL_PAGE_SIZE,
+            maxPages: 1
+        });
+        displayBlogPosts(data);
+        if (!data?.meta?.complete) {
+            setTimeout(() => prefetchRemainingBlogPosts(), 250);
+        }
+    } catch (error) {
+        const message = error?.message || String(error);
+        errorElement.textContent = `Failed to load blog posts: ${message}`;
+        errorElement.style.display = 'block';
+    } finally {
+        loadingElement.style.display = 'none';
+    }
+}
+
+async function prefetchRemainingBlogPosts() {
+    if (blogPrefetching) {
+        return;
+    }
+    blogPrefetching = true;
+    try {
+        const data = await fetchBlogPostsData(true, {
+            perPage: BLOG_FULL_PAGE_SIZE,
+            maxPages: BLOG_FULL_MAX_PAGES,
+            skipCache: true
+        });
+        if (!data || !Array.isArray(data.posts)) {
+            return;
+        }
+        const existingPosts = Array.isArray(cachedData.blog?.posts) ? cachedData.blog.posts : [];
+        const hasMore = data.posts.length > existingPosts.length;
+        const newlyComplete = Boolean(data.meta?.complete) && !cachedData.blog?.meta?.complete;
+        if (hasMore || newlyComplete) {
+            cachedData.blog = data;
+            rawData.blog = data.posts;
+            displayBlogPosts(data);
+        }
+    } catch (error) {
+        console.warn('Failed to prefetch blog posts:', error);
+    } finally {
+        blogPrefetching = false;
+    }
+}
+
+function displayBlogPosts(payload) {
+    const container = document.getElementById('blog-data');
+    if (!container) return;
+
+    const posts = Array.isArray(payload?.posts) ? payload.posts : Array.isArray(payload) ? payload : [];
+    const resultsInfo = document.getElementById('blog-results-info');
+
+    container.innerHTML = '';
+
+    if (!posts.length) {
+        container.innerHTML = '<div class="empty-state">No blog posts available yet. Check back soon.</div>';
+        if (resultsInfo) {
+            resultsInfo.style.display = 'none';
+            resultsInfo.textContent = '';
+        }
+        return;
+    }
+
+    const sortedPosts = sortBlogPosts(posts, blogSortMode);
+    sortedPosts.forEach(post => {
+        container.appendChild(createBlogCard(post));
+    });
+
+    if (resultsInfo) {
+        const summaryParts = [];
+        const totalKnown = Number(payload?.meta?.total_posts);
+        if (Number.isFinite(totalKnown) && totalKnown > 0) {
+            summaryParts.push(`${sortedPosts.length} of ${totalKnown} posts`);
+        } else {
+            summaryParts.push(`${sortedPosts.length} posts`);
+        }
+        const relativeFetched = formatRelativeTime(payload?.fetched_at);
+        if (relativeFetched) {
+            summaryParts.push(`fetched ${relativeFetched}`);
+        }
+        summaryParts.push(blogSortMode === 'oldest' ? 'sorted oldest first' : 'sorted newest first');
+        resultsInfo.textContent = summaryParts.join(' · ');
+        resultsInfo.style.display = 'block';
+    }
+}
+
+function getBlogTimestamp(post) {
+    if (!post || typeof post !== 'object') {
+        return 0;
+    }
+    const candidates = [post.date, post.date_gmt, post.modified];
+    for (const candidate of candidates) {
+        if (!candidate) continue;
+        const parsed = Date.parse(candidate);
+        if (!Number.isNaN(parsed)) {
+            return parsed;
+        }
+    }
+    return 0;
+}
+
+function sortBlogPosts(posts, mode) {
+    if (!Array.isArray(posts)) {
+        return [];
+    }
+    const sorted = [...posts].sort((a, b) => getBlogTimestamp(b) - getBlogTimestamp(a));
+    if (mode === 'oldest') {
+        sorted.reverse();
+    }
+    return sorted;
+}
+
+function createBlogCard(post) {
+    const card = document.createElement('div');
+    card.className = 'model-card blog-card';
+    card.dataset.source = 'blog';
+
+    const href = typeof post?.link === 'string' && post.link ? post.link : '#';
+    const titleText = typeof post?.title === 'string' && post.title.trim()
+        ? post.title.trim()
+        : 'Untitled Post';
+    const relativePublished = formatRelativeTime(post?.date || post?.date_gmt || post?.modified);
+    const publishedTs = getBlogTimestamp(post);
+    const publishedDate = publishedTs ? new Date(publishedTs).toLocaleDateString() : '';
+    const readingMinutes = typeof post?.reading_time_minutes === 'number' && post.reading_time_minutes > 0
+        ? `${post.reading_time_minutes} min read`
+        : '';
+
+    const metaParts = [];
+    if (relativePublished) {
+        metaParts.push(relativePublished);
+    } else if (publishedDate) {
+        metaParts.push(publishedDate);
+    }
+
+    const metaMarkup = metaParts.length
+        ? `<div class="card-meta">${metaParts.map(part => `<span class="meta-item">${escapeHtml(part)}</span>`).join('')}</div>`
+        : '';
+
+    const excerpt = typeof post?.excerpt === 'string' && post.excerpt.trim()
+        ? truncateText(post.excerpt.trim(), 260)
+        : '';
+    const summaryMarkup = excerpt
+        ? `<div class="card-summary">${escapeHtml(excerpt)}</div>`
+        : '';
+
+    const tagEntries = [];
+    const seen = new Set();
+    const categories = Array.isArray(post?.categories) ? post.categories : [];
+    categories.forEach(category => {
+        if (typeof category !== 'string') return;
+        const label = category.trim();
+        if (!label) return;
+        const key = `category:${label.toLowerCase()}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        tagEntries.push({ type: 'category', value: label });
+    });
+
+    const tags = Array.isArray(post?.tags) ? post.tags : [];
+    tags.forEach(tag => {
+        if (typeof tag !== 'string') return;
+        const cleaned = tag.trim().replace(/^#/, '').trim();
+        if (!cleaned) return;
+        const key = `tag:${cleaned.toLowerCase()}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        tagEntries.push({ type: 'tag', value: cleaned });
+    });
+
+    const tagMarkup = tagEntries.length
+        ? `<div class="card-tags">${tagEntries.map(renderBlogTag).join('')}</div>`
+        : '';
+
+    const badgeMarkup = readingMinutes
+        ? `<span class="card-badge">${escapeHtml(readingMinutes)}</span>`
+        : '';
+
+    card.innerHTML = `
+        <div class="card-header">
+            <div class="card-header-content">
+                <div class="source-badge">Blog</div>
+                <div class="card-title">
+                    <a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(titleText)}</a>
+                </div>
+                ${metaMarkup}
+            </div>
+        </div>
+        ${summaryMarkup}
+        ${tagMarkup}
+        <div class="card-actions">
+            <a class="chart-btn secondary" href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">Read Post</a>
+            ${badgeMarkup}
+        </div>
+    `;
+
+    return card;
+}
+
+function renderBlogTag(entry) {
+    if (!entry || !entry.value) {
+        return '';
+    }
+    const value = String(entry.value).trim();
+    if (!value) {
+        return '';
+    }
+    if (entry.type === 'category') {
+        return `<span class="card-tag category-tag">${escapeHtml(value)}</span>`;
+    }
+    const normalized = value.startsWith('#') ? value.slice(1).trim() : value;
+    if (!normalized) {
+        return '';
+    }
+    return `<span class="card-tag tag-pill">#${escapeHtml(normalized)}</span>`;
+}
+
+async function loadLatestFeed(forceRefresh = false) {
+    const loadingElement = document.getElementById('latest-loading');
+    const errorElement = document.getElementById('latest-error');
+    const dataElement = document.getElementById('latest-data');
+    const resultsInfo = document.getElementById('latest-results-info');
+
+    if (!loadingElement || !errorElement || !dataElement) {
+        return;
+    }
+
+    try {
+        loadingElement.style.display = 'flex';
+        errorElement.style.display = 'none';
+        dataElement.innerHTML = '';
+        if (resultsInfo) {
+            resultsInfo.style.display = 'none';
+            resultsInfo.textContent = '';
+        }
+
+        const params = new URLSearchParams({ timeframe: latestTimeframe });
+        params.set('cache_bust', (forceRefresh || latestTimeframe === 'day') ? 'true' : 'false');
+        if (latestIncludeHype) {
+            params.set('include_hype', 'true');
+        }
+        const data = await makeAPICall(`/latest?${params.toString()}`, null);
+        const items = Array.isArray(data?.items) ? data.items : [];
+        cachedData.latest = items;
+        rawData.latest = items;
+        latestMetadata = data || null;
+        if (typeof latestMetadata?.include_hype === 'boolean') {
+            latestIncludeHype = latestMetadata.include_hype;
+        }
+        ensureLatestControlListeners();
+        displayLatestFeed(items);
+    } catch (error) {
+        const message = error?.message || String(error);
+        errorElement.textContent = `Failed to load latest activity: ${message}`;
+        errorElement.style.display = 'block';
+    } finally {
+        loadingElement.style.display = 'none';
+    }
+}
+
+function displayLatestFeed(items) {
+    const container = document.getElementById('latest-data');
+    const resultsInfo = document.getElementById('latest-results-info');
+    if (!container) {
+        return;
+    }
+
+    container.innerHTML = '';
+
+    const windowLabel = latestMetadata?.window_label || (latestTimeframe === 'week' ? 'Last 7 days' : 'Last 24 hours');
+    const hypeIncluded = latestMetadata?.include_hype || latestIncludeHype;
+
+    updateLatestHeading();
+    syncLatestControls();
+
+    if (!items || !items.length) {
+        const hypeNote = hypeIncluded ? ' including Hype sources' : '';
+        container.innerHTML = `<div class="empty-state">No updates in the ${escapeHtml(windowLabel.toLowerCase())}${escapeHtml(hypeNote)}. Check back soon!</div>`;
+        if (resultsInfo) {
+            resultsInfo.style.display = 'none';
+            resultsInfo.textContent = '';
+        }
+        return;
+    }
+
+    items.forEach(item => {
+        container.appendChild(createLatestCard(item));
+    });
+
+    if (resultsInfo) {
+        const total = items.length;
+        const sources = latestMetadata?.sources || {};
+        const sourceSummary = Object.keys(sources).length
+            ? ` · Sources: ${Object.entries(sources).map(([key, count]) => `${key} (${count})`).join(', ')}`
+            : '';
+        const hypeSummary = hypeIncluded ? ' · Hype included' : ' · Hype excluded';
+        resultsInfo.textContent = `${total} updates · ${windowLabel}${hypeSummary}${sourceSummary}`;
+        resultsInfo.style.display = 'block';
+    }
+}
+
+function formatLatestSourceLabel(source) {
+    switch (source) {
+        case 'openrouter':
+            return 'OpenRouter Model';
+        case 'blog':
+            return 'Blog Post';
+        case 'replicate':
+            return 'Replicate Model';
+        case 'hype':
+            return 'Hype Signal';
+        case 'fal':
+            return 'fal.ai Release';
+        case 'monitor':
+            return 'Monitor Feed';
+        default:
+            return '';
+    }
+}
+
+function renderLatestTags(tags) {
+    if (!Array.isArray(tags) || !tags.length) {
+        return '';
+    }
+    const unique = [];
+    const seen = new Set();
+    tags.forEach(tag => {
+        const label = typeof tag === 'string' ? tag.trim() : '';
+        if (!label) return;
+        const normalized = label.toLowerCase();
+        if (seen.has(normalized)) return;
+        seen.add(normalized);
+        unique.push(label.startsWith('#') ? label : `#${label}`);
+    });
+    if (!unique.length) {
+        return '';
+    }
+    return `<div class="card-tags">${unique.map(tag => `<span class="card-tag tag-pill">${escapeHtml(tag)}</span>`).join('')}</div>`;
+}
+
+function createLatestCard(item) {
+    const card = document.createElement('div');
+    card.className = 'model-card latest-card';
+    card.dataset.source = item.source || 'latest';
+
+    const sourceLabel = item.source_label || formatLatestSourceLabel(item.source);
+    const relative = formatRelativeTime(item.timestamp);
+    const excerptRaw = typeof item.excerpt === 'string' && item.excerpt.trim()
+        ? item.excerpt.trim()
+        : (item.description || '');
+    const description = excerptRaw ? truncateText(excerptRaw, 260) : '';
+    const titleText = item.title ? escapeHtml(item.title) : 'Recent Update';
+    const badge = item.badge ? `<span class="card-badge">${escapeHtml(item.badge)}</span>` : '';
+    const tagsMarkup = renderLatestTags(item.tags);
+    const actionLabel = item.action_label || item.actionLabel || 'Open Link';
+    const linkMarkup = item.url
+        ? `<a class="chart-btn secondary" href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">`
+            + `${escapeHtml(actionLabel)}</a>`
+        : '';
+
+    const metaParts = [
+        sourceLabel ? `<span class="meta-item">${escapeHtml(sourceLabel)}</span>` : '',
+        relative ? `<span class="meta-item">${escapeHtml(relative)}</span>` : ''
+    ].filter(Boolean);
+
+    const metaMarkup = metaParts.length
+        ? `<div class="card-meta">${metaParts.join('')}</div>`
+        : '';
+
+    const badgeLabel = sourceLabel || 'Latest';
+
+    card.innerHTML = `
+        <div class="card-header">
+            <div class="card-header-content">
+                <div class="source-badge">${escapeHtml(badgeLabel)}</div>
+                <div class="card-title">
+                    ${item.url ? `<a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">${titleText}</a>` : `<span class="title-text">${titleText}</span>`}
+                </div>
+                ${metaMarkup}
+            </div>
+        </div>
+        ${description ? `<div class="card-summary">${escapeHtml(description)}</div>` : ''}
+        ${tagsMarkup}
+        <div class="card-actions">
+            ${linkMarkup}
+            ${badge}
+        </div>
+    `;
+
+    return card;
+}
+
+async function loadMonitorFeed(forceRefresh = false) {
+    const loadingElement = document.getElementById('monitor-loading');
+    const errorElement = document.getElementById('monitor-error');
+    const dataElement = document.getElementById('monitor-data');
+    const resultsInfo = document.getElementById('monitor-results-info');
+
+    if (!loadingElement || !errorElement || !dataElement) {
+        return;
+    }
+
+    try {
+        loadingElement.style.display = 'flex';
+        errorElement.style.display = 'none';
+        dataElement.innerHTML = '';
+        if (resultsInfo) {
+            resultsInfo.style.display = 'none';
+            resultsInfo.textContent = '';
+        }
+
+        const params = new URLSearchParams({
+            cache_bust: forceRefresh ? 'true' : 'false'
+        });
+        const data = await makeAPICall(`/api/monitor${params.toString() ? `?${params.toString()}` : ''}`, null);
+        const items = Array.isArray(data?.items) ? data.items : [];
+        cachedData.monitor = items;
+        rawData.monitor = items;
+        displayMonitorItems(items);
+
+        if (resultsInfo) {
+            const summaryParts = [];
+            if (data?.count != null) {
+                summaryParts.push(`${data.count} updates`);
+            }
+            if (data?.generated_at) {
+                const relative = formatRelativeTime(data.generated_at);
+                if (relative) {
+                    summaryParts.push(`refreshed ${relative}`);
+                }
+            }
+            resultsInfo.textContent = summaryParts.length ? summaryParts.join(' · ') : 'Monitor feed updates';
+            resultsInfo.style.display = 'block';
+        }
+    } catch (error) {
+        const message = error?.message || String(error);
+        errorElement.textContent = `Failed to load monitor feed: ${message}`;
+        errorElement.style.display = 'block';
+    } finally {
+        loadingElement.style.display = 'none';
+    }
+}
+
+function displayMonitorItems(items) {
+    const container = document.getElementById('monitor-data');
+    if (!container) {
+        return;
+    }
+
+    container.innerHTML = '';
+    if (!items || !items.length) {
+        container.innerHTML = '<div class="empty-state">No monitor updates available yet. Check back soon.</div>';
+        return;
+    }
+
+    items.forEach(item => {
+        container.appendChild(createMonitorCard(item));
+    });
+}
+
+function createMonitorCard(item) {
+    const card = document.createElement('div');
+    card.className = 'model-card latest-card';
+    card.dataset.source = 'monitor';
+
+    const title = item.title ? escapeHtml(item.title) : 'Monitor Update';
+    const relative = formatRelativeTime(item.timestamp);
+    const excerpt = item.excerpt ? escapeHtml(item.excerpt) : '';
+    const url = item.url ? escapeHtml(item.url) : '';
+
+    const metaParts = [`<span class="meta-item">Monitor Feed</span>`];
+    if (relative) {
+        metaParts.push(`<span class="meta-item">${escapeHtml(relative)}</span>`);
+    }
+    const metaMarkup = `<div class="card-meta">${metaParts.join('')}</div>`;
+
+    card.innerHTML = `
+        <div class="card-header">
+            <div class="card-header-content">
+                <div class="source-badge">Monitor</div>
+                <div class="card-title">
+                    ${url ? `<a href="${url}" target="_blank" rel="noopener noreferrer">${title}</a>` : title}
+                </div>
+                ${metaMarkup}
+            </div>
+        </div>
+        ${excerpt ? `<div class="card-summary">${excerpt}</div>` : ''}
+        <div class="card-actions">
+            ${url ? `<a class="chart-btn secondary" href="${url}" target="_blank" rel="noopener noreferrer">Open Source</a>` : ''}
+        </div>
+    `;
+
+    return card;
 }
 
 function formatContextLength(contextLength) {
@@ -1564,31 +2609,20 @@ function createMediaCard(model, mediaCategory = '') {
 
 // AI Agent functionality with streaming support and conversation context
 async function sendMessage() {
-    const sendMessageStartTime = Date.now();
-    console.log('💬 [AI Agent] sendMessage called', {
-        timestamp: new Date().toISOString()
-    });
-    
     const userInput = document.getElementById('user-input');
     const chatMessages = document.getElementById('chat-messages');
     const message = userInput.value.trim();
-    
+
     if (!message) {
-        console.log('⚠️ [AI Agent] Empty message, aborting');
         return;
     }
-    
-    console.log('📝 [AI Agent] Processing message', {
-        messageLength: message.length,
-        preview: message.substring(0, 50) + (message.length > 50 ? '...' : ''),
-        currentHistoryLength: agentConfig.conversationHistory.length
-    });
-    
+
     const attachments = await collectImageAttachments();
 
-    // Add user message to chat
+    // Render user bubble
     const userMessage = document.createElement('div');
     userMessage.className = 'message user';
+
     const messageText = document.createElement('div');
     messageText.className = 'message-text';
     messageText.textContent = message;
@@ -1598,8 +2632,8 @@ async function sendMessage() {
         const attachmentList = document.createElement('div');
         attachmentList.className = 'attachment-preview';
         attachments.forEach(att => {
-            const item = document.createElement('div');
             const sizeKB = (att.size / 1024).toFixed(1);
+            const item = document.createElement('div');
             item.textContent = `📎 ${att.name} (${sizeKB} KB)`;
             attachmentList.appendChild(item);
         });
@@ -1607,11 +2641,19 @@ async function sendMessage() {
     }
 
     chatMessages.appendChild(userMessage);
-    
-    // Add to conversation history for context
-    pushConversationEntry('user', message, attachments);
-    
-    // Add initial loading indicator
+
+    // Track conversation history
+    agentConfig.conversationHistory.push({
+        role: 'user',
+        content: message,
+        attachments,
+        timestamp: new Date().toISOString()
+    });
+    if (agentConfig.conversationHistory.length > 20) {
+        agentConfig.conversationHistory = agentConfig.conversationHistory.slice(-20);
+    }
+
+    // Add loading indicator for AI response
     const loadingMessage = document.createElement('div');
     loadingMessage.className = 'message ai loading-initial';
     loadingMessage.innerHTML = `
@@ -1621,69 +2663,42 @@ async function sendMessage() {
         </div>
     `;
     chatMessages.appendChild(loadingMessage);
-    
-    // Clear input
+
+    // Reset input
     userInput.value = '';
-    
-    // Scroll to bottom after user message
     chatMessages.scrollTop = chatMessages.scrollHeight;
-    
+
     try {
-        console.log('🤖 [AI Agent] Calling AI agent...');
-        // Call AI agent with streaming and context
         const response = await callGLMAgent(message, attachments);
-        
-        console.log('✅ [AI Agent] AI agent call successful', {
-            hasResponse: !!response.response,
-            responseLength: response.response ? response.response.length : 0,
-            hasTraces: !!response.traces,
-            tracesCount: response.traces ? response.traces.length : 0,
-            totalElapsed: Date.now() - sendMessageStartTime
-        });
-        
-        // Add AI response to conversation history
-        if (response) {
-            if (response.contextSnapshot) {
-                agentSessionContext = response.contextSnapshot;
-                agentSessionSnapshot = summarizeContextSnapshot(agentSessionContext);
-            }
-            if (response.response) {
-                pushConversationEntry('assistant', response.response);
-                console.log('📚 [AI Agent] Added AI response to conversation history');
-            }
-            resetImageUploads();
-            console.log('📚 [AI Agent] Added AI response to conversation history');
+
+        if (response && response.response) {
+            agentConfig.conversationHistory.push({
+                role: 'assistant',
+                content: response.response,
+                timestamp: new Date().toISOString()
+            });
         }
-        
-        // Remove streaming class from the final message
+
         const streamingMessage = chatMessages.querySelector('.message.ai.streaming');
         if (streamingMessage) {
             streamingMessage.classList.remove('streaming');
-            console.log('🎨 [AI Agent] Removed streaming class from final message');
         }
-        
-        // Ensure final scroll to bottom
-        chatMessages.scrollTop = chatMessages.scrollHeight;
-        
-    } catch (error) {
-        console.error('❌ [AI Agent] sendMessage failed', {
-            error: error.message,
-            stack: error.stack,
-            elapsed: Date.now() - sendMessageStartTime
-        });
 
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+        resetImageUploads();
+    } catch (error) {
         clearAgentLoadingState();
 
-        // Add error message
         const errorMessage = document.createElement('div');
         errorMessage.className = 'message ai error';
         errorMessage.innerHTML = `<div class="error-content">❌ <strong>Error:</strong> ${error.message}</div>`;
         chatMessages.appendChild(errorMessage);
+
         chatMessages.scrollTop = chatMessages.scrollHeight;
 
         if (!error || !error.__toastHandled) {
-            const toastMessage = error && error.message ? error.message : 'The AI agent request failed.';
-            showToast(toastMessage, 'error');
+            const messageText = (error && error.message) ? error.message : 'The AI agent request failed.';
+            showToast(messageText, 'error');
         }
     }
 }
@@ -1693,8 +2708,6 @@ function clearChatHistory() {
     const chatMessages = document.getElementById('chat-messages');
     chatMessages.innerHTML = '';
     agentConfig.conversationHistory = [];
-    agentSessionContext = null;
-    agentSessionSnapshot = '';
     resetImageUploads();
     
     // Add a welcome message
@@ -1718,69 +2731,495 @@ function clearChatHistory() {
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
+// Agent EXP (experimental Grok-powered chatbot)
+function initializeAgentExp() {
+    const modelSelect = document.getElementById('agent-exp-model');
+    const form = document.getElementById('agent-exp-form');
+    if (!modelSelect || !form) {
+        return;
+    }
+
+    const storedModel = localStorage.getItem(AGENT_EXP_MODEL_STORAGE_KEY);
+    if (storedModel) {
+        agentExpState.model = storedModel;
+    }
+
+    populateAgentExpModels();
+
+    if (modelSelect.value !== agentExpState.model) {
+        modelSelect.value = agentExpState.model;
+    }
+
+    modelSelect.addEventListener('change', () => {
+        const nextValue = modelSelect.value;
+        if (!nextValue) {
+            return;
+        }
+        agentExpState.model = nextValue;
+        localStorage.setItem(AGENT_EXP_MODEL_STORAGE_KEY, nextValue);
+        setAgentExpStatus(`Using ${nextValue}`);
+    });
+
+    form.addEventListener('submit', sendAgentExpMessage);
+
+    const clearButton = document.getElementById('agent-exp-clear');
+    if (clearButton) {
+        clearButton.addEventListener('click', clearAgentExpHistory);
+    }
+
+    const input = document.getElementById('agent-exp-input');
+    if (input) {
+        input.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                form.requestSubmit();
+            }
+        });
+    }
+
+    renderAgentExpWelcome();
+}
+
+function getAgentExpModelOptions() {
+    const entries = new Map();
+    const addEntry = (id, label) => {
+        if (!id || entries.has(id)) {
+            return;
+        }
+        entries.set(id, label || id);
+    };
+
+    addEntry(AGENT_EXP_DEFAULT_MODEL);
+    if (agentConfig && agentConfig.model) {
+        addEntry(agentConfig.model);
+    }
+
+    const agentSettings = (modelConfig && modelConfig.agent) || {};
+    (agentSettings.availableModels || []).forEach(id => addEntry(id));
+    (agentSettings.fallbackModels || []).forEach(id => addEntry(id));
+
+    if (cachedData.openRouterModels && Array.isArray(cachedData.openRouterModels)) {
+        cachedData.openRouterModels.slice(0, 30).forEach(model => {
+            addEntry(model.id, model.name || model.id);
+        });
+    }
+
+    return Array.from(entries.entries());
+}
+
+function populateAgentExpModels() {
+    const modelSelect = document.getElementById('agent-exp-model');
+    if (!modelSelect) {
+        return;
+    }
+
+    const choices = getAgentExpModelOptions();
+    modelSelect.innerHTML = '';
+
+    choices.forEach(([id, label]) => {
+        const option = document.createElement('option');
+        option.value = id;
+        const info = typeof getAgentModelInfo === 'function' ? getAgentModelInfo(id) : null;
+        option.textContent = (info && (info.name || info.displayName)) || label || id;
+        modelSelect.appendChild(option);
+    });
+
+    if (choices.length === 0) {
+        const fallbackOption = document.createElement('option');
+        fallbackOption.value = AGENT_EXP_DEFAULT_MODEL;
+        fallbackOption.textContent = AGENT_EXP_DEFAULT_MODEL;
+        modelSelect.appendChild(fallbackOption);
+        agentExpState.model = AGENT_EXP_DEFAULT_MODEL;
+    }
+
+    if (!choices.find(([id]) => id === agentExpState.model)) {
+        agentExpState.model = choices.length ? choices[0][0] : AGENT_EXP_DEFAULT_MODEL;
+    }
+
+    modelSelect.value = agentExpState.model;
+    localStorage.setItem(AGENT_EXP_MODEL_STORAGE_KEY, agentExpState.model);
+}
+
+function renderAgentExpWelcome() {
+    const container = document.getElementById('agent-exp-messages');
+    if (!container || container.dataset.welcomeRendered === 'true') {
+        return;
+    }
+
+    const welcome = document.createElement('div');
+    welcome.className = 'message ai';
+    welcome.innerHTML = `
+        <div class="response-content">
+            <p>👋 <strong>Welcome to Agent EXP.</strong> This lightweight Grok-powered agent can pull live dashboard datasets and run Perplexity searches.</p>
+            <p>Try asking for <em>fal.ai image models</em>, <em>fresh leaderboard changes</em>, or <em>pricing comparisons</em>.</p>
+        </div>
+    `;
+    container.appendChild(welcome);
+    container.dataset.welcomeRendered = 'true';
+    scrollAgentExpToBottom();
+}
+
+function clearAgentExpHistory(event) {
+    if (event) {
+        event.preventDefault();
+    }
+    const container = document.getElementById('agent-exp-messages');
+    if (container) {
+        container.innerHTML = '';
+        delete container.dataset.welcomeRendered;
+    }
+    agentExpState.conversation = [];
+    agentExpState.streamBuffer = '';
+    agentExpState.activeMessage = null;
+    agentExpState.streaming = false;
+    setAgentExpStatus('');
+    renderAgentExpWelcome();
+}
+
+function appendAgentExpMessage(role, content, options = {}) {
+    const container = document.getElementById('agent-exp-messages');
+    if (!container) {
+        return null;
+    }
+
+    const message = document.createElement('div');
+    message.className = `message ${role}`;
+    if (options.streaming) {
+        message.classList.add('streaming');
+    }
+
+    const responseContent = document.createElement('div');
+    responseContent.className = 'response-content';
+    if (content) {
+        responseContent.innerHTML = renderAgentExpMarkdown(content);
+    } else if (options.streaming) {
+        responseContent.innerHTML = '<div class="typing-indicator">Thinking...</div>';
+    }
+    message.appendChild(responseContent);
+    container.appendChild(message);
+    scrollAgentExpToBottom();
+    return message;
+}
+
+function renderAgentExpMarkdown(markdown) {
+    if (!markdown) {
+        return '';
+    }
+    let sanitized = typeof fixEncodingArtifacts === 'function' ? fixEncodingArtifacts(markdown) : markdown;
+    if (typeof marked !== 'undefined' && marked.parse) {
+        try {
+            return marked.parse(sanitized);
+        } catch (error) {
+            console.warn('Marked.js failed, using fallback markdown renderer.', error);
+        }
+    }
+    return simpleMarkdownToHtml(sanitized);
+}
+
+function setAgentExpStatus(message, isError = false) {
+    const status = document.getElementById('agent-exp-status');
+    if (!status) {
+        return;
+    }
+    if (!message) {
+        status.textContent = '';
+        status.classList.remove('error');
+        return;
+    }
+    status.textContent = message;
+    status.classList.toggle('error', Boolean(isError));
+}
+
+function pushAgentExpHistory(entry) {
+    agentExpState.conversation.push(entry);
+    if (agentExpState.conversation.length > 10) {
+        agentExpState.conversation = agentExpState.conversation.slice(-10);
+    }
+}
+
+function scrollAgentExpToBottom() {
+    const container = document.getElementById('agent-exp-messages');
+    if (!container) {
+        return;
+    }
+    container.scrollTop = container.scrollHeight;
+}
+
+function focusAgentExpInput() {
+    const input = document.getElementById('agent-exp-input');
+    if (input && typeof input.focus === 'function') {
+        setTimeout(() => input.focus(), 50);
+    }
+}
+
+async function sendAgentExpMessage(event) {
+    event.preventDefault();
+    if (agentExpState.streaming) {
+        showToast('Please wait for the current response to finish.', 'info');
+        return;
+    }
+
+    const input = document.getElementById('agent-exp-input');
+    if (!input) {
+        return;
+    }
+    const message = input.value.trim();
+    if (!message) {
+        return;
+    }
+
+    if (!getUserOpenRouterKey()) {
+        showToast('🔑 Add your OpenRouter key in Settings to chat with Agent EXP.', 'warning');
+        setAgentExpStatus('Add your OpenRouter key in Settings to talk to Agent EXP.', true);
+        return;
+    }
+
+    appendAgentExpMessage('user', message);
+    pushAgentExpHistory({ role: 'user', content: message });
+    input.value = '';
+    scrollAgentExpToBottom();
+
+    try {
+        await streamAgentExpResponse(message);
+    } catch (error) {
+        const errorMessage = error && error.message ? error.message : 'Agent EXP request failed.';
+        setAgentExpStatus(errorMessage, true);
+        showToast(errorMessage, 'error');
+    }
+}
+
+async function streamAgentExpResponse(message) {
+    const form = document.getElementById('agent-exp-form');
+    const submitButton = form ? form.querySelector('button[type="submit"]') : null;
+
+    agentExpState.streamBuffer = '';
+    agentExpState.streaming = true;
+
+    if (submitButton) {
+        submitButton.disabled = true;
+    }
+
+    const assistantMessage = appendAgentExpMessage('ai', '', { streaming: true });
+    const responseContent = assistantMessage ? assistantMessage.querySelector('.response-content') : null;
+    agentExpState.activeMessage = assistantMessage;
+    setAgentExpStatus(`Calling ${agentExpState.model}...`);
+
+    try {
+        const response = await fetch('/api/agent-exp', {
+            method: 'POST',
+            headers: withUserOpenRouterKey({
+                'Content-Type': 'application/json'
+            }),
+            body: JSON.stringify({
+                message,
+                model: agentExpState.model,
+                conversation: agentExpState.conversation,
+                experimental: getStoredExperimentalMode(),
+                stream: true
+            })
+        });
+
+        if (!response.ok) {
+            let errorMessage = `HTTP error ${response.status}`;
+            try {
+                const payload = await response.json();
+                errorMessage = payload.error || payload.message || errorMessage;
+            } catch (parseError) {
+                // ignore
+            }
+            if (response.status === 402) {
+                errorMessage = "🔑 OpenRouter API key required. Please add your key in Settings to use Agent EXP.";
+            }
+            throw new Error(errorMessage);
+        }
+
+        const reader = response.body && response.body.getReader ? response.body.getReader() : null;
+        if (!reader) {
+            throw new Error('Response body is not readable');
+        }
+
+        const decoder = new TextDecoder('utf-8');
+        let buffer = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) {
+                break;
+            }
+
+            buffer += decoder.decode(value, { stream: true });
+
+            let newlineIndex = buffer.indexOf('\n');
+            while (newlineIndex !== -1) {
+                const line = buffer.slice(0, newlineIndex).trim();
+                buffer = buffer.slice(newlineIndex + 1);
+                if (line) {
+                    processAgentExpLine(line, assistantMessage, responseContent);
+                }
+                newlineIndex = buffer.indexOf('\n');
+            }
+        }
+
+        const remaining = buffer.trim();
+        if (remaining) {
+            processAgentExpLine(remaining, assistantMessage, responseContent);
+        }
+    } catch (error) {
+        const errorMessage = error && error.message ? error.message : 'Agent EXP streaming failed.';
+        setAgentExpStatus(errorMessage, true);
+        if (assistantMessage && responseContent) {
+            assistantMessage.classList.remove('streaming');
+            responseContent.innerHTML = `<div class="error-content">❌ ${errorMessage}</div>`;
+        }
+        agentExpState.activeMessage = null;
+        agentExpState.streaming = false;
+        agentExpState.streamBuffer = '';
+        throw error;
+    } finally {
+        if (submitButton) {
+            submitButton.disabled = false;
+        }
+    }
+}
+
+function processAgentExpLine(line, assistantMessage, responseContent) {
+    if (!line.startsWith('data:')) {
+        return;
+    }
+    const payload = line.slice(5).trim();
+    if (!payload || payload === '[DONE]') {
+        return;
+    }
+    let event;
+    try {
+        event = JSON.parse(payload);
+    } catch (error) {
+        return;
+    }
+    handleAgentExpEvent(event, assistantMessage, responseContent);
+}
+
+function handleAgentExpEvent(event, assistantMessage, responseContent) {
+    if (!event || typeof event !== 'object') {
+        return;
+    }
+
+    switch (event.type) {
+        case 'status':
+            if (event.message) {
+                setAgentExpStatus(event.message);
+            }
+            break;
+        case 'tool':
+            renderAgentExpToolLog(event, assistantMessage);
+            if (event.tool === 'fetch_data') {
+                const dataLabels = (event.datasets || []).map(entry => entry.label || entry.id).join(', ');
+                if (dataLabels) {
+                    setAgentExpStatus(`Loaded datasets: ${dataLabels}`);
+                }
+            }
+            break;
+        case 'content': {
+            const chunk = event.content || '';
+            agentExpState.streamBuffer += chunk;
+            if (responseContent) {
+                responseContent.innerHTML = renderAgentExpMarkdown(agentExpState.streamBuffer);
+            }
+            scrollAgentExpToBottom();
+            break;
+        }
+        case 'error':
+            setAgentExpStatus(event.error || 'Agent EXP encountered an error.', true);
+            if (assistantMessage) {
+                assistantMessage.classList.remove('streaming');
+            }
+            if (responseContent) {
+                responseContent.innerHTML = `<div class="error-content">❌ ${event.error || 'Agent EXP encountered an error.'}</div>`;
+            }
+            agentExpState.activeMessage = null;
+            agentExpState.streaming = false;
+            agentExpState.streamBuffer = '';
+            break;
+        case 'done': {
+            if (assistantMessage) {
+                assistantMessage.classList.remove('streaming');
+            }
+            const finalText = agentExpState.streamBuffer ? fixEncodingArtifacts(agentExpState.streamBuffer.trim()) : '';
+            if (responseContent) {
+                responseContent.innerHTML = finalText ? renderAgentExpMarkdown(finalText) : '<div class="response-content">No response generated.</div>';
+            }
+            if (finalText) {
+                pushAgentExpHistory({ role: 'assistant', content: finalText });
+            }
+            setAgentExpStatus('');
+            agentExpState.activeMessage = null;
+            agentExpState.streaming = false;
+            agentExpState.streamBuffer = '';
+            scrollAgentExpToBottom();
+            break;
+        }
+    }
+}
+
+function renderAgentExpToolLog(event, assistantMessage) {
+    if (!assistantMessage) {
+        return;
+    }
+    let container = assistantMessage.querySelector('.agent-exp-tools');
+    if (!container) {
+        container = document.createElement('div');
+        container.className = 'agent-exp-tools';
+        assistantMessage.insertBefore(container, assistantMessage.firstChild);
+    }
+
+    const row = document.createElement('div');
+    row.className = 'agent-exp-tool-row';
+    if (event.status === 'error') {
+        row.classList.add('error');
+    }
+
+    const parts = [];
+    if (event.tool === 'fetch_data') {
+        const categories = (event.args && event.args.categories) ? event.args.categories.join(', ') : 'no categories';
+        parts.push(`fetch_data → ${categories}`);
+        if (event.args && event.args.limit !== undefined) {
+            parts.push(`limit: ${event.args.limit}`);
+        }
+        if (event.args && event.args.timeframe) {
+            parts.push(`timeframe: ${event.args.timeframe}`);
+        }
+        if (event.datasets && event.datasets.length) {
+            const counts = event.datasets.map(entry => `${entry.label || entry.id} (${entry.items ?? 0})`).join(', ');
+            if (counts) {
+                parts.push(counts);
+            }
+        }
+    } else if (event.tool === 'ask_perplexity') {
+        const query = event.args && event.args.query ? event.args.query : 'query';
+        parts.push(`ask_perplexity → ${query}`);
+    } else if (event.tool) {
+        parts.push(`${event.tool} invoked`);
+    }
+
+    if (event.error) {
+        parts.push(`⚠️ ${event.error}`);
+    }
+
+    row.textContent = parts.join(' · ');
+    container.appendChild(row);
+    scrollAgentExpToBottom();
+}
+
 // Call AI agent with streaming support
 async function callGLMAgent(userMessage, attachments = []) {
-    const callStartTime = Date.now();
-    console.log('🚀 [AI Agent] callGLMAgent initiated', {
-        messageLength: userMessage.length,
-        model: agentConfig.model,
-        conversationHistoryLength: agentConfig.conversationHistory.length,
-        timestamp: new Date().toISOString()
-    });
-    
     return new Promise((resolve, reject) => {
-        handleStreamingWithFetch(userMessage, attachments, (result) => {
-            console.log('✅ [AI Agent] callGLMAgent resolved successfully', {
-                responseLength: result.response ? result.response.length : 0,
-                tracesCount: result.traces ? result.traces.length : 0,
-                elapsed: Date.now() - callStartTime
-            });
-            resolve(result);
-        }, (error) => {
-            console.error('❌ [AI Agent] callGLMAgent rejected', {
-                error: error.message,
-                stack: error.stack,
-                elapsed: Date.now() - callStartTime
-            });
-            reject(error);
-        });
+        handleStreamingWithFetch(userMessage, attachments, resolve, reject);
     });
 }
 
 // Fallback streaming using fetch
 async function handleStreamingWithFetch(userMessage, attachments, resolve, reject) {
-    let timeoutId;
-    let reader;
-    const startTime = Date.now();
-    
-    console.log('🔄 [AI Agent] Starting streaming request', {
-        model: agentConfig.model,
-        messageLength: userMessage.length,
-        conversationHistoryLength: agentConfig.conversationHistory.length,
-        timestamp: new Date().toISOString()
-    });
-    
     try {
-        // Set up timeout for the entire streaming operation
-        const STREAM_TIMEOUT = 150000; // 2.5 minutes
-        
-        timeoutId = setTimeout(() => {
-            console.log('⏰ [AI Agent] Streaming timeout reached', {
-                elapsed: Date.now() - startTime,
-                timeout: STREAM_TIMEOUT
-            });
-            if (reader) {
-                try {
-                    reader.cancel();
-                    console.log('🛑 [AI Agent] Reader cancelled due to timeout');
-                } catch (e) {
-                    console.log('⚠️ [AI Agent] Error cancelling reader:', e);
-                }
-            }
-            reject(new Error('Streaming timeout - please try again'));
-        }, STREAM_TIMEOUT);
-
-        console.log('📤 [AI Agent] Sending fetch request to /api/ai-agent');
         const response = await fetch('/api/ai-agent', {
             method: 'POST',
             headers: withUserOpenRouterKey({
@@ -1791,27 +3230,17 @@ async function handleStreamingWithFetch(userMessage, attachments, resolve, rejec
                 stream: true,
                 model: agentConfig.model,
                 conversationHistory: agentConfig.conversationHistory,
-                contextSnapshot: agentSessionContext,
                 imageAttachments: attachments
             })
         });
 
-        console.log('📥 [AI Agent] Received response', {
-            status: response.status,
-            statusText: response.statusText,
-            headers: Object.fromEntries(response.headers.entries()),
-            ok: response.ok
-        });
-
         if (!response.ok) {
-            clearTimeout(timeoutId);
             let errorMessage = `HTTP error! status: ${response.status}`;
             try {
                 const payload = await response.json();
                 errorMessage = payload.error || payload.message || errorMessage;
-                console.log('❌ [AI Agent] HTTP error response', { status: response.status, error: errorMessage, payload });
             } catch (parseError) {
-                console.log('❌ [AI Agent] HTTP error but could not parse response body', { status: response.status, parseError });
+                // No-op: response may not contain JSON when streaming fails before start.
             }
 
             // Handle specific error cases
@@ -1822,230 +3251,62 @@ async function handleStreamingWithFetch(userMessage, attachments, resolve, rejec
             throw new Error(errorMessage);
         }
 
-        reader = response.body?.getReader();
+        const reader = response.body?.getReader();
         if (!reader) {
-            clearTimeout(timeoutId);
-            console.log('❌ [AI Agent] Response body is not readable');
             throw new Error('Response body is not readable');
         }
 
-        console.log('✅ [AI Agent] Reader initialized successfully');
-
-        const decoder = new TextDecoder('utf-8', { fatal: false });
+        const decoder = new TextDecoder('utf-8');
         let buffer = '';
         let fullResponse = '';
         let traces = [];
-        let statuses = [];
-        let lastEventTime = Date.now();
-        let eventsReceived = 0;
-        let chunksReceived = 0;
-        const MAX_EVENTS = 5000;
-        let finalPayload = null;
-        
-        // Check for stalled connection
-        const stallCheckInterval = setInterval(() => {
-            const timeSinceLastEvent = Date.now() - lastEventTime;
-            const totalElapsed = Date.now() - startTime;
-            console.log(`🔍 [AI Agent] Stall check`, {
-                timeSinceLastEvent,
-                totalElapsed,
-                eventsReceived,
-                chunksReceived,
-                bufferLength: buffer.length
-            });
-            
-            if (timeSinceLastEvent > 30000) { // 30 seconds without data
-                clearInterval(stallCheckInterval);
-                clearTimeout(timeoutId);
-                console.log('❌ [AI Agent] Connection stalled', {
-                    timeSinceLastEvent,
-                    totalElapsed,
-                    eventsReceived
-                });
-                if (reader) {
-                    try {
-                        reader.cancel();
-                    } catch (e) {
-                        // Ignore cancellation errors
-                    }
-                }
-                reject(new Error('Connection stalled - please try again'));
-            }
-        }, 10000); // Check every 10 seconds
 
         try {
-            console.log('🔄 [AI Agent] Starting to read stream');
             while (true) {
-                const readStartTime = Date.now();
-                const { done, value } = await Promise.race([
-                    reader.read(),
-                    new Promise((_, reject) =>
-                        setTimeout(() => reject(new Error('Read timeout')), 45000)
-                    )
-                ]);
-                
-                const readDuration = Date.now() - readStartTime;
-                chunksReceived++;
-                
-                console.log(`📦 [AI Agent] Chunk received`, {
-                    done,
-                    chunkSize: value ? value.length : 0,
-                    readDuration,
-                    totalChunks: chunksReceived,
-                    totalElapsed: Date.now() - startTime
-                });
-                
-                if (done) {
-                    clearInterval(stallCheckInterval);
-                    clearTimeout(timeoutId);
-                    console.log('✅ [AI Agent] Stream completed', {
-                        totalChunks: chunksReceived,
-                        totalElapsed: Date.now() - startTime,
-                        finalBufferLength: buffer.length,
-                        fullResponseLength: fullResponse.length,
-                        tracesCount: traces.length
-                    });
-                    break;
-                }
-
-                lastEventTime = Date.now();
-                eventsReceived++;
-
-                // Safety check for too many events
-                if (eventsReceived > MAX_EVENTS) {
-                    clearInterval(stallCheckInterval);
-                    clearTimeout(timeoutId);
-                    console.log('❌ [AI Agent] Too many events received', { eventsReceived, MAX_EVENTS });
-                    reject(new Error('Too many events received - response truncated'));
-                    return;
-                }
+                const { done, value } = await reader.read();
+                if (done) break;
 
                 buffer += decoder.decode(value, { stream: true });
-                console.log(`📝 [AI Agent] Buffer updated`, {
-                    bufferLength: buffer.length,
-                    chunkSize: value.length,
-                    totalElapsed: Date.now() - startTime
-                });
 
-                // Process all complete lines in buffer
-                let linesProcessed = 0;
                 while (true) {
                     const lineEnd = buffer.indexOf('\n');
                     if (lineEnd === -1) break;
 
                     const line = buffer.slice(0, lineEnd).trim();
                     buffer = buffer.slice(lineEnd + 1);
-                    linesProcessed++;
 
                     if (line.startsWith('data: ')) {
                         const data = line.slice(6);
-                        
-                        // Handle proper SSE termination
-                        if (data === '[DONE]') {
-                            clearInterval(stallCheckInterval);
-                            clearTimeout(timeoutId);
-                            console.log('✅ [AI Agent] Received [DONE] signal', {
-                                totalEvents: eventsReceived,
-                                totalLines: linesProcessed,
-                                totalElapsed: Date.now() - startTime
-                            });
-                            const resolvedPayload = finalPayload || {
-                                response: fixEncodingArtifacts(fullResponse),
-                                traces: traces
-                            };
-                            resolve(resolvedPayload);
-                            return;
-                        }
+                        if (data === '[DONE]') break;
 
                         try {
                             const parsed = JSON.parse(data);
-                            console.log(`🔧 [AI Agent] Event received`, {
-                                type: parsed.type,
-                                hasContent: !!parsed.content,
-                                hasTraces: !!parsed.traces,
-                                tracesCount: parsed.traces ? parsed.traces.length : 0,
-                                totalElapsed: Date.now() - startTime
-                            });
                             
                             switch(parsed.type) {
                                 case 'traces':
                                     traces = parsed.traces;
-                                    console.log(`📍 [AI Agent] Traces updated`, {
-                                        tracesCount: traces.length,
-                                        traces: traces.map(t => ({ step: t.step, status: t.status }))
-                                    });
-                                    updateStreamingResponse(fullResponse, traces, statuses);
                                     break;
-                                case 'status': {
-                                    const statusPayload = parsed.status;
-                                    if (statusPayload && typeof statusPayload === 'object') {
-                                        const statusEntry = {
-                                            stage: statusPayload.stage || 'Status',
-                                            message: statusPayload.message || '',
-                                            timestamp: statusPayload.timestamp || new Date().toISOString()
-                                        };
-                                        statuses.push(statusEntry);
-                                        if (statuses.length > MAX_AGENT_STATUS_ENTRIES) {
-                                            statuses = statuses.slice(-MAX_AGENT_STATUS_ENTRIES);
-                                        }
-                                        console.log('ℹ️ [AI Agent] Status update', statusEntry);
-                                        updateStreamingResponse(fullResponse, traces, statuses);
+                                case 'context': {
+                                    if (parsed.context) {
+                                        console.groupCollapsed('Agent context update');
+                                        console.log('Loaded categories:', parsed.context.categories || []);
+                                        console.log('Highlights:', parsed.context.highlights || []);
+                                        console.log('Generated at:', parsed.context.last_generated_at);
+                                        console.groupEnd();
                                     }
                                     break;
                                 }
                                 case 'content': {
                                     const sanitizedChunk = fixEncodingArtifacts(parsed.content);
                                     fullResponse = appendStreamChunk(fullResponse, sanitizedChunk);
-                                    console.log(`📄 [AI Agent] Content updated`, {
-                                        chunkLength: sanitizedChunk.length,
-                                        totalResponseLength: fullResponse.length,
-                                        preview: sanitizedChunk.substring(0, 100) + (sanitizedChunk.length > 100 ? '...' : '')
-                                    });
-                                    updateStreamingResponse(fullResponse, traces, statuses);
-                                    break;
-                                }
-                                case 'final': {
-                                    const finalResponse = fixEncodingArtifacts(parsed.response || fullResponse);
-                                    if (parsed.traces && Array.isArray(parsed.traces)) {
-                                        traces = parsed.traces;
-                                    }
-                                    fullResponse = finalResponse;
-                                    if (parsed.contextSnapshot) {
-                                        agentSessionContext = parsed.contextSnapshot;
-                                        agentSessionSnapshot = summarizeContextSnapshot(parsed.contextSnapshot);
-                                    }
-                                    const finalStatuses = statuses.slice();
-                                    updateStreamingResponse(finalResponse, traces, finalStatuses);
-                                    finalPayload = {
-                                        response: finalResponse,
-                                        traces: traces,
-                                        fetch_data: parsed.fetch_data || null,
-                                        compressed_snapshot: parsed.compressed_snapshot || '',
-                                        contextSnapshot: parsed.contextSnapshot || null,
-                                        web_search: parsed.web_search || null
-                                    };
+                                    updateStreamingResponse(fullResponse, traces);
                                     break;
                                 }
                                 case 'done':
-                                    clearInterval(stallCheckInterval);
-                                    clearTimeout(timeoutId);
-                                    console.log('✅ [AI Agent] Received done event', {
-                                        totalResponseLength: fullResponse.length,
-                                        tracesCount: traces.length,
-                                        totalElapsed: Date.now() - startTime
-                                    });
-                                    updateStreamingResponse(fullResponse, traces, statuses);
-                                    const donePayload = finalPayload || {
-                                        response: fixEncodingArtifacts(fullResponse),
-                                        traces: traces
-                                    };
-                                    resolve(donePayload);
+                                    resolve({ response: fullResponse, traces: traces });
                                     return;
                                 case 'error': {
-                                    clearInterval(stallCheckInterval);
-                                    clearTimeout(timeoutId);
                                     const errorMessage = parsed.error || 'The AI agent encountered an error.';
-                                    console.log('❌ [AI Agent] Received error event', { error: errorMessage });
                                     clearAgentLoadingState();
                                     showToast(errorMessage, 'error');
                                     const errorObject = new Error(errorMessage);
@@ -2055,59 +3316,17 @@ async function handleStreamingWithFetch(userMessage, attachments, resolve, rejec
                                 }
                             }
                         } catch (e) {
-                            console.warn('⚠️ [AI Agent] Invalid SSE JSON', { data, error: e.message });
-                            // Continue processing other events
+                            // Ignore invalid JSON
                         }
                     }
                 }
-                
-                if (linesProcessed > 0) {
-                    console.log(`📋 [AI Agent] Processed ${linesProcessed} lines from buffer`);
-                }
             }
             
-            // If we get here without a done event, resolve with what we have
-            clearInterval(stallCheckInterval);
-            clearTimeout(timeoutId);
-            console.log('⚠️ [AI Agent] Stream ended without done event', {
-                hasResponse: !!fullResponse,
-                hasTraces: traces.length > 0,
-                responseLength: fullResponse.length,
-                tracesCount: traces.length,
-                totalElapsed: Date.now() - startTime
-            });
-            
-            if (fullResponse || traces.length > 0 || finalPayload) {
-                const fallbackPayload = finalPayload || {
-                    response: fixEncodingArtifacts(fullResponse),
-                    traces: traces
-                };
-                resolve(fallbackPayload);
-            } else {
-                reject(new Error('Stream ended without response'));
-            }
+            resolve({ response: fixEncodingArtifacts(fullResponse), traces: traces });
         } finally {
-            clearInterval(stallCheckInterval);
-            clearTimeout(timeoutId);
-            if (reader) {
-                try {
-                    reader.cancel();
-                    console.log('🛑 [AI Agent] Reader cancelled in finally block');
-                } catch (e) {
-                    console.log('⚠️ [AI Agent] Error cancelling reader in finally:', e);
-                }
-            }
+            reader.cancel();
         }
     } catch (error) {
-        if (timeoutId) {
-            clearTimeout(timeoutId);
-        }
-        console.error('❌ [AI Agent] Streaming error occurred', {
-            error: error.message,
-            stack: error.stack,
-            elapsed: Date.now() - startTime,
-            phase: 'initialization'
-        });
         handleNonStreamingFallback(userMessage, attachments, resolve, reject);
     }
 }
@@ -2115,30 +3334,44 @@ async function handleStreamingWithFetch(userMessage, attachments, resolve, rejec
 // Fallback to non-streaming
 async function handleNonStreamingFallback(userMessage, attachments, resolve, reject) {
     try {
-        const payload = await makeAPICall('/api/ai-agent', null, {
+        const response = await fetch('/api/ai-agent', {
             method: 'POST',
-            headers: withUserOpenRouterKey({}),
+            headers: withUserOpenRouterKey({
+                'Content-Type': 'application/json'
+            }),
             body: JSON.stringify({
                 message: userMessage,
                 stream: false,
                 model: agentConfig.model,
                 conversationHistory: agentConfig.conversationHistory,
-                contextSnapshot: agentSessionContext,
                 imageAttachments: attachments
             })
         });
 
-        const sanitizedResponse = payload && typeof payload.response === 'string'
-            ? fixEncodingArtifacts(payload.response)
-            : '';
-        if (payload && payload.contextSnapshot) {
-            agentSessionContext = payload.contextSnapshot;
-            agentSessionSnapshot = summarizeContextSnapshot(payload.contextSnapshot);
+        if (!response.ok) {
+            let errorMessage = `HTTP error! status: ${response.status}`;
+            try {
+                const payload = await response.json();
+                errorMessage = payload.error || payload.message || errorMessage;
+            } catch (parseError) {
+                // Ignore parsing error
+            }
+
+            if (response.status === 402) {
+                errorMessage = "🔑 OpenRouter API key required. Please add your key in Settings to use AI features.";
+            }
+
+            throw new Error(errorMessage);
         }
-        updateStreamingResponse(sanitizedResponse, payload?.traces || [], []);
+
+        const payload = await response.json();
+        const sanitized = payload && typeof payload.response === 'string'
+            ? fixEncodingArtifacts(payload.response)
+            : (payload && payload.response) || '';
+
         resolve({
             ...payload,
-            response: sanitizedResponse
+            response: sanitized
         });
     } catch (error) {
         reject(error);
@@ -2146,49 +3379,31 @@ async function handleNonStreamingFallback(userMessage, attachments, resolve, rej
 }
 
 // Update streaming response in real-time
-function updateStreamingResponse(content, traces, statuses = []) {
-    const sanitizedContent = fixEncodingArtifacts(content || '');
-    const hasStatuses = Array.isArray(statuses) && statuses.length > 0;
-    const contentLength = sanitizedContent ? sanitizedContent.length : 0;
-    const traceCount = traces ? traces.length : 0;
-
-    console.log('🎨 [AI Agent] updateStreamingResponse called', {
-        hasContent: !!sanitizedContent,
-        contentLength,
-        hasTraces: !!traces,
-        tracesCount: traceCount,
-        hasStatuses,
-        statusesCount: Array.isArray(statuses) ? statuses.length : 0,
-        timestamp: new Date().toISOString()
-    });
-    
+function updateStreamingResponse(content, traces) {
     const chatMessages = document.getElementById('chat-messages');
+    const sanitizedContent = fixEncodingArtifacts(content || '');
     
     // Only remove initial loading indicator if we have traces to show
     const loadingIndicator = chatMessages.querySelector('.message.ai.loading-initial');
-    if (loadingIndicator && ((traces && traces.length > 0) || hasStatuses || (sanitizedContent && sanitizedContent.trim()))) {
+    if (loadingIndicator && traces && traces.length > 0) {
         loadingIndicator.remove();
-        console.log('🗑️ [AI Agent] Removed initial loading indicator');
     }
     
     let aiMessage = chatMessages.querySelector('.message.ai.streaming');
     
     if (!aiMessage) {
-        // Create the AI message container if it doesn't exist, but only if we have traces, content, or statuses
-        if ((traces && traces.length > 0) || (sanitizedContent && sanitizedContent.trim()) || hasStatuses) {
+        // Create the AI message container if it doesn't exist, but only if we have traces or content
+        if ((traces && traces.length > 0) || content) {
             // Remove loading indicator now since we're creating the actual message
             if (loadingIndicator) {
                 loadingIndicator.remove();
-                console.log('🗑️ [AI Agent] Removed loading indicator for message creation');
             }
             
             aiMessage = document.createElement('div');
             aiMessage.className = 'message ai streaming';
             chatMessages.appendChild(aiMessage);
-            console.log('✨ [AI Agent] Created new streaming message');
         } else {
             // Don't create message yet, keep showing loading indicator
-            console.log('⏳ [AI Agent] Keeping loading indicator - no content or traces yet');
             return;
         }
     }
@@ -2196,22 +3411,8 @@ function updateStreamingResponse(content, traces, statuses = []) {
     // Clear and rebuild the message
     aiMessage.innerHTML = '';
     
-    // Add visual debugging indicator
-    const debugIndicator = document.createElement('div');
-  	debugIndicator.className = 'debug-indicator';
-    debugIndicator.innerHTML = `
-        <div class="debug-status">
-            <span class="debug-emoji">🔍</span>
-            <span class="debug-text">Streaming: ${contentLength} chars, ${traceCount} traces, ${hasStatuses ? statuses.length : 0} statuses</span>
-            <span class="debug-time">${new Date().toLocaleTimeString()}</span>
-        </div>
-    `;
-    aiMessage.appendChild(debugIndicator);
-    console.log('🐛 [AI Agent] Added debug indicator');
-    
     // Add traces if available
     if (traces && traces.length > 0) {
-        console.log('📍 [AI Agent] Adding traces to message', { tracesCount: traces.length });
         const tracesContainer = document.createElement('div');
         tracesContainer.className = 'traces-container';
         
@@ -2241,27 +3442,6 @@ function updateStreamingResponse(content, traces, statuses = []) {
         tracesContainer.appendChild(tracesHeader);
         tracesContainer.appendChild(tracesList);
         aiMessage.appendChild(tracesContainer);
-        console.log('✅ [AI Agent] Traces added successfully');
-    }
-    
-    if (hasStatuses) {
-        console.log('ℹ️ [AI Agent] Rendering status log', { statusesCount: statuses.length });
-        const statusContainer = document.createElement('div');
-        statusContainer.className = 'status-log';
-        statusContainer.innerHTML = statuses.map(status => {
-            const stage = escapeHtml(status.stage || 'Status');
-            const message = escapeHtml(status.message || '');
-            const timestamp = status.timestamp ? new Date(status.timestamp).toLocaleTimeString() : '';
-            const timeLabel = timestamp ? `<span class="status-log-time">${escapeHtml(timestamp)}</span>` : '';
-            return `
-                <div class="status-log-item">
-                    <span class="status-log-stage">${stage}</span>
-                    <span class="status-log-message">${message}</span>
-                    ${timeLabel}
-                </div>
-            `;
-        }).join('');
-        aiMessage.appendChild(statusContainer);
     }
     
     // Add streaming content
@@ -2269,7 +3449,6 @@ function updateStreamingResponse(content, traces, statuses = []) {
     responseContent.className = 'response-content';
     
     if (sanitizedContent) {
-        console.log('📄 [AI Agent] Adding content to message', { contentLength: sanitizedContent.length });
         if (typeof marked !== 'undefined' && marked.parse) {
             try {
                 responseContent.innerHTML = marked.parse(sanitizedContent);
@@ -2282,14 +3461,12 @@ function updateStreamingResponse(content, traces, statuses = []) {
         }
     } else {
         responseContent.innerHTML = '<div class="typing-indicator">Thinking...</div>';
-        console.log('💭 [AI Agent] Added thinking indicator');
     }
     
     aiMessage.appendChild(responseContent);
     
     // Scroll to bottom
     chatMessages.scrollTop = chatMessages.scrollHeight;
-    console.log('📍 [AI Agent] Scrolled to bottom');
 }
 
 // Toggle traces visibility
@@ -4030,11 +5207,7 @@ function selectModel(inputId, dropdownId, model) {
 // Add model to fallback models list
 function addFallbackModel(model) {
     if (!selectedFallbackModels.find(m => m.id === model.id)) {
-        selectedFallbackModels.push(applyAgentModelInfo({
-            id: model.id,
-            name: model.name || model.id,
-            vendor: model.vendor || ''
-        }));
+        selectedFallbackModels.push(model);
         updateFallbackModelsDisplay();
     }
     
@@ -4061,7 +5234,7 @@ function updateFallbackModelsDisplay() {
         const tag = document.createElement('div');
         tag.className = 'selected-model-tag';
         tag.innerHTML = `
-            <span>${model.optionLabel || model.name || model.id}</span>
+            <span>${model.name}</span>
             <button class="remove-btn" onclick="removeFallbackModel('${model.id}')">&times;</button>
         `;
         container.appendChild(tag);
@@ -4071,11 +5244,7 @@ function updateFallbackModelsDisplay() {
 // Add model to available models list
 function addAvailableModel(model) {
     if (!selectedAvailableModels.find(m => m.id === model.id)) {
-        selectedAvailableModels.push(applyAgentModelInfo({
-            id: model.id,
-            name: model.name || model.id,
-            vendor: model.vendor || ''
-        }));
+        selectedAvailableModels.push(model);
         updateAvailableModelsDisplay();
         populateAgentDropdown();
     }
@@ -4104,7 +5273,7 @@ function updateAvailableModelsDisplay() {
         const tag = document.createElement('div');
         tag.className = 'selected-model-tag';
         tag.innerHTML = `
-            <span>${model.optionLabel || model.name || model.id}</span>
+            <span>${model.name}</span>
             <button class="remove-btn" onclick="removeAvailableModel('${model.id}')">&times;</button>
         `;
         container.appendChild(tag);
@@ -4129,22 +5298,15 @@ function populateAgentDropdown() {
     selectedAvailableModels.forEach(model => {
         const option = document.createElement('option');
         option.value = model.id;
-        const info = getAgentModelInfo(model.id);
-        let label = model.optionLabel || info?.optionLabel || model.name || model.id;
-        if (info?.costTier === 'expensive' || model.costTier === 'expensive') {
-            label += ' 💸';
-        }
-        option.textContent = label;
+        option.textContent = model.name || model.id;
         agentSelect.appendChild(option);
     });
 
     // Add speed mode option
     const speedModeOption = document.createElement('option');
-    const speedModel = localStorage.getItem('dashboard-speed-model') || agentConfig.speedModeModel || 'google/gemini-2.5-flash-lite-preview-09-2025';
-    const speedInfo = getAgentModelInfo(speedModel);
-    const speedLabel = speedInfo?.displayName || getModelDisplayName(speedModel);
+    const speedModel = localStorage.getItem('dashboard-speed-model') || agentConfig.speedModeModel || 'openai/gpt-4o-mini';
     speedModeOption.value = `speed:${speedModel}`;
-    speedModeOption.textContent = `⚡ Speed Mode (${speedLabel})`;
+    speedModeOption.textContent = `⚡ Speed Mode (${getModelDisplayName(speedModel)})`;
     agentSelect.appendChild(speedModeOption);
     
     // Restore previous selection or set default
@@ -4153,10 +5315,9 @@ function populateAgentDropdown() {
     } else if (selectedAvailableModels.length > 0) {
         agentSelect.value = selectedAvailableModels[0].id;
     }
-
+    
     // Update agent config
     updateAgentModel();
-    updateAgentModelWarning();
 }
 
 // Get model display name helper
@@ -4185,27 +5346,6 @@ function updateAgentModel() {
         agentConfig.model = selectedValue;
         console.log('Agent model updated to:', selectedValue);
     }
-
-    updateAgentModelWarning();
-}
-
-function updateAgentModelWarning() {
-    const warningEl = document.getElementById('agent-model-guidance');
-    if (!warningEl) return;
-
-    const info = getAgentModelInfo(agentConfig.model);
-    warningEl.classList.remove('expensive');
-
-    if (info) {
-        warningEl.style.display = 'none';
-        warningEl.textContent = '';
-        return;
-    }
-
-    warningEl.style.display = 'block';
-    warningEl.classList.add('expensive');
-    const modelId = agentConfig.model || 'custom model';
-    warningEl.textContent = `${modelId}: ensure the model supports very large contexts (≥200k tokens) and expect high costs.`;
 }
 
 // Setup dropdown functionality
@@ -4274,6 +5414,79 @@ document.addEventListener('DOMContentLoaded', function() {
     setupModelDropdown('setting-analysis-model', 'analysis-model-dropdown');
     setupModelDropdown('setting-fallback-models', 'fallback-models-dropdown');
     setupModelDropdown('setting-available-models', 'available-models-dropdown');
+
+    applyExperimentalMode(getStoredExperimentalMode());
+
+    const hypeRefreshButton = document.getElementById('hype-refresh');
+    if (hypeRefreshButton) {
+        hypeRefreshButton.addEventListener('click', async () => {
+            hypeRefreshButton.disabled = true;
+            try {
+                await loadHypeData(true);
+            } catch (error) {
+                console.error('Failed to refresh hype feed:', error);
+            } finally {
+                hypeRefreshButton.disabled = false;
+            }
+        });
+    }
+
+    const blogRefreshButton = document.getElementById('blog-refresh');
+    if (blogRefreshButton) {
+        blogRefreshButton.addEventListener('click', async () => {
+            blogRefreshButton.disabled = true;
+            try {
+                await loadBlogPosts(true);
+            } catch (error) {
+                console.error('Failed to refresh blog posts:', error);
+            } finally {
+                blogRefreshButton.disabled = false;
+            }
+        });
+    }
+
+    const latestRefreshButton = document.getElementById('latest-refresh');
+    if (latestRefreshButton) {
+        latestRefreshButton.addEventListener('click', async () => {
+            latestRefreshButton.disabled = true;
+            try {
+                await loadLatestFeed(true);
+            } catch (error) {
+                console.error('Failed to refresh latest feed:', error);
+            } finally {
+                latestRefreshButton.disabled = false;
+            }
+        });
+    }
+
+    ensureLatestControlListeners();
+
+    const monitorRefreshButton = document.getElementById('monitor-refresh');
+    if (monitorRefreshButton) {
+        monitorRefreshButton.addEventListener('click', async () => {
+            monitorRefreshButton.disabled = true;
+            try {
+                await loadMonitorFeed(true);
+            } catch (error) {
+                console.error('Failed to refresh monitor feed:', error);
+            } finally {
+                monitorRefreshButton.disabled = false;
+            }
+        });
+    }
+
+    const blogSortSelect = document.getElementById('blog-sort');
+    if (blogSortSelect) {
+        if (blogSortSelect.value) {
+            blogSortMode = blogSortSelect.value;
+        }
+        blogSortSelect.addEventListener('change', () => {
+            blogSortMode = blogSortSelect.value;
+            if (cachedData.blog) {
+                displayBlogPosts(cachedData.blog);
+            }
+        });
+    }
     
     // Initialize agent dropdown on page load
     setTimeout(() => {
@@ -4344,11 +5557,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 const analysisModel = document.getElementById('setting-analysis-model').value;
                 const fallbackModelsString = selectedFallbackModels.map(m => m.id).join(', ');
                 const availableModelsString = selectedAvailableModels.map(m => m.id).join(', ');
+                const experimentalToggle = document.getElementById('setting-experimental-mode');
                 
                 if (speedModel) localStorage.setItem('dashboard-speed-model', speedModel);
                 if (analysisModel) localStorage.setItem('dashboard-analysis-model', analysisModel);
                 if (fallbackModelsString) localStorage.setItem('dashboard-fallback-models', fallbackModelsString);
                 if (availableModelsString) localStorage.setItem('dashboard-available-models', availableModelsString);
+
+                if (experimentalToggle) {
+                    const enabled = experimentalToggle.checked;
+                    persistExperimentalMode(enabled);
+                    applyExperimentalMode(enabled);
+                }
 
                 // Update agent dropdown with new available models
                 populateAgentDropdown();
@@ -4397,13 +5617,13 @@ function loadSavedSettings() {
     const buildModelEntry = (id) => {
         const catalogModel = catalogById.get(id);
         if (catalogModel) {
-            return applyAgentModelInfo({
+            return {
                 id: catalogModel.id,
                 name: catalogModel.name || catalogModel.id,
                 vendor: catalogModel.vendor || ''
-            });
+            };
         }
-        return applyAgentModelInfo({ id, name: id });
+        return { id, name: id };
     };
 
     const availableIds = savedAvailableModels
@@ -4425,9 +5645,17 @@ function loadSavedSettings() {
         updateFallbackModelsDisplay();
     }
 
+    const experimentalToggle = document.getElementById('setting-experimental-mode');
+    if (experimentalToggle) {
+        const storedMode = getStoredExperimentalMode();
+        experimentalToggle.checked = storedMode;
+        if (experimentalModeEnabled !== storedMode) {
+            applyExperimentalMode(storedMode);
+        }
+    }
+
     refreshOpenRouterKeyField();
     attachOpenRouterKeyHandlers();
-    updateAgentModelWarning();
 }
 
 // Make functions available globally
@@ -4435,3 +5663,4 @@ window.removeFallbackModel = removeFallbackModel;
 window.removeAvailableModel = removeAvailableModel;
 window.clearChatHistory = clearChatHistory;
 window.updateAgentModel = updateAgentModel;
+window.loadMonitorFeed = loadMonitorFeed;

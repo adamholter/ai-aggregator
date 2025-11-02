@@ -758,6 +758,33 @@ body {
     border: 1px solid var(--border-color);
 }
 
+.agent-exp-status {
+    margin-top: 16px;
+    font-size: 0.9rem;
+    color: var(--info-text);
+    min-height: 1.2em;
+}
+
+.agent-exp-status.error {
+    color: var(--error-text);
+}
+
+.agent-exp-tools {
+    margin-bottom: 12px;
+    font-size: 0.85rem;
+    color: var(--info-text);
+    border-left: 2px solid var(--border-color);
+    padding-left: 10px;
+}
+
+.agent-exp-tool-row {
+    margin-bottom: 4px;
+}
+
+.agent-exp-tool-row.error {
+    color: var(--error-text);
+}
+
 .chat-input {
     position: relative;
     display: flex;
