@@ -2095,11 +2095,9 @@ async function loadLatestFeed(forceRefresh = false) {
         }
 
         const params = new URLSearchParams({ timeframe: latestTimeframe });
+        params.set('cache_bust', (forceRefresh || latestTimeframe === 'day') ? 'true' : 'false');
         if (latestIncludeHype) {
             params.set('include_hype', 'true');
-        }
-        if (forceRefresh) {
-            params.set('cache_bust', 'true');
         }
         const data = await makeAPICall(`/latest?${params.toString()}`, null);
         const items = Array.isArray(data?.items) ? data.items : [];
@@ -2271,10 +2269,9 @@ async function loadMonitorFeed(forceRefresh = false) {
             resultsInfo.textContent = '';
         }
 
-        const params = new URLSearchParams();
-        if (forceRefresh) {
-            params.set('cache_bust', 'true');
-        }
+        const params = new URLSearchParams({
+            cache_bust: forceRefresh ? 'true' : 'false'
+        });
         const data = await makeAPICall(`/api/monitor${params.toString() ? `?${params.toString()}` : ''}`, null);
         const items = Array.isArray(data?.items) ? data.items : [];
         cachedData.monitor = items;
