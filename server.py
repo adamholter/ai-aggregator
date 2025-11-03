@@ -1141,6 +1141,7 @@ CUSTOM_CATEGORY_LOADERS = {}
 
 AGENT_EXP_DEFAULT_MODEL = 'x-ai/grok-4-fast'
 AGENT_EXP_DEFAULT_LIMIT = 50
+AGENT_EXP_MAX_LIMIT = 200
 
 AGENT_EXP_CORE_TABS = [
     {
@@ -1249,7 +1250,7 @@ def get_agent_exp_tools_schema():
                         'limit': {
                             'type': ['integer', 'null'],
                             'minimum': 1,
-                            'description': 'Maximum rows per category. Defaults to 50 when omitted; set to null to disable the cap.'
+                            'description': f'Maximum rows per category (defaults to {AGENT_EXP_DEFAULT_LIMIT}). Values above {AGENT_EXP_MAX_LIMIT} are coerced to {AGENT_EXP_MAX_LIMIT}.'
                         },
                         'timeframe': {
                             'type': 'string',
@@ -1315,7 +1316,7 @@ def build_agent_exp_system_prompt(experimental_mode, default_limit=AGENT_EXP_DEF
         "Experimental tabs are disabled for this session; stay within the core leaderboards unless the user explicitly toggles experimental mode."
     )
 
-    return f"""You are Agent EXP inside the AI Model Research Dashboard. You operate strictly on fetched datasets and live research.
+    return f"""You are the dashboard's AI Agent. Operate strictly on fetched datasets and live research—no internal memory or assumptions.
 
 DATA REPRESENTATION
 - Every `fetch_data` call returns an authoritative package: category metadata, structured JSON summaries, markdown highlights, and a compressed table snapshot optimised for tokens. Treat these as ground truth.
@@ -1323,7 +1324,7 @@ DATA REPRESENTATION
 
 TOOLS
 1. `fetch_data(categories, limit?, timeframe?, include_hype?)`
-   • Default limit is {default_limit} rows per tab when omitted; set `limit=null` to stream everything.
+   • Default limit is {default_limit} rows per tab—stick to this unless the user explicitly needs more. Never exceed {AGENT_EXP_MAX_LIMIT} rows; even `limit=null` is capped there.
    • `timeframe`/`recency` accepts `day|week|month|year`. Use `week` for Latest news recaps, `day` for hot launches, etc.
    • `include_hype=true` blends Hype signals into the Latest tab when you need community sentiment.
 2. `ask_perplexity(query)`
@@ -1336,6 +1337,7 @@ TAB PLAYBOOK
 
 OPERATING RULES
 - Always load relevant tabs with `fetch_data` before answering. Layer additional calls if you need more categories or a wider timeframe.
+- Default to the most recent {default_limit} items. Only increase the limit when the user explicitly demands it, and never request more than {AGENT_EXP_MAX_LIMIT}.
 - Treat dashboard datasets as the primary source and cite them as **Database**. Cite Perplexity results as **Web Search**.
 - Your own training knowledge is considered outdated—do not rely on it without verification.
 - Keep responses concise, structured, and grounded in the provided material. Surface the most relevant metrics, pricing, and comparisons for the user’s task."""
@@ -6271,14 +6273,16 @@ def _agent_exp_parse_limit(tool_args):
         return AGENT_EXP_DEFAULT_LIMIT, True
     raw_limit = tool_args.get('limit')
     if raw_limit is None:
-        return None, False
+        return AGENT_EXP_MAX_LIMIT, False
     try:
         limit_value = int(raw_limit)
-        if limit_value <= 0:
-            return None, False
-        return limit_value, False
     except (TypeError, ValueError):
-        raise ValueError(f"Invalid limit value '{raw_limit}'. Provide a positive integer or null.")
+        raise ValueError(f"Invalid limit value '{raw_limit}'. Provide a positive integer, null, or omit the field.")
+    if limit_value <= 0:
+        return AGENT_EXP_DEFAULT_LIMIT, True
+    if limit_value > AGENT_EXP_MAX_LIMIT:
+        return AGENT_EXP_MAX_LIMIT, False
+    return limit_value, False
 
 
 def _agent_exp_parse_recency(tool_args, label):
@@ -6360,7 +6364,7 @@ def _agent_exp_execute_fetch(tool_args, experimental_mode):
         'status': 'ok',
         'args': {
             'categories': requested,
-            'limit': limit_value if limit_value is not None else 'all',
+            'limit': limit_value,
             'used_default_limit': used_default_limit,
             'timeframe': timeframe_value,
             'recency': recency_value,
@@ -6373,7 +6377,7 @@ def _agent_exp_execute_fetch(tool_args, experimental_mode):
     if fetch_result.get('errors'):
         log_entry['warnings'] = fetch_result['errors']
 
-    print(f"🛠️ [Agent EXP] fetch_data categories={requested} limit={log_entry['args']['limit']} timeframe={timeframe_value or recency_value} rejected={rejected}")
+    print(f"🛠️ [Agent] fetch_data categories={requested} limit={limit_value} timeframe={timeframe_value or recency_value} rejected={rejected}")
 
     return json.dumps(tool_payload, ensure_ascii=False), log_entry
 
@@ -6404,13 +6408,13 @@ def _agent_exp_execute_perplexity(tool_args, auth_token):
         f'{OPENROUTER_BASE_URL}/chat/completions',
         headers=headers,
         json=payload,
-        timeout=60
+        timeout=300
     )
     response.raise_for_status()
     data = response.json()
     content = data.get('choices', [{}])[0].get('message', {}).get('content') or ''
 
-    print(f"🔍 [Agent EXP] ask_perplexity query='{query}'")
+    print(f"🔍 [Agent] ask_perplexity query='{query}'")
 
     tool_payload = {
         'query': query,
@@ -6458,17 +6462,17 @@ def agent_exp_session(auth_token, user_message, conversation_history, model_id, 
                 f'{OPENROUTER_BASE_URL}/chat/completions',
                 headers=headers,
                 json=payload,
-                timeout=90
+                timeout=300
             )
             response.raise_for_status()
         except requests.exceptions.HTTPError as exc:
             message = f'OpenRouter request failed: {exc}'
-            print(f"❌ [Agent EXP] {message}")
+            print(f"❌ [Agent] {message}")
             yield {'type': 'error', 'error': message}
             return
         except requests.exceptions.RequestException as exc:
             message = f'OpenRouter request error: {exc}'
-            print(f"❌ [Agent EXP] {message}")
+            print(f"❌ [Agent] {message}")
             yield {'type': 'error', 'error': message}
             return
 
@@ -6504,7 +6508,7 @@ def agent_exp_session(auth_token, user_message, conversation_history, model_id, 
                     log_entry.setdefault('type', 'tool')
                 except Exception as exc:
                     error_message = str(exc)
-                    print(f"❌ [Agent EXP] Tool '{tool_name}' failed: {error_message}")
+                    print(f"❌ [Agent] Tool '{tool_name}' failed: {error_message}")
                     tool_content = json.dumps({'error': error_message}, ensure_ascii=False)
                     log_entry = {
                         'type': 'tool',
@@ -6564,7 +6568,7 @@ def agent_exp_endpoint():
 
     stream = bool(data.get('stream', True))
 
-    print(f"🚀 [Agent EXP] message='{user_message[:80]}' model={model_id} experimental={experimental_mode} stream={stream}")
+    print(f"🚀 [Agent] message='{user_message[:80]}' model={model_id} experimental={experimental_mode} stream={stream}")
 
     if not stream:
         final_response = ''
@@ -6585,9 +6589,9 @@ def agent_exp_endpoint():
             for event in agent_exp_session(auth_token, user_message, conversation, model_id, experimental_mode):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
         except Exception as exc:
-            message = f'Agent EXP failed: {exc}'
-            print(f"❌ [Agent EXP] {message}")
-            error_event = {'type': 'error', 'error': 'Agent EXP encountered an unexpected error.'}
+            message = f'Agent session failed: {exc}'
+            print(f"❌ [Agent] {message}")
+            error_event = {'type': 'error', 'error': 'The Agent encountered an unexpected error.'}
             yield f"data: {json.dumps(error_event, ensure_ascii=False)}\n\n"
             yield "data: {\"type\": \"done\"}\n\n"
 

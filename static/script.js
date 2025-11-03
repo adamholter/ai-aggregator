@@ -857,7 +857,7 @@ function ensureExperimentalNavButtons() {
     ensureButton('latest', 'Latest');
     ensureButton('monitor', 'Monitor');
     ensureButton('blog', 'Blog');
-    ensureButton('agent-exp', 'Agent EXP');
+    ensureButton('agent-exp', 'Agent');
 }
 
 function ensureExperimentalSections() {
@@ -2731,7 +2731,7 @@ function clearChatHistory() {
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
-// Agent EXP (experimental Grok-powered chatbot)
+// Agent chatbot (Grok-powered, fetch_data + Perplexity)
 function initializeAgentExp() {
     const modelSelect = document.getElementById('agent-exp-model');
     const form = document.getElementById('agent-exp-form');
@@ -2850,7 +2850,7 @@ function renderAgentExpWelcome() {
     welcome.className = 'message ai';
     welcome.innerHTML = `
         <div class="response-content">
-            <p>👋 <strong>Welcome to Agent EXP.</strong> This lightweight Grok-powered agent can pull live dashboard datasets and run Perplexity searches.</p>
+            <p>👋 <strong>Welcome to the Agent.</strong> This lightweight Grok-powered assistant can pull live dashboard datasets and run Perplexity searches.</p>
             <p>Try asking for <em>fal.ai image models</em>, <em>fresh leaderboard changes</em>, or <em>pricing comparisons</em>.</p>
         </div>
     `;
@@ -2969,8 +2969,8 @@ async function sendAgentExpMessage(event) {
     }
 
     if (!getUserOpenRouterKey()) {
-        showToast('🔑 Add your OpenRouter key in Settings to chat with Agent EXP.', 'warning');
-        setAgentExpStatus('Add your OpenRouter key in Settings to talk to Agent EXP.', true);
+        showToast('🔑 Add your OpenRouter key in Settings to chat with the Agent.', 'warning');
+        setAgentExpStatus('Add your OpenRouter key in Settings to talk to the Agent.', true);
         return;
     }
 
@@ -2982,7 +2982,7 @@ async function sendAgentExpMessage(event) {
     try {
         await streamAgentExpResponse(message);
     } catch (error) {
-        const errorMessage = error && error.message ? error.message : 'Agent EXP request failed.';
+        const errorMessage = error && error.message ? error.message : 'Agent request failed.';
         setAgentExpStatus(errorMessage, true);
         showToast(errorMessage, 'error');
     }
@@ -3028,7 +3028,7 @@ async function streamAgentExpResponse(message) {
                 // ignore
             }
             if (response.status === 402) {
-                errorMessage = "🔑 OpenRouter API key required. Please add your key in Settings to use Agent EXP.";
+                errorMessage = "🔑 OpenRouter API key required. Please add your key in Settings to use the Agent.";
             }
             throw new Error(errorMessage);
         }
@@ -3065,7 +3065,7 @@ async function streamAgentExpResponse(message) {
             processAgentExpLine(remaining, assistantMessage, responseContent);
         }
     } catch (error) {
-        const errorMessage = error && error.message ? error.message : 'Agent EXP streaming failed.';
+        const errorMessage = error && error.message ? error.message : 'Agent streaming failed.';
         setAgentExpStatus(errorMessage, true);
         if (assistantMessage && responseContent) {
             assistantMessage.classList.remove('streaming');
@@ -3129,12 +3129,12 @@ function handleAgentExpEvent(event, assistantMessage, responseContent) {
             break;
         }
         case 'error':
-            setAgentExpStatus(event.error || 'Agent EXP encountered an error.', true);
+            setAgentExpStatus(event.error || 'The Agent encountered an error.', true);
             if (assistantMessage) {
                 assistantMessage.classList.remove('streaming');
             }
             if (responseContent) {
-                responseContent.innerHTML = `<div class="error-content">❌ ${event.error || 'Agent EXP encountered an error.'}</div>`;
+                responseContent.innerHTML = `<div class="error-content">❌ ${event.error || 'The Agent encountered an error.'}</div>`;
             }
             agentExpState.activeMessage = null;
             agentExpState.streaming = false;
