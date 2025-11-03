@@ -1142,6 +1142,64 @@ CUSTOM_CATEGORY_LOADERS = {}
 AGENT_EXP_DEFAULT_MODEL = 'x-ai/grok-4-fast'
 AGENT_EXP_DEFAULT_LIMIT = 50
 AGENT_EXP_MAX_LIMIT = 200
+FAL_CATEGORY_OPTIONS = {
+    'all': 'All Categories',
+    'text-to-image': 'Text-to-Image',
+    'image-to-image': 'Image-to-Image',
+    'text-to-video': 'Text-to-Video',
+    'image-to-video': 'Image-to-Video',
+    'video-to-video': 'Video-to-Video',
+    'text-to-speech': 'Text-to-Speech',
+    'image-to-3d': 'Image-to-3D',
+    'vision': 'Vision',
+    'llm': 'LLM'
+}
+FAL_CATEGORY_ALIASES = {}
+for key, label in FAL_CATEGORY_OPTIONS.items():
+    variants = {
+        key,
+        label.lower(),
+        label.replace('-', ' ').lower(),
+        label.replace('-', '').lower(),
+        label.replace('-', '_').lower(),
+        label.replace(' ', '').lower(),
+        label.replace(' ', '-').lower(),
+        label.replace(' ', '_').lower(),
+        key.replace('-', ' '),
+        key.replace('-', ''),
+        key.replace('-', '_')
+    }
+    for variant in variants:
+        FAL_CATEGORY_ALIASES[variant] = key
+FAL_CATEGORY_ALIASES['all categories'] = 'all'
+FAL_CATEGORY_ALIASES['all'] = 'all'
+
+
+def normalize_fal_category_value(value):
+    if value is None:
+        return 'all'
+    text = str(value).strip().lower()
+    if not text:
+        return 'all'
+
+    candidates = {text}
+    candidates.add(text.replace(' to ', '-to-'))
+    candidates.add(text.replace('_', '-'))
+    candidates.add(text.replace('_', ' '))
+    candidates.add(text.replace('_', ''))
+    candidates.add(text.replace(' ', '-'))
+    candidates.add(text.replace(' ', '_'))
+    candidates.add(text.replace(' ', ''))
+
+    for candidate in list(candidates):
+        if candidate in FAL_CATEGORY_ALIASES:
+            return FAL_CATEGORY_ALIASES[candidate]
+        collapsed = candidate.replace('-', '').replace(' ', '').replace('_', '')
+        for alias_key, normalized in FAL_CATEGORY_ALIASES.items():
+            alias_collapsed = alias_key.replace('-', '').replace(' ', '').replace('_', '')
+            if collapsed == alias_collapsed:
+                return normalized
+    return None
 
 AGENT_EXP_CORE_TABS = [
     {
@@ -1265,6 +1323,11 @@ def get_agent_exp_tools_schema():
                         'include_hype': {
                             'type': 'boolean',
                             'description': 'Blend Hype signals into the Latest feed when true.'
+                        },
+                        'fal_category': {
+                            'type': 'string',
+                            'enum': [label for label in FAL_CATEGORY_OPTIONS.values()],
+                            'description': 'Optional fal.ai category filter (defaults to All Categories).'
                         }
                     },
                     'required': ['categories']
@@ -1310,6 +1373,7 @@ def build_agent_exp_system_prompt(experimental_mode, default_limit=AGENT_EXP_DEF
         tab_entries.extend(AGENT_EXP_EXPERIMENTAL_TABS)
 
     tab_lines = _format_tab_lines(tab_entries)
+    fal_category_list = ', '.join(FAL_CATEGORY_OPTIONS[label_key] for label_key in FAL_CATEGORY_OPTIONS if label_key != 'all')
     experimental_note = (
         "Experimental tabs (Hype, Monitor, Blog, Latest) are enabled. Use them deliberately when the request needs community buzz, social updates, or narrative context."
         if experimental_mode else
@@ -1327,6 +1391,7 @@ TOOLS
    • Default limit is {default_limit} rows per tab—stick to this unless the user explicitly needs more. Never exceed {AGENT_EXP_MAX_LIMIT} rows; even `limit=null` is capped there.
    • `timeframe`/`recency` accepts `day|week|month|year`. Use `week` for Latest news recaps, `day` for hot launches, etc.
    • `include_hype=true` blends Hype signals into the Latest tab when you need community sentiment.
+   • For fal.ai datasets you may add `fal_category` with one of: {fal_category_list}. Default is All Categories—only narrow when it helps precision.
 2. `ask_perplexity(query)`
    • Runs perplexity/sonar-pro-search with a dashboard-specific system prompt. Its built-in knowledge is stale—cite these results as **Web Search**.
 
@@ -1338,6 +1403,7 @@ TAB PLAYBOOK
 OPERATING RULES
 - Always load relevant tabs with `fetch_data` before answering. Layer additional calls if you need more categories or a wider timeframe.
 - Default to the most recent {default_limit} items. Only increase the limit when the user explicitly demands it, and never request more than {AGENT_EXP_MAX_LIMIT}.
+- For fal.ai, prefer `fal_category` over bumping the limit when you need specificity (e.g., filter to Text-to-Image instead of grabbing hundreds of models).
 - Treat dashboard datasets as the primary source and cite them as **Database**. Cite Perplexity results as **Web Search**.
 - Your own training knowledge is considered outdated—do not rely on it without verification.
 - Keep responses concise, structured, and grounded in the provided material. Surface the most relevant metrics, pricing, and comparisons for the user’s task."""
@@ -2508,15 +2574,39 @@ def fetch_data_for_categories(categories, limit_per_category=None, recency=None,
             )
 
             items = filter_items_by_recency(items, effective_recency)
+            fal_category_label = None
+            fal_category_filter = None
+            if category_id == 'fal':
+                fal_category_filter = None
+                if isinstance(options, dict):
+                    fal_category_filter = options.get('_fal_category_normalized')
+                if fal_category_filter is None:
+                    fal_category_filter = 'all'
+                if fal_category_filter != 'all':
+                    fal_category_label = FAL_CATEGORY_OPTIONS.get(fal_category_filter, fal_category_filter)
+                    filtered_items = []
+                    for item in items or []:
+                        if normalize_fal_category_value(item.get('category')) == fal_category_filter:
+                            filtered_items.append(item)
+                    items = filtered_items
+
             fallback_used = False
 
             if not items and not loader:
                 fallback_items = load_category_fallback(category_id)
                 if fallback_items:
                     items = filter_items_by_recency(fallback_items, effective_recency)
+                    if category_id == 'fal' and fal_category_filter and fal_category_filter != 'all':
+                        filtered_items = []
+                        for item in items or []:
+                            if normalize_fal_category_value(item.get('category')) == fal_category_filter:
+                                filtered_items.append(item)
+                        items = filtered_items
                     fallback_used = True
 
             if not items:
+                if category_id == 'fal' and fal_category_label:
+                    errors.append({'category': category_id, 'warning': f'No fal.ai entries for category filter \"{fal_category_label}\".'})
                 continue
 
             datasets[category_id] = items
@@ -2530,6 +2620,8 @@ def fetch_data_for_categories(categories, limit_per_category=None, recency=None,
                 metadata_entry['limit'] = limit_per_category
             if timeframe:
                 metadata_entry['timeframe'] = timeframe
+            if category_id == 'fal' and fal_category_label:
+                metadata_entry['fal_category'] = fal_category_label
             if isinstance(loader_metadata, dict):
                 for key, value in loader_metadata.items():
                     if value is not None and key not in metadata_entry:
@@ -6322,13 +6414,26 @@ def _agent_exp_execute_fetch(tool_args, experimental_mode):
         timeframe_value = recency_value
     include_hype = bool(tool_args.get('include_hype'))
 
+    fal_category_raw = tool_args.get('fal_category')
+    if fal_category_raw is None and 'falCategory' in tool_args:
+        fal_category_raw = tool_args.get('falCategory')
+    normalized_fal_category = normalize_fal_category_value(fal_category_raw)
+    if fal_category_raw is not None and normalized_fal_category is None:
+        valid_list = ', '.join(FAL_CATEGORY_OPTIONS.values())
+        raise ValueError(f"Invalid fal_category '{fal_category_raw}'. Use one of: {valid_list}.")
+    if normalized_fal_category is None:
+        normalized_fal_category = 'all'
+
+    fetch_options = dict(tool_args or {})
+    fetch_options['_fal_category_normalized'] = normalized_fal_category
+
     fetch_result = fetch_data_for_categories(
         requested,
         limit_per_category=limit_value,
         recency=recency_value,
         timeframe=timeframe_value,
         include_hype=include_hype,
-        options=tool_args
+        options=fetch_options
     )
 
     context = rebuild_fetch_context(fetch_result)
@@ -6340,7 +6445,8 @@ def _agent_exp_execute_fetch(tool_args, experimental_mode):
         'markdown': fetch_result.get('markdown', ''),
         'compressed': compressed_snapshot,
         'datasets': fetch_result.get('datasets', {}),
-        'generated_at': fetch_result.get('generated_at')
+        'generated_at': fetch_result.get('generated_at'),
+        'fal_category': FAL_CATEGORY_OPTIONS.get(normalized_fal_category)
     }
     if rejected:
         tool_payload['rejected_categories'] = rejected
@@ -6368,7 +6474,8 @@ def _agent_exp_execute_fetch(tool_args, experimental_mode):
             'used_default_limit': used_default_limit,
             'timeframe': timeframe_value,
             'recency': recency_value,
-            'include_hype': include_hype
+            'include_hype': include_hype,
+            'fal_category': FAL_CATEGORY_OPTIONS.get(normalized_fal_category)
         },
         'datasets': datasets_summary
     }
