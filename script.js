@@ -42,7 +42,7 @@ let rawData = {
 
 // AI Agent configuration
 let agentConfig = {
-    model: 'z-ai/glm-4.5',
+    model: 'x-ai/grok-4-fast',
     availableModels: [], // Will be populated from settings
     conversationHistory: [] // For context memory
 };
@@ -56,6 +56,8 @@ let agentExpState = {
     streamBuffer: '',
     activeMessage: null
 };
+let testingCatalogTagFilter = '__all';
+let testingCatalogTagOptions = [];
 
 let openRouterIndex = null;
 const modelMatchCache = new Map();
@@ -1040,6 +1042,9 @@ function ensureExperimentalSections() {
             <div class="section-header">
                 <h2>Testing Catalog</h2>
                 <div class="controls">
+                    <select id="testing-catalog-tag-filter" aria-label="Filter Testing Catalog by tag">
+                        <option value="__all" selected>All Tags</option>
+                    </select>
                     <button class="refresh-btn" id="testing-catalog-refresh">Refresh Feed</button>
                 </div>
             </div>
@@ -1907,6 +1912,7 @@ async function loadTestingCatalogData(forceRefresh = false) {
         cachedData.testingCatalog = payload;
         rawData.testingCatalog = Array.isArray(payload?.items) ? payload.items : [];
         displayTestingCatalogItems(rawData.testingCatalog);
+        populateTestingCatalogTags(); // Populate tag filter dropdown
         loadingElement.style.display = 'none';
         if (resultsElement) {
             const count = rawData.testingCatalog.length;
@@ -1942,6 +1948,7 @@ function createTestingCatalogCard(item) {
     const card = document.createElement('div');
     card.className = 'model-card blog-card';
     card.dataset.source = 'testingcatalog';
+    card.dataset.tags = Array.isArray(item?.tags) ? item.tags.join(',').toLowerCase() : '';
 
     const title = item?.title ? String(item.title).trim() : 'Untitled Update';
     const url = item?.url || '#';
@@ -1952,9 +1959,6 @@ function createTestingCatalogCard(item) {
     const tagsMarkup = tags.length
         ? `<div class="blog-tags">${tags.map(tag => `<span class="tag">${tag}</span>`).join('')}</div>`
         : '';
-    const imageMarkup = item?.image_url
-        ? `<div class="blog-image"><img src="${item.image_url}" alt="" loading="lazy"></div>`
-        : '';
 
     card.innerHTML = `
         <div class="blog-meta">
@@ -1963,7 +1967,6 @@ function createTestingCatalogCard(item) {
         </div>
         <h3><a href="${url}" target="_blank" rel="noopener noreferrer">${title}</a></h3>
         ${summary ? `<p class="blog-summary">${summary}</p>` : ''}
-        ${imageMarkup}
         <div class="blog-footer">
             <span class="blog-source">TestingCatalog.com</span>
             ${tagsMarkup}
@@ -1971,6 +1974,88 @@ function createTestingCatalogCard(item) {
     `;
 
     return card;
+}
+
+// Populate tag filter dropdown with available tags
+function populateTestingCatalogTags() {
+    const tagFilter = document.getElementById('testing-catalog-tag-filter');
+    const items = rawData.testingCatalog || [];
+    
+    if (!tagFilter || !items.length) {
+        return;
+    }
+
+    // Extract all unique tags from items
+    const allTags = new Set();
+    items.forEach(item => {
+        if (Array.isArray(item?.tags)) {
+            item.tags.forEach(tag => {
+                if (tag && typeof tag === 'string') {
+                    allTags.add(tag.trim());
+                }
+            });
+        }
+    });
+
+    // Clear existing options except "All Tags"
+    const existingOptions = Array.from(tagFilter.querySelectorAll('option:not([value="__all"])'));
+    existingOptions.forEach(option => option.remove());
+
+    // Add tag options
+    const sortedTags = Array.from(allTags).sort();
+    sortedTags.forEach(tag => {
+        const option = document.createElement('option');
+        option.value = tag;
+        option.textContent = tag;
+        tagFilter.appendChild(option);
+    });
+
+    // Add event listener for tag filtering
+    if (!tagFilter.dataset.listenerAttached) {
+        tagFilter.addEventListener('change', filterTestingCatalogByTag);
+        tagFilter.dataset.listenerAttached = 'true';
+    }
+}
+
+// Filter Testing Catalog items by selected tag
+function filterTestingCatalogByTag() {
+    const tagFilter = document.getElementById('testing-catalog-tag-filter');
+    const resultsInfo = document.getElementById('testing-catalog-results-info');
+    const items = rawData.testingCatalog || [];
+    
+    if (!tagFilter || !items.length) {
+        return;
+    }
+
+    const selectedTag = tagFilter.value;
+    let filteredItems = items;
+
+    // Filter by selected tag if not "All Tags"
+    if (selectedTag && selectedTag !== '__all') {
+        filteredItems = items.filter(item => {
+            if (!Array.isArray(item?.tags)) {
+                return false;
+            }
+            return item.tags.some(tag =>
+                tag && typeof tag === 'string' && tag.trim() === selectedTag
+            );
+        });
+    }
+
+    // Display filtered items
+    displayTestingCatalogItems(filteredItems);
+
+    // Update results info
+    if (resultsInfo) {
+        const count = filteredItems.length;
+        const total = items.length;
+        if (selectedTag && selectedTag !== '__all') {
+            resultsInfo.textContent = `Showing ${count} of ${total} articles tagged "${selectedTag}"`;
+        } else {
+            resultsInfo.textContent = `Showing ${count} articles`;
+        }
+        resultsInfo.style.display = 'block';
+    }
 }
 
 async function fetchBlogPostsData(forceRefresh = false, options = {}) {

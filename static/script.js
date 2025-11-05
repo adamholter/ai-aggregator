@@ -56,6 +56,8 @@ let agentExpState = {
     streamBuffer: '',
     activeMessage: null
 };
+let testingCatalogTagFilter = '__all';
+let testingCatalogTagOptions = [];
 
 let openRouterIndex = null;
 const modelMatchCache = new Map();
@@ -991,6 +993,21 @@ function ensureExperimentalSections() {
             refresh.addEventListener('click', () => loadTestingCatalogData(true));
             refresh.dataset.listenerAttached = 'true';
         }
+        const filterSelect = section.querySelector('#testing-catalog-tag-filter');
+        if (filterSelect && filterSelect.dataset.listenerAttached !== 'true') {
+            filterSelect.addEventListener('change', () => {
+                testingCatalogTagFilter = filterSelect.value || '__all';
+                displayTestingCatalogItems(rawData.testingCatalog || []);
+                const resultsElement = document.getElementById('testing-catalog-results-info');
+                if (resultsElement) {
+                    const filtered = applyTestingCatalogFilter(rawData.testingCatalog || []);
+                    resultsElement.textContent = filtered.length
+                        ? `Showing ${filtered.length} articles${testingCatalogTagFilter !== '__all' ? ` (tag: ${testingCatalogTagFilter})` : ''}`
+                        : 'No articles match the selected tag.';
+                }
+            });
+            filterSelect.dataset.listenerAttached = 'true';
+        }
     };
 
     if (!document.getElementById('blog')) {
@@ -1040,6 +1057,9 @@ function ensureExperimentalSections() {
             <div class="section-header">
                 <h2>Testing Catalog</h2>
                 <div class="controls">
+                    <select id="testing-catalog-tag-filter" aria-label="Filter Testing Catalog by tag">
+                        <option value="__all" selected>All Tags</option>
+                    </select>
                     <button class="refresh-btn" id="testing-catalog-refresh">Refresh Feed</button>
                 </div>
             </div>
@@ -1906,11 +1926,28 @@ async function loadTestingCatalogData(forceRefresh = false) {
         const payload = await makeAPICall(url, null);
         cachedData.testingCatalog = payload;
         rawData.testingCatalog = Array.isArray(payload?.items) ? payload.items : [];
+        const uniqueTags = new Set();
+        rawData.testingCatalog.forEach(item => {
+            if (item?.section) {
+                uniqueTags.add(String(item.section).trim());
+            }
+            if (Array.isArray(item?.tags)) {
+                item.tags.forEach(tag => {
+                    if (tag) {
+                        uniqueTags.add(String(tag).trim());
+                    }
+                });
+            }
+        });
+        testingCatalogTagOptions = Array.from(uniqueTags).filter(Boolean).sort((a, b) => a.localeCompare(b));
+        updateTestingCatalogTagFilter();
         displayTestingCatalogItems(rawData.testingCatalog);
         loadingElement.style.display = 'none';
         if (resultsElement) {
-            const count = rawData.testingCatalog.length;
-            resultsElement.textContent = count ? `Showing ${count} articles` : 'No recent articles available';
+            const filtered = applyTestingCatalogFilter(rawData.testingCatalog);
+            const count = filtered.length;
+            const filterSuffix = testingCatalogTagFilter !== '__all' ? ` (tag: ${testingCatalogTagFilter})` : '';
+            resultsElement.textContent = count ? `Showing ${count} articles${filterSuffix}` : 'No recent articles available';
             resultsElement.style.display = 'block';
         }
     } catch (error) {
@@ -1918,6 +1955,20 @@ async function loadTestingCatalogData(forceRefresh = false) {
         errorElement.textContent = `Failed to load Testing Catalog: ${error.message}`;
         errorElement.style.display = 'block';
     }
+}
+
+function applyTestingCatalogFilter(items) {
+    if (!Array.isArray(items)) return [];
+    if (testingCatalogTagFilter === '__all') {
+        return items;
+    }
+    const normalizedFilter = testingCatalogTagFilter.toLowerCase();
+    return items.filter(item => {
+        const tags = Array.isArray(item?.tags) ? item.tags : [];
+        const section = item?.section ? [item.section] : [];
+        const combined = [...tags, ...section];
+        return combined.some(tag => typeof tag === 'string' && tag.toLowerCase() === normalizedFilter);
+    });
 }
 
 function displayTestingCatalogItems(items) {
@@ -1928,12 +1979,14 @@ function displayTestingCatalogItems(items) {
 
     container.innerHTML = '';
 
-    if (!items || !items.length) {
+    const filteredItems = applyTestingCatalogFilter(items);
+
+    if (!filteredItems.length) {
         container.innerHTML = '<div class="empty-state">No TestingCatalog stories in the past 24 hours.</div>';
         return;
     }
 
-    items.forEach(item => {
+    filteredItems.forEach(item => {
         container.appendChild(createTestingCatalogCard(item));
     });
 }
@@ -1952,9 +2005,6 @@ function createTestingCatalogCard(item) {
     const tagsMarkup = tags.length
         ? `<div class="blog-tags">${tags.map(tag => `<span class="tag">${tag}</span>`).join('')}</div>`
         : '';
-    const imageMarkup = item?.image_url
-        ? `<div class="blog-image"><img src="${item.image_url}" alt="" loading="lazy"></div>`
-        : '';
 
     card.innerHTML = `
         <div class="blog-meta">
@@ -1963,7 +2013,6 @@ function createTestingCatalogCard(item) {
         </div>
         <h3><a href="${url}" target="_blank" rel="noopener noreferrer">${title}</a></h3>
         ${summary ? `<p class="blog-summary">${summary}</p>` : ''}
-        ${imageMarkup}
         <div class="blog-footer">
             <span class="blog-source">TestingCatalog.com</span>
             ${tagsMarkup}
@@ -1971,6 +2020,21 @@ function createTestingCatalogCard(item) {
     `;
 
     return card;
+}
+
+function updateTestingCatalogTagFilter() {
+    const select = document.getElementById('testing-catalog-tag-filter');
+    if (!select) {
+        return;
+    }
+    const current = select.value || '__all';
+    const options = ['__all', ...testingCatalogTagOptions];
+    select.innerHTML = options.map(tag => {
+        const label = tag === '__all' ? 'All Tags' : tag;
+        const selectedAttr = tag === current ? ' selected' : '';
+        return `<option value="${tag}"${selectedAttr}>${label}</option>`;
+    }).join('');
+    testingCatalogTagFilter = options.includes(current) ? current : '__all';
 }
 
 async function fetchBlogPostsData(forceRefresh = false, options = {}) {
