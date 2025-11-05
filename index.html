@@ -40,6 +40,7 @@
             <button class="nav-btn" data-section="hype" data-experimental="true" style="display:none;" aria-hidden="true">Hype</button>
             <button class="nav-btn" data-section="latest" data-experimental="true" style="display:none;" aria-hidden="true">Latest</button>
             <button class="nav-btn" data-section="blog" data-experimental="true" style="display:none;" aria-hidden="true">Blog</button>
+            <button class="nav-btn" data-section="testing-catalog" data-experimental="true" style="display:none;" aria-hidden="true">Testing Catalog</button>
             <button class="nav-btn" data-section="agent-exp" data-experimental="true" style="display:none;" aria-hidden="true">Agent</button>
             <button class="nav-btn" data-section="about">About</button>
         </nav>
@@ -306,35 +307,21 @@
                 <div class="data-container" id="hype-data"></div>
             </section>
 
-            <!-- AI Agent Section -->
-            <section id="ai-agent" class="content-section" data-experimental="true" style="display:none;" aria-hidden="true">
+            <!-- Testing Catalog Section -->
+            <section id="testing-catalog" class="content-section" data-experimental="true" style="display:none;" aria-hidden="true">
                 <div class="section-header">
-                    <h2>AI Analysis Agent</h2>
+                    <h2>Testing Catalog</h2>
                     <div class="controls">
-                        <select id="agent-model" onchange="updateAgentModel()">
-                            <option value="" disabled>Loading models...</option>
-                        </select>
-                        <button id="clear-chat" onclick="clearChatHistory()" class="chart-btn secondary" style="margin-left: 8px;">Clear Chat</button>
-                    </div>
-                    <div class="agent-warning experimental-warning">⚠️ Experimental mode: the agent still has known bugs and intermittent tool-call failures.</div>
-                    <div class="agent-warning" id="agent-model-guidance" style="display: none;"></div>
-                </div>
-                <div class="ai-agent-container">
-                    <div class="chat-container">
-                        <div class="chat-messages" id="chat-messages"></div>
-                        <div class="chat-input">
-                            <button type="button" id="agent-attachment-button" class="attachment-button" title="Attach images" aria-label="Attach images">
-                                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                                    <path d="M21 12.79a2.5 2.5 0 0 0-4-1.94l-7.5 7.5a4 4 0 0 1-5.66-5.66l9.19-9.19a2.5 2.5 0 1 1 3.54 3.54l-8.48 8.48a1 1 0 0 1-1.42-1.42l7.78-7.78" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
-                                </svg>
-                            </button>
-                            <input type="file" id="agent-image" accept="image/*" multiple hidden>
-                            <textarea id="user-input" placeholder="Ask about AI models, performance, or recommendations..."></textarea>
-                            <button onclick="sendMessage()">Send</button>
-                        </div>
-                        <div id="agent-image-preview" class="image-preview-list"></div>
+                        <button class="refresh-btn" id="testing-catalog-refresh">Refresh Feed</button>
                     </div>
                 </div>
+                <p class="section-note">Fresh Android testing news sourced from TestingCatalog (updated daily).</p>
+                <div class="loading" id="testing-catalog-loading">
+                    <div class="loading-spinner"></div>
+                </div>
+                <div class="error" id="testing-catalog-error" style="display: none;"></div>
+                <div class="results-info" id="testing-catalog-results-info" style="display:none;"></div>
+                <div class="data-container" id="testing-catalog-data"></div>
             </section>
 
             <!-- Agent Section -->

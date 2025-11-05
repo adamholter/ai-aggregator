@@ -6,6 +6,7 @@ import json
 import csv
 import io
 from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 import os
 import subprocess
 import tempfile
@@ -92,6 +93,15 @@ _MONITOR_CACHE = {
     'payload': None
 }
 MONITOR_CACHE_TTL = timedelta(minutes=15)
+
+TESTING_CATALOG_RSS_URL = 'https://www.testingcatalog.com/rss/'
+TESTING_CATALOG_CACHE_TTL = timedelta(hours=24)
+_TESTING_CATALOG_CACHE = {
+    'timestamp': None,
+    'payload': None
+}
+TESTING_CATALOG_LOG_PATH = os.path.join(BASE_DIR, 'logs', 'testing_catalog.jsonl')
+_TESTING_CATALOG_LOG_LOCK = Lock()
 
 
 def _warn_if_missing(name, value):
@@ -1007,7 +1017,10 @@ FETCH_DATA_CATEGORY_ALIASES = {
     'blogs': 'blog',
     'latest': 'latest',
     'monitor': 'monitor',
-    'news': 'latest'
+    'news': 'latest',
+    'testing-catalog': 'testing-catalog',
+    'testing_catalog': 'testing-catalog',
+    'testingcatalog': 'testing-catalog'
 }
 
 FETCH_DATA_CATEGORY_CONFIG = {
@@ -1134,6 +1147,13 @@ FETCH_DATA_CATEGORY_CONFIG = {
         'extract': lambda payload: (payload or {}).get('items', []) if isinstance(payload, dict) else (payload or []),
         'limit': None,
         'source': 'monitor'
+    },
+    'testing-catalog': {
+        'label': 'TestingCatalog News',
+        'custom_loader': 'testing_catalog',
+        'extract': lambda payload: (payload or {}).get('items', []) if isinstance(payload, dict) else (payload or []),
+        'limit': None,
+        'source': 'testingcatalog'
     }
 }
 
@@ -1798,6 +1818,168 @@ def _extract_wp_author_name(embedded):
     return ''
 
 
+def _decode_basic_html(value):
+    if not value:
+        return ''
+    return (str(value)
+            .replace('&amp;', '&')
+            .replace('&lt;', '<')
+            .replace('&gt;', '>')
+            .replace('&quot;', '"')
+            .replace('&#39;', "'")
+            .replace('&nbsp;', ' '))
+
+
+def _strip_basic_html(html_text):
+    if not html_text:
+        return ''
+    no_js = re.sub(r'<script[\s\S]*?</script>', '', html_text, flags=re.IGNORECASE)
+    no_style = re.sub(r'<style[\s\S]*?</style>', '', no_js, flags=re.IGNORECASE)
+    text = re.sub(r'<[^>]+>', ' ', no_style)
+    return re.sub(r'\s+', ' ', text).strip()
+
+
+def _sanitize_basic_html(html_text):
+    if not html_text:
+        return ''
+    sanitized = re.sub(r'<script[\s\S]*?</script>', '', html_text, flags=re.IGNORECASE)
+    sanitized = re.sub(r'<style[\s\S]*?</style>', '', sanitized, flags=re.IGNORECASE)
+    sanitized = re.sub(r'<iframe[\s\S]*?</iframe>', '', sanitized, flags=re.IGNORECASE)
+    sanitized = re.sub(r'<noscript[\s\S]*?</noscript>', '', sanitized, flags=re.IGNORECASE)
+    sanitized = re.sub(r' on[a-z]+\s*=\s*"[^"]*"', '', sanitized, flags=re.IGNORECASE)
+    sanitized = re.sub(r" on[a-z]+\s*=\s*'[^']*'", '', sanitized, flags=re.IGNORECASE)
+    sanitized = re.sub(r'(href|src)\s*=\s*"javascript:[^"]*"', r'\1="#"', sanitized, flags=re.IGNORECASE)
+    sanitized = re.sub(r"(href|src)\s*=\s*'javascript:[^']*'", r"\1='#'", sanitized, flags=re.IGNORECASE)
+    return sanitized
+
+
+def _get_tag_once(tag, xml):
+    pattern = re.compile(rf'<{tag}>([\s\S]*?)</{tag}>', re.IGNORECASE)
+    match = pattern.search(xml)
+    return match.group(1) if match else ''
+
+
+def _get_cdata(tag, xml):
+    raw = _get_tag_once(tag, xml)
+    if not raw:
+        return ''
+    match = re.search(r'<!\[CDATA\[([\s\S]*?)\]\]>', raw, re.IGNORECASE)
+    return match.group(1) if match else raw
+
+
+def _get_all_cdata(tag, xml):
+    pattern = re.compile(rf'<{tag}><!\[CDATA\[([\s\S]*?)\]\]></{tag}>', re.IGNORECASE)
+    return [match.group(1) for match in pattern.finditer(xml)]
+
+
+def _first_image_from_html(html_text):
+    if not html_text:
+        return ''
+    match = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', html_text, re.IGNORECASE)
+    return match.group(1) if match else ''
+
+
+def _media_content_url(xml_item):
+    match = re.search(r'<media:content[^>]*url="([^"]+)"', xml_item, re.IGNORECASE)
+    return match.group(1) if match else ''
+
+
+def _canonicalize_url(link):
+    if not link:
+        return ''
+    try:
+        url = urllib.parse.urlparse(link.strip())
+        cleaned = url._replace(fragment='', query='')
+        return urllib.parse.urlunparse(cleaned)
+    except Exception:
+        return link.strip()
+
+
+def _two_sentence_summary(text):
+    if not text:
+        return ''
+    sentences = re.findall(r'[^.!?]+[.!?]', text)
+    if not sentences:
+        return text.strip()
+    return ' '.join(sentences[:2]).strip()
+
+
+def _parse_testing_catalog_feed(xml_text):
+    if not xml_text:
+        return []
+
+    now_utc = datetime.utcnow().replace(tzinfo=timezone.utc)
+    cutoff = now_utc - timedelta(days=1)
+    items = []
+    seen = set()
+
+    for match in re.finditer(r'<item>([\s\S]*?)</item>', xml_text, re.IGNORECASE):
+        item_xml = match.group(1)
+
+        pub_date_raw = _decode_basic_html(_get_tag_once('pubDate', item_xml))
+        if not pub_date_raw:
+            continue
+        try:
+            pub_dt = parsedate_to_datetime(pub_date_raw)
+        except (TypeError, ValueError):
+            try:
+                pub_dt = datetime.fromisoformat(pub_date_raw.replace('Z', '+00:00'))
+            except ValueError:
+                continue
+        if pub_dt is None:
+            continue
+        if pub_dt.tzinfo is None:
+            pub_dt = pub_dt.replace(tzinfo=timezone.utc)
+        else:
+            pub_dt = pub_dt.astimezone(timezone.utc)
+
+        if pub_dt > now_utc or pub_dt < cutoff:
+            continue
+
+        link = _canonicalize_url(_decode_basic_html(_get_tag_once('link', item_xml)))
+        if not link or link in seen:
+            continue
+        seen.add(link)
+
+        title = _decode_basic_html(_get_cdata('title', item_xml)).strip()
+        description_html = _decode_basic_html(_get_cdata('description', item_xml))
+        content_html_raw = _decode_basic_html(_get_cdata('content:encoded', item_xml)) or description_html
+        sanitized_html = _sanitize_basic_html(content_html_raw).strip()
+        text_content = _strip_basic_html(sanitized_html)
+        word_count = len(text_content.split()) if text_content else 0
+
+        categories = [_decode_basic_html(value).strip() for value in _get_all_cdata('category', item_xml)]
+        categories = [value for value in categories if value]
+        section = categories[0] if categories else ''
+        tags = categories[1:]
+
+        image_url = (_media_content_url(item_xml)
+                     or _first_image_from_html(sanitized_html)
+                     or '')
+
+        summary = _two_sentence_summary(text_content)
+
+        iso = pub_dt.isoformat().replace('+00:00', 'Z')
+        date_part, time_part = iso.split('T')
+
+        items.append({
+            'title': title,
+            'url': link,
+            'published_date': date_part,
+            'published_time': time_part,
+            'section': section,
+            'tags': tags,
+            'summary': summary,
+            'image_url': image_url,
+            'source': 'testingcatalog.com',
+            'word_count': word_count,
+            'content_html': sanitized_html,
+            'content_text': text_content
+        })
+
+    return items
+
+
 def _extract_wp_featured_image(embedded):
     media_list = embedded.get('wp:featuredmedia')
     if not isinstance(media_list, list):
@@ -1818,6 +2000,82 @@ def _extract_wp_featured_image(embedded):
                         if candidate:
                             return candidate
     return ''
+
+
+def _load_testing_catalog_log_urls():
+    urls = set()
+    try:
+        with open(TESTING_CATALOG_LOG_PATH, 'r', encoding='utf-8') as handle:
+            for line in handle:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    record = json.loads(line)
+                    url = (record or {}).get('url')
+                    if url:
+                        urls.add(url)
+                except json.JSONDecodeError:
+                    continue
+    except FileNotFoundError:
+        return urls
+    return urls
+
+
+def _append_testing_catalog_log(entries):
+    if not entries:
+        return
+    os.makedirs(os.path.dirname(TESTING_CATALOG_LOG_PATH), exist_ok=True)
+    with _TESTING_CATALOG_LOG_LOCK:
+        with open(TESTING_CATALOG_LOG_PATH, 'a', encoding='utf-8') as handle:
+            for entry in entries:
+                try:
+                    handle.write(json.dumps(entry, ensure_ascii=False) + '\n')
+                except Exception:
+                    continue
+
+
+def fetch_testing_catalog_feed(force_refresh=False):
+    now = datetime.utcnow()
+    cached_payload = _TESTING_CATALOG_CACHE.get('payload')
+    cached_timestamp = _TESTING_CATALOG_CACHE.get('timestamp')
+    if (
+        not force_refresh
+        and cached_payload
+        and cached_timestamp
+        and now - cached_timestamp < TESTING_CATALOG_CACHE_TTL
+    ):
+        return cached_payload
+
+    try:
+        response = requests.get(
+            TESTING_CATALOG_RSS_URL,
+            headers={'User-Agent': 'ai-dashboard/1.0 (+https://adam.holter.com)'},
+            timeout=300
+        )
+        response.raise_for_status()
+        xml_text = response.text
+    except requests.exceptions.RequestException as exc:
+        if cached_payload:
+            print(f"WARNING: TestingCatalog fetch failed ({exc}); returning cached dataset")
+            return cached_payload
+        raise RuntimeError(f'Failed to fetch TestingCatalog feed: {exc}') from exc
+
+    items = _parse_testing_catalog_feed(xml_text)
+
+    existing_urls = _load_testing_catalog_log_urls()
+    new_entries = [item for item in items if item.get('url') and item['url'] not in existing_urls]
+    if new_entries:
+        _append_testing_catalog_log(new_entries)
+
+    payload = {
+        'items': items,
+        'count': len(items),
+        'fetched_at': datetime.utcnow().replace(microsecond=0).isoformat() + 'Z'
+    }
+    _TESTING_CATALOG_CACHE['timestamp'] = datetime.utcnow()
+    _TESTING_CATALOG_CACHE['payload'] = payload
+    return payload
 
 
 def _estimate_blog_reading_minutes(html_content):
@@ -5927,6 +6185,35 @@ def generate_latest_feed_payload(timeframe='day', force_refresh=False, include_h
     except Exception as exc:
         print(f"WARNING: Failed to aggregate blog posts for latest feed: {exc}")
 
+    # TestingCatalog feed
+    try:
+        testing_payload = fetch_testing_catalog_feed(force_refresh=force_refresh)
+        for item in testing_payload.get('items', []):
+            date_part = item.get('published_date')
+            time_part = item.get('published_time')
+            if not date_part or not time_part:
+                continue
+            dt_str = f"{date_part}T{time_part}"
+            try:
+                dt = datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
+            except ValueError:
+                continue
+            if dt < cutoff:
+                continue
+            append_entry({
+                'id': f"testingcatalog:{item.get('url')}",
+                'title': item.get('title') or 'TestingCatalog Update',
+                'source': 'testingcatalog',
+                'source_label': 'Testing Catalog',
+                'excerpt': item.get('summary') or item.get('content_text') or '',
+                'timestamp_dt': dt,
+                'url': item.get('url') or '',
+                'badge': item.get('section') or '',
+                'tags': item.get('tags') or []
+            })
+    except Exception as exc:
+        print(f"WARNING: Failed to aggregate TestingCatalog feed: {exc}")
+
     # Hype
     if include_hype:
         try:
@@ -6184,11 +6471,40 @@ def _agent_exp_loader_monitor(options):
     return result, metadata
 
 
+def _agent_exp_loader_testing_catalog(options):
+    limit = options.get('limit')
+    force_refresh = bool(options.get('options', {}).get('cache_bust'))
+    limit_value = None
+    if limit is not None:
+        try:
+            limit_value = int(limit)
+        except (TypeError, ValueError):
+            limit_value = None
+
+    payload = fetch_testing_catalog_feed(force_refresh=force_refresh)
+    items = list(payload.get('items') or [])
+    if limit_value is not None and limit_value >= 0:
+        items = items[:limit_value]
+
+    result = dict(payload)
+    result['items'] = items
+    result['count'] = len(items)
+
+    metadata = {
+        'source': 'testingcatalog.com'
+    }
+    if limit_value is not None:
+        metadata['limit'] = limit_value
+
+    return result, metadata
+
+
 CUSTOM_CATEGORY_LOADERS.update({
     'latest': _agent_exp_loader_latest,
     'hype': _agent_exp_loader_hype,
     'blog': _agent_exp_loader_blog,
-    'monitor': _agent_exp_loader_monitor
+    'monitor': _agent_exp_loader_monitor,
+    'testing-catalog': _agent_exp_loader_testing_catalog
 })
 
 
@@ -6283,6 +6599,19 @@ def get_blog_posts():
         return jsonify({'error': str(exc)}), 503
     except Exception as exc:
         return jsonify({'error': f'Error fetching blog posts: {exc}'}), 500
+
+
+@app.route('/api/testing-catalog', methods=['GET'])
+def get_testing_catalog_feed():
+    force_refresh = request.args.get('cache_bust', 'false').lower() == 'true'
+    try:
+        payload = fetch_testing_catalog_feed(force_refresh=force_refresh)
+        return jsonify(payload)
+    except RuntimeError as exc:
+        return jsonify({'error': str(exc)}), 503
+    except Exception as exc:
+        return jsonify({'error': f'Failed to fetch TestingCatalog feed: {exc}'}), 502
+
 
 @app.route('/api/fetch-data', methods=['POST'])
 def fetch_data_api():

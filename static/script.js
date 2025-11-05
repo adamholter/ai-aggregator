@@ -18,7 +18,8 @@ let cachedData = {
     hype: null,
     blog: null,
     latest: null,
-    monitor: null
+    monitor: null,
+    testingCatalog: null
 };
 
 // Store raw data for filtering
@@ -35,7 +36,8 @@ let rawData = {
     hype: null,
     blog: null,
     latest: null,
-    monitor: null
+    monitor: null,
+    testingCatalog: null
 };
 
 // AI Agent configuration
@@ -857,6 +859,7 @@ function ensureExperimentalNavButtons() {
     ensureButton('latest', 'Latest');
     ensureButton('monitor', 'Monitor');
     ensureButton('blog', 'Blog');
+    ensureButton('testing-catalog', 'Testing Catalog');
     ensureButton('agent-exp', 'Agent');
 }
 
@@ -981,6 +984,15 @@ function ensureExperimentalSections() {
         }
     }
 
+    const attachTestingCatalogListeners = (section) => {
+        if (!section) return;
+        const refresh = section.querySelector('#testing-catalog-refresh');
+        if (refresh && refresh.dataset.listenerAttached !== 'true') {
+            refresh.addEventListener('click', () => loadTestingCatalogData(true));
+            refresh.dataset.listenerAttached = 'true';
+        }
+    };
+
     if (!document.getElementById('blog')) {
         // Inject blog section dynamically when the HTML template hasn't been updated yet.
         const section = document.createElement('section');
@@ -1015,6 +1027,35 @@ function ensureExperimentalSections() {
         } else {
             main.appendChild(section);
         }
+    }
+
+    if (!document.getElementById('testing-catalog')) {
+        const section = document.createElement('section');
+        section.id = 'testing-catalog';
+        section.className = 'content-section';
+        section.dataset.experimental = 'true';
+        section.style.display = 'none';
+        section.setAttribute('aria-hidden', 'true');
+        section.innerHTML = `
+            <div class="section-header">
+                <h2>Testing Catalog</h2>
+                <div class="controls">
+                    <button class="refresh-btn" id="testing-catalog-refresh">Refresh Feed</button>
+                </div>
+            </div>
+            <p class="section-note">Fresh Android testing news sourced from TestingCatalog (updated daily).</p>
+            <div class="loading" id="testing-catalog-loading">
+                <div class="loading-spinner"></div>
+            </div>
+            <div class="error" id="testing-catalog-error" style="display: none;"></div>
+            <div class="results-info" id="testing-catalog-results-info" style="display:none;"></div>
+            <div class="data-container" id="testing-catalog-data"></div>
+        `;
+
+        main.appendChild(section);
+        attachTestingCatalogListeners(section);
+    } else {
+        attachTestingCatalogListeners(document.getElementById('testing-catalog'));
     }
 }
 
@@ -1099,6 +1140,13 @@ function loadSectionData(section) {
                 loadBlogPosts();
             } else {
                 displayBlogPosts(cachedData.blog);
+            }
+            break;
+        case 'testing-catalog':
+            if (!cachedData.testingCatalog) {
+                loadTestingCatalogData();
+            } else {
+                displayTestingCatalogItems(rawData.testingCatalog || []);
             }
             break;
         case 'agent-exp':
@@ -1822,6 +1870,107 @@ function formatRelativeTime(timestamp) {
         }
     }
     return '';
+}
+
+function formatTestingCatalogTimestamp(dateStr, timeStr) {
+    if (!dateStr || !timeStr) return '';
+    const iso = `${dateStr}T${timeStr}`;
+    const parsed = new Date(iso);
+    if (Number.isNaN(parsed.getTime())) {
+        return '';
+    }
+    return parsed.toLocaleString();
+}
+
+async function loadTestingCatalogData(forceRefresh = false) {
+    const loadingElement = document.getElementById('testing-catalog-loading');
+    const errorElement = document.getElementById('testing-catalog-error');
+    const dataElement = document.getElementById('testing-catalog-data');
+    const resultsElement = document.getElementById('testing-catalog-results-info');
+
+    if (!loadingElement || !errorElement || !dataElement) {
+        return;
+    }
+
+    loadingElement.style.display = 'flex';
+    errorElement.style.display = 'none';
+    dataElement.innerHTML = '';
+    if (resultsElement) {
+        resultsElement.style.display = 'none';
+        resultsElement.textContent = '';
+    }
+
+    const url = forceRefresh ? '/api/testing-catalog?cache_bust=true' : '/api/testing-catalog';
+
+    try {
+        const payload = await makeAPICall(url, null);
+        cachedData.testingCatalog = payload;
+        rawData.testingCatalog = Array.isArray(payload?.items) ? payload.items : [];
+        displayTestingCatalogItems(rawData.testingCatalog);
+        loadingElement.style.display = 'none';
+        if (resultsElement) {
+            const count = rawData.testingCatalog.length;
+            resultsElement.textContent = count ? `Showing ${count} articles` : 'No recent articles available';
+            resultsElement.style.display = 'block';
+        }
+    } catch (error) {
+        loadingElement.style.display = 'none';
+        errorElement.textContent = `Failed to load Testing Catalog: ${error.message}`;
+        errorElement.style.display = 'block';
+    }
+}
+
+function displayTestingCatalogItems(items) {
+    const container = document.getElementById('testing-catalog-data');
+    if (!container) {
+        return;
+    }
+
+    container.innerHTML = '';
+
+    if (!items || !items.length) {
+        container.innerHTML = '<div class="empty-state">No TestingCatalog stories in the past 24 hours.</div>';
+        return;
+    }
+
+    items.forEach(item => {
+        container.appendChild(createTestingCatalogCard(item));
+    });
+}
+
+function createTestingCatalogCard(item) {
+    const card = document.createElement('div');
+    card.className = 'model-card blog-card';
+    card.dataset.source = 'testingcatalog';
+
+    const title = item?.title ? String(item.title).trim() : 'Untitled Update';
+    const url = item?.url || '#';
+    const timestamp = formatTestingCatalogTimestamp(item?.published_date, item?.published_time);
+    const summary = item?.summary || item?.content_text || '';
+    const badge = item?.section ? `<span class="blog-tag">${item.section}</span>` : '';
+    const tags = Array.isArray(item?.tags) ? item.tags : [];
+    const tagsMarkup = tags.length
+        ? `<div class="blog-tags">${tags.map(tag => `<span class="tag">${tag}</span>`).join('')}</div>`
+        : '';
+    const imageMarkup = item?.image_url
+        ? `<div class="blog-image"><img src="${item.image_url}" alt="" loading="lazy"></div>`
+        : '';
+
+    card.innerHTML = `
+        <div class="blog-meta">
+            ${timestamp ? `<span class="blog-date">${timestamp}</span>` : ''}
+            ${badge}
+        </div>
+        <h3><a href="${url}" target="_blank" rel="noopener noreferrer">${title}</a></h3>
+        ${summary ? `<p class="blog-summary">${summary}</p>` : ''}
+        ${imageMarkup}
+        <div class="blog-footer">
+            <span class="blog-source">TestingCatalog.com</span>
+            ${tagsMarkup}
+        </div>
+    `;
+
+    return card;
 }
 
 async function fetchBlogPostsData(forceRefresh = false, options = {}) {
