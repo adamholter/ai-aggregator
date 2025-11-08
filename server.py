@@ -356,6 +356,11 @@ def format_prompt(template, **kwargs):
         result = result.replace(placeholder, str(value))
     return result
 
+def get_prompt_current_date():
+    """Return today's date formatted for prompts."""
+    now = datetime.now(timezone.utc)
+    return now.strftime('%B %d, %Y')
+
 # Cache configuration
 cache = {}
 MATCH_CACHE = {}
@@ -819,14 +824,14 @@ Return JSON only."""
         'model': 'google/gemini-2.5-flash-lite-preview-09-2025',
         'messages': [{'role': 'user', 'content': prompt}],
         'temperature': 0.1,
-        'timeout': 25
+        'timeout': 90
     }
 
     response = requests.post(
         f'{OPENROUTER_BASE_URL}/chat/completions',
         headers=build_openrouter_headers(auth_token),
         json=payload,
-        timeout=30
+        timeout=90
     )
     response.raise_for_status()
     result = response.json()
@@ -1399,8 +1404,10 @@ def build_agent_exp_system_prompt(experimental_mode, default_limit=AGENT_EXP_DEF
         if experimental_mode else
         "Experimental tabs are disabled for this session; stay within the core leaderboards unless the user explicitly toggles experimental mode."
     )
+    current_date = get_prompt_current_date()
 
     return f"""You are the dashboard's AI Agent. Operate strictly on fetched datasets and live research—no internal memory or assumptions.
+Current Date: {current_date}
 
 DATA REPRESENTATION
 - Every `fetch_data` call returns an authoritative package: category metadata, structured JSON summaries, markdown highlights, and a compressed table snapshot optimised for tokens. Treat these as ground truth.
@@ -2751,7 +2758,7 @@ Rules:
     payload = {
         'model': fetch_model,
         'messages': [{'role': 'user', 'content': prompt}],
-        'timeout': 30
+        'timeout': 90
     }
 
     try:
@@ -2759,7 +2766,7 @@ Rules:
             f'{OPENROUTER_BASE_URL}/chat/completions',
             headers=headers,
             json=payload,
-            timeout=40
+            timeout=120
         )
         response.raise_for_status()
         result = response.json()
@@ -3224,7 +3231,7 @@ Guidelines:
             f'{OPENROUTER_BASE_URL}/chat/completions',
             headers=headers,
             json=payload,
-            timeout=30
+            timeout=90
         )
         response.raise_for_status()
         result = response.json()
@@ -3479,6 +3486,7 @@ def build_agent_prompt_context(user_message, fetch_context, web_context):
         'FETCH_DATA_MARKDOWN': fetch_markdown,
         'FETCH_DATA_JSON': structured_json,
         'COMPRESSED_DATASETS': compressed_snapshot,
+        'CURRENT_DATE': get_prompt_current_date(),
         'WEB_DATA': web_data,
         'WEB_DATA_SECTION': web_section,
         'LOADED_DATASETS': build_loaded_datasets_label(fetch_context)
@@ -4366,7 +4374,7 @@ Return a concise markdown report that cites sources inline when available."""
                 'content': formatted_prompt
             }
         ],
-        'timeout': 45
+        'timeout': 120
     }
 
     try:
@@ -4374,7 +4382,7 @@ Return a concise markdown report that cites sources inline when available."""
             f'{OPENROUTER_BASE_URL}/chat/completions',
             headers=headers,
             json=payload,
-            timeout=45
+            timeout=150
         )
         if response.status_code == 200:
             result = response.json()
@@ -5220,6 +5228,7 @@ def ai_agent():
         model_display_name = get_model_display_name(final_model)
 
         default_final_prompt = """You are an AI model analysis expert. You can call tools to gather data before responding.
+Current Date: {CURRENT_DATE}
 
 TOOLS AVAILABLE:
 - fetch_data(categories: list[str], recency?: "day"|"week"|"month"|"year") -> Loads cached datasets (Artificial Analysis, OpenRouter, fal.ai, Replicate). Example: `FETCH_DATA: {\"categories\":[\"llms\",\"openrouter\"],\"recency\":\"week\"}` (omit recency to include all data).
@@ -5298,12 +5307,12 @@ Respond concisely and cite the sources (Conversation History, Database, Web Sear
                     
                     # Add timeout and connection management
                     start_time = time.time()
-                    timeout_seconds = 120  # 2 minute timeout for production
-                    
+                    timeout_seconds = 360  # 6 minute timeout for production
+                   
                     events_sent = 0
                     max_events = 5000  # Prevent infinite loops while streaming
                     last_yield_time = start_time
-                    stall_timeout = 30  # 30 seconds without yielding
+                    stall_timeout = 120  # 2 minute stall allowance
                     content_emitted = False
                     
                     try:
@@ -5567,7 +5576,13 @@ def _handle_model_analysis_post():
             compose_compressed_datasets(fetch_context),
             MAX_COMPRESSED_DATASET_CHARS
         )
-        default_analysis_prompt = """You are an AI model analysis expert. Provide a comprehensive analysis of this model using ONLY the provided data.
+        default_analysis_prompt = """Current Date: {CURRENT_DATE}
+You are an AI model analysis expert. Provide a comprehensive analysis of this model using ONLY the provided data.
+
+SUMMARY GUIDELINES:
+- Start with an ## Executive Summary containing 2-3 concise sentences or bullet points that highlight the most important insights or comparisons. Keep it short and grounded in the provided information.
+- Keep every following section to 2-3 short sentences or bullet lines. Focus on implications, trade-offs, and standout metrics instead of restating raw dataset rows.
+- Call out recommendations, strengths, and limitations explicitly; if a detail is absent, acknowledge the gap instead of guessing.
 
 Model Data from Database:
 {MODEL_DATA_JSON}
@@ -5589,6 +5604,9 @@ CRITICAL: Base your analysis entirely on the supplied information. Do not use ex
 IMPORTANT: Write your response directly in markdown format. Do NOT wrap it in code fences.
 
 Generate a detailed analysis covering:
+
+## Executive Summary
+- Provide 2-3 sentences or bullet points that summarize the clearest, most actionable insights. Stay concise and reference the provided data.
 
 ## Model Overview
 - Name, creator, and category
@@ -5626,7 +5644,8 @@ Explicitly note when information is not present in the provided datasets."""
             COMPRESSED_DATASETS=fetch_compressed,
             FETCH_DATA_MARKDOWN=fetch_markdown,
             WEB_DATA="Web search was not requested; rely on provided datasets.",
-            RELATED_DATA=fetch_markdown
+            RELATED_DATA=fetch_markdown,
+            CURRENT_DATE=get_prompt_current_date()
         )
         analysis_prompt = enforce_prompt_ceiling(analysis_prompt)
 
@@ -5702,7 +5721,7 @@ Explicitly note when information is not present in the provided datasets."""
                         headers=headers,
                         json=stream_payload,
                         stream=True,
-                        timeout=(10, 180)
+                        timeout=(30, 540)
                     )
                     if response.status_code != 200:
                         fallback_reason = f'Stream request failed with status {response.status_code}'
@@ -5828,7 +5847,7 @@ Explicitly note when information is not present in the provided datasets."""
                 f'{OPENROUTER_BASE_URL}/chat/completions',
                 headers=headers,
                 json=request_payload,
-                timeout=180
+                timeout=360
             )
             response.raise_for_status()
             result = response.json()
@@ -6844,7 +6863,7 @@ def _agent_exp_execute_perplexity(tool_args, auth_token):
         f'{OPENROUTER_BASE_URL}/chat/completions',
         headers=headers,
         json=payload,
-        timeout=300
+        timeout=600
     )
     response.raise_for_status()
     data = response.json()
@@ -6898,7 +6917,7 @@ def agent_exp_session(auth_token, user_message, conversation_history, model_id, 
                 f'{OPENROUTER_BASE_URL}/chat/completions',
                 headers=headers,
                 json=payload,
-                timeout=300
+                timeout=600
             )
             response.raise_for_status()
         except requests.exceptions.HTTPError as exc:
@@ -7109,14 +7128,14 @@ Be selective - only include the top 5-10 most relevant results. Focus on models 
                     'content': prompt
                 }
             ],
-            'timeout': 30  # 30 second timeout
+            'timeout': 90  # 90 second timeout
         }
         
         response = requests.post(
             f'{OPENROUTER_BASE_URL}/chat/completions',
             headers=headers,
             json=payload,
-            timeout=25  # 25 second request timeout
+            timeout=90  # 90 second request timeout
         )
         
         if response.status_code == 200:
@@ -7729,7 +7748,7 @@ def append_quickchart_guidance(prompt_template, theme):
     return f"{prompt_template}\n\n{guidance}"
 
 
-def fetch_non_stream_content(headers, payload, theme, timeout=180):
+def fetch_non_stream_content(headers, payload, theme, timeout=360):
     """Fetch a non-streamed completion and return the parsed response JSON."""
     response = requests.post(
         f'{OPENROUTER_BASE_URL}/chat/completions',
