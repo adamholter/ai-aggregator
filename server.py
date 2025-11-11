@@ -101,6 +101,7 @@ _TESTING_CATALOG_CACHE = {
     'payload': None
 }
 TESTING_CATALOG_LOG_PATH = os.path.join(BASE_DIR, 'logs', 'testing_catalog.jsonl')
+TESTING_CATALOG_HISTORY_PATH = os.path.join(BASE_DIR, 'logs', 'testing_catalog_history.json')
 _TESTING_CATALOG_LOG_LOCK = Lock()
 
 
@@ -2042,6 +2043,55 @@ def _append_testing_catalog_log(entries):
                     continue
 
 
+def _load_testing_catalog_history():
+    try:
+        with open(TESTING_CATALOG_HISTORY_PATH, 'r', encoding='utf-8') as handle:
+            data = json.load(handle)
+            if isinstance(data, list):
+                return data
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
+    except Exception:
+        return []
+    return []
+
+
+def _save_testing_catalog_history(entries):
+    os.makedirs(os.path.dirname(TESTING_CATALOG_HISTORY_PATH), exist_ok=True)
+    with _TESTING_CATALOG_LOG_LOCK:
+        with open(TESTING_CATALOG_HISTORY_PATH, 'w', encoding='utf-8') as handle:
+            json.dump(entries, handle, ensure_ascii=False, indent=2)
+
+
+def _testing_catalog_history_sort_key(entry):
+    if not isinstance(entry, dict):
+        return ''
+    date = entry.get('published_date') or ''
+    time = entry.get('published_time') or ''
+    return f"{date}T{time}"
+
+
+def _append_testing_catalog_history(entries):
+    if not entries:
+        return
+    history = _load_testing_catalog_history()
+    seen_urls = {record.get('url') for record in history if isinstance(record, dict) and record.get('url')}
+    added = False
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        url = entry.get('url')
+        if not url or url in seen_urls:
+            continue
+        seen_urls.add(url)
+        history.append(entry)
+        added = True
+    if not added:
+        return
+    history.sort(key=_testing_catalog_history_sort_key, reverse=True)
+    _save_testing_catalog_history(history)
+
+
 def fetch_testing_catalog_feed(force_refresh=False):
     now = datetime.utcnow()
     cached_payload = _TESTING_CATALOG_CACHE.get('payload')
@@ -2070,16 +2120,27 @@ def fetch_testing_catalog_feed(force_refresh=False):
 
     items = _parse_testing_catalog_feed(xml_text)
 
+    history = _load_testing_catalog_history()
     existing_urls = _load_testing_catalog_log_urls()
+    existing_urls.update({
+        entry.get('url')
+        for entry in history
+        if isinstance(entry, dict) and entry.get('url')
+    })
+
     new_entries = [item for item in items if item.get('url') and item['url'] not in existing_urls]
     if new_entries:
         _append_testing_catalog_log(new_entries)
+        _append_testing_catalog_history(new_entries)
+        history = _load_testing_catalog_history()
 
     payload = {
         'items': items,
         'count': len(items),
         'fetched_at': datetime.utcnow().replace(microsecond=0).isoformat() + 'Z'
     }
+    payload['history'] = history
+    payload['history_count'] = len(history)
     _TESTING_CATALOG_CACHE['timestamp'] = datetime.utcnow()
     _TESTING_CATALOG_CACHE['payload'] = payload
     return payload
