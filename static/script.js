@@ -42,7 +42,7 @@ let rawData = {
 
 // AI Agent configuration
 let agentConfig = {
-    model: 'z-ai/glm-4.5',
+    model: 'x-ai/grok-4-fast',
     availableModels: [], // Will be populated from settings
     conversationHistory: [] // For context memory
 };
@@ -75,7 +75,7 @@ const THEME_LABELS = {
 
 let modelConfig = null;
 let settingsInitialized = false;
-let experimentalModeEnabled = false;
+let experimentalModeEnabled = true;
 let hypeSortMode = 'newest';
 let blogSortMode = 'newest';
 let agentPendingImages = [];
@@ -325,10 +325,14 @@ function setUserOpenRouterKey(value) {
 
 function getStoredExperimentalMode() {
     try {
-        return localStorage.getItem(EXPERIMENTAL_MODE_STORAGE_KEY) === 'true';
+        const stored = localStorage.getItem(EXPERIMENTAL_MODE_STORAGE_KEY);
+        if (stored === null) {
+            return null;
+        }
+        return stored === 'true';
     } catch (error) {
         console.warn('Unable to read experimental mode preference:', error);
-        return false;
+        return null;
     }
 }
 
@@ -700,7 +704,8 @@ document.addEventListener('DOMContentLoaded', async function() {
     initializeAgentExp();
     loadLLMData(); // Load LLM data by default
     setupImageUpload();
-    applyExperimentalMode(getStoredExperimentalMode());
+    const storedExperimentalMode = getStoredExperimentalMode();
+    applyExperimentalMode(storedExperimentalMode === null ? true : storedExperimentalMode);
 
     const hypeSortSelect = document.getElementById('hype-sort');
     if (hypeSortSelect) {
@@ -839,22 +844,18 @@ function ensureExperimentalNavButtons() {
             button = document.createElement('button');
             button.className = 'nav-btn';
             button.dataset.section = section;
-            button.dataset.experimental = 'true';
             button.textContent = label;
-            button.style.display = 'none';
-            button.setAttribute('aria-hidden', 'true');
             const anchor = nav.querySelector('.nav-btn[data-section="ai-agent"]');
             if (anchor) {
                 nav.insertBefore(button, anchor);
             } else {
                 nav.appendChild(button);
             }
-        } else if (button.dataset.experimental !== 'true') {
-            button.dataset.experimental = 'true';
+        } else {
+            button.textContent = label;
         }
-        if (!button.hasAttribute('aria-hidden')) {
-            button.setAttribute('aria-hidden', experimentalModeEnabled ? 'false' : 'true');
-        }
+        button.style.display = '';
+        button.removeAttribute('aria-hidden');
     };
 
     ensureButton('hype', 'Hype');
@@ -918,9 +919,6 @@ function ensureExperimentalSections() {
         const section = document.createElement('section');
         section.id = 'latest';
         section.className = 'content-section';
-        section.dataset.experimental = 'true';
-        section.style.display = 'none';
-        section.setAttribute('aria-hidden', 'true');
         section.innerHTML = `
             <div class="section-header">
                 <h2>Latest Activity (Last 24 hours)</h2>
@@ -936,32 +934,17 @@ function ensureExperimentalSections() {
             <div class="results-info" id="latest-results-info" style="display:none;"></div>
             <div class="data-container" id="latest-data"></div>
         `;
-
-        const blogSection = document.getElementById('blog');
-        if (blogSection && blogSection.parentNode === main) {
-            main.insertBefore(section, blogSection);
-        } else {
-            const textToImage = document.getElementById('text-to-image');
-            if (textToImage && textToImage.parentNode === main) {
-                main.insertBefore(section, textToImage);
-            } else {
-                main.appendChild(section);
-            }
-        }
+        main.appendChild(section);
         ensureLatestControls(section);
     } else {
+        existingLatest.style.display = '';
         ensureLatestControls(existingLatest);
     }
-
-    ensureLatestControlListeners();
 
     if (!document.getElementById('monitor')) {
         const section = document.createElement('section');
         section.id = 'monitor';
         section.className = 'content-section';
-        section.dataset.experimental = 'true';
-        section.style.display = 'none';
-        section.setAttribute('aria-hidden', 'true');
         section.innerHTML = `
             <div class="section-header">
                 <h2>Monitor Feed</h2>
@@ -977,13 +960,15 @@ function ensureExperimentalSections() {
             <div class="results-info" id="monitor-results-info" style="display:none;"></div>
             <div class="data-container" id="monitor-data"></div>
         `;
-
         const blogSection = document.getElementById('blog');
         if (blogSection && blogSection.parentNode === main) {
             main.insertBefore(section, blogSection);
         } else {
             main.appendChild(section);
         }
+    } else {
+        const existingMonitor = document.getElementById('monitor');
+        existingMonitor.style.display = '';
     }
 
     const attachTestingCatalogListeners = (section) => {
@@ -993,31 +978,12 @@ function ensureExperimentalSections() {
             refresh.addEventListener('click', () => loadTestingCatalogData(true));
             refresh.dataset.listenerAttached = 'true';
         }
-        const filterSelect = section.querySelector('#testing-catalog-tag-filter');
-        if (filterSelect && filterSelect.dataset.listenerAttached !== 'true') {
-            filterSelect.addEventListener('change', () => {
-                testingCatalogTagFilter = filterSelect.value || '__all';
-                displayTestingCatalogItems(rawData.testingCatalog || []);
-                const resultsElement = document.getElementById('testing-catalog-results-info');
-                if (resultsElement) {
-                    const filtered = applyTestingCatalogFilter(rawData.testingCatalog || []);
-                    resultsElement.textContent = filtered.length
-                        ? `Showing ${filtered.length} articles${testingCatalogTagFilter !== '__all' ? ` (tag: ${testingCatalogTagFilter})` : ''}`
-                        : 'No articles match the selected tag.';
-                }
-            });
-            filterSelect.dataset.listenerAttached = 'true';
-        }
     };
 
     if (!document.getElementById('blog')) {
-        // Inject blog section dynamically when the HTML template hasn't been updated yet.
         const section = document.createElement('section');
         section.id = 'blog';
         section.className = 'content-section';
-        section.dataset.experimental = 'true';
-        section.style.display = 'none';
-        section.setAttribute('aria-hidden', 'true');
         section.innerHTML = `
             <div class="section-header">
                 <h2>Latest Blog Posts</h2>
@@ -1037,7 +1003,6 @@ function ensureExperimentalSections() {
             <div class="results-info" id="blog-results-info" style="display:none;"></div>
             <div class="data-container" id="blog-data"></div>
         `;
-
         const textToImage = document.getElementById('text-to-image');
         if (textToImage && textToImage.parentNode === main) {
             main.insertBefore(section, textToImage);
@@ -1050,9 +1015,6 @@ function ensureExperimentalSections() {
         const section = document.createElement('section');
         section.id = 'testing-catalog';
         section.className = 'content-section';
-        section.dataset.experimental = 'true';
-        section.style.display = 'none';
-        section.setAttribute('aria-hidden', 'true');
         section.innerHTML = `
             <div class="section-header">
                 <h2>Testing Catalog</h2>
@@ -1071,14 +1033,12 @@ function ensureExperimentalSections() {
             <div class="results-info" id="testing-catalog-results-info" style="display:none;"></div>
             <div class="data-container" id="testing-catalog-data"></div>
         `;
-
         main.appendChild(section);
         attachTestingCatalogListeners(section);
     } else {
         attachTestingCatalogListeners(document.getElementById('testing-catalog'));
     }
 }
-
 function setupNavigation() {
     const navButtons = document.querySelectorAll('.nav-btn');
     const sections = document.querySelectorAll('.content-section');
@@ -1926,28 +1886,12 @@ async function loadTestingCatalogData(forceRefresh = false) {
         const payload = await makeAPICall(url, null);
         cachedData.testingCatalog = payload;
         rawData.testingCatalog = Array.isArray(payload?.items) ? payload.items : [];
-        const uniqueTags = new Set();
-        rawData.testingCatalog.forEach(item => {
-            if (item?.section) {
-                uniqueTags.add(String(item.section).trim());
-            }
-            if (Array.isArray(item?.tags)) {
-                item.tags.forEach(tag => {
-                    if (tag) {
-                        uniqueTags.add(String(tag).trim());
-                    }
-                });
-            }
-        });
-        testingCatalogTagOptions = Array.from(uniqueTags).filter(Boolean).sort((a, b) => a.localeCompare(b));
-        updateTestingCatalogTagFilter();
         displayTestingCatalogItems(rawData.testingCatalog);
+        populateTestingCatalogTags(); // Populate tag filter dropdown
         loadingElement.style.display = 'none';
         if (resultsElement) {
-            const filtered = applyTestingCatalogFilter(rawData.testingCatalog);
-            const count = filtered.length;
-            const filterSuffix = testingCatalogTagFilter !== '__all' ? ` (tag: ${testingCatalogTagFilter})` : '';
-            resultsElement.textContent = count ? `Showing ${count} articles${filterSuffix}` : 'No recent articles available';
+            const count = rawData.testingCatalog.length;
+            resultsElement.textContent = count ? `Showing ${count} articles` : 'No recent articles available';
             resultsElement.style.display = 'block';
         }
     } catch (error) {
@@ -1955,20 +1899,6 @@ async function loadTestingCatalogData(forceRefresh = false) {
         errorElement.textContent = `Failed to load Testing Catalog: ${error.message}`;
         errorElement.style.display = 'block';
     }
-}
-
-function applyTestingCatalogFilter(items) {
-    if (!Array.isArray(items)) return [];
-    if (testingCatalogTagFilter === '__all') {
-        return items;
-    }
-    const normalizedFilter = testingCatalogTagFilter.toLowerCase();
-    return items.filter(item => {
-        const tags = Array.isArray(item?.tags) ? item.tags : [];
-        const section = item?.section ? [item.section] : [];
-        const combined = [...tags, ...section];
-        return combined.some(tag => typeof tag === 'string' && tag.toLowerCase() === normalizedFilter);
-    });
 }
 
 function displayTestingCatalogItems(items) {
@@ -1979,14 +1909,12 @@ function displayTestingCatalogItems(items) {
 
     container.innerHTML = '';
 
-    const filteredItems = applyTestingCatalogFilter(items);
-
-    if (!filteredItems.length) {
+    if (!items || !items.length) {
         container.innerHTML = '<div class="empty-state">No TestingCatalog stories in the past 24 hours.</div>';
         return;
     }
 
-    filteredItems.forEach(item => {
+    items.forEach(item => {
         container.appendChild(createTestingCatalogCard(item));
     });
 }
@@ -1995,6 +1923,7 @@ function createTestingCatalogCard(item) {
     const card = document.createElement('div');
     card.className = 'model-card blog-card';
     card.dataset.source = 'testingcatalog';
+    card.dataset.tags = Array.isArray(item?.tags) ? item.tags.join(',').toLowerCase() : '';
 
     const title = item?.title ? String(item.title).trim() : 'Untitled Update';
     const url = item?.url || '#';
@@ -2022,19 +1951,86 @@ function createTestingCatalogCard(item) {
     return card;
 }
 
-function updateTestingCatalogTagFilter() {
-    const select = document.getElementById('testing-catalog-tag-filter');
-    if (!select) {
+// Populate tag filter dropdown with available tags
+function populateTestingCatalogTags() {
+    const tagFilter = document.getElementById('testing-catalog-tag-filter');
+    const items = rawData.testingCatalog || [];
+    
+    if (!tagFilter || !items.length) {
         return;
     }
-    const current = select.value || '__all';
-    const options = ['__all', ...testingCatalogTagOptions];
-    select.innerHTML = options.map(tag => {
-        const label = tag === '__all' ? 'All Tags' : tag;
-        const selectedAttr = tag === current ? ' selected' : '';
-        return `<option value="${tag}"${selectedAttr}>${label}</option>`;
-    }).join('');
-    testingCatalogTagFilter = options.includes(current) ? current : '__all';
+
+    // Extract all unique tags from items
+    const allTags = new Set();
+    items.forEach(item => {
+        if (Array.isArray(item?.tags)) {
+            item.tags.forEach(tag => {
+                if (tag && typeof tag === 'string') {
+                    allTags.add(tag.trim());
+                }
+            });
+        }
+    });
+
+    // Clear existing options except "All Tags"
+    const existingOptions = Array.from(tagFilter.querySelectorAll('option:not([value="__all"])'));
+    existingOptions.forEach(option => option.remove());
+
+    // Add tag options
+    const sortedTags = Array.from(allTags).sort();
+    sortedTags.forEach(tag => {
+        const option = document.createElement('option');
+        option.value = tag;
+        option.textContent = tag;
+        tagFilter.appendChild(option);
+    });
+
+    // Add event listener for tag filtering
+    if (!tagFilter.dataset.listenerAttached) {
+        tagFilter.addEventListener('change', filterTestingCatalogByTag);
+        tagFilter.dataset.listenerAttached = 'true';
+    }
+}
+
+// Filter Testing Catalog items by selected tag
+function filterTestingCatalogByTag() {
+    const tagFilter = document.getElementById('testing-catalog-tag-filter');
+    const resultsInfo = document.getElementById('testing-catalog-results-info');
+    const items = rawData.testingCatalog || [];
+    
+    if (!tagFilter || !items.length) {
+        return;
+    }
+
+    const selectedTag = tagFilter.value;
+    let filteredItems = items;
+
+    // Filter by selected tag if not "All Tags"
+    if (selectedTag && selectedTag !== '__all') {
+        filteredItems = items.filter(item => {
+            if (!Array.isArray(item?.tags)) {
+                return false;
+            }
+            return item.tags.some(tag =>
+                tag && typeof tag === 'string' && tag.trim() === selectedTag
+            );
+        });
+    }
+
+    // Display filtered items
+    displayTestingCatalogItems(filteredItems);
+
+    // Update results info
+    if (resultsInfo) {
+        const count = filteredItems.length;
+        const total = items.length;
+        if (selectedTag && selectedTag !== '__all') {
+            resultsInfo.textContent = `Showing ${count} of ${total} articles tagged "${selectedTag}"`;
+        } else {
+            resultsInfo.textContent = `Showing ${count} articles`;
+        }
+        resultsInfo.style.display = 'block';
+    }
 }
 
 async function fetchBlogPostsData(forceRefresh = false, options = {}) {
@@ -2771,6 +2767,56 @@ function displayMediaData(models, type) {
 }
 
 // Create media card
+function simplifyCategoryLabel(category) {
+    if (!category) {
+        return '';
+    }
+    return (category.style_category || category.subject_matter_category || 'total').trim();
+}
+
+function buildCategoryPreviewMarkup(categories = [], limit = 3) {
+    if (!Array.isArray(categories) || !categories.length) {
+        return '';
+    }
+    const uniqueEntries = [];
+    const seen = new Set();
+    categories.forEach(category => {
+        const label = simplifyCategoryLabel(category);
+        if (!label) {
+            return;
+        }
+        const normalizedLabel = label.toLowerCase();
+        if (seen.has(normalizedLabel)) {
+            return;
+        }
+        seen.add(normalizedLabel);
+        uniqueEntries.push({
+            label,
+            elo: category.elo || category.elo_score || 'N/A'
+        });
+    });
+
+    if (!uniqueEntries.length) {
+        return '';
+    }
+
+    const previewEntries = uniqueEntries.slice(0, limit);
+    const hasMore = uniqueEntries.length > previewEntries.length;
+
+    return `
+        <div class="evaluations">
+            <h4>Category Breakdown</h4>
+            ${previewEntries.map(entry => `
+                <div class="evaluation-item">
+                    <span>${entry.label}</span>
+                    <span>ELO: ${entry.elo}</span>
+                </div>
+            `).join('')}
+            ${hasMore ? '<div class="evaluation-note">Click for the full breakdown.</div>' : ''}
+        </div>
+    `;
+}
+
 function createMediaCard(model, mediaCategory = '') {
     const card = document.createElement('div');
     card.className = 'model-card clickable';
@@ -2802,17 +2848,7 @@ function createMediaCard(model, mediaCategory = '') {
             <span class="stat-value">${model.ci95 || 'N/A'}</span>
         </div>
         
-        ${model.categories ? `
-            <div class="evaluations">
-                <h4>Category Breakdown</h4>
-                ${model.categories.map(category => `
-                    <div class="evaluation-item">
-                        <span>${category.style_category || category.subject_matter_category || 'Unknown'}</span>
-                        <span>ELO: ${category.elo}</span>
-                    </div>
-                `).join('')}
-            </div>
-        ` : ''}
+        ${buildCategoryPreviewMarkup(model.categories)}
         
         <div class="click-hint">💡 Click to explore full model details</div>
     `;
@@ -2944,7 +2980,7 @@ function clearChatHistory() {
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
-// Agent chatbot (Grok-powered, fetch_data + Perplexity)
+// Agent chatbot (Gemini 2.5 Flash Preview 09-2025 powered, fetch_data + Perplexity)
 function initializeAgentExp() {
     const modelSelect = document.getElementById('agent-exp-model');
     const form = document.getElementById('agent-exp-form');
@@ -3063,7 +3099,7 @@ function renderAgentExpWelcome() {
     welcome.className = 'message ai';
     welcome.innerHTML = `
         <div class="response-content">
-            <p>👋 <strong>Welcome to the Agent.</strong> This lightweight Grok-powered assistant can pull live dashboard datasets and run Perplexity searches.</p>
+            <p>👋 <strong>Welcome to the Agent.</strong> This lightweight Gemini 2.5 Flash Preview (09-2025) assistant can pull live dashboard datasets and run Perplexity searches.</p>
             <p>Try asking for <em>fal.ai image models</em>, <em>fresh leaderboard changes</em>, or <em>pricing comparisons</em>.</p>
         </div>
     `;
@@ -5628,7 +5664,8 @@ document.addEventListener('DOMContentLoaded', function() {
     setupModelDropdown('setting-fallback-models', 'fallback-models-dropdown');
     setupModelDropdown('setting-available-models', 'available-models-dropdown');
 
-    applyExperimentalMode(getStoredExperimentalMode());
+    const storedExperimentalMode = getStoredExperimentalMode();
+    applyExperimentalMode(storedExperimentalMode === null ? true : storedExperimentalMode);
 
     const hypeRefreshButton = document.getElementById('hype-refresh');
     if (hypeRefreshButton) {
@@ -5861,9 +5898,10 @@ function loadSavedSettings() {
     const experimentalToggle = document.getElementById('setting-experimental-mode');
     if (experimentalToggle) {
         const storedMode = getStoredExperimentalMode();
-        experimentalToggle.checked = storedMode;
-        if (experimentalModeEnabled !== storedMode) {
-            applyExperimentalMode(storedMode);
+        const preferredMode = storedMode === null ? true : storedMode;
+        experimentalToggle.checked = preferredMode;
+        if (experimentalModeEnabled !== preferredMode) {
+            applyExperimentalMode(preferredMode);
         }
     }
 

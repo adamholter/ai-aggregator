@@ -24,6 +24,7 @@
                 <span class="legend-item" data-source="hype"><span class="legend-dot"></span>Hype Signals</span>
                 <span class="legend-item" data-source="monitor"><span class="legend-dot"></span>Monitor Feed</span>
                 <span class="legend-item" data-source="blog"><span class="legend-dot"></span>Blog</span>
+                <span class="legend-item" data-source="testingcatalog"><span class="legend-dot"></span>Testing Catalog</span>
             </div>
         </header>
 
@@ -37,12 +38,12 @@
             <button class="nav-btn" data-section="fal-models">Fal.ai</button>
             <button class="nav-btn" data-section="replicate-models">Replicate</button>
             <button class="nav-btn" data-section="openrouter-models">OpenRouter</button>
-            <button class="nav-btn" data-section="hype" data-experimental="true" style="display:none;" aria-hidden="true">Hype</button>
-            <button class="nav-btn" data-section="latest" data-experimental="true" style="display:none;" aria-hidden="true">Latest</button>
-            <button class="nav-btn" data-section="monitor" data-experimental="true" style="display:none;" aria-hidden="true">Monitor</button>
-            <button class="nav-btn" data-section="blog" data-experimental="true" style="display:none;" aria-hidden="true">Blog</button>
-            <button class="nav-btn" data-section="testing-catalog" data-experimental="true" style="display:none;" aria-hidden="true">Testing Catalog</button>
-            <button class="nav-btn" data-section="agent-exp" data-experimental="true" style="display:none;" aria-hidden="true">Agent</button>
+            <button class="nav-btn" data-section="hype">Hype</button>
+            <button class="nav-btn" data-section="latest">Latest</button>
+            <button class="nav-btn" data-section="monitor">Monitor</button>
+            <button class="nav-btn" data-section="blog">Blog</button>
+            <button class="nav-btn" data-section="testing-catalog">Testing Catalog</button>
+            <button class="nav-btn" data-section="agent-exp">Agent</button>
             <button class="nav-btn" data-section="about">About</button>
         </nav>
 
@@ -71,7 +72,7 @@
             </section>
 
             <!-- Latest Section -->
-            <section id="latest" class="content-section" data-experimental="true" style="display:none;" aria-hidden="true">
+            <section id="latest" class="content-section">
                 <div class="section-header">
                     <h2>Latest Activity (Last 24 hours)</h2>
                     <div class="controls">
@@ -96,7 +97,7 @@
             </section>
 
             <!-- Monitor Section -->
-            <section id="monitor" class="content-section" data-experimental="true" style="display:none;" aria-hidden="true">
+            <section id="monitor" class="content-section">
                 <div class="section-header">
                     <h2>Monitor Feed</h2>
                     <div class="controls">
@@ -113,7 +114,7 @@
             </section>
 
             <!-- Blog Section -->
-            <section id="blog" class="content-section" data-experimental="true" style="display:none;" aria-hidden="true">
+            <section id="blog" class="content-section">
                 <div class="section-header">
                     <h2>Latest Blog Posts</h2>
                     <div class="controls">
@@ -313,7 +314,7 @@
             </section>
 
             <!-- Hype Section -->
-            <section id="hype" class="content-section" data-experimental="true" style="display:none;" aria-hidden="true">
+            <section id="hype" class="content-section">
                 <div class="section-header">
                     <h2>Hype Tracker</h2>
                     <div class="controls">
@@ -334,7 +335,7 @@
             </section>
 
             <!-- Testing Catalog Section -->
-            <section id="testing-catalog" class="content-section" data-experimental="true" style="display:none;" aria-hidden="true">
+            <section id="testing-catalog" class="content-section">
                 <div class="section-header">
                     <h2>Testing Catalog</h2>
                     <div class="controls">
@@ -354,7 +355,7 @@
         </section>
 
             <!-- Agent Section -->
-            <section id="agent-exp" class="content-section" data-experimental="true" style="display:none;" aria-hidden="true">
+            <section id="agent-exp" class="content-section">
                 <div class="section-header">
                     <h2>Agent</h2>
                     <div class="controls">
@@ -363,7 +364,7 @@
                         </select>
                         <button id="agent-exp-clear" type="button" class="chart-btn secondary" style="margin-left: 8px;">Clear Chat</button>
                     </div>
-                    <div class="agent-warning experimental-warning">⚡ Lightweight Grok-powered chatbot with dashboard data + Perplexity tools.</div>
+                    <div class="agent-warning experimental-warning">⚡ Lightweight Gemini 2.5 Flash Preview (09-2025) assistant with dashboard data + Perplexity tools.</div>
                 </div>
                 <div class="ai-agent-container agent-exp-container">
                     <div class="chat-container">

@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, Response, stream_with_context, has_request_context
+from flask import Flask, jsonify, request, Response, stream_with_context, has_request_context, render_template_string
 from flask_cors import CORS
 import argparse
 import requests
@@ -103,6 +103,10 @@ _TESTING_CATALOG_CACHE = {
 TESTING_CATALOG_LOG_PATH = os.path.join(BASE_DIR, 'logs', 'testing_catalog.jsonl')
 TESTING_CATALOG_HISTORY_PATH = os.path.join(BASE_DIR, 'logs', 'testing_catalog_history.json')
 _TESTING_CATALOG_LOG_LOCK = Lock()
+USAGE_HISTORY_LIMIT = 400
+USAGE_STATS = defaultdict(int)
+_USAGE_HISTORY = deque(maxlen=USAGE_HISTORY_LIMIT)
+_USAGE_LOG_LOCK = Lock()
 
 
 def _warn_if_missing(name, value):
@@ -182,6 +186,7 @@ def enforce_basic_rate_limit():
         return None
     if request.method == 'OPTIONS':
         return None
+    _record_usage_event()
     path = request.path or ''
     if not path.startswith('/api/'):
         return None
@@ -2090,6 +2095,31 @@ def _append_testing_catalog_history(entries):
         return
     history.sort(key=_testing_catalog_history_sort_key, reverse=True)
     _save_testing_catalog_history(history)
+
+
+def _should_track_usage_path(path):
+    if not path:
+        return False
+    normalized = path.lower()
+    if normalized.startswith('/static/') or normalized.startswith('/favicon') or normalized.startswith('/usage'):
+        return False
+    return True
+
+
+def _record_usage_event():
+    if not _should_track_usage_path(request.path):
+        return
+    entry = {
+        'timestamp': datetime.utcnow().replace(microsecond=0).isoformat(),
+        'method': request.method,
+        'path': request.path,
+        'query': request.query_string.decode('utf-8') if request.query_string else '',
+        'ip': request.remote_addr,
+        'user_agent': (request.headers.get('User-Agent') or '')[:120]
+    }
+    with _USAGE_LOG_LOCK:
+        USAGE_STATS[request.path] += 1
+        _USAGE_HISTORY.appendleft(entry)
 
 
 def fetch_testing_catalog_feed(force_refresh=False):
@@ -8422,6 +8452,70 @@ def health_check():
         'timestamp': datetime.now().isoformat(),
         'cache_size': len(cache)
     })
+
+
+@app.route('/usage', methods=['GET'])
+def usage_dashboard():
+    stats = sorted(USAGE_STATS.items(), key=lambda item: item[1], reverse=True)
+    recent = list(_USAGE_HISTORY)
+    return render_template_string("""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Dashboard Usage</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>Usage Dashboard</h1>
+            <p>Track the most-used endpoints and recent activity across the public APIs.</p>
+        </header>
+        <section class="usage-panel">
+            <h2>Top Endpoints</h2>
+            <div class="usage-grid">
+                <table class="usage-table">
+                    <thead>
+                        <tr>
+                            <th>Endpoint</th>
+                            <th>Requests</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for path, count in stats[:10] %}
+                        <tr>
+                            <td>{{ path }}</td>
+                            <td>{{ count }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                <div class="usage-summary">
+                    <p class="usage-caption">Showing the top 10 paths with recorded usage.</p>
+                    <p class="usage-caption">{{ recent|length }} recent tracked interactions.</p>
+                </div>
+            </div>
+        </section>
+        <section class="usage-panel">
+            <h2>Recent Requests</h2>
+            <div class="usage-list">
+                {% for entry in recent[:20] %}
+                <div class="usage-item">
+                    <div><strong>{{ entry.method }}</strong> {{ entry.path }}</div>
+                    <div>{{ entry.timestamp }} · {{ entry.ip }}</div>
+                    {% if entry.query %}
+                    <div class="usage-query">Query: {{ entry.query }}</div>
+                    {% endif %}
+                    <div class="usage-agent">{{ entry.user_agent }}</div>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+    </div>
+</body>
+</html>""", stats=stats, recent=recent)
+
 
 @app.route('/api/debug/utf8', methods=['POST'])
 def debug_utf8():

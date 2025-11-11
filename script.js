@@ -75,7 +75,7 @@ const THEME_LABELS = {
 
 let modelConfig = null;
 let settingsInitialized = false;
-let experimentalModeEnabled = false;
+let experimentalModeEnabled = true;
 let hypeSortMode = 'newest';
 let blogSortMode = 'newest';
 let agentPendingImages = [];
@@ -325,10 +325,14 @@ function setUserOpenRouterKey(value) {
 
 function getStoredExperimentalMode() {
     try {
-        return localStorage.getItem(EXPERIMENTAL_MODE_STORAGE_KEY) === 'true';
+        const stored = localStorage.getItem(EXPERIMENTAL_MODE_STORAGE_KEY);
+        if (stored === null) {
+            return null;
+        }
+        return stored === 'true';
     } catch (error) {
         console.warn('Unable to read experimental mode preference:', error);
-        return false;
+        return null;
     }
 }
 
@@ -700,7 +704,8 @@ document.addEventListener('DOMContentLoaded', async function() {
     initializeAgentExp();
     loadLLMData(); // Load LLM data by default
     setupImageUpload();
-    applyExperimentalMode(getStoredExperimentalMode());
+    const storedExperimentalMode = getStoredExperimentalMode();
+    applyExperimentalMode(storedExperimentalMode === null ? true : storedExperimentalMode);
 
     const hypeSortSelect = document.getElementById('hype-sort');
     if (hypeSortSelect) {
@@ -839,22 +844,18 @@ function ensureExperimentalNavButtons() {
             button = document.createElement('button');
             button.className = 'nav-btn';
             button.dataset.section = section;
-            button.dataset.experimental = 'true';
             button.textContent = label;
-            button.style.display = 'none';
-            button.setAttribute('aria-hidden', 'true');
             const anchor = nav.querySelector('.nav-btn[data-section="ai-agent"]');
             if (anchor) {
                 nav.insertBefore(button, anchor);
             } else {
                 nav.appendChild(button);
             }
-        } else if (button.dataset.experimental !== 'true') {
-            button.dataset.experimental = 'true';
+        } else {
+            button.textContent = label;
         }
-        if (!button.hasAttribute('aria-hidden')) {
-            button.setAttribute('aria-hidden', experimentalModeEnabled ? 'false' : 'true');
-        }
+        button.style.display = '';
+        button.removeAttribute('aria-hidden');
     };
 
     ensureButton('hype', 'Hype');
@@ -918,9 +919,6 @@ function ensureExperimentalSections() {
         const section = document.createElement('section');
         section.id = 'latest';
         section.className = 'content-section';
-        section.dataset.experimental = 'true';
-        section.style.display = 'none';
-        section.setAttribute('aria-hidden', 'true');
         section.innerHTML = `
             <div class="section-header">
                 <h2>Latest Activity (Last 24 hours)</h2>
@@ -936,32 +934,17 @@ function ensureExperimentalSections() {
             <div class="results-info" id="latest-results-info" style="display:none;"></div>
             <div class="data-container" id="latest-data"></div>
         `;
-
-        const blogSection = document.getElementById('blog');
-        if (blogSection && blogSection.parentNode === main) {
-            main.insertBefore(section, blogSection);
-        } else {
-            const textToImage = document.getElementById('text-to-image');
-            if (textToImage && textToImage.parentNode === main) {
-                main.insertBefore(section, textToImage);
-            } else {
-                main.appendChild(section);
-            }
-        }
+        main.appendChild(section);
         ensureLatestControls(section);
     } else {
+        existingLatest.style.display = '';
         ensureLatestControls(existingLatest);
     }
-
-    ensureLatestControlListeners();
 
     if (!document.getElementById('monitor')) {
         const section = document.createElement('section');
         section.id = 'monitor';
         section.className = 'content-section';
-        section.dataset.experimental = 'true';
-        section.style.display = 'none';
-        section.setAttribute('aria-hidden', 'true');
         section.innerHTML = `
             <div class="section-header">
                 <h2>Monitor Feed</h2>
@@ -977,13 +960,15 @@ function ensureExperimentalSections() {
             <div class="results-info" id="monitor-results-info" style="display:none;"></div>
             <div class="data-container" id="monitor-data"></div>
         `;
-
         const blogSection = document.getElementById('blog');
         if (blogSection && blogSection.parentNode === main) {
             main.insertBefore(section, blogSection);
         } else {
             main.appendChild(section);
         }
+    } else {
+        const existingMonitor = document.getElementById('monitor');
+        existingMonitor.style.display = '';
     }
 
     const attachTestingCatalogListeners = (section) => {
@@ -996,13 +981,9 @@ function ensureExperimentalSections() {
     };
 
     if (!document.getElementById('blog')) {
-        // Inject blog section dynamically when the HTML template hasn't been updated yet.
         const section = document.createElement('section');
         section.id = 'blog';
         section.className = 'content-section';
-        section.dataset.experimental = 'true';
-        section.style.display = 'none';
-        section.setAttribute('aria-hidden', 'true');
         section.innerHTML = `
             <div class="section-header">
                 <h2>Latest Blog Posts</h2>
@@ -1022,7 +1003,6 @@ function ensureExperimentalSections() {
             <div class="results-info" id="blog-results-info" style="display:none;"></div>
             <div class="data-container" id="blog-data"></div>
         `;
-
         const textToImage = document.getElementById('text-to-image');
         if (textToImage && textToImage.parentNode === main) {
             main.insertBefore(section, textToImage);
@@ -1035,9 +1015,6 @@ function ensureExperimentalSections() {
         const section = document.createElement('section');
         section.id = 'testing-catalog';
         section.className = 'content-section';
-        section.dataset.experimental = 'true';
-        section.style.display = 'none';
-        section.setAttribute('aria-hidden', 'true');
         section.innerHTML = `
             <div class="section-header">
                 <h2>Testing Catalog</h2>
@@ -1056,14 +1033,12 @@ function ensureExperimentalSections() {
             <div class="results-info" id="testing-catalog-results-info" style="display:none;"></div>
             <div class="data-container" id="testing-catalog-data"></div>
         `;
-
         main.appendChild(section);
         attachTestingCatalogListeners(section);
     } else {
         attachTestingCatalogListeners(document.getElementById('testing-catalog'));
     }
 }
-
 function setupNavigation() {
     const navButtons = document.querySelectorAll('.nav-btn');
     const sections = document.querySelectorAll('.content-section');
@@ -3005,7 +2980,7 @@ function clearChatHistory() {
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
-// Agent chatbot (Grok-powered, fetch_data + Perplexity)
+// Agent chatbot (Gemini 2.5 Flash Preview 09-2025 powered, fetch_data + Perplexity)
 function initializeAgentExp() {
     const modelSelect = document.getElementById('agent-exp-model');
     const form = document.getElementById('agent-exp-form');
@@ -3124,7 +3099,7 @@ function renderAgentExpWelcome() {
     welcome.className = 'message ai';
     welcome.innerHTML = `
         <div class="response-content">
-            <p>👋 <strong>Welcome to the Agent.</strong> This lightweight Grok-powered assistant can pull live dashboard datasets and run Perplexity searches.</p>
+            <p>👋 <strong>Welcome to the Agent.</strong> This lightweight Gemini 2.5 Flash Preview (09-2025) assistant can pull live dashboard datasets and run Perplexity searches.</p>
             <p>Try asking for <em>fal.ai image models</em>, <em>fresh leaderboard changes</em>, or <em>pricing comparisons</em>.</p>
         </div>
     `;
@@ -5689,7 +5664,8 @@ document.addEventListener('DOMContentLoaded', function() {
     setupModelDropdown('setting-fallback-models', 'fallback-models-dropdown');
     setupModelDropdown('setting-available-models', 'available-models-dropdown');
 
-    applyExperimentalMode(getStoredExperimentalMode());
+    const storedExperimentalMode = getStoredExperimentalMode();
+    applyExperimentalMode(storedExperimentalMode === null ? true : storedExperimentalMode);
 
     const hypeRefreshButton = document.getElementById('hype-refresh');
     if (hypeRefreshButton) {
@@ -5922,9 +5898,10 @@ function loadSavedSettings() {
     const experimentalToggle = document.getElementById('setting-experimental-mode');
     if (experimentalToggle) {
         const storedMode = getStoredExperimentalMode();
-        experimentalToggle.checked = storedMode;
-        if (experimentalModeEnabled !== storedMode) {
-            applyExperimentalMode(storedMode);
+        const preferredMode = storedMode === null ? true : storedMode;
+        experimentalToggle.checked = preferredMode;
+        if (experimentalModeEnabled !== preferredMode) {
+            applyExperimentalMode(preferredMode);
         }
     }
 
