@@ -63,8 +63,8 @@
     --hype-default-bg: rgba(148, 163, 184, 0.18);
     --hype-default-text: #1f2937;
     --source-blog: #f97316;
-    --source-monitor: #0f766e;
-    --source-testingcatalog: #a855f7;
+    --source-monitor: #dc2626;
+    --source-testingcatalog: #047857;
 }
 
 [data-theme="dark"] {
@@ -93,8 +93,8 @@
     --hype-default-bg: rgba(148, 163, 184, 0.22);
     --hype-default-text: #e5e7eb;
     --source-blog: #fb923c;
-    --source-monitor: #2dd4bf;
-    --source-testingcatalog: #c084fc;
+    --source-monitor: #dc2626;
+    --source-testingcatalog: #047857;
 }
 
 [data-theme="source"] {
@@ -118,8 +118,8 @@
     --source-openrouter: #7c3aed;
     --source-hype: #ec4899;
     --source-blog: #f97316;
-    --source-monitor: #0d9488;
-    --source-testingcatalog: #9d174d;
+    --source-monitor: #dc2626;
+    --source-testingcatalog: #047857;
     --hype-github-bg: rgba(36, 41, 46, 0.12);
     --hype-github-text: #1f2937;
     --hype-huggingface-bg: rgba(255, 196, 45, 0.22);
@@ -207,6 +207,16 @@ body {
     height: 10px;
     border-radius: 50%;
     background: currentColor;
+}
+
+[data-theme="source"] .source-legend .legend-item[data-source="testingcatalog"] {
+    color: var(--source-testingcatalog);
+    border-color: rgba(4, 120, 87, 0.4);
+}
+
+[data-theme="source"] .source-legend .legend-item[data-source="monitor"] {
+    color: var(--source-monitor);
+    border-color: rgba(220, 38, 38, 0.35);
 }
 
 [data-theme="source"] .legend-item[data-source="aa-llm"] {
