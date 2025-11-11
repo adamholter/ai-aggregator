@@ -73,6 +73,12 @@ const THEME_LABELS = {
     source: { label: 'Source Mode', icon: '🌈' }
 };
 
+const LLM_MAIN_INDEX_KEYS = [
+    { key: 'artificial_analysis_coding_index', label: 'Coding Index' },
+    { key: 'artificial_analysis_intelligence_index', label: 'Intelligence Index' },
+    { key: 'artificial_analysis_math_index', label: 'Math Index' }
+];
+
 let modelConfig = null;
 let settingsInitialized = false;
 let experimentalModeEnabled = true;
@@ -1212,6 +1218,49 @@ function displayLLMData(models) {
 }
 
 // Create LLM card
+function buildLLMEvaluationPreview(evaluations = {}) {
+    const entries = [];
+    LLM_MAIN_INDEX_KEYS.forEach(({ key, label }) => {
+        const value = evaluations[key];
+        if (value == null) {
+            return;
+        }
+        entries.push({
+            label,
+            value: typeof value === 'number' ? value.toFixed(3) : value
+        });
+    });
+
+    if (!entries.length) {
+        const fallbackEntries = Object.entries(evaluations)
+            .slice(0, 3)
+            .map(([key, value]) => ({
+                label: formatEvaluationKey(key),
+                value: typeof value === 'number' ? value.toFixed(3) : value
+            }));
+        entries.push(...fallbackEntries);
+    }
+
+    if (!entries.length) {
+        return '';
+    }
+
+    const hasMore = Object.keys(evaluations).length > entries.length;
+
+    return `
+        <div class="evaluations">
+            <h4>Evaluations</h4>
+            ${entries.map(entry => `
+                <div class="evaluation-item">
+                    <span>${entry.label}</span>
+                    <span>${entry.value}</span>
+                </div>
+            `).join('')}
+            ${hasMore ? '<div class="evaluation-note">Click to see the full breakdown.</div>' : ''}
+        </div>
+    `;
+}
+
 function createLLMCard(model) {
     const card = document.createElement('div');
     card.className = 'model-card clickable';
@@ -1237,15 +1286,7 @@ function createLLMCard(model) {
             </div>
         </div>
         
-        <div class="evaluations">
-            <h4>Evaluations</h4>
-            ${Object.entries(evaluations).map(([key, value]) => `
-                <div class="evaluation-item">
-                    <span>${formatEvaluationKey(key)}</span>
-                    <span>${typeof value === 'number' ? value.toFixed(3) : value}</span>
-                </div>
-            `).join('')}
-        </div>
+        ${buildLLMEvaluationPreview(evaluations)}
         
         <div class="pricing">
             <h4>Pricing (per 1M tokens)</h4>
