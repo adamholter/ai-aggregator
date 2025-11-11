@@ -6632,6 +6632,59 @@ def get_testing_catalog_feed():
         return jsonify({'error': f'Failed to fetch TestingCatalog feed: {exc}'}), 502
 
 
+def _split_query_values(values):
+    entries = []
+    for raw in values:
+        if not raw:
+            continue
+        for part in raw.split(','):
+            cleaned = part.strip()
+            if cleaned:
+                entries.append(cleaned)
+    return entries
+
+
+def _gather_fetch_categories():
+    keys = ['categories', 'category', 'tabs', 'tab']
+    entries = []
+    seen = set()
+    for key in keys:
+        for candidate in _split_query_values(request.args.getlist(key)):
+            normalized = candidate.strip()
+            if normalized and normalized.lower() not in seen:
+                seen.add(normalized.lower())
+                entries.append(normalized)
+    return entries
+
+
+def _parse_positive_limit_param(param_name):
+    raw = request.args.get(param_name)
+    if raw is None:
+        return None, None
+    try:
+        value = int(raw)
+        if value <= 0:
+            raise ValueError()
+        return value, None
+    except ValueError:
+        return None, f"Invalid {param_name} value '{raw}'. It must be a positive integer."
+
+
+def _parse_bool_param(name):
+    raw = request.args.get(name)
+    if raw is None:
+        return False
+    return str(raw).strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
+def _get_openrouter_key_from_query():
+    for name in ('key', 'api_key', 'apiKey', 'openrouter_key', 'openrouterKey'):
+        value = request.args.get(name)
+        if value:
+            return value.strip()
+    return ''
+
+
 @app.route('/api/fetch-data', methods=['POST'])
 def fetch_data_api():
     """Aggregate datasets for the requested categories and return structured summaries."""
@@ -6659,6 +6712,97 @@ def fetch_data_api():
     except Exception as exc:
         print(f"ERROR: fetch-data tool failed: {exc}")
         return jsonify({'error': 'Failed to fetch dataset summaries'}), 500
+
+
+@app.route('/api/fetch', methods=['GET'])
+def api_fetch():
+    """Expose compressed dataset snapshots for the requested categories via GET params."""
+    categories = _gather_fetch_categories()
+    if not categories:
+        return jsonify({'error': 'At least one category or tab is required as a query parameter.'}), 400
+
+    limit_value, limit_error = _parse_positive_limit_param('limit')
+    if limit_error:
+        return jsonify({'error': limit_error}), 400
+
+    recency_value, recency_error = normalize_recency_value(request.args.get('recency'))
+    if recency_error:
+        return jsonify({'error': recency_error}), 400
+
+    timeframe_value, timeframe_error = normalize_recency_value(request.args.get('timeframe'))
+    if timeframe_error:
+        return jsonify({'error': timeframe_error}), 400
+
+    include_hype = _parse_bool_param('include_hype') or _parse_bool_param('includeHype')
+
+    fal_category_raw = request.args.get('fal_category') or request.args.get('falCategory')
+    normalized_fal_category = normalize_fal_category_value(fal_category_raw)
+    if fal_category_raw and fal_category_raw.strip():
+        allowed_aliases = {alias.lower() for alias in FAL_CATEGORY_ALIASES.keys()}
+        if fal_category_raw.strip().lower() not in allowed_aliases:
+            valid_list = ', '.join(sorted(set(FAL_CATEGORY_OPTIONS.values())))
+            return jsonify({'error': f"Invalid fal_category '{fal_category_raw}'. Use one of: {valid_list}."}), 400
+
+    fetch_options = {'_fal_category_normalized': normalized_fal_category}
+
+    try:
+        fetch_result = fetch_data_for_categories(
+            categories,
+            limit_per_category=limit_value,
+            recency=recency_value,
+            timeframe=timeframe_value,
+            include_hype=include_hype,
+            options=fetch_options
+        )
+    except Exception as exc:
+        print(f"ERROR: /api/fetch request failed: {exc}")
+        return jsonify({'error': 'Failed to fetch datasets', 'details': str(exc)}), 500
+
+    context = rebuild_fetch_context(fetch_result)
+    compressed_snapshot = compose_compressed_datasets(context)
+
+    payload = {
+        'categories': fetch_result.get('categories', []),
+        'structured': fetch_result.get('structured', {}),
+        'markdown': fetch_result.get('markdown', ''),
+        'datasets': fetch_result.get('datasets', {}),
+        'compressed': compressed_snapshot,
+        'generated_at': fetch_result.get('generated_at'),
+        'errors': fetch_result.get('errors') or [],
+        'fal_category': FAL_CATEGORY_OPTIONS.get(normalized_fal_category)
+    }
+    return jsonify(payload)
+
+
+@app.route('/api/ask-perplexity', methods=['GET'])
+def api_ask_perplexity():
+    """Proxy a Perplexity search via OpenRouter when provided a query and API key."""
+    query = (request.args.get('query') or '').strip()
+    if not query:
+        return jsonify({'error': 'Query parameter is required.'}), 400
+
+    api_key = _get_openrouter_key_from_query()
+    if not api_key:
+        return jsonify({'error': 'OpenRouter key is required via the `key` (or api_key/openrouter_key) parameter.'}), 400
+
+    try:
+        result_payload, _ = _agent_exp_execute_perplexity({'query': query}, api_key)
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    except requests.exceptions.RequestException as exc:
+        return jsonify({'error': 'Perplexity request failed', 'details': str(exc)}), 502
+
+    try:
+        parsed = json.loads(result_payload)
+    except json.JSONDecodeError:
+        parsed = {'raw': result_payload}
+
+    return jsonify({
+        'query': query,
+        'model': parsed.get('model'),
+        'response': parsed.get('response'),
+        'raw': parsed
+    })
 
 
 def _agent_exp_allowed_categories(experimental_mode):
