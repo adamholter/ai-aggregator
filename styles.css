@@ -64,6 +64,7 @@
     --hype-default-text: #1f2937;
     --source-blog: #f97316;
     --source-monitor: #0f766e;
+    --source-testingcatalog: #a855f7;
 }
 
 [data-theme="dark"] {
@@ -93,6 +94,7 @@
     --hype-default-text: #e5e7eb;
     --source-blog: #fb923c;
     --source-monitor: #2dd4bf;
+    --source-testingcatalog: #c084fc;
 }
 
 [data-theme="source"] {
@@ -117,6 +119,7 @@
     --source-hype: #ec4899;
     --source-blog: #f97316;
     --source-monitor: #0d9488;
+    --source-testingcatalog: #9d174d;
     --hype-github-bg: rgba(36, 41, 46, 0.12);
     --hype-github-text: #1f2937;
     --hype-huggingface-bg: rgba(255, 196, 45, 0.22);
@@ -977,6 +980,14 @@ body {
 
 [data-theme="source"] .model-card[data-source="monitor"] .source-badge {
     color: var(--source-monitor);
+}
+
+[data-theme="source"] .model-card[data-source="testingcatalog"] {
+    border-top-color: var(--source-testingcatalog);
+}
+
+[data-theme="source"] .model-card[data-source="testingcatalog"] .source-badge {
+    color: var(--source-testingcatalog);
 }
 
 /* Model stats */
