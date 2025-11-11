@@ -2792,6 +2792,56 @@ function displayMediaData(models, type) {
 }
 
 // Create media card
+function simplifyCategoryLabel(category) {
+    if (!category) {
+        return '';
+    }
+    return (category.style_category || category.subject_matter_category || 'total').trim();
+}
+
+function buildCategoryPreviewMarkup(categories = [], limit = 3) {
+    if (!Array.isArray(categories) || !categories.length) {
+        return '';
+    }
+    const uniqueEntries = [];
+    const seen = new Set();
+    categories.forEach(category => {
+        const label = simplifyCategoryLabel(category);
+        if (!label) {
+            return;
+        }
+        const normalizedLabel = label.toLowerCase();
+        if (seen.has(normalizedLabel)) {
+            return;
+        }
+        seen.add(normalizedLabel);
+        uniqueEntries.push({
+            label,
+            elo: category.elo || category.elo_score || 'N/A'
+        });
+    });
+
+    if (!uniqueEntries.length) {
+        return '';
+    }
+
+    const previewEntries = uniqueEntries.slice(0, limit);
+    const hasMore = uniqueEntries.length > previewEntries.length;
+
+    return `
+        <div class="evaluations">
+            <h4>Category Breakdown</h4>
+            ${previewEntries.map(entry => `
+                <div class="evaluation-item">
+                    <span>${entry.label}</span>
+                    <span>ELO: ${entry.elo}</span>
+                </div>
+            `).join('')}
+            ${hasMore ? '<div class="evaluation-note">Click for the full breakdown.</div>' : ''}
+        </div>
+    `;
+}
+
 function createMediaCard(model, mediaCategory = '') {
     const card = document.createElement('div');
     card.className = 'model-card clickable';
@@ -2823,17 +2873,7 @@ function createMediaCard(model, mediaCategory = '') {
             <span class="stat-value">${model.ci95 || 'N/A'}</span>
         </div>
         
-        ${model.categories ? `
-            <div class="evaluations">
-                <h4>Category Breakdown</h4>
-                ${model.categories.map(category => `
-                    <div class="evaluation-item">
-                        <span>${category.style_category || category.subject_matter_category || 'Unknown'}</span>
-                        <span>ELO: ${category.elo}</span>
-                    </div>
-                `).join('')}
-            </div>
-        ` : ''}
+        ${buildCategoryPreviewMarkup(model.categories)}
         
         <div class="click-hint">💡 Click to explore full model details</div>
     `;

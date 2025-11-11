@@ -1054,6 +1054,13 @@ body {
     border-bottom: none;
 }
 
+.evaluation-note {
+    font-size: 0.8rem;
+    color: var(--info-text);
+    margin-top: 8px;
+    text-align: right;
+}
+
 /* Pricing */
 .pricing {
     background: var(--info-bg);
