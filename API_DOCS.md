@@ -59,6 +59,14 @@ Runs a Perplexity (web search) tool call and returns the response payload.
 
 Returns `400` when parameters are missing or malformed, `502` when the upstream call fails.
 
+**Example**
+
+```
+curl 'https://your-hostname/api/ask-perplexity?query=latest%20ai%20agents&key=sk-xxx'
+```
+
+The endpoint proxies a Perplexity request through OpenRouter using the provided `key`, so you can trigger a live web-search directly from the dashboard helpers rather than issuing the OpenRouter call yourself.
+
 ## `GET /latest`
 Existing endpoint that generates the Latest feed aggregated from multiple sources (the same data you get from `/api/fetch?tabs=latest`).
 
