@@ -2132,6 +2132,9 @@ def fetch_testing_catalog_feed(force_refresh=False):
         and cached_timestamp
         and now - cached_timestamp < TESTING_CATALOG_CACHE_TTL
     ):
+        history = _load_testing_catalog_history()
+        cached_payload['history'] = history
+        cached_payload['history_count'] = len(history)
         return cached_payload
 
     try:
