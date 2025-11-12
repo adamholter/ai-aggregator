@@ -1926,30 +1926,18 @@ async function loadTestingCatalogData(forceRefresh = false) {
     try {
         const payload = await makeAPICall(url, null);
         cachedData.testingCatalog = payload;
-        const historyItems = Array.isArray(payload?.history) ? payload.history : [];
-        const recentItems = Array.isArray(payload?.items) ? payload.items : [];
-        const seenUrls = new Set();
-        const combined = [];
-        historyItems.forEach(item => {
-            if (item?.url && !seenUrls.has(item.url)) {
-                seenUrls.add(item.url);
-            }
-            combined.push(item);
-        });
-        recentItems.forEach(item => {
-            if (item?.url && !seenUrls.has(item.url)) {
-                seenUrls.add(item.url);
-                combined.unshift(item);
-            }
-        });
-        rawData.testingCatalog = combined;
+        const mergedItems = Array.isArray(payload?.items) ? payload.items : [];
+        rawData.testingCatalog = mergedItems;
         displayTestingCatalogItems(rawData.testingCatalog);
         populateTestingCatalogTags(); // Populate tag filter dropdown
         loadingElement.style.display = 'none';
         if (resultsElement) {
             const totalCount = rawData.testingCatalog.length;
+            const historyTotal = typeof payload?.history_count === 'number'
+                ? payload.history_count
+                : Array.isArray(payload?.history) ? payload.history.length : totalCount;
             resultsElement.textContent = totalCount
-                ? `Showing ${totalCount} accumulated articles (history maintained across fetches)`
+                ? `Showing ${totalCount} TestingCatalog articles (history size: ${historyTotal})`
                 : 'No TestingCatalog articles available yet';
             resultsElement.style.display = 'block';
         }
