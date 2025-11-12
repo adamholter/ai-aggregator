@@ -107,6 +107,20 @@ USAGE_HISTORY_LIMIT = 400
 USAGE_STATS = defaultdict(int)
 _USAGE_HISTORY = deque(maxlen=USAGE_HISTORY_LIMIT)
 _USAGE_LOG_LOCK = Lock()
+def _merge_testing_catalog_items(history, recent):
+    seen_urls = set()
+    combined = []
+    for entry in history:
+        url = entry.get('url')
+        if url and url not in seen_urls:
+            seen_urls.add(url)
+            combined.append(entry)
+    for entry in recent:
+        url = entry.get('url')
+        if url and url not in seen_urls:
+            seen_urls.add(url)
+            combined.insert(0, entry)
+    return combined
 
 
 def _warn_if_missing(name, value):
@@ -2133,8 +2147,10 @@ def fetch_testing_catalog_feed(force_refresh=False):
         and now - cached_timestamp < TESTING_CATALOG_CACHE_TTL
     ):
         history = _load_testing_catalog_history()
+        combined_items = _merge_testing_catalog_items(history, cached_payload.get('recent_items') or cached_payload.get('items') or [])
         cached_payload['history'] = history
         cached_payload['history_count'] = len(history)
+        cached_payload['items'] = combined_items
         return cached_payload
 
     try:
@@ -2167,8 +2183,10 @@ def fetch_testing_catalog_feed(force_refresh=False):
         _append_testing_catalog_history(new_entries)
         history = _load_testing_catalog_history()
 
+    combined_items = _merge_testing_catalog_items(history, items)
     payload = {
-        'items': items,
+        'items': combined_items,
+        'recent_items': items,
         'count': len(items),
         'fetched_at': datetime.utcnow().replace(microsecond=0).isoformat() + 'Z'
     }
