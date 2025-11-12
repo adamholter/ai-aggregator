@@ -1926,13 +1926,31 @@ async function loadTestingCatalogData(forceRefresh = false) {
     try {
         const payload = await makeAPICall(url, null);
         cachedData.testingCatalog = payload;
-        rawData.testingCatalog = Array.isArray(payload?.items) ? payload.items : [];
+        const historyItems = Array.isArray(payload?.history) ? payload.history : [];
+        const recentItems = Array.isArray(payload?.items) ? payload.items : [];
+        const seenUrls = new Set();
+        const combined = [];
+        historyItems.forEach(item => {
+            if (item?.url && !seenUrls.has(item.url)) {
+                seenUrls.add(item.url);
+            }
+            combined.push(item);
+        });
+        recentItems.forEach(item => {
+            if (item?.url && !seenUrls.has(item.url)) {
+                seenUrls.add(item.url);
+                combined.unshift(item);
+            }
+        });
+        rawData.testingCatalog = combined;
         displayTestingCatalogItems(rawData.testingCatalog);
         populateTestingCatalogTags(); // Populate tag filter dropdown
         loadingElement.style.display = 'none';
         if (resultsElement) {
-            const count = rawData.testingCatalog.length;
-            resultsElement.textContent = count ? `Showing ${count} articles` : 'No recent articles available';
+            const totalCount = rawData.testingCatalog.length;
+            resultsElement.textContent = totalCount
+                ? `Showing ${totalCount} accumulated articles (history maintained across fetches)`
+                : 'No TestingCatalog articles available yet';
             resultsElement.style.display = 'block';
         }
     } catch (error) {
@@ -1951,7 +1969,7 @@ function displayTestingCatalogItems(items) {
     container.innerHTML = '';
 
     if (!items || !items.length) {
-        container.innerHTML = '<div class="empty-state">No TestingCatalog stories in the past 24 hours.</div>';
+        container.innerHTML = '<div class="empty-state">No TestingCatalog stories are available yet.</div>';
         return;
     }
 
