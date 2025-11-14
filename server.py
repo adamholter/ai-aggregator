@@ -102,6 +102,7 @@ _TESTING_CATALOG_CACHE = {
 }
 TESTING_CATALOG_LOG_PATH = os.path.join(BASE_DIR, 'logs', 'testing_catalog.jsonl')
 TESTING_CATALOG_HISTORY_PATH = os.path.join(BASE_DIR, 'logs', 'testing_catalog_history.json')
+FAST_TESTING_CATALOG_PREVIEW_LIMIT = 6
 _TESTING_CATALOG_LOG_LOCK = Lock()
 USAGE_HISTORY_LIMIT = 400
 USAGE_STATS = defaultdict(int)
@@ -1931,7 +1932,7 @@ def _two_sentence_summary(text):
     return ' '.join(sentences[:2]).strip()
 
 
-def _parse_testing_catalog_feed(xml_text):
+def _parse_testing_catalog_feed(xml_text, limit=None):
     if not xml_text:
         return []
 
@@ -2003,6 +2004,8 @@ def _parse_testing_catalog_feed(xml_text):
             'content_html': sanitized_html,
             'content_text': text_content
         })
+        if limit and len(items) >= limit:
+            break
 
     return items
 
@@ -2136,12 +2139,13 @@ def _record_usage_event():
         _USAGE_HISTORY.appendleft(entry)
 
 
-def fetch_testing_catalog_feed(force_refresh=False):
+def fetch_testing_catalog_feed(force_refresh=False, fast_limit=None, update_history=True):
     now = datetime.utcnow()
     cached_payload = _TESTING_CATALOG_CACHE.get('payload')
     cached_timestamp = _TESTING_CATALOG_CACHE.get('timestamp')
     if (
-        not force_refresh
+        fast_limit is None
+        and not force_refresh
         and cached_payload
         and cached_timestamp
         and now - cached_timestamp < TESTING_CATALOG_CACHE_TTL
@@ -2167,21 +2171,25 @@ def fetch_testing_catalog_feed(force_refresh=False):
             return cached_payload
         raise RuntimeError(f'Failed to fetch TestingCatalog feed: {exc}') from exc
 
-    items = _parse_testing_catalog_feed(xml_text)
+    items = _parse_testing_catalog_feed(xml_text, limit=fast_limit)
 
     history = _load_testing_catalog_history()
-    existing_urls = _load_testing_catalog_log_urls()
-    existing_urls.update({
-        entry.get('url')
-        for entry in history
-        if isinstance(entry, dict) and entry.get('url')
-    })
+    if update_history and fast_limit is None:
+        existing_urls = _load_testing_catalog_log_urls()
+        existing_urls.update({
+            entry.get('url')
+            for entry in history
+            if isinstance(entry, dict) and entry.get('url')
+        })
 
-    new_entries = [item for item in items if item.get('url') and item['url'] not in existing_urls]
-    if new_entries:
-        _append_testing_catalog_log(new_entries)
-        _append_testing_catalog_history(new_entries)
-        history = _load_testing_catalog_history()
+        new_entries = [
+            item for item in items
+            if item.get('url') and item['url'] not in existing_urls
+        ]
+        if new_entries:
+            _append_testing_catalog_log(new_entries)
+            _append_testing_catalog_history(new_entries)
+            history = _load_testing_catalog_history()
 
     combined_items = _merge_testing_catalog_items(history, items)
     payload = {
@@ -2192,8 +2200,9 @@ def fetch_testing_catalog_feed(force_refresh=False):
     }
     payload['history'] = history
     payload['history_count'] = len(history)
-    _TESTING_CATALOG_CACHE['timestamp'] = datetime.utcnow()
-    _TESTING_CATALOG_CACHE['payload'] = payload
+    if fast_limit is None:
+        _TESTING_CATALOG_CACHE['timestamp'] = datetime.utcnow()
+        _TESTING_CATALOG_CACHE['payload'] = payload
     return payload
 
 
@@ -6734,9 +6743,21 @@ def get_blog_posts():
 
 @app.route('/api/testing-catalog', methods=['GET'])
 def get_testing_catalog_feed():
-    force_refresh = request.args.get('cache_bust', 'false').lower() == 'true'
+    args = request.args
+    force_refresh = (
+        args.get('cache_bust', 'false').lower() == 'true'
+        or args.get('force_refresh', 'false').lower() == 'true'
+    )
+    fast_load = args.get('fast_load', 'false').lower() == 'true'
     try:
-        payload = fetch_testing_catalog_feed(force_refresh=force_refresh)
+        if fast_load:
+            payload = fetch_testing_catalog_feed(
+                force_refresh=True,
+                fast_limit=FAST_TESTING_CATALOG_PREVIEW_LIMIT,
+                update_history=False
+            )
+        else:
+            payload = fetch_testing_catalog_feed(force_refresh=force_refresh)
         return jsonify(payload)
     except RuntimeError as exc:
         return jsonify({'error': str(exc)}), 503

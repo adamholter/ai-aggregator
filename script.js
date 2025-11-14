@@ -58,6 +58,7 @@ let agentExpState = {
 };
 let testingCatalogTagFilter = '__all';
 let testingCatalogTagOptions = [];
+let testingCatalogLoadId = 0;
 
 let openRouterIndex = null;
 const modelMatchCache = new Map();
@@ -1921,30 +1922,80 @@ async function loadTestingCatalogData(forceRefresh = false) {
         resultsElement.textContent = '';
     }
 
-    const url = forceRefresh ? '/api/testing-catalog?cache_bust=true' : '/api/testing-catalog';
+    const quickUrl = `/api/testing-catalog?fast_load=true&cache_bust=true${forceRefresh ? '&force_refresh=true' : ''}`;
+    const fullUrl = `/api/testing-catalog?cache_bust=true${forceRefresh ? '&force_refresh=true' : ''}`;
+    const loadId = ++testingCatalogLoadId;
+    let previewDisplayed = false;
 
-    try {
-        const payload = await makeAPICall(url, null);
-        cachedData.testingCatalog = payload;
-        const mergedItems = Array.isArray(payload?.items) ? payload.items : [];
-        rawData.testingCatalog = mergedItems;
-        displayTestingCatalogItems(rawData.testingCatalog);
-        populateTestingCatalogTags(); // Populate tag filter dropdown
-        loadingElement.style.display = 'none';
-        if (resultsElement) {
-            const totalCount = rawData.testingCatalog.length;
+    const renderResultsText = (items, payload, isFull) => {
+        if (!resultsElement) {
+            return;
+        }
+        if (!items.length) {
+            resultsElement.textContent = 'No TestingCatalog articles are available yet';
+            resultsElement.style.display = 'block';
+            return;
+        }
+        if (isFull) {
             const historyTotal = typeof payload?.history_count === 'number'
                 ? payload.history_count
-                : Array.isArray(payload?.history) ? payload.history.length : totalCount;
-            resultsElement.textContent = totalCount
-                ? `Showing ${totalCount} TestingCatalog articles (history size: ${historyTotal})`
-                : 'No TestingCatalog articles available yet';
-            resultsElement.style.display = 'block';
+                : Array.isArray(payload?.history) ? payload.history.length : items.length;
+            resultsElement.textContent = `Showing ${items.length} TestingCatalog articles (history size: ${historyTotal})`;
+        } else {
+            resultsElement.textContent = `Showing ${items.length} preview TestingCatalog articles (full catalog loading…)`;
         }
+        resultsElement.style.display = 'block';
+    };
+
+    const startFullFetch = () => {
+        (async () => {
+            try {
+                const payload = await makeAPICall(fullUrl, null);
+                if (loadId !== testingCatalogLoadId) {
+                    return;
+                }
+                cachedData.testingCatalog = payload;
+                const mergedItems = Array.isArray(payload?.items) ? payload.items : [];
+                rawData.testingCatalog = mergedItems;
+                displayTestingCatalogItems(rawData.testingCatalog);
+                populateTestingCatalogTags(); // Populate tag filter dropdown
+                renderResultsText(mergedItems, payload, true);
+                errorElement.style.display = 'none';
+            } catch (fullError) {
+                if (loadId !== testingCatalogLoadId) {
+                    return;
+                }
+                errorElement.textContent = previewDisplayed
+                    ? `Updated Testing Catalog load failed: ${fullError.message}`
+                    : `Failed to load Testing Catalog: ${fullError.message}`;
+                errorElement.style.display = 'block';
+            }
+        })();
+    };
+
+    try {
+        const payload = await makeAPICall(quickUrl, null);
+        if (loadId !== testingCatalogLoadId) {
+            return;
+        }
+        const previewItems = Array.isArray(payload?.items) ? payload.items : [];
+        rawData.testingCatalog = previewItems;
+        displayTestingCatalogItems(rawData.testingCatalog);
+        populateTestingCatalogTags(); // Populate tag filter dropdown
+        renderResultsText(previewItems, payload, false);
+        previewDisplayed = true;
     } catch (error) {
-        loadingElement.style.display = 'none';
-        errorElement.textContent = `Failed to load Testing Catalog: ${error.message}`;
+        if (loadId !== testingCatalogLoadId) {
+            return;
+        }
+        errorElement.textContent = `Failed to load Testing Catalog preview: ${error.message}`;
         errorElement.style.display = 'block';
+    } finally {
+        if (loadId !== testingCatalogLoadId) {
+            return;
+        }
+        loadingElement.style.display = 'none';
+        startFullFetch();
     }
 }
 
