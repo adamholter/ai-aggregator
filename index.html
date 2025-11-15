@@ -571,6 +571,20 @@
                     </div>
                 </div>
 
+                <div class="settings-section">
+                    <h3>Filtering Defaults</h3>
+                    <div class="form-row">
+                        <label for="filter-model-id">Filter model ID</label>
+                        <input id="filter-model-id" type="text" placeholder="google/gemini-2.5-flash-lite-preview-09-2025" />
+                        <p class="help-text">Default OpenRouter model used by the experimental filter.</p>
+                    </div>
+                    <div class="form-row">
+                        <label for="filter-prompt-note">Filter prompt note</label>
+                        <input id="filter-prompt-note" type="text" placeholder="Prioritize recency and impact" />
+                        <p class="help-text">Appended to the system prompt to customize filtering behavior.</p>
+                    </div>
+                </div>
+
                 <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:24px;">
                     <button class="chart-btn" id="settings-save">Save Settings</button>
                     <button class="chart-btn secondary" id="settings-cancel">Cancel</button>

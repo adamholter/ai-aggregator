@@ -63,6 +63,7 @@ let currentUser = null;
 let authMode = 'login';
 let pinnedItems = [];
 const LOCAL_PIN_STORAGE_KEY = 'dashboard-pinned-items';
+const EXPERIMENTAL_FILTER_MODEL = 'google/gemini-2.5-flash-lite-preview-09-2025';
 const FILTERABLE_SECTIONS = {
     llms: { sectionId: 'llms', category: 'llms', limit: 60, getItems: () => rawData.llms || [] },
     'text-to-image': { sectionId: 'text-to-image', category: 'text-to-image', limit: 60, getItems: () => rawData.textToImage || [] },
