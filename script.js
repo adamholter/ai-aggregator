@@ -61,6 +61,8 @@ let testingCatalogTagOptions = [];
 let testingCatalogLoadId = 0;
 let currentUser = null;
 let authMode = 'login';
+let pinnedItems = [];
+const LOCAL_PIN_STORAGE_KEY = 'dashboard-pinned-items';
 
 let openRouterIndex = null;
 const modelMatchCache = new Map();
@@ -711,9 +713,15 @@ document.addEventListener('DOMContentLoaded', async function() {
   applyAgentDefaults();
    setupOpenRouterControls();
    populateAgentDropdown();
-    initializeAgentExp();
-    loadLLMData(); // Load LLM data by default
-    setupImageUpload();
+   initializeAgentExp();
+   loadLLMData(); // Load LLM data by default
+   setupImageUpload();
+    const pinnedRefreshButton = document.getElementById('pinned-refresh');
+    if (pinnedRefreshButton) {
+        pinnedRefreshButton.addEventListener('click', () => {
+            refreshPinnedItems();
+        });
+    }
     const storedExperimentalMode = getStoredExperimentalMode();
     applyExperimentalMode(storedExperimentalMode === null ? true : storedExperimentalMode);
 
@@ -731,8 +739,9 @@ document.addEventListener('DOMContentLoaded', async function() {
 
 // Theme management
 function initializeTheme() {
-    const stored = localStorage.getItem('theme') || 'light';
-    const initialTheme = THEME_SEQUENCE.includes(stored) ? stored : 'light';
+    const stored = localStorage.getItem('theme');
+    const preferredDefault = 'source';
+    const initialTheme = THEME_SEQUENCE.includes(stored) ? stored : preferredDefault;
     document.documentElement.setAttribute('data-theme', initialTheme);
     if (!THEME_SEQUENCE.includes(stored)) {
         localStorage.setItem('theme', initialTheme);
@@ -812,6 +821,7 @@ async function refreshAuthState() {
         currentUser = null;
     }
     updateAuthButton();
+    await refreshPinnedItems();
 }
 
 function updateAuthButton() {
@@ -902,6 +912,7 @@ async function handleAuthSubmit(event) {
         currentUser = payload.user || null;
         closeAuthModal();
         updateAuthButton();
+        await refreshPinnedItems();
     } catch (error) {
         console.error('Auth request failed:', error);
         showAuthError('Request failed. Please try again.');
@@ -916,7 +927,229 @@ async function logoutUser() {
     } finally {
         currentUser = null;
         updateAuthButton();
+        await refreshPinnedItems();
     }
+}
+
+function buildPinKey(categoryId, item) {
+    if (!categoryId) {
+        return `uncategorized:${Date.now()}`;
+    }
+    const identifier =
+        item?.id
+        || item?.uuid
+        || item?.model_id
+        || item?.modelId
+        || item?.slug
+        || item?.url
+        || item?.name
+        || item?.title;
+    if (identifier) {
+        return `${categoryId}:${identifier}`;
+    }
+    const jsonSnippet = JSON.stringify({
+        label: item?.name || item?.title || item?.summary || '',
+        url: item?.url || ''
+    });
+    let hash = 0;
+    for (let i = 0; i < jsonSnippet.length; i++) {
+        hash = (hash * 31 + jsonSnippet.charCodeAt(i)) | 0;
+    }
+    return `${categoryId}:${Math.abs(hash)}`;
+}
+
+function loadLocalPins() {
+    try {
+        const raw = localStorage.getItem(LOCAL_PIN_STORAGE_KEY);
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+            return parsed;
+        }
+    } catch (error) {
+        console.error('Failed to parse local pins:', error);
+    }
+    return [];
+}
+
+function saveLocalPins(items) {
+    try {
+        localStorage.setItem(LOCAL_PIN_STORAGE_KEY, JSON.stringify(items));
+    } catch (error) {
+        console.error('Failed to save local pins:', error);
+    }
+}
+
+function isItemPinned(categoryId, item) {
+    const key = buildPinKey(categoryId, item);
+    return pinnedItems.some(entry => entry.key === key);
+}
+
+function attachPinButton(card, categoryId, item) {
+    if (!card || !item) {
+        return;
+    }
+    const key = buildPinKey(categoryId, item);
+    let button = card.querySelector('.pin-control');
+    if (!button) {
+        button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'pin-control';
+        button.addEventListener('click', event => {
+            event.preventDefault();
+            event.stopPropagation();
+            togglePin(categoryId, item);
+        });
+        card.appendChild(button);
+    }
+    button.dataset.pinKey = key;
+    updatePinButton(button);
+}
+
+function updatePinButton(button) {
+    if (!button) return;
+    const key = button.dataset.pinKey;
+    const pinned = pinnedItems.some(entry => entry.key === key);
+    button.classList.toggle('is-pinned', pinned);
+    button.textContent = pinned ? '★ Pinned' : '☆ Pin';
+}
+
+function updatePinButtonStates() {
+    const buttons = document.querySelectorAll('.pin-control');
+    buttons.forEach(updatePinButton);
+}
+
+async function togglePin(categoryId, item) {
+    const key = buildPinKey(categoryId, item);
+    const existing = pinnedItems.find(entry => entry.key === key);
+    try {
+        if (currentUser) {
+            if (existing) {
+                await removeRemotePin(existing);
+            } else {
+                await addRemotePin(categoryId, item, key);
+            }
+        } else {
+            if (existing) {
+                removeLocalPin(key);
+            } else {
+                addLocalPin(categoryId, item, key);
+            }
+        }
+    } catch (error) {
+        console.error('Failed to toggle pin:', error);
+    }
+    await refreshPinnedItems();
+}
+
+async function addRemotePin(categoryId, item, key) {
+    const response = await fetch('/api/pins', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ category: categoryId, item, key })
+    });
+    if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || 'Failed to pin item.');
+    }
+}
+
+async function removeRemotePin(pin) {
+    if (!pin?.id && !pin?.key) {
+        return;
+    }
+    const endpoint = pin.id ? `/api/pins/${pin.id}` : `/api/pins?key=${encodeURIComponent(pin.key)}`;
+    const response = await fetch(endpoint, {
+        method: 'DELETE',
+        credentials: 'same-origin'
+    });
+    if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || 'Failed to remove pin.');
+    }
+}
+
+function addLocalPin(categoryId, item, key) {
+    const entries = loadLocalPins();
+    entries.unshift({
+        id: key,
+        key,
+        category: categoryId,
+        item,
+        created_at: new Date().toISOString()
+    });
+    saveLocalPins(entries.slice(0, 200));
+}
+
+function removeLocalPin(key) {
+    const entries = loadLocalPins().filter(entry => entry.key !== key);
+    saveLocalPins(entries);
+}
+
+async function refreshPinnedItems() {
+    try {
+        if (currentUser) {
+            const response = await fetch('/api/pins', { credentials: 'same-origin' });
+            if (response.ok) {
+                const payload = await response.json();
+                pinnedItems = payload.items || [];
+            } else {
+                pinnedItems = [];
+            }
+        } else {
+            pinnedItems = loadLocalPins();
+        }
+    } catch (error) {
+        console.error('Failed to refresh pins:', error);
+        if (!currentUser) {
+            pinnedItems = loadLocalPins();
+        }
+    }
+    renderPinnedItemsSection();
+    updatePinButtonStates();
+}
+
+function renderPinnedItemsSection() {
+    const container = document.getElementById('pinned-data');
+    const emptyState = document.getElementById('pinned-empty');
+    if (!container || !emptyState) {
+        return;
+    }
+    container.innerHTML = '';
+    if (!pinnedItems.length) {
+        emptyState.style.display = 'block';
+        return;
+    }
+    emptyState.style.display = 'none';
+    pinnedItems.forEach(pin => {
+        container.appendChild(createPinnedCard(pin));
+    });
+}
+
+function createPinnedCard(pin) {
+    const card = document.createElement('div');
+    card.className = 'model-card pinned-card';
+    const item = pin.item || {};
+    const title = item.title || item.name || 'Pinned Item';
+    const description = item.summary || item.excerpt || item.description || item.content_text || '';
+    const url = item.url || item.link || '';
+    const categoryLabel = pin.category ? pin.category.replace(/-/g, ' ').toUpperCase() : 'Pinned';
+
+    card.innerHTML = `
+        <div class="source-badge">${categoryLabel}</div>
+        <h3>${escapeHtml(title)}</h3>
+        ${description ? `<p>${escapeHtml(description)}</p>` : ''}
+        <div class="pin-meta">
+            Saved ${formatRelativeTime(pin.created_at)}${url ? ` · <a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">Open</a>` : ''}
+        </div>
+    `;
+
+    const removeButton = document.createElement('button');
+    removeButton.className = 'pin-remove-btn';
+    removeButton.textContent = 'Remove';
+    removeButton.addEventListener('click', () => togglePin(pin.category, item));
+    card.appendChild(removeButton);
+    return card;
 }
 
 
@@ -1465,7 +1698,7 @@ function createLLMCard(model) {
         
         <div class="click-hint">💡 Click to explore full model details</div>
     `;
-    
+    attachPinButton(card, 'llms', model);
     return card;
 }
 
@@ -1985,6 +2218,7 @@ function createHypeCard(item, index, fetchedAt) {
         </div>
     `;
 
+    attachPinButton(card, 'hype', item);
     return card;
 }
 
@@ -2208,6 +2442,7 @@ function createTestingCatalogCard(item) {
         </div>
     `;
 
+    attachPinButton(card, 'testing-catalog', item);
     return card;
 }
 
@@ -2538,7 +2773,7 @@ function createBlogCard(post) {
             ${badgeMarkup}
         </div>
     `;
-
+    attachPinButton(card, 'blog', post);
     return card;
 }
 
@@ -2732,6 +2967,7 @@ function createLatestCard(item) {
         </div>
     `;
 
+    attachPinButton(card, 'latest', item);
     return card;
 }
 
@@ -2835,6 +3071,7 @@ function createMonitorCard(item) {
         </div>
     `;
 
+    attachPinButton(card, 'monitor', item);
     return card;
 }
 
@@ -2978,7 +3215,7 @@ function createOpenRouterCard(model) {
             ${model.hugging_face_id ? `<a class="external-link" href="https://huggingface.co/${model.hugging_face_id}" target="_blank" rel="noopener">Hugging Face ↗</a>` : ''}
         </div>
     `;
-
+    attachPinButton(card, 'openrouter', model);
     return card;
 }
 
@@ -3112,7 +3349,7 @@ function createMediaCard(model, mediaCategory = '') {
         
         <div class="click-hint">💡 Click to explore full model details</div>
     `;
-    
+    attachPinButton(card, mediaCategory || 'media', model);
     return card;
 }
 
@@ -4238,7 +4475,7 @@ function createFalModelCard(model) {
         
         <div class="click-hint">💡 Click to explore full model details</div>
     `;
-    
+    attachPinButton(card, 'fal', model);
     return card;
 }
 
@@ -4298,7 +4535,7 @@ function createReplicateModelCard(model) {
         
         <div class="click-hint">💡 Click to explore full model details</div>
     `;
-    
+    attachPinButton(card, 'replicate', model);
     return card;
 }
 

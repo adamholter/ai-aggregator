@@ -40,6 +40,7 @@
             <button class="nav-btn" data-section="replicate-models">Replicate</button>
             <button class="nav-btn" data-section="openrouter-models">OpenRouter</button>
             <button class="nav-btn" data-section="hype">Hype</button>
+            <button class="nav-btn" data-section="pinned">Pinned</button>
             <button class="nav-btn" data-section="latest">Latest</button>
             <button class="nav-btn" data-section="blog">Blog</button>
             <button class="nav-btn" data-section="testing-catalog">Testing Catalog</button>
@@ -69,6 +70,19 @@
                 <div class="error" id="llms-error" style="display: none;"></div>
                 <div class="results-info" id="llms-results-info"></div>
                 <div class="data-container" id="llms-data"></div>
+            </section>
+
+            <!-- Pinned Section -->
+            <section id="pinned" class="content-section">
+                <div class="section-header">
+                    <h2>Pinned</h2>
+                    <div class="controls">
+                        <button class="refresh-btn" id="pinned-refresh">Refresh Pins</button>
+                    </div>
+                </div>
+                <p class="section-note">Quick access to cards you’ve pinned across the dashboard.</p>
+                <div class="empty-state" id="pinned-empty">You haven’t pinned any cards yet.</div>
+                <div class="data-container" id="pinned-data"></div>
             </section>
 
             <!-- Latest Section -->

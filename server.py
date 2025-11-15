@@ -42,6 +42,7 @@ app.config['JSONIFY_MIMETYPE'] = 'application/json; charset=utf-8'
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, 'data')
 USERS_DB_PATH = os.path.join(DATA_DIR, 'users.json')
+PINS_DB_PATH = os.path.join(DATA_DIR, 'pins.json')
 
 # API Configuration
 ARTIFICIAL_ANALYSIS_API_KEY = (os.environ.get('ARTIFICIAL_ANALYSIS_API_KEY') or '').strip()
@@ -195,6 +196,43 @@ def get_current_user():
     if not email:
         return None
     return _find_user_by_email(email)
+
+
+def _load_pin_store():
+    try:
+        with open(PINS_DB_PATH, 'r', encoding='utf-8') as handle:
+            data = json.load(handle)
+            if isinstance(data, dict):
+                return data
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+    except Exception:
+        return {}
+    return {}
+
+
+def _save_pin_store(store):
+    os.makedirs(os.path.dirname(PINS_DB_PATH), exist_ok=True)
+    with open(PINS_DB_PATH, 'w', encoding='utf-8') as handle:
+        json.dump(store, handle, ensure_ascii=False, indent=2)
+
+
+def _get_user_pins(user_id):
+    if not user_id:
+        return []
+    store = _load_pin_store()
+    pins = store.get(user_id)
+    if isinstance(pins, list):
+        return pins
+    return []
+
+
+def _write_user_pins(user_id, pins):
+    if not user_id:
+        return
+    store = _load_pin_store()
+    store[user_id] = pins
+    _save_pin_store(store)
 
 
 def get_request_bearer_token():
@@ -8847,6 +8885,72 @@ def auth_login():
 def auth_logout():
     session.pop('user_email', None)
     return jsonify({'success': True})
+
+
+@app.route('/api/pins', methods=['GET'])
+def list_pins():
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': 'Login required.'}), 401
+    pins = _get_user_pins(user.get('id'))
+    return jsonify({'items': pins})
+
+
+@app.route('/api/pins', methods=['POST'])
+def add_pin():
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': 'Login required.'}), 401
+    data = request.get_json(silent=True) or {}
+    category = (data.get('category') or '').strip()
+    item = data.get('item')
+    key = (data.get('key') or '').strip()
+    if not category or not isinstance(item, dict):
+        return jsonify({'error': 'Category and item payload are required.'}), 400
+    if not key:
+        key = f"{category}:{uuid.uuid4().hex}"
+    pins = _get_user_pins(user.get('id'))
+    existing = next((entry for entry in pins if entry.get('key') == key), None)
+    if existing:
+        return jsonify({'pin': existing})
+    entry = {
+        'id': uuid.uuid4().hex,
+        'key': key,
+        'category': category,
+        'item': item,
+        'created_at': datetime.utcnow().replace(microsecond=0).isoformat() + 'Z'
+    }
+    pins.insert(0, entry)
+    pins = pins[:200]
+    _write_user_pins(user.get('id'), pins)
+    return jsonify({'pin': entry})
+
+
+@app.route('/api/pins/<pin_id>', methods=['DELETE'])
+def delete_pin(pin_id):
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': 'Login required.'}), 401
+    pins = _get_user_pins(user.get('id'))
+    updated = [entry for entry in pins if entry.get('id') != pin_id]
+    removed = len(updated) != len(pins)
+    _write_user_pins(user.get('id'), updated)
+    return jsonify({'success': removed})
+
+
+@app.route('/api/pins', methods=['DELETE'])
+def delete_pin_by_key():
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': 'Login required.'}), 401
+    key = (request.args.get('key') or '').strip()
+    if not key:
+        return jsonify({'error': 'Pin key is required.'}), 400
+    pins = _get_user_pins(user.get('id'))
+    updated = [entry for entry in pins if entry.get('key') != key]
+    removed = len(updated) != len(pins)
+    _write_user_pins(user.get('id'), updated)
+    return jsonify({'success': removed})
 
 
 @app.route('/usage', methods=['GET'])
