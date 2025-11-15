@@ -586,31 +586,6 @@ body {
     color: var(--info-text);
 }
 
-.filter-results {
-    border: 1px dashed var(--border-color);
-    padding: 12px;
-    border-radius: 6px;
-    margin-top: 16px;
-    background: var(--card-bg);
-}
-
-.filter-results-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-}
-
-.filter-results-body {
-    margin-top: 12px;
-    display: grid;
-    gap: 12px;
-}
-
-.filtered-card {
-    border-color: var(--accent-color);
-}
-
 :root.experimental-mode .filter-controls,
 .experimental-mode .filter-controls {
     display: flex;

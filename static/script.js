@@ -79,7 +79,85 @@ const FILTERABLE_SECTIONS = {
     'testing-catalog': { sectionId: 'testing-catalog', category: 'testing-catalog', limit: 60, getItems: () => rawData.testingCatalog || [] },
     monitor: { sectionId: 'monitor', category: 'monitor', limit: 60, getItems: () => rawData.monitor || [] }
 };
+const CATEGORY_RAW_DATA_KEYS = {
+    'text-to-image': 'textToImage',
+    'image-editing': 'imageEditing',
+    'text-to-speech': 'textToSpeech',
+    'text-to-video': 'textToVideo',
+    'image-to-video': 'imageToVideo',
+    'fal': 'falModels',
+    'replicate': 'replicateModels',
+    'openrouter': 'openRouterModels',
+    'hype': 'hype',
+    'latest': 'latest',
+    'blog': 'blog',
+    'testing-catalog': 'testingCatalog',
+    'monitor': 'monitor'
+};
 const filterState = {};
+
+function getFilteredItems(category, fallback = []) {
+    const state = filterState[category];
+    if (!state || !state.enabled || !Array.isArray(state.items) || !state.items.length) {
+        return fallback;
+    }
+    return state.items;
+}
+
+function refreshCategoryView(category) {
+    switch (category) {
+        case 'llms':
+            filterLLMData();
+            break;
+        case 'text-to-image':
+        case 'image-editing':
+        case 'text-to-speech':
+        case 'text-to-video':
+        case 'image-to-video': {
+            const rawKey = CATEGORY_RAW_DATA_KEYS[category];
+            const items = rawKey ? (rawData[rawKey] || []) : [];
+            displayMediaData(getFilteredItems(category, items), category);
+            break;
+        }
+        case 'fal':
+            filterFalModelsData();
+            break;
+        case 'replicate':
+            filterReplicateModelsData();
+            break;
+        case 'openrouter':
+            filterOpenRouterModelsData();
+            break;
+        case 'hype':
+            displayHypeItems({
+                items: getFilteredItems('hype', (cachedData.hype?.items || rawData.hype || [])),
+                fetched_at: cachedData.hype?.fetched_at
+            });
+            break;
+        case 'latest':
+            displayLatestFeed(getFilteredItems('latest', rawData.latest || cachedData.latest || []));
+            break;
+        case 'blog':
+            displayBlogPosts(cachedData.blog || { posts: rawData.blog || [] });
+            break;
+        case 'testing-catalog':
+            displayTestingCatalogItems(getFilteredItems('testing-catalog', rawData.testingCatalog || []));
+            break;
+        case 'monitor':
+            displayMonitorItems(getFilteredItems('monitor', rawData.monitor || []));
+            break;
+        default:
+            break;
+    }
+    updatePinButtonStates();
+}
+
+function refreshFilterControlsVisibility() {
+    const controls = document.querySelectorAll('[data-filter-control]');
+    controls.forEach(control => {
+        control.style.display = experimentalModeEnabled ? 'flex' : 'none';
+    });
+}
 
 let openRouterIndex = null;
 const modelMatchCache = new Map();
@@ -1189,40 +1267,22 @@ function setupFilterControls() {
                 </label>
                 <input type="text" data-filter-input="${category}" placeholder="Importance & recency (optional)" disabled>
                 <button type="button" class="filter-run" data-filter-run="${category}" disabled>Run</button>
+                <button type="button" class="link-btn" data-filter-clear="${category}">Clear</button>
                 <span class="filter-status" data-filter-status="${category}"></span>
             `;
             header.appendChild(control);
             const toggle = control.querySelector(`[data-filter-toggle="${category}"]`);
             const runButton = control.querySelector(`[data-filter-run="${category}"]`);
+            const clearButton = control.querySelector(`[data-filter-clear="${category}"]`);
             toggle.addEventListener('change', () => handleFilterToggle(category, toggle.checked));
             runButton.addEventListener('click', () => handleFilterRun(category));
-        }
-        if (!section.querySelector(`[data-filter-results="${category}"]`)) {
-            const resultsWrapper = document.createElement('div');
-            resultsWrapper.className = 'filter-results';
-            resultsWrapper.dataset.filterResults = category;
-            resultsWrapper.style.display = 'none';
-            resultsWrapper.innerHTML = `
-                <div class="filter-results-header">
-                    <h3>AI Filtered Highlights</h3>
-                    <button type="button" class="link-btn" data-filter-clear="${category}">Clear</button>
-                </div>
-                <div class="filter-results-body" data-filter-cards="${category}"></div>
-            `;
-            const note = section.querySelector('.section-note');
-            if (note && note.parentNode) {
-                note.parentNode.insertBefore(resultsWrapper, note.nextSibling);
-            } else {
-                section.insertBefore(resultsWrapper, section.firstChild);
-            }
-            const clearButton = resultsWrapper.querySelector(`[data-filter-clear="${category}"]`);
-            clearButton.addEventListener('click', () => {
-                const toggle = section.querySelector(`[data-filter-toggle="${category}"]`);
-                if (toggle) {
+            if (clearButton) {
+                clearButton.addEventListener('click', () => {
                     toggle.checked = false;
-                }
-                handleFilterToggle(category, false);
-            });
+                    handleFilterToggle(category, false);
+                });
+            }
+            control.style.display = 'flex';
         }
     });
     refreshFilterControlsVisibility();
@@ -1241,7 +1301,7 @@ function handleFilterToggle(category, enabled) {
     }
     if (!enabled) {
         filterState[category].items = [];
-        renderFilterResults(category);
+        refreshCategoryView(category);
         markFilterStatus(category, '');
     }
 }
@@ -1289,7 +1349,7 @@ async function handleFilterRun(category) {
             enabled: true,
             items: Array.isArray(payload.items) ? payload.items : []
         };
-        renderFilterResults(category);
+        refreshCategoryView(category);
         markFilterStatus(category, `Filtered ${filterState[category].items.length} items`);
     } catch (error) {
         console.error('Filter request failed:', error);
@@ -1322,56 +1382,6 @@ function buildFilterTimestamp(item) {
         return `${item.published_date}T${item.published_time}`;
     }
     return item.published_date || item.date || item.created_at || '';
-}
-
-function renderFilterResults(category) {
-    const container = document.querySelector(`[data-filter-results="${category}"]`);
-    const cardsContainer = document.querySelector(`[data-filter-cards="${category}"]`);
-    if (!container || !cardsContainer) {
-        return;
-    }
-    const state = filterState[category];
-    if (!experimentalModeEnabled || !state || !state.enabled) {
-        container.style.display = 'none';
-        cardsContainer.innerHTML = '';
-        return;
-    }
-    cardsContainer.innerHTML = '';
-    if (!state.items || !state.items.length) {
-        cardsContainer.innerHTML = '<div class="empty-state">No AI-filtered items yet.</div>';
-    } else {
-        state.items.forEach(item => {
-            const card = document.createElement('div');
-            card.className = 'model-card filtered-card';
-            const title = item.title || item.name || 'Item';
-            const summary = item.summary || '';
-            const link = item.link || '';
-            const timestamp = item.timestamp || '';
-            card.innerHTML = `
-                <div class="source-badge">AI Filter</div>
-                <h3>${escapeHtml(title)}</h3>
-                ${timestamp ? `<div class="pin-meta">${escapeHtml(formatRelativeTime(timestamp))}</div>` : ''}
-                ${summary ? `<p>${escapeHtml(summary)}</p>` : ''}
-                ${link ? `<a href="${escapeHtml(link)}" target="_blank" rel="noopener" class="link-btn">Open</a>` : ''}
-            `;
-            cardsContainer.appendChild(card);
-        });
-    }
-    container.style.display = 'block';
-}
-
-function refreshFilterControlsVisibility() {
-    const controls = document.querySelectorAll('[data-filter-control]');
-    controls.forEach(control => {
-        control.style.display = experimentalModeEnabled ? '' : 'none';
-    });
-    if (!experimentalModeEnabled) {
-        document.querySelectorAll('.filter-results').forEach(container => {
-            container.style.display = 'none';
-        });
-    } else {
-        Object.keys(filterState).forEach(renderFilterResults);
-    }
 }
 
 
@@ -2226,11 +2236,12 @@ function filterOpenRouterModelsData() {
     });
 
     filtered = sortOpenRouterModelsData(filtered, sortBy);
-    displayOpenRouterModelsData(filtered);
+    const displayModels = getFilteredItems('openrouter', filtered);
+    displayOpenRouterModelsData(displayModels);
 
     const resultsInfo = document.getElementById('openrouter-models-results-info');
     if (resultsInfo) {
-        resultsInfo.textContent = `Showing ${filtered.length} of ${rawData.openRouterModels.length} models`;
+        resultsInfo.textContent = `Showing ${displayModels.length} of ${rawData.openRouterModels.length} models`;
     }
 }
 
@@ -2264,7 +2275,8 @@ function displayOpenRouterModelsData(models) {
     if (!container) return;
 
     container.innerHTML = '';
-    models.forEach(model => {
+    const displayModels = getFilteredItems('openrouter', models);
+    displayModels.forEach(model => {
         container.appendChild(createOpenRouterCard(model));
     });
 }
@@ -2329,13 +2341,14 @@ function displayHypeItems(payload) {
     }
 
     const sortedItems = sortHypeItems(items, hypeSortMode);
+    const displayItems = getFilteredItems('hype', sortedItems);
 
-    sortedItems.forEach((item, index) => {
+    displayItems.forEach((item, index) => {
         container.appendChild(createHypeCard(item, index, fetchedAt));
     });
 
     if (resultsInfo) {
-        const summary = [`${items.length} trending projects`];
+        const summary = [`${displayItems.length} trending projects`];
         const relativeFetched = formatRelativeTime(fetchedAt);
         if (relativeFetched) {
             summary.push(`fetched ${relativeFetched}`);
@@ -2630,12 +2643,13 @@ function displayTestingCatalogItems(items) {
 
     container.innerHTML = '';
 
-    if (!items || !items.length) {
+    const displayItems = getFilteredItems('testing-catalog', items);
+    if (!displayItems || !displayItems.length) {
         container.innerHTML = '<div class="empty-state">No TestingCatalog stories are available yet.</div>';
         return;
     }
 
-    items.forEach(item => {
+    displayItems.forEach(item => {
         container.appendChild(createTestingCatalogCard(item));
     });
 }
@@ -2869,7 +2883,8 @@ function displayBlogPosts(payload) {
     }
 
     const sortedPosts = sortBlogPosts(posts, blogSortMode);
-    sortedPosts.forEach(post => {
+    const displayPosts = getFilteredItems('blog', sortedPosts);
+    displayPosts.forEach(post => {
         container.appendChild(createBlogCard(post));
     });
 
@@ -2877,9 +2892,9 @@ function displayBlogPosts(payload) {
         const summaryParts = [];
         const totalKnown = Number(payload?.meta?.total_posts);
         if (Number.isFinite(totalKnown) && totalKnown > 0) {
-            summaryParts.push(`${sortedPosts.length} of ${totalKnown} posts`);
+            summaryParts.push(`${displayPosts.length} of ${totalKnown} posts`);
         } else {
-            summaryParts.push(`${sortedPosts.length} posts`);
+            summaryParts.push(`${displayPosts.length} posts`);
         }
         const relativeFetched = formatRelativeTime(payload?.fetched_at);
         if (relativeFetched) {
@@ -3090,12 +3105,13 @@ function displayLatestFeed(items) {
         return;
     }
 
-    items.forEach(item => {
+    const displayItems = getFilteredItems('latest', items);
+    displayItems.forEach(item => {
         container.appendChild(createLatestCard(item));
     });
 
     if (resultsInfo) {
-        const total = items.length;
+        const total = displayItems.length;
         const sources = latestMetadata?.sources || {};
         const sourceSummary = Object.keys(sources).length
             ? ` · Sources: ${Object.entries(sources).map(([key, count]) => `${key} (${count})`).join(', ')}`
@@ -3256,12 +3272,13 @@ function displayMonitorItems(items) {
     }
 
     container.innerHTML = '';
-    if (!items || !items.length) {
+    const displayItems = getFilteredItems('monitor', items);
+    if (!displayItems || !displayItems.length) {
         container.innerHTML = '<div class="empty-state">No monitor updates available yet. Check back soon.</div>';
         return;
     }
 
-    items.forEach(item => {
+    displayItems.forEach(item => {
         container.appendChild(createMonitorCard(item));
     });
 }
@@ -3484,7 +3501,8 @@ function displayMediaData(models, type) {
     const container = document.getElementById(`${type}-data`);
     container.innerHTML = '';
 
-    models.forEach(model => {
+    const displayModels = getFilteredItems(type, Array.isArray(models) ? models : []);
+    displayModels.forEach(model => {
         const modelCard = createMediaCard(model, type);
         container.appendChild(modelCard);
     });
@@ -4506,11 +4524,12 @@ function filterLLMData() {
     filteredData = sortLLMData(filteredData, sortBy);
     
     // Display results
-    displayLLMData(filteredData);
+    const displayModels = getFilteredItems('llms', filteredData);
+    displayLLMData(displayModels);
     
     // Update results info
     const resultsInfo = document.getElementById('llms-results-info');
-    resultsInfo.textContent = `Showing ${filteredData.length} of ${rawData.llms.length} models`;
+    resultsInfo.textContent = `Showing ${displayModels.length} of ${rawData.llms.length} models`;
 }
 
 function sortLLMData(data, sortBy) {
@@ -4602,12 +4621,12 @@ function filterFalModelsData() {
     // Sort data
     filteredData = sortFalModelsData(filteredData, sortBy);
     
-    // Display results
-    displayFalModelsData(filteredData);
+    const displayModels = getFilteredItems('fal', filteredData);
+    displayFalModelsData(displayModels);
     
     // Update results info
     const resultsInfo = document.getElementById('fal-models-results-info');
-    resultsInfo.textContent = `Showing ${filteredData.length} of ${rawData.falModels.length} models`;
+    resultsInfo.textContent = `Showing ${displayModels.length} of ${rawData.falModels.length} models`;
 }
 
 function sortFalModelsData(data, sortBy) {
@@ -4630,7 +4649,8 @@ function displayFalModelsData(models) {
     const container = document.getElementById('fal-models-data');
     container.innerHTML = '';
 
-    models.forEach(model => {
+    const displayModels = getFilteredItems('fal', models);
+    displayModels.forEach(model => {
         const modelCard = createFalModelCard(model);
         container.appendChild(modelCard);
     });
@@ -4771,7 +4791,8 @@ function displayReplicateModelsData(models) {
     const container = document.getElementById('replicate-models-data');
     container.innerHTML = '';
 
-    models.forEach(model => {
+    const displayModels = getFilteredItems('replicate', models);
+    displayModels.forEach(model => {
         const modelCard = createReplicateModelCard(model);
         container.appendChild(modelCard);
     });
@@ -4798,12 +4819,12 @@ function filterReplicateModelsData() {
     // Sort data
     filteredData = sortReplicateModelsData(filteredData, sortBy);
     
-    // Display results
-    displayReplicateModelsData(filteredData);
-    
+    const displayModels = getFilteredItems('replicate', filteredData);
+    displayReplicateModelsData(displayModels);
+
     // Update results info
     const resultsInfo = document.getElementById('replicate-models-results-info');
-    resultsInfo.textContent = `Showing ${filteredData.length} of ${rawData.replicateModels.length} models`;
+    resultsInfo.textContent = `Showing ${displayModels.length} of ${rawData.replicateModels.length} models`;
 }
 
 function sortReplicateModelsData(data, sortBy) {
