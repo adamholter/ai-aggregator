@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, Response, stream_with_context, has_request_context, render_template_string
+from flask import Flask, jsonify, request, Response, stream_with_context, has_request_context, render_template_string, session
 from flask_cors import CORS
 import argparse
 import requests
@@ -23,20 +23,25 @@ import urllib.parse
 import time
 from contextlib import contextmanager
 from copy import deepcopy
+import uuid
 from html import unescape
 from decimal import Decimal
 from collections import defaultdict, deque
 from threading import Lock
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
+from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__, static_folder='.', static_url_path='')
 CORS(app)
+app.secret_key = os.environ.get('APP_SECRET_KEY') or 'change-me-in-production'
 
 # Set proper encoding for Flask responses
 app.config['JSON_AS_ASCII'] = False
 app.config['JSONIFY_MIMETYPE'] = 'application/json; charset=utf-8'
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(BASE_DIR, 'data')
+USERS_DB_PATH = os.path.join(DATA_DIR, 'users.json')
 
 # API Configuration
 ARTIFICIAL_ANALYSIS_API_KEY = (os.environ.get('ARTIFICIAL_ANALYSIS_API_KEY') or '').strip()
@@ -137,6 +142,59 @@ _warn_if_missing('HYPE_SUPABASE_API_KEY', HYPE_SUPABASE_API_KEY)
 
 class MissingOpenRouterKeyError(Exception):
     """Raised when an OpenRouter API key is required but not available."""
+
+
+def _normalize_email(value):
+    if not value:
+        return ''
+    return str(value).strip().lower()
+
+
+def _load_users():
+    try:
+        with open(USERS_DB_PATH, 'r', encoding='utf-8') as handle:
+            data = json.load(handle)
+            if isinstance(data, list):
+                return data
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
+    except Exception:
+        return []
+    return []
+
+
+def _save_users(users):
+    os.makedirs(os.path.dirname(USERS_DB_PATH), exist_ok=True)
+    with open(USERS_DB_PATH, 'w', encoding='utf-8') as handle:
+        json.dump(users, handle, ensure_ascii=False, indent=2)
+
+
+def _find_user_by_email(email, users=None):
+    normalized = _normalize_email(email)
+    if not normalized:
+        return None
+    user_list = users if isinstance(users, list) else _load_users()
+    for entry in user_list:
+        if _normalize_email(entry.get('email')) == normalized:
+            return entry
+    return None
+
+
+def _serialize_user(user):
+    if not isinstance(user, dict):
+        return None
+    return {
+        'id': user.get('id'),
+        'email': user.get('email'),
+        'created_at': user.get('created_at')
+    }
+
+
+def get_current_user():
+    email = session.get('user_email')
+    if not email:
+        return None
+    return _find_user_by_email(email)
 
 
 def get_request_bearer_token():
@@ -8732,6 +8790,63 @@ def health_check():
         'timestamp': datetime.now().isoformat(),
         'cache_size': len(cache)
     })
+
+
+@app.route('/api/me', methods=['GET'])
+def current_user_profile():
+    user = get_current_user()
+    if not user:
+        return jsonify({'authenticated': False})
+    return jsonify({'authenticated': True, 'user': _serialize_user(user)})
+
+
+def _validate_credentials(email, password):
+    normalized_email = _normalize_email(email)
+    if not normalized_email or '@' not in normalized_email:
+        return None, 'A valid email address is required.'
+    if not password or len(password) < 6:
+        return None, 'Password must be at least 6 characters.'
+    return normalized_email, None
+
+
+@app.route('/auth/register', methods=['POST'])
+def auth_register():
+    data = request.get_json(silent=True) or {}
+    email, error = _validate_credentials(data.get('email'), data.get('password'))
+    if error:
+        return jsonify({'error': error}), 400
+    users = _load_users()
+    if _find_user_by_email(email, users):
+        return jsonify({'error': 'An account already exists for that email.'}), 409
+    user_entry = {
+        'id': str(uuid.uuid4()),
+        'email': email,
+        'password': generate_password_hash(data.get('password')),
+        'created_at': datetime.utcnow().replace(microsecond=0).isoformat() + 'Z'
+    }
+    users.append(user_entry)
+    _save_users(users)
+    session['user_email'] = email
+    return jsonify({'user': _serialize_user(user_entry)}), 201
+
+
+@app.route('/auth/login', methods=['POST'])
+def auth_login():
+    data = request.get_json(silent=True) or {}
+    email, error = _validate_credentials(data.get('email'), data.get('password'))
+    if error:
+        return jsonify({'error': error}), 400
+    user_entry = _find_user_by_email(email)
+    if not user_entry or not check_password_hash(user_entry.get('password', ''), data.get('password') or ''):
+        return jsonify({'error': 'Invalid email or password.'}), 401
+    session['user_email'] = email
+    return jsonify({'user': _serialize_user(user_entry)})
+
+
+@app.route('/auth/logout', methods=['POST'])
+def auth_logout():
+    session.pop('user_email', None)
+    return jsonify({'success': True})
 
 
 @app.route('/usage', methods=['GET'])

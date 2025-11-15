@@ -10,6 +10,7 @@
 </head>
 <body>
     <button class="theme-toggle" onclick="toggleTheme()">🌙 Dark Mode</button>
+    <button class="auth-button" id="auth-button">Log In</button>
     <div class="container">
         <header class="header">
             <h1>AI Model Analysis Dashboard</h1>
@@ -40,7 +41,6 @@
             <button class="nav-btn" data-section="openrouter-models">OpenRouter</button>
             <button class="nav-btn" data-section="hype">Hype</button>
             <button class="nav-btn" data-section="latest">Latest</button>
-            <button class="nav-btn" data-section="monitor">Monitor</button>
             <button class="nav-btn" data-section="blog">Blog</button>
             <button class="nav-btn" data-section="testing-catalog">Testing Catalog</button>
             <button class="nav-btn" data-section="agent-exp">Agent</button>
@@ -74,43 +74,18 @@
             <!-- Latest Section -->
             <section id="latest" class="content-section">
                 <div class="section-header">
-                    <h2>Latest Activity (Last 24 hours)</h2>
+                    <h2>Latest 24h Activity</h2>
                     <div class="controls">
-                        <select id="latest-timeframe" aria-label="Latest feed timeframe">
-                            <option value="day" selected>Last 24 hours</option>
-                            <option value="week">Last 7 days</option>
-                        </select>
-                        <label class="toggle-option">
-                            <input type="checkbox" id="latest-include-hype">
-                            <span>Include Hype</span>
-                        </label>
                         <button class="refresh-btn" id="latest-refresh">Refresh Feed</button>
                     </div>
                 </div>
-                <p class="section-note">Experimental aggregation of Blog, OpenRouter, Replicate, and fal.ai updates from the selected window. Enable Hype to blend in community buzz.</p>
+                <p class="section-note">Experimental aggregation of Blog, Hype, OpenRouter, Replicate, and fal.ai updates from the last 24 hours.</p>
                 <div class="loading" id="latest-loading">
                     <div class="loading-spinner"></div>
                 </div>
                 <div class="error" id="latest-error" style="display: none;"></div>
                 <div class="results-info" id="latest-results-info" style="display:none;"></div>
                 <div class="data-container" id="latest-data"></div>
-            </section>
-
-            <!-- Monitor Section -->
-            <section id="monitor" class="content-section">
-                <div class="section-header">
-                    <h2>Monitor Feed</h2>
-                    <div class="controls">
-                        <button class="refresh-btn" id="monitor-refresh">Refresh Monitor</button>
-                    </div>
-                </div>
-                <p class="section-note">Auto-compiles updates from MatVid Pro’s Discord channel and Adam’s personal X feed.</p>
-                <div class="loading" id="monitor-loading">
-                    <div class="loading-spinner"></div>
-                </div>
-                <div class="error" id="monitor-error" style="display: none;"></div>
-                <div class="results-info" id="monitor-results-info" style="display:none;"></div>
-                <div class="data-container" id="monitor-data"></div>
             </section>
 
             <!-- Blog Section -->
@@ -345,14 +320,14 @@
                         <button class="refresh-btn" id="testing-catalog-refresh">Refresh Feed</button>
                     </div>
                 </div>
-            <p class="section-note">Fresh Android testing news sourced from TestingCatalog (updated daily).</p>
-            <div class="loading" id="testing-catalog-loading">
-                <div class="loading-spinner"></div>
-            </div>
-            <div class="error" id="testing-catalog-error" style="display: none;"></div>
-            <div class="results-info" id="testing-catalog-results-info" style="display:none;"></div>
-            <div class="data-container" id="testing-catalog-data"></div>
-        </section>
+                <p class="section-note">Fresh Android testing news sourced from TestingCatalog (updated daily).</p>
+                <div class="loading" id="testing-catalog-loading">
+                    <div class="loading-spinner"></div>
+                </div>
+                <div class="error" id="testing-catalog-error" style="display: none;"></div>
+                <div class="results-info" id="testing-catalog-results-info" style="display:none;"></div>
+                <div class="data-container" id="testing-catalog-data"></div>
+            </section>
 
             <!-- Agent Section -->
             <section id="agent-exp" class="content-section">
@@ -474,6 +449,31 @@
     </button>
 
     <div id="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+    <!-- Auth modal -->
+    <div id="auth-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-content" style="max-width:420px;">
+            <div class="modal-header">
+                <h2 id="auth-modal-title">Log In</h2>
+                <button class="modal-close" id="auth-close">×</button>
+            </div>
+            <div class="modal-body">
+                <form id="auth-form">
+                    <label>Email
+                        <input type="email" id="auth-email" required placeholder="you@example.com">
+                    </label>
+                    <label>Password
+                        <input type="password" id="auth-password" required minlength="6" placeholder="Enter password">
+                    </label>
+                    <div class="auth-actions">
+                        <button type="submit" id="auth-submit">Log In</button>
+                        <button type="button" class="link-btn" id="auth-mode-toggle">Need an account? Register</button>
+                    </div>
+                    <div class="auth-error" id="auth-error" role="alert"></div>
+                </form>
+            </div>
+        </div>
+    </div>
 
     <!-- Settings modal -->
     <div id="settings-modal" class="modal-overlay" style="display:none;">

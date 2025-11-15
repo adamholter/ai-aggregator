@@ -59,6 +59,8 @@ let agentExpState = {
 let testingCatalogTagFilter = '__all';
 let testingCatalogTagOptions = [];
 let testingCatalogLoadId = 0;
+let currentUser = null;
+let authMode = 'login';
 
 let openRouterIndex = null;
 const modelMatchCache = new Map();
@@ -701,11 +703,12 @@ function similarity(a, b) {
 document.addEventListener('DOMContentLoaded', async function() {
     console.info('The quick brown fox jumped over the lazy dogs – experimental canary build active.');
     await preloadModelConfig();
-    ensureExperimentalSections();
-   ensureExperimentalNavButtons();
-   setupNavigation();
-   initializeTheme();
-   applyAgentDefaults();
+   ensureExperimentalSections();
+  ensureExperimentalNavButtons();
+  setupNavigation();
+  initializeTheme();
+   initializeAuthControls();
+  applyAgentDefaults();
    setupOpenRouterControls();
    populateAgentDropdown();
     initializeAgentExp();
@@ -757,6 +760,165 @@ function updateThemeToggleText(theme) {
         toggle.textContent = `${descriptor.icon} ${descriptor.label}`;
     }
 }
+
+async function initializeAuthControls() {
+    const authButton = document.getElementById('auth-button');
+    const authForm = document.getElementById('auth-form');
+    const authClose = document.getElementById('auth-close');
+    const modeToggle = document.getElementById('auth-mode-toggle');
+
+    if (authButton) {
+        authButton.addEventListener('click', () => {
+            if (currentUser) {
+                logoutUser();
+            } else {
+                openAuthModal('login');
+            }
+        });
+    }
+    if (authForm) {
+        authForm.addEventListener('submit', handleAuthSubmit);
+    }
+    if (authClose) {
+        authClose.addEventListener('click', closeAuthModal);
+    }
+    if (modeToggle) {
+        modeToggle.addEventListener('click', () => {
+            setAuthMode(authMode === 'login' ? 'register' : 'login');
+        });
+    }
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape') {
+            const modal = document.getElementById('auth-modal');
+            if (modal && modal.style.display !== 'none') {
+                closeAuthModal();
+            }
+        }
+    });
+    await refreshAuthState();
+}
+
+async function refreshAuthState() {
+    try {
+        const response = await fetch('/api/me', { credentials: 'same-origin' });
+        if (response.ok) {
+            const payload = await response.json();
+            currentUser = payload.authenticated ? payload.user : null;
+        } else {
+            currentUser = null;
+        }
+    } catch (error) {
+        console.error('Failed to check auth state:', error);
+        currentUser = null;
+    }
+    updateAuthButton();
+}
+
+function updateAuthButton() {
+    const authButton = document.getElementById('auth-button');
+    if (!authButton) return;
+    if (currentUser) {
+        authButton.textContent = `Log Out (${currentUser.email})`;
+        authButton.dataset.authState = 'logout';
+    } else {
+        authButton.textContent = 'Log In';
+        authButton.dataset.authState = 'login';
+    }
+}
+
+function setAuthMode(mode) {
+    authMode = mode;
+    const modalTitle = document.getElementById('auth-modal-title');
+    const submitButton = document.getElementById('auth-submit');
+    const modeToggle = document.getElementById('auth-mode-toggle');
+    if (modalTitle) {
+        modalTitle.textContent = mode === 'register' ? 'Create Account' : 'Log In';
+    }
+    if (submitButton) {
+        submitButton.textContent = mode === 'register' ? 'Register' : 'Log In';
+    }
+    if (modeToggle) {
+        modeToggle.textContent = mode === 'register'
+            ? 'Already have an account? Log In'
+            : 'Need an account? Register';
+    }
+    const passwordInput = document.getElementById('auth-password');
+    if (passwordInput) {
+        passwordInput.value = '';
+    }
+    showAuthError('');
+}
+
+function openAuthModal(mode = 'login') {
+    const modal = document.getElementById('auth-modal');
+    if (!modal) return;
+    setAuthMode(mode);
+    modal.style.display = 'flex';
+    const emailInput = document.getElementById('auth-email');
+    if (emailInput) {
+        emailInput.focus();
+    }
+}
+
+function closeAuthModal() {
+    const modal = document.getElementById('auth-modal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+    showAuthError('');
+}
+
+function showAuthError(message) {
+    const errorElement = document.getElementById('auth-error');
+    if (errorElement) {
+        errorElement.textContent = message || '';
+    }
+}
+
+async function handleAuthSubmit(event) {
+    event.preventDefault();
+    const emailInput = document.getElementById('auth-email');
+    const passwordInput = document.getElementById('auth-password');
+    if (!emailInput || !passwordInput) return;
+    const email = emailInput.value.trim();
+    const password = passwordInput.value;
+    if (!email || !password) {
+        showAuthError('Email and password are required.');
+        return;
+    }
+    const endpoint = authMode === 'register' ? '/auth/register' : '/auth/login';
+    try {
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ email, password })
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+            showAuthError(payload.error || 'Unable to complete the request.');
+            return;
+        }
+        currentUser = payload.user || null;
+        closeAuthModal();
+        updateAuthButton();
+    } catch (error) {
+        console.error('Auth request failed:', error);
+        showAuthError('Request failed. Please try again.');
+    }
+}
+
+async function logoutUser() {
+    try {
+        await fetch('/auth/logout', { method: 'POST', credentials: 'same-origin' });
+    } catch (error) {
+        console.error('Failed to log out:', error);
+    } finally {
+        currentUser = null;
+        updateAuthButton();
+    }
+}
+
 
 async function preloadModelConfig() {
     if (modelConfig !== null) {

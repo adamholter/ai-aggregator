@@ -260,7 +260,7 @@ body {
 .theme-toggle {
     position: fixed;
     top: 20px;
-    right: 20px;
+    right: 150px;
     background: var(--button-bg);
     color: var(--button-text);
     border: 1px solid var(--border-color);
@@ -273,6 +273,25 @@ body {
 
 .theme-toggle:hover {
     background: var(--button-hover-bg);
+}
+
+.auth-button {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: var(--accent-color);
+    color: #fff;
+    border: none;
+    padding: 8px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 600;
+    transition: opacity 0.2s ease;
+}
+
+.auth-button:hover {
+    opacity: 0.9;
 }
 
 /* Navigation */
@@ -2521,6 +2540,58 @@ body {
     padding: 24px;
     overflow-y: auto;
     max-height: calc(90vh - 100px);
+}
+
+.modal-body form label {
+    display: block;
+    font-size: 0.9rem;
+    color: var(--text-color);
+    margin-bottom: 12px;
+}
+
+.modal-body form input {
+    width: 100%;
+    margin-top: 6px;
+    padding: 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 0.95rem;
+    background: var(--card-bg);
+    color: var(--text-color);
+}
+
+.auth-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-top: 16px;
+}
+
+.auth-actions button[type="submit"] {
+    flex: 1;
+    background: var(--button-bg);
+    color: var(--button-text);
+    border: none;
+    padding: 10px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.link-btn {
+    background: none;
+    border: none;
+    color: var(--accent-color);
+    cursor: pointer;
+    font-size: 0.9rem;
+    text-decoration: underline;
+}
+
+.auth-error {
+    margin-top: 12px;
+    font-size: 0.9rem;
+    color: #b91c1c;
 }
 
 /* Loading state */

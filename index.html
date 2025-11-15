@@ -10,6 +10,7 @@
 </head>
 <body>
     <button class="theme-toggle" onclick="toggleTheme()">🌙 Dark Mode</button>
+    <button class="auth-button" id="auth-button">Log In</button>
     <div class="container">
         <header class="header">
             <h1>AI Model Analysis Dashboard</h1>
@@ -448,6 +449,31 @@
     </button>
 
     <div id="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+    <!-- Auth modal -->
+    <div id="auth-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-content" style="max-width:420px;">
+            <div class="modal-header">
+                <h2 id="auth-modal-title">Log In</h2>
+                <button class="modal-close" id="auth-close">×</button>
+            </div>
+            <div class="modal-body">
+                <form id="auth-form">
+                    <label>Email
+                        <input type="email" id="auth-email" required placeholder="you@example.com">
+                    </label>
+                    <label>Password
+                        <input type="password" id="auth-password" required minlength="6" placeholder="Enter password">
+                    </label>
+                    <div class="auth-actions">
+                        <button type="submit" id="auth-submit">Log In</button>
+                        <button type="button" class="link-btn" id="auth-mode-toggle">Need an account? Register</button>
+                    </div>
+                    <div class="auth-error" id="auth-error" role="alert"></div>
+                </form>
+            </div>
+        </div>
+    </div>
 
     <!-- Settings modal -->
     <div id="settings-modal" class="modal-overlay" style="display:none;">
