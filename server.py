@@ -6474,14 +6474,33 @@ def _format_hype_source_label(source):
     return mapping.get(normalized, str(source))
 
 
-def generate_latest_feed_payload(timeframe='day', force_refresh=False, include_hype=False):
+def _parse_latest_window_days(timeframe, days_override=None):
+    if days_override is not None:
+        try:
+            value = int(days_override)
+            if value > 0:
+                return value
+        except (TypeError, ValueError):
+            pass
     normalized = str(timeframe or 'day').strip().lower()
     if normalized in {'week', 'weeks', '7d', '7day', '7days'}:
-        normalized = 'week'
-    else:
-        normalized = 'day'
+        return 7
+    if normalized in {'day', '1d', '1day', '1days', 'daily'}:
+        return 1
+    match = re.match(r'^(\d+)(?:d|day|days)?$', normalized)
+    if match:
+        try:
+            value = int(match.group(1))
+            if value > 0:
+                return value
+        except ValueError:
+            pass
+    return 1
 
-    window_hours = 24 if normalized == 'day' else 24 * 7
+
+def generate_latest_feed_payload(timeframe='day', days=None, force_refresh=False, include_hype=False):
+    window_days = _parse_latest_window_days(timeframe, days_override=days)
+    window_hours = max(1, window_days) * 24
     cutoff = datetime.utcnow().replace(tzinfo=timezone.utc) - timedelta(hours=window_hours)
 
     entries = []
@@ -6496,10 +6515,12 @@ def generate_latest_feed_payload(timeframe='day', force_refresh=False, include_h
 
     # Blog posts
     try:
+        per_page_override = 50 if window_days <= 1 else BLOG_POSTS_PER_PAGE
+        max_pages_override = 3 if window_days <= 1 else BLOG_POSTS_MAX_PAGES
         blog_payload = fetch_blog_posts(
             force_refresh=force_refresh,
-            per_page_override=50 if window_hours <= 24 else BLOG_POSTS_PER_PAGE,
-            max_pages_override=3 if window_hours <= 24 else BLOG_POSTS_MAX_PAGES
+            per_page_override=per_page_override,
+            max_pages_override=max_pages_override
         )
         for post in blog_payload.get('posts', []):
             dt = _coerce_timestamp_utc(post.get('date') or post.get('date_gmt') or post.get('modified'))
@@ -6659,10 +6680,18 @@ def generate_latest_feed_payload(timeframe='day', force_refresh=False, include_h
     max_items = 150 if window_hours > 24 else 50
     entries = entries[:max_items]
 
+    if window_days == 1:
+        window_label = 'Last 24 hours'
+    elif window_days == 7:
+        window_label = 'Last 7 days'
+    else:
+        window_label = f'Last {window_days} days'
+
     payload = {
-        'timeframe': normalized,
+        'timeframe': timeframe,
+        'window_days': window_days,
         'window_hours': window_hours,
-        'window_label': 'Last 24 hours' if normalized == 'day' else 'Last 7 days',
+        'window_label': window_label,
         'generated_at': datetime.utcnow().replace(microsecond=0).isoformat() + 'Z',
         'count': len(entries),
         'sources': dict(source_counts),
@@ -6674,12 +6703,16 @@ def generate_latest_feed_payload(timeframe='day', force_refresh=False, include_h
 
 def _agent_exp_loader_latest(options):
     timeframe = options.get('timeframe') or 'day'
+    days_override = options.get('days')
+    if days_override is None:
+        days_override = options.get('window_days')
     include_hype = bool(options.get('include_hype'))
     limit = options.get('limit')
     force_refresh = bool(options.get('options', {}).get('cache_bust'))
 
     payload = generate_latest_feed_payload(
         timeframe=timeframe,
+        days=days_override,
         force_refresh=force_refresh,
         include_hype=include_hype
     )
@@ -6701,7 +6734,8 @@ def _agent_exp_loader_latest(options):
     metadata = {
         'window_label': payload.get('window_label'),
         'include_hype': include_hype,
-        'timeframe': result.get('timeframe')
+        'timeframe': result.get('timeframe'),
+        'window_days': payload.get('window_days')
     }
     if limit_value is not None:
         metadata['limit'] = limit_value
@@ -6845,11 +6879,13 @@ CUSTOM_CATEGORY_LOADERS.update({
 @app.route('/latest', methods=['GET'])
 def latest_feed():
     timeframe = request.args.get('timeframe', 'day')
+    days_param = request.args.get('days')
     force_refresh = request.args.get('cache_bust', 'false').lower() == 'true'
     include_hype = request.args.get('include_hype', 'false').lower() in {'1', 'true', 'yes', 'on'}
     try:
         payload = generate_latest_feed_payload(
             timeframe=timeframe,
+            days=days_param,
             force_refresh=force_refresh,
             include_hype=include_hype
         )
