@@ -2687,6 +2687,143 @@ def compose_compressed_datasets(fetch_context, max_items=None):
         return combined[:MAX_COMPRESSED_DATASET_CHARS].rstrip() + '\n... (truncated)'
     return combined
 
+
+DEFAULT_TOON_FIELDS = ['name', 'excerpt', 'link']
+
+TOON_CATEGORY_FIELD_SCHEMAS = {
+    'llms': ['name', 'provider', 'excerpt'],
+    'openrouter': ['name', 'provider', 'excerpt'],
+    'testing-catalog': ['name', 'excerpt', 'link'],
+    'latest': ['name', 'excerpt', 'link'],
+    'monitor': ['name', 'excerpt', 'link'],
+    'blog': ['name', 'excerpt', 'link'],
+    'hype': ['name', 'excerpt', 'link'],
+    'fal': ['name', 'excerpt', 'link'],
+    'replicate': ['name', 'excerpt', 'link'],
+    'text-to-image': ['name', 'excerpt', 'link'],
+    'image-editing': ['name', 'excerpt', 'link'],
+    'text-to-speech': ['name', 'excerpt', 'link'],
+    'text-to-video': ['name', 'excerpt', 'link'],
+    'image-to-video': ['name', 'excerpt', 'link']
+}
+
+ALL_DATA_CATEGORY_MAP = {
+    'artificial_analysis_llms': 'llms',
+    'openrouter_models': 'openrouter',
+    'text_to_image_models': 'text-to-image',
+    'image_editing_models': 'image-editing',
+    'text_to_speech_models': 'text-to-speech',
+    'text_to_video_models': 'text-to-video',
+    'image_to_video_models': 'image-to-video',
+    'fal_ai_models': 'fal',
+    'replicate_models': 'replicate'
+}
+
+
+def get_toon_fields_for_category(category_id):
+    return TOON_CATEGORY_FIELD_SCHEMAS.get(category_id, DEFAULT_TOON_FIELDS)
+
+
+def sanitize_toon_value(value):
+    if value is None:
+        return ''
+    text = str(value).strip()
+    text = text.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ')
+    text = text.replace(',', '\\,')
+    if len(text) > TOON_FIELD_MAX_LENGTH:
+        text = text[:TOON_FIELD_MAX_LENGTH].rstrip() + '…'
+    return text
+
+
+def get_toon_field_value(category_id, item, field_name):
+    if field_name == 'name':
+        return infer_item_name(item)
+    if field_name == 'provider':
+        return infer_item_provider(category_id, item) or ''
+    if field_name == 'excerpt':
+        if category_id == 'testing-catalog':
+            candidate = (item.get('summary') or item.get('content_text') or extract_item_description(item))
+            return candidate or ''
+        return extract_item_description(item)
+    if field_name == 'link':
+        return extract_item_link(item)
+    return ''
+
+
+def build_toon_table(label, field_names, rows):
+    header = f"{label}[{len(rows)}]{{{','.join(field_names)}}}:"
+    lines = [header]
+    for row in rows:
+        lines.append(f"  {','.join(row)}")
+    return '\n'.join(lines)
+
+
+def compose_toon_sections(sections, max_items=None):
+    if max_items is None:
+        max_items = MAX_TOON_ITEMS_PER_CATEGORY
+    output_sections = []
+    for label, category_id, items in sections:
+        if not items:
+            continue
+        field_names = get_toon_fields_for_category(category_id)
+        row_entries = []
+        for entry in items[:max_items]:
+            row = [
+                sanitize_toon_value(get_toon_field_value(category_id, entry, field))
+                for field in field_names
+            ]
+            if any(row):
+                row_entries.append(row)
+        if not row_entries:
+            continue
+        output_sections.append(build_toon_table(label or category_id or 'Category', field_names, row_entries))
+    if not output_sections:
+        return 'No dataset entries were available.'
+    return '\n\n'.join(output_sections)
+
+
+def compose_fetch_toon_datasets(fetch_context, max_items=None):
+    metadata = (fetch_context or {}).get('metadata') or []
+    datasets = (fetch_context or {}).get('datasets') or {}
+    sections = []
+    for meta in metadata:
+        category_id = meta.get('id')
+        if not category_id:
+            continue
+        label = meta.get('label') or category_id
+        items = datasets.get(category_id) or []
+        sections.append((label, category_id, items))
+    return compose_toon_sections(sections, max_items=max_items)
+
+
+def compose_all_data_toon(all_data, max_items=None):
+    if not isinstance(all_data, dict):
+        return 'No dataset entries were available.'
+    sections = []
+    for key, items in sorted(all_data.items()):
+        if not isinstance(items, list) or not items:
+            continue
+        category_id = ALL_DATA_CATEGORY_MAP.get(key, key)
+        label = category_id
+        config = FETCH_DATA_CATEGORY_CONFIG.get(category_id)
+        if config:
+            label = config.get('label') or label
+        sections.append((label, category_id, items))
+    return compose_toon_sections(sections, max_items=max_items)
+
+
+def compose_model_data_toon(model_data):
+    if not isinstance(model_data, dict):
+        return 'Model data is not available.'
+    row = [
+        sanitize_toon_value(infer_item_name(model_data)),
+        sanitize_toon_value(infer_item_provider('model', model_data)),
+        sanitize_toon_value(extract_item_description(model_data)),
+        sanitize_toon_value(extract_item_link(model_data))
+    ]
+    field_names = ['name', 'provider', 'excerpt', 'link']
+    return build_toon_table('model', field_names, [row])
+
 def extract_item_identifier(category_id, item):
     if not isinstance(item, dict):
         return None
@@ -2709,6 +2846,19 @@ def extract_item_description(item):
         value = item.get(key)
         if value:
             return str(value)
+    return ''
+
+
+def extract_item_link(item):
+    if not isinstance(item, dict):
+        return ''
+    for key in (
+        'url', 'link', 'permalink', 'href', 'source_url',
+        'web_url', 'model_url', 'landing_page', 'page_url'
+    ):
+        value = item.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
     return ''
 
 def build_fetch_data_markdown(metadata, summary, datasets):
@@ -2839,6 +2989,9 @@ def run_fetch_data_summarizer(metadata, datasets):
 Categories:
 {CATEGORY_METADATA}
 
+Dataset TOON:
+{DATASETS_TOON}
+
 Dataset JSON:
 {DATASETS_JSON}
 
@@ -2868,10 +3021,15 @@ Rules:
 - Omit any hallucinated or uncertain information.
 - Keep JSON keys exactly as specified."""
 
+    toon_payload = truncate_text_for_prompt(
+        compose_fetch_toon_datasets({'metadata': metadata, 'datasets': datasets}),
+        MAX_PROMPT_STRUCTURED_CHARS
+    )
     prompt_template = get_prompt_value(['fetch-data', 'prompt'], default_fetch_prompt)
     prompt = format_prompt(
         prompt_template,
         CATEGORY_METADATA=json.dumps(metadata, ensure_ascii=False, indent=2),
+        DATASETS_TOON=toon_payload,
         DATASETS_JSON=json.dumps(datasets, ensure_ascii=False, indent=2)
     )
     prompt = enforce_prompt_ceiling(prompt)
@@ -3202,6 +3360,8 @@ MAX_PROMPT_STRUCTURED_CHARS = 9000
 MAX_PROMPT_DATASETS_CHARS = 240000
 MAX_COMPRESSED_DATASET_CHARS = 240000
 MAX_COMPRESSED_ITEMS_PER_CATEGORY = 0
+MAX_TOON_ITEMS_PER_CATEGORY = 40
+TOON_FIELD_MAX_LENGTH = 220
 MAX_PROMPT_FINAL_CHARS = 60000
 MAX_PROMPT_CATEGORY_SUMMARIES = 5
 MAX_PROMPT_CATEGORY_SUMMARY_CHARS = 480
@@ -5705,8 +5865,14 @@ SUMMARY GUIDELINES:
 - Keep every following section to 2-3 short sentences or bullet lines. Focus on implications, trade-offs, and standout metrics instead of restating raw dataset rows.
 - Call out recommendations, strengths, and limitations explicitly; if a detail is absent, acknowledge the gap instead of guessing.
 
-Model Data from Database:
+Model Data from Database (TOON):
+{MODEL_DATA_TOON}
+
+Model Data from Database (JSON):
 {MODEL_DATA_JSON}
+
+Structured Dataset Summary (TOON):
+{FETCH_DATA_TOON}
 
 Structured Dataset Summary:
 {FETCH_DATA_JSON}
@@ -5758,10 +5924,20 @@ Explicitly note when information is not present in the provided datasets."""
             ['model-analysis', 'analysis-generation'],
             default_analysis_prompt
         )
+        fetch_toon = truncate_text_for_prompt(
+            compose_fetch_toon_datasets(fetch_context),
+            MAX_PROMPT_STRUCTURED_CHARS
+        )
+        model_toon = truncate_text_for_prompt(
+            compose_model_data_toon(model_data),
+            MAX_PROMPT_STRUCTURED_CHARS
+        )
         analysis_prompt = format_prompt(
             analysis_prompt_template,
             MODEL_DATA_JSON=json.dumps(model_data, ensure_ascii=False, indent=2),
+            MODEL_DATA_TOON=model_toon,
             FETCH_DATA_JSON=fetch_structured_json,
+            FETCH_DATA_TOON=fetch_toon,
             COMPRESSED_DATASETS=fetch_compressed,
             FETCH_DATA_MARKDOWN=fetch_markdown,
             WEB_DATA="Web search was not requested; rely on provided datasets.",
@@ -7366,6 +7542,9 @@ def intelligent_query():
         
         default_intelligent_prompt = """You are a data analysis assistant. Analyze the following dataset and extract only the most relevant information for this query: "{QUERY}"
 
+Dataset TOON:
+{DATASET_TOON}
+
 Dataset:
 {DATASET_JSON}
 
@@ -7390,9 +7569,14 @@ Be selective - only include the top 5-10 most relevant results. Focus on models 
             ['intelligent-query', 'prompt'],
             default_intelligent_prompt
         )
+        dataset_toon = truncate_text_for_prompt(
+            compose_all_data_toon(all_data),
+            MAX_PROMPT_STRUCTURED_CHARS
+        )
         prompt = format_prompt(
             intelligent_prompt_template,
             QUERY=query,
+            DATASET_TOON=dataset_toon,
             DATASET_JSON=json.dumps(all_data, indent=2)
         )
         prompt = enforce_prompt_ceiling(prompt)

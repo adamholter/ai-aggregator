@@ -65,8 +65,17 @@ SUMMARY GUIDELINES:
 - Keep every following section to 2-3 short sentences or bullet lines. Emphasize implications, trade-offs, and standout metrics rather than repeating raw dataset rows.
 - Highlight recommendations, strengths, and limitations explicitly; if certain data is missing, acknowledge the gap instead of guessing.
 
+Model Data from Database (TOON):
+{MODEL_DATA_TOON}
+
 Model Data from Database:
 {MODEL_DATA_JSON}
+
+Structured Dataset Summary (TOON):
+{FETCH_DATA_TOON}
+
+Structured Dataset Summary:
+{FETCH_DATA_JSON}
 
 Fetched Dataset Summary:
 {FETCH_DATA_MARKDOWN}
@@ -117,6 +126,9 @@ The analysis pipeline enforces these sections while also injecting the same `{CU
 ```
 You are a data analysis assistant. Analyze the following dataset and extract only the most relevant information for this query: "{QUERY}"
 
+Dataset TOON:
+{DATASET_TOON}
+
 Dataset:
 {DATASET_JSON}
 
@@ -148,6 +160,9 @@ You are a structured data extraction assistant. The provided datasets are the gr
 
 Categories:
 {CATEGORY_METADATA}
+
+Dataset TOON:
+{DATASETS_TOON}
 
 Dataset JSON:
 {DATASETS_JSON}
