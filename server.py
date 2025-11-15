@@ -2123,6 +2123,23 @@ def _should_track_usage_path(path):
     return True
 
 
+def _is_likely_automation_path(path):
+    if not path:
+        return False
+    normalized = path.lower()
+    normalized_path = normalized.split('?', 1)[0]
+    return (
+        normalized_path.startswith('/api/')
+        or normalized_path == '/latest'
+        or normalized_path.startswith('/latest/')
+    )
+
+
+def _annotate_usage_entry(entry):
+    entry.setdefault('is_automation', _is_likely_automation_path(entry.get('path', '')))
+    return entry
+
+
 def _record_usage_event():
     if not _should_track_usage_path(request.path):
         return
@@ -2134,6 +2151,7 @@ def _record_usage_event():
         'ip': request.remote_addr,
         'user_agent': (request.headers.get('User-Agent') or '')[:120]
     }
+    _annotate_usage_entry(entry)
     with _USAGE_LOG_LOCK:
         USAGE_STATS[request.path] += 1
         _USAGE_HISTORY.appendleft(entry)
@@ -8684,6 +8702,23 @@ def health_check():
 def usage_dashboard():
     stats = sorted(USAGE_STATS.items(), key=lambda item: item[1], reverse=True)
     recent = list(_USAGE_HISTORY)
+    for entry in recent:
+        _annotate_usage_entry(entry)
+
+    total_requests = len(recent)
+    unique_ips = len({entry.get('ip') or 'unknown' for entry in recent})
+    automation_entries = [entry for entry in recent if entry.get('is_automation')]
+    human_entries = [entry for entry in recent if not entry.get('is_automation')]
+    estimated_human_ips = len({entry.get('ip') or 'unknown' for entry in human_entries})
+    estimated_automation_ips = len({entry.get('ip') or 'unknown' for entry in automation_entries})
+    metrics = {
+        'total_requests': total_requests,
+        'unique_ips': unique_ips,
+        'estimated_human_ips': estimated_human_ips,
+        'estimated_automation_hits': len(automation_entries),
+        'estimated_automation_ips': estimated_automation_ips,
+        'human_requests': len(human_entries)
+    }
     return render_template_string("""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -8698,6 +8733,34 @@ def usage_dashboard():
             <h1>Usage Dashboard</h1>
             <p>Track the most-used endpoints and recent activity across the public APIs.</p>
         </header>
+        <section class="usage-panel">
+            <h2>Audience Insight</h2>
+            <div class="usage-metrics">
+                <div class="usage-stat">
+                    <p class="usage-stat-label">Tracked Requests</p>
+                    <p class="usage-stat-value">{{ metrics.total_requests }}</p>
+                    <p class="usage-stat-note">{{ metrics.human_requests + metrics.estimated_automation_hits }} entries recorded</p>
+                </div>
+                <div class="usage-stat">
+                    <p class="usage-stat-label">Unique IPs</p>
+                    <p class="usage-stat-value">{{ metrics.unique_ips }}</p>
+                    <p class="usage-stat-note">{{ metrics.total_requests }} recent requests</p>
+                </div>
+                <div class="usage-stat">
+                    <p class="usage-stat-label">Estimated Human Visitors</p>
+                    <p class="usage-stat-value">{{ metrics.estimated_human_ips }}</p>
+                    <p class="usage-stat-note">{{ metrics.human_requests }} interactive hits</p>
+                </div>
+                <div class="usage-stat">
+                    <p class="usage-stat-label">Automation Hits</p>
+                    <p class="usage-stat-value">{{ metrics.estimated_automation_hits }}</p>
+                    <p class="usage-stat-note">{{ metrics.estimated_automation_ips }} automation IPs detected</p>
+                </div>
+            </div>
+            <p class="usage-caption">
+                Requests to <code>/api/*</code> and <code>/latest</code> are flagged as automation scrapes for this estimate.
+            </p>
+        </section>
         <section class="usage-panel">
             <h2>Top Endpoints</h2>
             <div class="usage-grid">
@@ -8739,8 +8802,8 @@ def usage_dashboard():
             </div>
         </section>
     </div>
-</body>
-</html>""", stats=stats, recent=recent)
+    </body>
+</html>""", stats=stats, recent=recent, metrics=metrics)
 
 
 @app.route('/api/debug/utf8', methods=['POST'])

@@ -3091,6 +3091,46 @@ body {
     margin-top: 4px;
 }
 
+.usage-metrics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+.usage-stat {
+    flex: 1;
+    min-width: 180px;
+    padding: 0.9rem 1rem;
+    border: 1px solid rgba(28, 45, 67, 0.1);
+    border-radius: 0.75rem;
+    background: #fff;
+    box-shadow: 0 4px 12px rgba(17, 24, 39, 0.05);
+}
+.usage-stat-label {
+    font-size: 0.85rem;
+    color: #4b5563;
+    margin-bottom: 0.35rem;
+}
+.usage-stat-value {
+    font-size: 1.8rem;
+    margin: 0;
+    font-weight: 600;
+}
+.usage-stat-note {
+    margin: 0.35rem 0 0;
+    font-size: 0.82rem;
+    color: #6b7280;
+}
+
+@media (max-width: 700px) {
+    .usage-metrics {
+        flex-direction: column;
+    }
+    .usage-stat {
+        min-width: 100%;
+    }
+}
+
 .trace-content {
     padding: 16px;
     background: var(--card-bg);
