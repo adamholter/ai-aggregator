@@ -2362,7 +2362,47 @@ def _record_usage_event():
         _USAGE_HISTORY.appendleft(entry)
 
 
-def fetch_testing_catalog_feed(force_refresh=False, fast_limit=None, update_history=True):
+def _extract_next_testing_catalog_url(xml_text):
+    if not xml_text:
+        return ''
+    match = re.search(r'<link[^>]+rel=["\\\']next["\\\'][^>]*href=["\\\']([^"\\\']+)["\\\']', xml_text, re.IGNORECASE)
+    if match:
+        return match.group(1)
+    return ''
+
+
+def _collect_testing_catalog_pages(force_refresh, max_pages=5, fast_limit=None):
+    items = []
+    seen_urls = set()
+    next_urls = [TESTING_CATALOG_RSS_URL]
+    session = requests.Session()
+    page_counter = 0
+    while next_urls and page_counter < max_pages:
+        url = next_urls.pop(0)
+        if not url or url in seen_urls:
+            continue
+        seen_urls.add(url)
+        try:
+            response = session.get(
+                url,
+                headers={'User-Agent': 'ai-dashboard/1.0 (+https://adam.holter.com)'},
+                timeout=300
+            )
+            response.raise_for_status()
+            xml_text = response.text
+        except requests.exceptions.RequestException as exc:
+            if items:
+                break
+            raise RuntimeError(f'Failed to fetch TestingCatalog feed: {exc}') from exc
+        items.extend(_parse_testing_catalog_feed(xml_text, limit=fast_limit))
+        next_url = _extract_next_testing_catalog_url(xml_text)
+        if next_url and next_url not in seen_urls:
+            next_urls.append(next_url)
+        page_counter += 1
+    return items
+
+
+def fetch_testing_catalog_feed(force_refresh=False, fast_limit=None, update_history=True, max_pages=5):
     now = datetime.utcnow()
     cached_payload = _TESTING_CATALOG_CACHE.get('payload')
     cached_timestamp = _TESTING_CATALOG_CACHE.get('timestamp')
@@ -2380,21 +2420,11 @@ def fetch_testing_catalog_feed(force_refresh=False, fast_limit=None, update_hist
         cached_payload['items'] = combined_items
         return cached_payload
 
-    try:
-        response = requests.get(
-            TESTING_CATALOG_RSS_URL,
-            headers={'User-Agent': 'ai-dashboard/1.0 (+https://adam.holter.com)'},
-            timeout=300
-        )
-        response.raise_for_status()
-        xml_text = response.text
-    except requests.exceptions.RequestException as exc:
-        if cached_payload:
-            print(f"WARNING: TestingCatalog fetch failed ({exc}); returning cached dataset")
-            return cached_payload
-        raise RuntimeError(f'Failed to fetch TestingCatalog feed: {exc}') from exc
-
-    items = _parse_testing_catalog_feed(xml_text, limit=fast_limit)
+    items = _collect_testing_catalog_pages(
+        force_refresh=force_refresh,
+        max_pages=max_pages,
+        fast_limit=fast_limit
+    )
 
     history = _load_testing_catalog_history()
     if update_history and fast_limit is None:
@@ -7054,7 +7084,7 @@ def _agent_exp_loader_testing_catalog(options):
         except (TypeError, ValueError):
             limit_value = None
 
-    payload = fetch_testing_catalog_feed(force_refresh=force_refresh)
+        payload = fetch_testing_catalog_feed(force_refresh=force_refresh, max_pages=5)
     items = list(payload.get('items') or [])
     if limit_value is not None and limit_value >= 0:
         items = items[:limit_value]
@@ -9072,7 +9102,11 @@ def experimental_filter():
     category = (data.get('category') or '').strip()
     items = data.get('items') or []
     instructions = (data.get('instructions') or '').strip()
-    system_prompt = data.get('system_prompt') or DEFAULT_FILTER_SYSTEM_PROMPT
+    model_id = (data.get('model_id') or data.get('model') or EXPERIMENTAL_FILTER_MODEL).strip()
+    system_prompt = (data.get('system_prompt') or DEFAULT_FILTER_SYSTEM_PROMPT).strip()
+    custom_note = (data.get('system_prompt_note') or '').strip()
+    if custom_note:
+        system_prompt = f"{system_prompt}\n\n{custom_note}"
     if not category or not isinstance(items, list) or not items:
         return jsonify({'error': 'Category and at least one item are required.'}), 400
     rows = _prepare_filter_rows(items)
@@ -9086,7 +9120,7 @@ def experimental_filter():
         "Return only the filtered TOON table. Do not add prose, code fences, or commentary."
     )
     payload = {
-        'model': EXPERIMENTAL_FILTER_MODEL,
+        'model': model_id,
         'messages': [
             {'role': 'system', 'content': system_prompt},
             {'role': 'user', 'content': user_prompt}

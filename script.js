@@ -95,6 +95,20 @@ const CATEGORY_RAW_DATA_KEYS = {
     'monitor': 'monitor'
 };
 const filterState = {};
+const displayedSnapshots = {};
+const FILTER_MODEL_STORAGE_KEY = 'dashboard-filter-model-id';
+const FILTER_PROMPT_NOTE_STORAGE_KEY = 'dashboard-filter-prompt-note';
+
+function recordDisplayedItems(category, items) {
+    if (typeof category !== 'string') {
+        return;
+    }
+    displayedSnapshots[category] = Array.isArray(items) ? items.slice() : [];
+}
+
+function getDisplayedItems(category) {
+    return displayedSnapshots[category] ? displayedSnapshots[category].slice() : [];
+}
 
 function getFilteredItems(category, fallback = []) {
     const state = filterState[category];
@@ -102,6 +116,30 @@ function getFilteredItems(category, fallback = []) {
         return fallback;
     }
     return state.items;
+}
+
+function getConfiguredFilterModelId() {
+    return localStorage.getItem(FILTER_MODEL_STORAGE_KEY) || EXPERIMENTAL_FILTER_MODEL;
+}
+
+function setConfiguredFilterModelId(value) {
+    if (value) {
+        localStorage.setItem(FILTER_MODEL_STORAGE_KEY, value.trim());
+    } else {
+        localStorage.removeItem(FILTER_MODEL_STORAGE_KEY);
+    }
+}
+
+function getFilterPromptNoteSetting() {
+    return localStorage.getItem(FILTER_PROMPT_NOTE_STORAGE_KEY) || '';
+}
+
+function setFilterPromptNoteSetting(value) {
+    if (value) {
+        localStorage.setItem(FILTER_PROMPT_NOTE_STORAGE_KEY, value.trim());
+    } else {
+        localStorage.removeItem(FILTER_PROMPT_NOTE_STORAGE_KEY);
+    }
 }
 
 function refreshCategoryView(category) {
@@ -806,7 +844,8 @@ document.addEventListener('DOMContentLoaded', async function() {
   setupNavigation();
    initializeTheme();
    initializeAuthControls();
-   setupFilterControls();
+    setupFilterControls();
+    setupFilterSettings();
    applyAgentDefaults();
    setupOpenRouterControls();
    populateAgentDropdown();
@@ -1312,6 +1351,19 @@ function setupFilterControls() {
     refreshFilterControlsVisibility();
 }
 
+function setupFilterSettings() {
+    const modelInput = document.getElementById('filter-model-id');
+    const promptInput = document.getElementById('filter-prompt-note');
+    if (modelInput) {
+        modelInput.value = getConfiguredFilterModelId();
+        modelInput.addEventListener('change', () => setConfiguredFilterModelId(modelInput.value));
+    }
+    if (promptInput) {
+        promptInput.value = getFilterPromptNoteSetting();
+        promptInput.addEventListener('change', () => setFilterPromptNoteSetting(promptInput.value));
+    }
+}
+
 function handleFilterToggle(category, enabled) {
     filterState[category] = filterState[category] || { items: [] };
     filterState[category].enabled = enabled;
@@ -1342,7 +1394,8 @@ async function handleFilterRun(category) {
     if (!config) {
         return;
     }
-    const items = config.getItems();
+    const displayed = getDisplayedItems(category);
+    const items = displayed.length ? displayed : config.getItems();
     if (!items || !items.length) {
         markFilterStatus(category, 'No data available to filter.');
         return;
@@ -1362,7 +1415,9 @@ async function handleFilterRun(category) {
             body: JSON.stringify({
                 category: config.category,
                 instructions,
-                items: prepareFilterItems(items, config.limit || 60)
+                items: prepareFilterItems(items, config.limit || 60),
+                model_id: getConfiguredFilterModelId(),
+                system_prompt_note: getFilterPromptNoteSetting()
             })
         });
         const payload = await response.json();
@@ -1868,6 +1923,7 @@ function displayLLMData(models) {
         const modelCard = createLLMCard(model);
         container.appendChild(modelCard);
     });
+    recordDisplayedItems('llms', models);
 }
 
 // Create LLM card
@@ -2300,6 +2356,7 @@ function displayOpenRouterModelsData(models) {
 
     container.innerHTML = '';
     const displayModels = getFilteredItems('openrouter', models);
+    recordDisplayedItems('openrouter', displayModels);
     displayModels.forEach(model => {
         container.appendChild(createOpenRouterCard(model));
     });
@@ -2370,6 +2427,7 @@ function displayHypeItems(payload) {
     displayItems.forEach((item, index) => {
         container.appendChild(createHypeCard(item, index, fetchedAt));
     });
+    recordDisplayedItems('hype', displayItems);
 
     if (resultsInfo) {
         const summary = [`${displayItems.length} trending projects`];
@@ -2669,6 +2727,7 @@ function displayTestingCatalogItems(items) {
     displayItems.forEach(item => {
         container.appendChild(createTestingCatalogCard(item));
     });
+    recordDisplayedItems('testing-catalog', displayItems);
 }
 
 function createTestingCatalogCard(item) {
@@ -2904,6 +2963,7 @@ function displayBlogPosts(payload) {
     displayPosts.forEach(post => {
         container.appendChild(createBlogCard(post));
     });
+    recordDisplayedItems('blog', displayPosts);
 
     if (resultsInfo) {
         const summaryParts = [];
@@ -3126,6 +3186,7 @@ function displayLatestFeed(items) {
     displayItems.forEach(item => {
         container.appendChild(createLatestCard(item));
     });
+    recordDisplayedItems('latest', displayItems);
 
     if (resultsInfo) {
         const total = displayItems.length;
@@ -3298,6 +3359,7 @@ function displayMonitorItems(items) {
     displayItems.forEach(item => {
         container.appendChild(createMonitorCard(item));
     });
+    recordDisplayedItems('monitor', displayItems);
 }
 
 function createMonitorCard(item) {
@@ -3523,6 +3585,7 @@ function displayMediaData(models, type) {
         const modelCard = createMediaCard(model, type);
         container.appendChild(modelCard);
     });
+    recordDisplayedItems(type, displayModels);
 }
 
 // Create media card
@@ -4667,6 +4730,7 @@ function displayFalModelsData(models) {
     container.innerHTML = '';
 
     const displayModels = getFilteredItems('fal', models);
+    recordDisplayedItems('fal', displayModels);
     displayModels.forEach(model => {
         const modelCard = createFalModelCard(model);
         container.appendChild(modelCard);
@@ -4809,6 +4873,7 @@ function displayReplicateModelsData(models) {
     container.innerHTML = '';
 
     const displayModels = getFilteredItems('replicate', models);
+    recordDisplayedItems('replicate', displayModels);
     displayModels.forEach(model => {
         const modelCard = createReplicateModelCard(model);
         container.appendChild(modelCard);
