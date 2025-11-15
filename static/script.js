@@ -95,6 +95,20 @@ const CATEGORY_RAW_DATA_KEYS = {
     'monitor': 'monitor'
 };
 const filterState = {};
+const displayedSnapshots = {};
+const FILTER_MODEL_STORAGE_KEY = 'dashboard-filter-model-id';
+const FILTER_PROMPT_NOTE_STORAGE_KEY = 'dashboard-filter-prompt-note';
+
+function recordDisplayedItems(category, items) {
+    if (typeof category !== 'string') {
+        return;
+    }
+    displayedSnapshots[category] = Array.isArray(items) ? items.slice() : [];
+}
+
+function getDisplayedItems(category) {
+    return displayedSnapshots[category] ? displayedSnapshots[category].slice() : [];
+}
 
 function getFilteredItems(category, fallback = []) {
     const state = filterState[category];
@@ -102,6 +116,30 @@ function getFilteredItems(category, fallback = []) {
         return fallback;
     }
     return state.items;
+}
+
+function getConfiguredFilterModelId() {
+    return localStorage.getItem(FILTER_MODEL_STORAGE_KEY) || EXPERIMENTAL_FILTER_MODEL;
+}
+
+function setConfiguredFilterModelId(value) {
+    if (value) {
+        localStorage.setItem(FILTER_MODEL_STORAGE_KEY, value.trim());
+    } else {
+        localStorage.removeItem(FILTER_MODEL_STORAGE_KEY);
+    }
+}
+
+function getFilterPromptNoteSetting() {
+    return localStorage.getItem(FILTER_PROMPT_NOTE_STORAGE_KEY) || '';
+}
+
+function setFilterPromptNoteSetting(value) {
+    if (value) {
+        localStorage.setItem(FILTER_PROMPT_NOTE_STORAGE_KEY, value.trim());
+    } else {
+        localStorage.removeItem(FILTER_PROMPT_NOTE_STORAGE_KEY);
+    }
 }
 
 function refreshCategoryView(category) {
@@ -806,7 +844,8 @@ document.addEventListener('DOMContentLoaded', async function() {
   setupNavigation();
    initializeTheme();
    initializeAuthControls();
-   setupFilterControls();
+    setupFilterControls();
+    setupFilterSettings();
    applyAgentDefaults();
    setupOpenRouterControls();
    populateAgentDropdown();
@@ -1107,11 +1146,12 @@ function updatePinButton(button) {
     const key = button.dataset.pinKey;
     const pinned = pinnedItems.some(entry => entry.key === key);
     button.classList.toggle('is-pinned', pinned);
-    button.innerHTML = `
-        <svg width="12" height="14" viewBox="0 0 12 14" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-            <path d="M6 0C5.45 0 5 0.45 5 1V5.9L3 7.9V9.6L5 8.2V14H7V8.2L9 9.6V7.9L7 5.9V1C7 0.45 6.55 0 6 0Z"/>
+    const svg = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-pin" viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M4.146.146A.5.5 0 0 1 4.5 0h7a.5.5 0 0 1 .5.5c0 .68-.342 1.174-.646 1.479-.126.125-.25.224-.354.298v4.431l.078.048c.203.127.476.314.751.555C12.36 7.775 13 8.527 13 9.5a.5.5 0 0 1-.5.5h-4v4.5c0 .276-.224 1.5-.5 1.5s-.5-1.224-.5-1.5V10h-4a.5.5 0 0 1-.5-.5c0-.973.64-1.725 1.17-2.189A6 6 0 0 1 5 6.708V2.277a3 3 0 0 1-.354-.298C4.342 1.674 4 1.179 4 .5a.5.5 0 0 1 .146-.354m1.58 1.408-.002-.001zm-.002-.001.002.001A.5.5 0 0 1 6 2v5a.5.5 0 0 1-.276.447h-.002l-.012.007-.054.03a5 5 0 0 0-.827.58c-.318.278-.585.596-.725.936h7.792c-.14-.34-.407-.658-.725-.936a5 5 0 0 0-.881-.61l-.012-.006h-.002A.5.5 0 0 1 10 7V2a.5.5 0 0 1 .295-.458 1.8 1.8 0 0 0 .351-.271c.08-.08.155-.17.214-.271H5.14q.091.15.214.271a1.8 1.8 0 0 0 .37.282"/>
         </svg>
     `;
+    button.innerHTML = svg;
     button.setAttribute('aria-label', pinned ? 'Unpin this card' : 'Pin this card');
 }
 
@@ -1312,6 +1352,19 @@ function setupFilterControls() {
     refreshFilterControlsVisibility();
 }
 
+function setupFilterSettings() {
+    const modelInput = document.getElementById('filter-model-id');
+    const promptInput = document.getElementById('filter-prompt-note');
+    if (modelInput) {
+        modelInput.value = getConfiguredFilterModelId();
+        modelInput.addEventListener('change', () => setConfiguredFilterModelId(modelInput.value));
+    }
+    if (promptInput) {
+        promptInput.value = getFilterPromptNoteSetting();
+        promptInput.addEventListener('change', () => setFilterPromptNoteSetting(promptInput.value));
+    }
+}
+
 function handleFilterToggle(category, enabled) {
     filterState[category] = filterState[category] || { items: [] };
     filterState[category].enabled = enabled;
@@ -1342,7 +1395,8 @@ async function handleFilterRun(category) {
     if (!config) {
         return;
     }
-    const items = config.getItems();
+    const displayed = getDisplayedItems(category);
+    const items = displayed.length ? displayed : config.getItems();
     if (!items || !items.length) {
         markFilterStatus(category, 'No data available to filter.');
         return;
@@ -1362,7 +1416,9 @@ async function handleFilterRun(category) {
             body: JSON.stringify({
                 category: config.category,
                 instructions,
-                items: prepareFilterItems(items, config.limit || 60)
+                items: prepareFilterItems(items, config.limit || 60),
+                model_id: getConfiguredFilterModelId(),
+                system_prompt_note: getFilterPromptNoteSetting()
             })
         });
         const payload = await response.json();
@@ -1868,6 +1924,7 @@ function displayLLMData(models) {
         const modelCard = createLLMCard(model);
         container.appendChild(modelCard);
     });
+    recordDisplayedItems('llms', models);
 }
 
 // Create LLM card
@@ -2300,6 +2357,7 @@ function displayOpenRouterModelsData(models) {
 
     container.innerHTML = '';
     const displayModels = getFilteredItems('openrouter', models);
+    recordDisplayedItems('openrouter', displayModels);
     displayModels.forEach(model => {
         container.appendChild(createOpenRouterCard(model));
     });
@@ -2370,6 +2428,7 @@ function displayHypeItems(payload) {
     displayItems.forEach((item, index) => {
         container.appendChild(createHypeCard(item, index, fetchedAt));
     });
+    recordDisplayedItems('hype', displayItems);
 
     if (resultsInfo) {
         const summary = [`${displayItems.length} trending projects`];
@@ -2669,6 +2728,7 @@ function displayTestingCatalogItems(items) {
     displayItems.forEach(item => {
         container.appendChild(createTestingCatalogCard(item));
     });
+    recordDisplayedItems('testing-catalog', displayItems);
 }
 
 function createTestingCatalogCard(item) {
@@ -2904,6 +2964,7 @@ function displayBlogPosts(payload) {
     displayPosts.forEach(post => {
         container.appendChild(createBlogCard(post));
     });
+    recordDisplayedItems('blog', displayPosts);
 
     if (resultsInfo) {
         const summaryParts = [];
@@ -3126,6 +3187,7 @@ function displayLatestFeed(items) {
     displayItems.forEach(item => {
         container.appendChild(createLatestCard(item));
     });
+    recordDisplayedItems('latest', displayItems);
 
     if (resultsInfo) {
         const total = displayItems.length;
@@ -3298,6 +3360,7 @@ function displayMonitorItems(items) {
     displayItems.forEach(item => {
         container.appendChild(createMonitorCard(item));
     });
+    recordDisplayedItems('monitor', displayItems);
 }
 
 function createMonitorCard(item) {
@@ -3523,6 +3586,7 @@ function displayMediaData(models, type) {
         const modelCard = createMediaCard(model, type);
         container.appendChild(modelCard);
     });
+    recordDisplayedItems(type, displayModels);
 }
 
 // Create media card
@@ -4667,6 +4731,7 @@ function displayFalModelsData(models) {
     container.innerHTML = '';
 
     const displayModels = getFilteredItems('fal', models);
+    recordDisplayedItems('fal', displayModels);
     displayModels.forEach(model => {
         const modelCard = createFalModelCard(model);
         container.appendChild(modelCard);
@@ -4809,6 +4874,7 @@ function displayReplicateModelsData(models) {
     container.innerHTML = '';
 
     const displayModels = getFilteredItems('replicate', models);
+    recordDisplayedItems('replicate', displayModels);
     displayModels.forEach(model => {
         const modelCard = createReplicateModelCard(model);
         container.appendChild(modelCard);

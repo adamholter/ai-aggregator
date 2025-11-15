@@ -65,6 +65,8 @@
     --source-blog: #f97316;
     --source-monitor: #dc2626;
     --source-testingcatalog: #047857;
+    --pin-color: #1d4ed8;
+    --pin-color-dark: #60a5fa;
 }
 
 [data-theme="dark"] {
@@ -95,6 +97,8 @@
     --source-blog: #fb923c;
     --source-monitor: #dc2626;
     --source-testingcatalog: #047857;
+    --pin-color: #bfdbfe;
+    --pin-color-dark: #93c5fd;
 }
 
 [data-theme="source"] {
@@ -522,7 +526,7 @@ body {
     padding: 4px 10px;
     font-size: 0.75rem;
     background: var(--card-bg);
-    color: var(--text-color);
+    color: var(--pin-color);
     cursor: pointer;
     transition: all 0.2s ease;
 }
