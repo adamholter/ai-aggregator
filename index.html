@@ -9,23 +9,27 @@
     <link rel="icon" type="image/svg+xml" href="/u86mkqMgI0HOjDhIVO1WF.svg">
 </head>
 <body>
-    <button class="theme-toggle" onclick="toggleTheme()">🌙 Dark Mode</button>
-    <button class="auth-button" id="auth-button">Log In</button>
     <div class="container">
         <header class="header">
-            <h1>AI Model Analysis Dashboard</h1>
-            <p>Powered by Artificial Analysis, OpenRouter, Fal, and Replicate APIs</p>
-            <div class="source-legend" id="source-legend">
-                <span class="legend-title">Source colors</span>
-                <span class="legend-item" data-source="aa-llm"><span class="legend-dot"></span>Artificial Analysis (LLMs)</span>
-                <span class="legend-item" data-source="aa-media"><span class="legend-dot"></span>Artificial Analysis (Media)</span>
-                <span class="legend-item" data-source="fal"><span class="legend-dot"></span>fal.ai</span>
-                <span class="legend-item" data-source="replicate"><span class="legend-dot"></span>Replicate</span>
-                <span class="legend-item" data-source="openrouter"><span class="legend-dot"></span>OpenRouter</span>
-                <span class="legend-item" data-source="hype"><span class="legend-dot"></span>Hype Signals</span>
-                <span class="legend-item" data-source="monitor"><span class="legend-dot"></span>Monitor Feed</span>
-                <span class="legend-item" data-source="blog"><span class="legend-dot"></span>Blog</span>
-                <span class="legend-item" data-source="testingcatalog"><span class="legend-dot"></span>Testing Catalog</span>
+            <div class="header-main">
+                <h1>AI Model Analysis Dashboard</h1>
+                <p>Powered by Artificial Analysis, OpenRouter, Fal, and Replicate APIs</p>
+                <div class="source-legend" id="source-legend">
+                    <span class="legend-title">Source colors</span>
+                    <span class="legend-item" data-source="aa-llm"><span class="legend-dot"></span>Artificial Analysis (LLMs)</span>
+                    <span class="legend-item" data-source="aa-media"><span class="legend-dot"></span>Artificial Analysis (Media)</span>
+                    <span class="legend-item" data-source="fal"><span class="legend-dot"></span>fal.ai</span>
+                    <span class="legend-item" data-source="replicate"><span class="legend-dot"></span>Replicate</span>
+                    <span class="legend-item" data-source="openrouter"><span class="legend-dot"></span>OpenRouter</span>
+                    <span class="legend-item" data-source="hype"><span class="legend-dot"></span>Hype Signals</span>
+                    <span class="legend-item" data-source="monitor"><span class="legend-dot"></span>Monitor Feed</span>
+                    <span class="legend-item" data-source="blog"><span class="legend-dot"></span>Blog</span>
+                    <span class="legend-item" data-source="testingcatalog"><span class="legend-dot"></span>Testing Catalog</span>
+                </div>
+            </div>
+            <div class="header-actions">
+                <button class="theme-toggle" onclick="toggleTheme()">🌙 Dark Mode</button>
+                <button class="auth-button" id="auth-button">Log In</button>
             </div>
         </header>
 
@@ -54,7 +58,7 @@
                 <div class="section-header">
                     <h2>Large Language Models</h2>
                     <div class="controls">
-                        <input type="text" id="llm-search" placeholder="Search models..." oninput="filterLLMData()">
+                        <input type="text" id="llm-search" autocomplete="off" placeholder="Search models..." oninput="filterLLMData()">
                         <select id="llm-sort" onchange="filterLLMData()">
                             <option value="intelligence">Intelligence Index</option>
                             <option value="speed">Output Speed</option>
@@ -128,7 +132,7 @@
                 <div class="section-header">
                     <h2>Text-to-Image Models</h2>
                     <div class="controls">
-                        <input type="text" id="text-to-image-search" placeholder="Search models..." oninput="filterTextToImageData()">
+                        <input type="text" id="text-to-image-search" autocomplete="off" placeholder="Search models..." oninput="filterTextToImageData()">
                         <select id="text-to-image-sort" onchange="filterTextToImageData()">
                             <option value="elo">Overall ELO</option>
                             <option value="avg-style">Average Style ELO</option>
@@ -205,7 +209,7 @@
                 <div class="section-header">
                     <h2>Fal.ai Media Generation Models</h2>
                     <div class="controls">
-                        <input type="text" id="fal-models-search" placeholder="Search models..." oninput="filterFalModelsData()">
+                        <input type="text" id="fal-models-search" autocomplete="off" placeholder="Search models..." oninput="filterFalModelsData()">
                         <select id="fal-models-sort" onchange="filterFalModelsData()">
                             <option value="date">Release Date (Newest)</option>
                             <option value="category">Category</option>
@@ -239,7 +243,7 @@
                 <div class="section-header">
                     <h2>Replicate Models</h2>
                     <div class="controls">
-                        <input type="text" id="replicate-models-search" placeholder="Search models..." oninput="filterReplicateModelsData()">
+                        <input type="text" id="replicate-models-search" autocomplete="off" placeholder="Search models..." oninput="filterReplicateModelsData()">
                         <select id="replicate-models-sort" onchange="filterReplicateModelsData()">
                             <option value="date">Newest</option>
                             <option value="popularity">Popularity</option>
@@ -275,7 +279,7 @@
                 <div class="section-header">
                     <h2>OpenRouter Models</h2>
                     <div class="controls">
-                        <input type="text" id="openrouter-search" placeholder="Search models...">
+                        <input type="text" id="openrouter-search" autocomplete="off" placeholder="Search models...">
                         <select id="openrouter-sort">
                             <option value="newest">Newest</option>
                             <option value="name">Name (A-Z)</option>
@@ -472,12 +476,12 @@
                 <button class="modal-close" id="auth-close">×</button>
             </div>
             <div class="modal-body">
-                <form id="auth-form">
+                <form id="auth-form" autocomplete="off">
                     <label>Email
-                        <input type="email" id="auth-email" required placeholder="you@example.com">
+                        <input type="email" id="auth-email" autocomplete="off" required placeholder="you@example.com">
                     </label>
                     <label>Password
-                        <input type="password" id="auth-password" required minlength="6" placeholder="Enter password">
+                        <input type="password" id="auth-password" autocomplete="off" required minlength="6" placeholder="Enter password">
                     </label>
                     <div class="auth-actions">
                         <button type="submit" id="auth-submit">Log In</button>
@@ -502,7 +506,7 @@
                     <div class="form-row">
                         <label for="setting-available-models">Available Models in Agent</label>
                         <div class="model-dropdown-container">
-                            <input id="setting-available-models" type="text" placeholder="Search and select models for agent dropdown..." class="model-search-input" />
+                            <input id="setting-available-models" type="text" placeholder="Search and select models for agent dropdown..." class="model-search-input" autocomplete="off" />
                             <div class="model-dropdown" id="available-models-dropdown" style="display: none;"></div>
                             <div class="loading-indicator" id="available-models-loading" style="display: none;">Loading models...</div>
                             <div class="selected-models" id="selected-available-models"></div>
@@ -512,7 +516,7 @@
                     <div class="form-row">
                         <label for="setting-speed-model">Speed Mode Model</label>
                         <div class="model-dropdown-container">
-                            <input id="setting-speed-model" type="text" placeholder="Search models..." class="model-search-input" />
+                            <input id="setting-speed-model" type="text" placeholder="Search models..." class="model-search-input" autocomplete="off" />
                             <div class="model-dropdown" id="speed-model-dropdown" style="display: none;"></div>
                             <div class="loading-indicator" id="speed-model-loading" style="display: none;">Loading models...</div>
                         </div>
@@ -525,7 +529,7 @@
                     <div class="form-row">
                         <label for="setting-analysis-model">Model Analysis Model</label>
                         <div class="model-dropdown-container">
-                            <input id="setting-analysis-model" type="text" placeholder="Search models..." class="model-search-input" />
+                            <input id="setting-analysis-model" type="text" placeholder="Search models..." class="model-search-input" autocomplete="off" />
                             <div class="model-dropdown" id="analysis-model-dropdown" style="display: none;"></div>
                             <div class="loading-indicator" id="analysis-model-loading" style="display: none;">Loading models...</div>
                         </div>
@@ -534,7 +538,7 @@
                     <div class="form-row">
                         <label for="setting-fallback-models">Fallback Models</label>
                         <div class="model-dropdown-container">
-                            <input id="setting-fallback-models" type="text" placeholder="Search and select multiple models..." class="model-search-input" />
+                            <input id="setting-fallback-models" type="text" placeholder="Search and select multiple models..." class="model-search-input" autocomplete="off" />
                             <div class="model-dropdown" id="fallback-models-dropdown" style="display: none;"></div>
                             <div class="loading-indicator" id="fallback-models-loading" style="display: none;">Loading models...</div>
                             <div class="selected-models" id="selected-fallback-models"></div>

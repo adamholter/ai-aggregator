@@ -1107,7 +1107,12 @@ function updatePinButton(button) {
     const key = button.dataset.pinKey;
     const pinned = pinnedItems.some(entry => entry.key === key);
     button.classList.toggle('is-pinned', pinned);
-    button.textContent = pinned ? '★ Pinned' : '☆ Pin';
+    button.innerHTML = `
+        <svg width="12" height="14" viewBox="0 0 12 14" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M6 0C5.45 0 5 0.45 5 1V5.9L3 7.9V9.6L5 8.2V14H7V8.2L9 9.6V7.9L7 5.9V1C7 0.45 6.55 0 6 0Z"/>
+        </svg>
+    `;
+    button.setAttribute('aria-label', pinned ? 'Unpin this card' : 'Pin this card');
 }
 
 function updatePinButtonStates() {
@@ -1218,34 +1223,53 @@ function renderPinnedItemsSection() {
         return;
     }
     emptyState.style.display = 'none';
-    pinnedItems.forEach(pin => {
-        container.appendChild(createPinnedCard(pin));
+    pinnedItems.forEach((pin, index) => {
+        const card = createCardForPinnedItem(pin, index);
+        if (card) {
+            container.appendChild(card);
+        }
     });
 }
+const PIN_CARD_CREATORS = {
+    llms: (item) => createLLMCard(item),
+    'text-to-image': (item) => createMediaCard(item, 'text-to-image'),
+    'image-editing': (item) => createMediaCard(item, 'image-editing'),
+    'text-to-speech': (item) => createMediaCard(item, 'text-to-speech'),
+    'text-to-video': (item) => createMediaCard(item, 'text-to-video'),
+    'image-to-video': (item) => createMediaCard(item, 'image-to-video'),
+    fal: (item) => createFalModelCard(item),
+    replicate: (item) => createReplicateModelCard(item),
+    openrouter: (item) => createOpenRouterCard(item),
+    hype: (item, index, pin) => createHypeCard(item, index, pin?.item?.fetched_at),
+    blog: (item) => createBlogCard(item),
+    'testing-catalog': (item) => createTestingCatalogCard(item),
+    latest: (item) => createLatestCard(item),
+    monitor: (item) => createMonitorCard(item)
+};
 
-function createPinnedCard(pin) {
-    const card = document.createElement('div');
-    card.className = 'model-card pinned-card';
+function createCardForPinnedItem(pin, index = 0) {
+    const category = pin.category;
     const item = pin.item || {};
-    const title = item.title || item.name || 'Pinned Item';
-    const description = item.summary || item.excerpt || item.description || item.content_text || '';
-    const url = item.url || item.link || '';
-    const categoryLabel = pin.category ? pin.category.replace(/-/g, ' ').toUpperCase() : 'Pinned';
-
-    card.innerHTML = `
-        <div class="source-badge">${categoryLabel}</div>
-        <h3>${escapeHtml(title)}</h3>
-        ${description ? `<p>${escapeHtml(description)}</p>` : ''}
-        <div class="pin-meta">
-            Saved ${formatRelativeTime(pin.created_at)}${url ? ` · <a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">Open</a>` : ''}
-        </div>
-    `;
-
-    const removeButton = document.createElement('button');
-    removeButton.className = 'pin-remove-btn';
-    removeButton.textContent = 'Remove';
-    removeButton.addEventListener('click', () => togglePin(pin.category, item));
-    card.appendChild(removeButton);
+    const creator = PIN_CARD_CREATORS[category];
+    if (!creator) {
+        return null;
+    }
+    const card = creator(item, index, pin);
+    if (!card) {
+        return null;
+    }
+    const button = card.querySelector('.pin-control');
+    if (button) {
+        button.dataset.pinKey = pin.key;
+        updatePinButton(button);
+    } else {
+        attachPinButton(card, category, item);
+        const newButton = card.querySelector('.pin-control');
+        if (newButton) {
+            newButton.dataset.pinKey = pin.key;
+            updatePinButton(newButton);
+        }
+    }
     return card;
 }
 
@@ -2431,13 +2455,6 @@ function createHypeCard(item, index, fetchedAt) {
         ? `<div class="card-tags">${tagEntries.map(renderHypeTag).join('')}</div>`
         : '';
     const summaryMarkup = summaryText ? `<div class="card-summary">${escapeHtml(summaryText)}</div>` : '';
-
-    const rankBadge = `
-        <div class="card-rank-badge">
-            <span class="rank-number">#${index + 1}</span>
-            <span class="rank-dot" aria-hidden="true"></span>
-        </div>
-    `;
 
     card.innerHTML = `
         <div class="card-header">

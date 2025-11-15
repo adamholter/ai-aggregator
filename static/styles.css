@@ -148,10 +148,19 @@ body {
 
 /* Header */
 .header {
-    text-align: center;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
     margin-bottom: 40px;
     padding: 40px 20px;
     border-bottom: 1px solid var(--border-color);
+}
+
+.header-main {
+    flex: 1;
+    min-width: 240px;
 }
 
 .header h1 {
@@ -164,6 +173,12 @@ body {
 .header p {
     font-size: 0.9rem;
     color: var(--info-text);
+}
+
+.header-actions {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
 }
 
 .source-legend {
@@ -258,9 +273,6 @@ body {
 
 /* Theme toggle */
 .theme-toggle {
-    position: fixed;
-    top: 20px;
-    right: 150px;
     background: var(--button-bg);
     color: var(--button-text);
     border: 1px solid var(--border-color);
@@ -276,9 +288,6 @@ body {
 }
 
 .auth-button {
-    position: fixed;
-    top: 20px;
-    right: 20px;
     background: var(--accent-color);
     color: #fff;
     border: none;
@@ -518,36 +527,17 @@ body {
     transition: all 0.2s ease;
 }
 
+.pin-control svg {
+    display: block;
+    width: 12px;
+    height: 14px;
+}
+
 .pin-control.is-pinned {
     background: #fcd34d;
     border-color: #f59e0b;
     color: #7c2d12;
     font-weight: 600;
-}
-
-.pinned-card {
-    border-color: var(--accent-color);
-}
-
-.pinned-card .pin-meta {
-    font-size: 0.85rem;
-    color: var(--info-text);
-    margin-bottom: 10px;
-}
-
-.pin-remove-btn {
-    margin-top: 14px;
-    padding: 8px 12px;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    background: transparent;
-    cursor: pointer;
-    font-size: 0.85rem;
-    transition: all 0.2s ease;
-}
-
-.pin-remove-btn:hover {
-    background: var(--info-bg);
 }
 
 .filter-controls {
@@ -611,28 +601,6 @@ body {
     gap: 6px;
     flex: 1;
     min-width: 0;
-}
-
-.hype-card .card-rank-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
-    border-radius: 999px;
-    background: var(--source-hype, var(--button-bg));
-    color: #ffffff;
-    font-size: 0.82rem;
-    font-weight: 600;
-    line-height: 1;
-    box-shadow: 0 6px 18px rgba(236, 72, 153, 0.18);
-    white-space: nowrap;
-}
-
-.hype-card .card-rank-badge .rank-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.9);
 }
 
 .hype-card .source-badge {
