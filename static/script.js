@@ -63,6 +63,23 @@ let currentUser = null;
 let authMode = 'login';
 let pinnedItems = [];
 const LOCAL_PIN_STORAGE_KEY = 'dashboard-pinned-items';
+const FILTERABLE_SECTIONS = {
+    llms: { sectionId: 'llms', category: 'llms', limit: 60, getItems: () => rawData.llms || [] },
+    'text-to-image': { sectionId: 'text-to-image', category: 'text-to-image', limit: 60, getItems: () => rawData.textToImage || [] },
+    'image-editing': { sectionId: 'image-editing', category: 'image-editing', limit: 60, getItems: () => rawData.imageEditing || [] },
+    'text-to-speech': { sectionId: 'text-to-speech', category: 'text-to-speech', limit: 60, getItems: () => rawData.textToSpeech || [] },
+    'text-to-video': { sectionId: 'text-to-video', category: 'text-to-video', limit: 60, getItems: () => rawData.textToVideo || [] },
+    'image-to-video': { sectionId: 'image-to-video', category: 'image-to-video', limit: 60, getItems: () => rawData.imageToVideo || [] },
+    fal: { sectionId: 'fal-models', category: 'fal', limit: 60, getItems: () => rawData.falModels || [] },
+    replicate: { sectionId: 'replicate-models', category: 'replicate', limit: 60, getItems: () => rawData.replicateModels || [] },
+    openrouter: { sectionId: 'openrouter-models', category: 'openrouter', limit: 60, getItems: () => rawData.openRouterModels || [] },
+    hype: { sectionId: 'hype', category: 'hype', limit: 60, getItems: () => rawData.hype || [] },
+    latest: { sectionId: 'latest', category: 'latest', limit: 80, getItems: () => rawData.latest || cachedData.latest || [] },
+    blog: { sectionId: 'blog', category: 'blog', limit: 60, getItems: () => rawData.blog || [] },
+    'testing-catalog': { sectionId: 'testing-catalog', category: 'testing-catalog', limit: 60, getItems: () => rawData.testingCatalog || [] },
+    monitor: { sectionId: 'monitor', category: 'monitor', limit: 60, getItems: () => rawData.monitor || [] }
+};
+const filterState = {};
 
 let openRouterIndex = null;
 const modelMatchCache = new Map();
@@ -372,6 +389,7 @@ function applyExperimentalMode(enabled) {
     if (!experimentalModeEnabled) {
         ensureActiveSectionIsAllowed();
     }
+    refreshFilterControlsVisibility();
 }
 
 function ensureActiveSectionIsAllowed() {
@@ -708,9 +726,10 @@ document.addEventListener('DOMContentLoaded', async function() {
    ensureExperimentalSections();
   ensureExperimentalNavButtons();
   setupNavigation();
-  initializeTheme();
+   initializeTheme();
    initializeAuthControls();
-  applyAgentDefaults();
+   setupFilterControls();
+   applyAgentDefaults();
    setupOpenRouterControls();
    populateAgentDropdown();
    initializeAgentExp();
@@ -1151,6 +1170,210 @@ function createPinnedCard(pin) {
     card.appendChild(removeButton);
     return card;
 }
+
+function setupFilterControls() {
+    Object.entries(FILTERABLE_SECTIONS).forEach(([category, config]) => {
+        const section = document.getElementById(config.sectionId);
+        if (!section) {
+            return;
+        }
+        const header = section.querySelector('.section-header');
+        if (header && !header.querySelector(`[data-filter-control="${category}"]`)) {
+            const control = document.createElement('div');
+            control.className = 'filter-controls';
+            control.dataset.filterControl = category;
+            control.innerHTML = `
+                <label class="filter-toggle">
+                    <input type="checkbox" data-filter-toggle="${category}">
+                    <span>AI Filter</span>
+                </label>
+                <input type="text" data-filter-input="${category}" placeholder="Importance & recency (optional)" disabled>
+                <button type="button" class="filter-run" data-filter-run="${category}" disabled>Run</button>
+                <span class="filter-status" data-filter-status="${category}"></span>
+            `;
+            header.appendChild(control);
+            const toggle = control.querySelector(`[data-filter-toggle="${category}"]`);
+            const runButton = control.querySelector(`[data-filter-run="${category}"]`);
+            toggle.addEventListener('change', () => handleFilterToggle(category, toggle.checked));
+            runButton.addEventListener('click', () => handleFilterRun(category));
+        }
+        if (!section.querySelector(`[data-filter-results="${category}"]`)) {
+            const resultsWrapper = document.createElement('div');
+            resultsWrapper.className = 'filter-results';
+            resultsWrapper.dataset.filterResults = category;
+            resultsWrapper.style.display = 'none';
+            resultsWrapper.innerHTML = `
+                <div class="filter-results-header">
+                    <h3>AI Filtered Highlights</h3>
+                    <button type="button" class="link-btn" data-filter-clear="${category}">Clear</button>
+                </div>
+                <div class="filter-results-body" data-filter-cards="${category}"></div>
+            `;
+            const note = section.querySelector('.section-note');
+            if (note && note.parentNode) {
+                note.parentNode.insertBefore(resultsWrapper, note.nextSibling);
+            } else {
+                section.insertBefore(resultsWrapper, section.firstChild);
+            }
+            const clearButton = resultsWrapper.querySelector(`[data-filter-clear="${category}"]`);
+            clearButton.addEventListener('click', () => {
+                const toggle = section.querySelector(`[data-filter-toggle="${category}"]`);
+                if (toggle) {
+                    toggle.checked = false;
+                }
+                handleFilterToggle(category, false);
+            });
+        }
+    });
+    refreshFilterControlsVisibility();
+}
+
+function handleFilterToggle(category, enabled) {
+    filterState[category] = filterState[category] || { items: [] };
+    filterState[category].enabled = enabled;
+    const input = document.querySelector(`[data-filter-input="${category}"]`);
+    const runButton = document.querySelector(`[data-filter-run="${category}"]`);
+    if (input) {
+        input.disabled = !enabled;
+    }
+    if (runButton) {
+        runButton.disabled = !enabled;
+    }
+    if (!enabled) {
+        filterState[category].items = [];
+        renderFilterResults(category);
+        markFilterStatus(category, '');
+    }
+}
+
+function markFilterStatus(category, message) {
+    const statusElement = document.querySelector(`[data-filter-status="${category}"]`);
+    if (statusElement) {
+        statusElement.textContent = message || '';
+    }
+}
+
+async function handleFilterRun(category) {
+    const config = FILTERABLE_SECTIONS[category];
+    if (!config) {
+        return;
+    }
+    const items = config.getItems();
+    if (!items || !items.length) {
+        markFilterStatus(category, 'No data available to filter.');
+        return;
+    }
+    const instructionsInput = document.querySelector(`[data-filter-input="${category}"]`);
+    const instructions = instructionsInput ? instructionsInput.value.trim() : '';
+    markFilterStatus(category, 'Filtering...');
+    const runButton = document.querySelector(`[data-filter-run="${category}"]`);
+    if (runButton) {
+        runButton.disabled = true;
+    }
+    try {
+        const response = await fetch('/api/experimental-filter', {
+            method: 'POST',
+            headers: withUserOpenRouterKey({ 'Content-Type': 'application/json' }),
+            credentials: 'same-origin',
+            body: JSON.stringify({
+                category: config.category,
+                instructions,
+                items: prepareFilterItems(items, config.limit || 60)
+            })
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+            throw new Error(payload.error || 'Filtering failed.');
+        }
+        filterState[category] = {
+            enabled: true,
+            items: Array.isArray(payload.items) ? payload.items : []
+        };
+        renderFilterResults(category);
+        markFilterStatus(category, `Filtered ${filterState[category].items.length} items`);
+    } catch (error) {
+        console.error('Filter request failed:', error);
+        markFilterStatus(category, error.message || 'Filtering failed.');
+    } finally {
+        if (runButton) {
+            runButton.disabled = false;
+        }
+    }
+}
+
+function prepareFilterItems(items, limit = 60) {
+    return items.slice(0, limit).map(item => ({
+        title: item?.title || item?.name || item?.model || item?.id || '',
+        summary: item?.summary || item?.excerpt || item?.description || item?.content_text || '',
+        link: item?.url || item?.link || '',
+        timestamp: buildFilterTimestamp(item),
+        tags: item?.tags || item?.categories || []
+    }));
+}
+
+function buildFilterTimestamp(item) {
+    if (!item || typeof item !== 'object') {
+        return '';
+    }
+    if (item.timestamp) {
+        return item.timestamp;
+    }
+    if (item.published_date && item.published_time) {
+        return `${item.published_date}T${item.published_time}`;
+    }
+    return item.published_date || item.date || item.created_at || '';
+}
+
+function renderFilterResults(category) {
+    const container = document.querySelector(`[data-filter-results="${category}"]`);
+    const cardsContainer = document.querySelector(`[data-filter-cards="${category}"]`);
+    if (!container || !cardsContainer) {
+        return;
+    }
+    const state = filterState[category];
+    if (!experimentalModeEnabled || !state || !state.enabled) {
+        container.style.display = 'none';
+        cardsContainer.innerHTML = '';
+        return;
+    }
+    cardsContainer.innerHTML = '';
+    if (!state.items || !state.items.length) {
+        cardsContainer.innerHTML = '<div class="empty-state">No AI-filtered items yet.</div>';
+    } else {
+        state.items.forEach(item => {
+            const card = document.createElement('div');
+            card.className = 'model-card filtered-card';
+            const title = item.title || item.name || 'Item';
+            const summary = item.summary || '';
+            const link = item.link || '';
+            const timestamp = item.timestamp || '';
+            card.innerHTML = `
+                <div class="source-badge">AI Filter</div>
+                <h3>${escapeHtml(title)}</h3>
+                ${timestamp ? `<div class="pin-meta">${escapeHtml(formatRelativeTime(timestamp))}</div>` : ''}
+                ${summary ? `<p>${escapeHtml(summary)}</p>` : ''}
+                ${link ? `<a href="${escapeHtml(link)}" target="_blank" rel="noopener" class="link-btn">Open</a>` : ''}
+            `;
+            cardsContainer.appendChild(card);
+        });
+    }
+    container.style.display = 'block';
+}
+
+function refreshFilterControlsVisibility() {
+    const controls = document.querySelectorAll('[data-filter-control]');
+    controls.forEach(control => {
+        control.style.display = experimentalModeEnabled ? '' : 'none';
+    });
+    if (!experimentalModeEnabled) {
+        document.querySelectorAll('.filter-results').forEach(container => {
+            container.style.display = 'none';
+        });
+    } else {
+        Object.keys(filterState).forEach(renderFilterResults);
+    }
+}
+
 
 
 async function preloadModelConfig() {
@@ -1739,6 +1962,7 @@ async function loadImageEditingData() {
 
         const data = await makeAPICall('/api/image-editing', null);
         cachedData.imageEditing = data;
+        rawData.imageEditing = data.data;
         
         displayMediaData(data.data, 'image-editing');
         loadingElement.style.display = 'none';
@@ -1762,6 +1986,7 @@ async function loadTextToSpeechData() {
 
         const data = await makeAPICall('/api/text-to-speech', null);
         cachedData.textToSpeech = data;
+        rawData.textToSpeech = data.data;
         
         displayMediaData(data.data, 'text-to-speech');
         loadingElement.style.display = 'none';
@@ -1785,6 +2010,7 @@ async function loadTextToVideoData() {
 
         const data = await makeAPICall('/api/text-to-video', null);
         cachedData.textToVideo = data;
+        rawData.textToVideo = data.data;
         
         displayMediaData(data.data, 'text-to-video');
         loadingElement.style.display = 'none';
@@ -1808,6 +2034,7 @@ async function loadImageToVideoData() {
 
         const data = await makeAPICall('/api/image-to-video', null);
         cachedData.imageToVideo = data;
+        rawData.imageToVideo = data.data;
         
         displayMediaData(data.data, 'image-to-video');
         loadingElement.style.display = 'none';

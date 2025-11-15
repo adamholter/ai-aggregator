@@ -73,6 +73,14 @@ FALLBACK_CATEGORY_FILES = {
     'fal': os.path.join(BASE_DIR, 'data', 'fallback', 'fal_models.json'),
     'replicate': os.path.join(BASE_DIR, 'data', 'fallback', 'replicate_models.json')
 }
+EXPERIMENTAL_FILTER_MODEL = os.environ.get('EXPERIMENTAL_FILTER_MODEL', 'google/gemini-2.5-flash-lite-preview-09-2025')
+DEFAULT_FILTER_SYSTEM_PROMPT = (
+    "You are an AI assistant that filters dashboard entries. Each dataset is provided in TOON format "
+    "with fields such as title, summary, link, and timestamp. Rank and select the most important, "
+    "timely items (novel launches, major updates, highly impactful releases). Always respond with a "
+    "single TOON table named filtered[...] using the same fields from the input. Escape commas inside "
+    "fields with a backslash. Do not add explanations outside the table."
+)
 
 GOOGLE_SHEETS_API_KEY = (os.environ.get('GOOGLE_SHEETS_API_KEY') or '').strip()
 MONITOR_SHEET_ID = (os.environ.get('MONITOR_SHEET_ID') or '1Dg58BUnlBwREG__ls6qcUrj3PHE9LMAOvQMZGesQI84').strip()
@@ -233,6 +241,107 @@ def _write_user_pins(user_id, pins):
     store = _load_pin_store()
     store[user_id] = pins
     _save_pin_store(store)
+
+
+def _extract_filter_timestamp(item):
+    if not isinstance(item, dict):
+        return ''
+    if item.get('timestamp'):
+        return item.get('timestamp')
+    date = item.get('published_date') or item.get('date') or item.get('created_at')
+    time_value = item.get('published_time') or item.get('time')
+    if date and time_value:
+        return f"{date}T{time_value}"
+    if date:
+        return date
+    return ''
+
+
+def _prepare_filter_rows(items, limit=60):
+    rows = []
+    for entry in items[:limit]:
+        if not isinstance(entry, dict):
+            continue
+        title = entry.get('title') or entry.get('name') or entry.get('model') or entry.get('id')
+        summary = (
+            entry.get('summary')
+            or entry.get('excerpt')
+            or entry.get('description')
+            or entry.get('content_text')
+            or entry.get('content')
+            or ''
+        )
+        link = entry.get('link') or entry.get('url') or entry.get('source_url') or ''
+        timestamp = _extract_filter_timestamp(entry)
+        if not title:
+            continue
+        rows.append({
+            'title': str(title)[:200],
+            'summary': str(summary)[:600],
+            'link': str(link),
+            'timestamp': str(timestamp)
+        })
+    return rows
+
+
+def _build_filter_toon(rows):
+    if not rows:
+        return ''
+    fields = ['title', 'summary', 'link', 'timestamp']
+    lines = [f"filtered[{len(rows)}]{{{','.join(fields)}}}:"]
+    for row in rows:
+        values = [sanitize_toon_value(row.get(field, '')) for field in fields]
+        lines.append(f"  {','.join(values)}")
+    return '\n'.join(lines)
+
+
+def _split_toon_row(row_text):
+    values = []
+    buffer = []
+    escaped = False
+    for char in row_text:
+        if escaped:
+            buffer.append(char)
+            escaped = False
+        elif char == '\\':
+            escaped = True
+        elif char == ',':
+            values.append(''.join(buffer).strip())
+            buffer = []
+        else:
+            buffer.append(char)
+    values.append(''.join(buffer).strip())
+    return values
+
+
+def _parse_filter_toon_response(content):
+    if not content:
+        return []
+    lines = [line.rstrip() for line in content.splitlines() if line.strip()]
+    header_pattern = re.compile(r'^[^\[\]\n]+\[(\d+)\]\{([^\}]+)\}:\s*$')
+    header_line = None
+    for line in lines:
+        match = header_pattern.match(line.strip())
+        if match:
+            header_line = line
+            fields = [field.strip() for field in match.group(2).split(',') if field.strip()]
+            break
+    if not header_line:
+        raise ValueError('Filtered TOON payload missing header.')
+    if not fields:
+        raise ValueError('Filtered TOON payload missing fields.')
+    header_index = lines.index(header_line)
+    entries = []
+    for line in lines[header_index + 1:]:
+        stripped = line.strip()
+        if not stripped or stripped.startswith('#'):
+            continue
+        values = _split_toon_row(stripped)
+        row = {}
+        for field, value in zip(fields, values):
+            row[field] = value
+        entries.append(row)
+    return entries
 
 
 def get_request_bearer_token():
@@ -8951,6 +9060,60 @@ def delete_pin_by_key():
     removed = len(updated) != len(pins)
     _write_user_pins(user.get('id'), updated)
     return jsonify({'success': removed})
+
+
+@app.route('/api/experimental-filter', methods=['POST'])
+def experimental_filter():
+    try:
+        user_token = require_user_openrouter_token()
+    except MissingOpenRouterKeyError:
+        return openrouter_key_required_response()
+    data = request.get_json(silent=True) or {}
+    category = (data.get('category') or '').strip()
+    items = data.get('items') or []
+    instructions = (data.get('instructions') or '').strip()
+    system_prompt = data.get('system_prompt') or DEFAULT_FILTER_SYSTEM_PROMPT
+    if not category or not isinstance(items, list) or not items:
+        return jsonify({'error': 'Category and at least one item are required.'}), 400
+    rows = _prepare_filter_rows(items)
+    if not rows:
+        return jsonify({'items': []})
+    toon_payload = _build_filter_toon(rows)
+    user_prompt = (
+        f"Dataset Category: {category}\n"
+        f"Custom Instructions: {instructions or 'Surface the most important, time-sensitive entries.'}\n\n"
+        f"Input TOON:\n{toon_payload}\n\n"
+        "Return only the filtered TOON table. Do not add prose, code fences, or commentary."
+    )
+    payload = {
+        'model': EXPERIMENTAL_FILTER_MODEL,
+        'messages': [
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': user_prompt}
+        ],
+        'timeout': 120
+    }
+    headers = build_openrouter_headers(user_token)
+    try:
+        response = requests.post(
+            f'{OPENROUTER_BASE_URL}/chat/completions',
+            headers=headers,
+            json=payload,
+            timeout=150
+        )
+        response.raise_for_status()
+        result = response.json()
+        content = result['choices'][0]['message']['content']
+        filtered_items = _parse_filter_toon_response(content)
+        return jsonify({'items': filtered_items})
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    except requests.exceptions.HTTPError as exc:
+        print(f"ERROR: Experimental filter call failed: {exc}")
+        return jsonify({'error': 'Filtering request failed.', 'details': str(exc)}), 502
+    except Exception as exc:
+        print(f"ERROR: Unexpected filter failure: {exc}")
+        return jsonify({'error': 'Failed to process filter request.'}), 502
 
 
 @app.route('/usage', methods=['GET'])

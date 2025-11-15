@@ -550,6 +550,72 @@ body {
     background: var(--info-bg);
 }
 
+.filter-controls {
+    display: none;
+    align-items: center;
+    gap: 0.8rem;
+    flex-wrap: wrap;
+    margin-top: 8px;
+}
+
+.filter-controls input[type="text"] {
+    min-width: 240px;
+    padding: 6px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 0.85rem;
+}
+
+.filter-controls .filter-run {
+    padding: 6px 12px;
+    border-radius: 4px;
+    border: none;
+    background: var(--button-bg);
+    color: var(--button-text);
+    cursor: pointer;
+}
+
+.filter-controls .filter-run:disabled,
+.filter-controls input[disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.filter-status {
+    font-size: 0.8rem;
+    color: var(--info-text);
+}
+
+.filter-results {
+    border: 1px dashed var(--border-color);
+    padding: 12px;
+    border-radius: 6px;
+    margin-top: 16px;
+    background: var(--card-bg);
+}
+
+.filter-results-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.filter-results-body {
+    margin-top: 12px;
+    display: grid;
+    gap: 12px;
+}
+
+.filtered-card {
+    border-color: var(--accent-color);
+}
+
+:root.experimental-mode .filter-controls,
+.experimental-mode .filter-controls {
+    display: flex;
+}
+
 .hype-card {
     display: flex;
     flex-direction: column;
