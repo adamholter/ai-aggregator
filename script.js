@@ -2525,7 +2525,6 @@ function createHypeCard(item, index, fetchedAt) {
                 </div>
                 ${metaMarkup}
             </div>
-            ${rankBadge}
         </div>
         ${summaryMarkup}
         ${tagMarkup}
