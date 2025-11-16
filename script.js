@@ -113,10 +113,71 @@ function getDisplayedItems(category) {
 
 function getFilteredItems(category, fallback = []) {
     const state = filterState[category];
-    if (!state || !state.enabled || !Array.isArray(state.items) || !state.items.length) {
+    if (!state || !state.enabled || !Array.isArray(state.items)) {
         return fallback;
     }
     return state.items;
+}
+
+function normalizeFilterIdentifier(value) {
+    if (value === undefined || value === null) {
+        return '';
+    }
+    const normalized = String(value).trim();
+    return normalized ? normalized.toLowerCase() : '';
+}
+
+function collectFilterMatchKeys(entry) {
+    if (!entry || typeof entry !== 'object') {
+        return [];
+    }
+    const keys = new Set();
+    const candidates = [
+        entry.title,
+        entry.name,
+        entry.model,
+        entry.id,
+        entry.slug,
+        entry.link,
+        entry.url
+    ];
+    candidates.forEach(value => {
+        const normalized = normalizeFilterIdentifier(value);
+        if (normalized) {
+            keys.add(normalized);
+        }
+    });
+    return Array.from(keys);
+}
+
+function mapFilterEntriesToItems(items, filterEntries) {
+    if (!Array.isArray(items) || !Array.isArray(filterEntries)) {
+        return [];
+    }
+    const filterKeys = new Set();
+    filterEntries.forEach(entry => {
+        collectFilterMatchKeys(entry).forEach(key => filterKeys.add(key));
+    });
+    if (!filterKeys.size) {
+        return [];
+    }
+    const matchedItems = [];
+    const seenItems = new Set();
+    items.forEach(item => {
+        if (seenItems.has(item)) {
+            return;
+        }
+        const candidateKeys = collectFilterMatchKeys(item);
+        if (!candidateKeys.length) {
+            return;
+        }
+        const isMatch = candidateKeys.some(key => filterKeys.has(key));
+        if (isMatch) {
+            matchedItems.push(item);
+            seenItems.add(item);
+        }
+    });
+    return matchedItems;
 }
 
 function getConfiguredFilterModelId() {
@@ -1396,8 +1457,9 @@ async function handleFilterRun(category) {
     if (!config) {
         return;
     }
+    const datasetItems = Array.isArray(config.getItems()) ? config.getItems() : [];
     const displayed = getDisplayedItems(category);
-    const items = displayed.length ? displayed : config.getItems();
+    const items = displayed.length ? displayed : datasetItems;
     if (!items || !items.length) {
         markFilterStatus(category, 'No data available to filter.');
         return;
@@ -1426,12 +1488,16 @@ async function handleFilterRun(category) {
         if (!response.ok) {
             throw new Error(payload.error || 'Filtering failed.');
         }
+        const filterEntries = Array.isArray(payload.items) ? payload.items : [];
+        const matchSource = datasetItems.length ? datasetItems : items;
+        const matchedItems = mapFilterEntriesToItems(matchSource, filterEntries);
         filterState[category] = {
             enabled: true,
-            items: Array.isArray(payload.items) ? payload.items : []
+            items: matchedItems
         };
         refreshCategoryView(category);
-        markFilterStatus(category, `Filtered ${filterState[category].items.length} items`);
+        const matchedCount = matchedItems.length;
+        markFilterStatus(category, `Filtered ${matchedCount} item${matchedCount === 1 ? '' : 's'}`);
     } catch (error) {
         console.error('Filter request failed:', error);
         markFilterStatus(category, error.message || 'Filtering failed.');
