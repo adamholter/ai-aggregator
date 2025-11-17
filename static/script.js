@@ -292,6 +292,8 @@ let blogPrefetching = false;
 let latestTimeframe = 'day';
 let latestIncludeHype = false;
 let latestMetadata = null;
+let latestLoadId = 0;
+const LATEST_PREVIEW_LIMIT = 10;
 let latestControlsWired = false;
 
 function getLatestControls() {
@@ -2759,7 +2761,6 @@ async function loadTestingCatalogData(forceRefresh = false) {
         const previewItems = Array.isArray(payload?.items) ? payload.items : [];
         rawData.testingCatalog = previewItems;
         displayTestingCatalogItems(rawData.testingCatalog);
-        populateTestingCatalogTags(); // Populate tag filter dropdown
         renderResultsText(previewItems, payload, false);
         previewDisplayed = true;
     } catch (error) {
@@ -3191,36 +3192,81 @@ async function loadLatestFeed(forceRefresh = false) {
         return;
     }
 
-    try {
-        loadingElement.style.display = 'flex';
-        errorElement.style.display = 'none';
-        dataElement.innerHTML = '';
-        if (resultsInfo) {
-            resultsInfo.style.display = 'none';
-            resultsInfo.textContent = '';
-        }
+    loadingElement.style.display = 'flex';
+    errorElement.style.display = 'none';
+    dataElement.innerHTML = '';
+    if (resultsInfo) {
+        resultsInfo.style.display = 'none';
+        resultsInfo.textContent = '';
+    }
 
-        const params = new URLSearchParams({ timeframe: latestTimeframe });
-        params.set('cache_bust', (forceRefresh || latestTimeframe === 'day') ? 'true' : 'false');
+    const loadId = ++latestLoadId;
+    let previewDisplayed = false;
+
+    const startFullFetch = () => {
+        (async () => {
+            try {
+                const params = new URLSearchParams({ timeframe: latestTimeframe });
+                params.set('cache_bust', (forceRefresh || latestTimeframe === 'day') ? 'true' : 'false');
+                if (latestIncludeHype) {
+                    params.set('include_hype', 'true');
+                }
+                const data = await makeAPICall(`/latest?${params.toString()}`, null);
+                if (loadId !== latestLoadId) {
+                    return;
+                }
+                const items = Array.isArray(data?.items) ? data.items : [];
+                cachedData.latest = items;
+                rawData.latest = items;
+                latestMetadata = data || null;
+                if (typeof latestMetadata?.include_hype === 'boolean') {
+                    latestIncludeHype = latestMetadata.include_hype;
+                }
+                ensureLatestControlListeners();
+                displayLatestFeed(items);
+                errorElement.style.display = 'none';
+            } catch (error) {
+                if (loadId !== latestLoadId) {
+                    return;
+                }
+                const message = previewDisplayed
+                    ? `Updated latest feed failed: ${error.message}`
+                    : `Failed to load latest feed: ${error.message}`;
+                errorElement.textContent = message;
+                errorElement.style.display = 'block';
+            }
+        })();
+    };
+
+    try {
+        const previewParams = new URLSearchParams({ timeframe: latestTimeframe });
+        previewParams.set('limit', String(LATEST_PREVIEW_LIMIT));
+        previewParams.set('cache_bust', forceRefresh ? 'true' : 'false');
         if (latestIncludeHype) {
-            params.set('include_hype', 'true');
+            previewParams.set('include_hype', 'true');
         }
-        const data = await makeAPICall(`/latest?${params.toString()}`, null);
-        const items = Array.isArray(data?.items) ? data.items : [];
-        cachedData.latest = items;
-        rawData.latest = items;
-        latestMetadata = data || null;
-        if (typeof latestMetadata?.include_hype === 'boolean') {
-            latestIncludeHype = latestMetadata.include_hype;
+        const previewPayload = await makeAPICall(`/api/latest-preview?${previewParams.toString()}`, null);
+        if (loadId !== latestLoadId) {
+            return;
         }
+        const previewItems = Array.isArray(previewPayload?.items) ? previewPayload.items : [];
+        rawData.latest = previewItems;
+        latestMetadata = previewPayload || null;
         ensureLatestControlListeners();
-        displayLatestFeed(items);
+        displayLatestFeed(previewItems);
+        previewDisplayed = true;
     } catch (error) {
-        const message = error?.message || String(error);
-        errorElement.textContent = `Failed to load latest activity: ${message}`;
+        if (loadId !== latestLoadId) {
+            return;
+        }
+        errorElement.textContent = `Failed to load latest preview: ${error.message}`;
         errorElement.style.display = 'block';
     } finally {
+        if (loadId !== latestLoadId) {
+            return;
+        }
         loadingElement.style.display = 'none';
+        startFullFetch();
     }
 }
 
@@ -3262,7 +3308,11 @@ function displayLatestFeed(items) {
             ? ` · Sources: ${Object.entries(sources).map(([key, count]) => `${key} (${count})`).join(', ')}`
             : '';
         const hypeSummary = hypeIncluded ? ' · Hype included' : ' · Hype excluded';
-        resultsInfo.textContent = `${total} updates · ${windowLabel}${hypeSummary}${sourceSummary}`;
+        const summaryParts = [`${total} updates`, windowLabel];
+        if (latestMetadata?.preview) {
+            summaryParts.push('Preview');
+        }
+        resultsInfo.textContent = `${summaryParts.join(' · ')}${hypeSummary}${sourceSummary}`;
         resultsInfo.style.display = 'block';
     }
 }

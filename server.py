@@ -122,10 +122,15 @@ TESTING_CATALOG_HISTORY_PATH = os.path.join(BASE_DIR, 'logs', 'testing_catalog_h
 FAST_TESTING_CATALOG_PREVIEW_LIMIT = 6
 TESTING_CATALOG_MAX_PAGES = max(int(os.environ.get('TESTING_CATALOG_MAX_PAGES', '20')), 1)
 _TESTING_CATALOG_LOG_LOCK = Lock()
+LATEST_PREVIEW_LIMIT = max(int(os.environ.get('LATEST_PREVIEW_LIMIT', '10')), 1)
+LATEST_CACHE_TTL = timedelta(minutes=max(int(os.environ.get('LATEST_CACHE_MINUTES', '10')), 1))
+_LATEST_FEED_CACHE = {}
 USAGE_HISTORY_LIMIT = 400
 USAGE_STATS = defaultdict(int)
 _USAGE_HISTORY = deque(maxlen=USAGE_HISTORY_LIMIT)
 _USAGE_LOG_LOCK = Lock()
+
+
 def _merge_testing_catalog_items(history, recent):
     seen_urls = set()
     combined = []
@@ -140,6 +145,56 @@ def _merge_testing_catalog_items(history, recent):
             seen_urls.add(url)
             combined.insert(0, entry)
     return combined
+
+
+def _latest_cache_key(timeframe, days, include_hype):
+    normalized_timeframe = str(timeframe or 'day').strip().lower()
+    days_value = str(days or '').strip()
+    include_flag = '1' if include_hype else '0'
+    return f'{normalized_timeframe}|{days_value}|{include_flag}'
+
+
+def _get_cached_latest_payload(timeframe, days, include_hype):
+    key = _latest_cache_key(timeframe, days, include_hype)
+    entry = _LATEST_FEED_CACHE.get(key)
+    if not entry:
+        return None
+    timestamp = entry.get('timestamp')
+    if not timestamp or datetime.utcnow() - timestamp > LATEST_CACHE_TTL:
+        _LATEST_FEED_CACHE.pop(key, None)
+        return None
+    return entry.get('payload')
+
+
+def _store_latest_payload(timeframe, days, include_hype, payload):
+    key = _latest_cache_key(timeframe, days, include_hype)
+    _LATEST_FEED_CACHE[key] = {
+        'timestamp': datetime.utcnow(),
+        'payload': deepcopy(payload)
+    }
+
+
+def _get_latest_preview_payload(timeframe, days, include_hype, limit, force_refresh=False):
+    if not force_refresh:
+        cached = _get_cached_latest_payload(timeframe, days, include_hype)
+    else:
+        cached = None
+    if cached is None:
+        payload = generate_latest_feed_payload(
+            timeframe=timeframe,
+            days=days,
+            include_hype=include_hype,
+            cache_result=True
+        )
+    else:
+        payload = cached
+    preview_items = list(payload.get('items', []))[:limit]
+    preview_payload = dict(payload)
+    preview_payload['items'] = preview_items
+    preview_payload['count'] = len(preview_items)
+    preview_payload['preview'] = True
+    preview_payload['preview_limit'] = limit
+    return preview_payload
 
 
 def _warn_if_missing(name, value):
@@ -6733,7 +6788,7 @@ def _parse_latest_window_days(timeframe, days_override=None):
     return 1
 
 
-def generate_latest_feed_payload(timeframe='day', days=None, force_refresh=False, include_hype=False):
+def generate_latest_feed_payload(timeframe='day', days=None, force_refresh=False, include_hype=False, cache_result=True):
     window_days = _parse_latest_window_days(timeframe, days_override=days)
     window_hours = max(1, window_days) * 24
     cutoff = datetime.utcnow().replace(tzinfo=timezone.utc) - timedelta(hours=window_hours)
@@ -6933,6 +6988,11 @@ def generate_latest_feed_payload(timeframe='day', days=None, force_refresh=False
         'include_hype': bool(include_hype),
         'items': entries
     }
+    if cache_result:
+        try:
+            _store_latest_payload(timeframe, days, include_hype, payload)
+        except Exception:
+            pass
     return payload
 
 
@@ -7109,6 +7169,28 @@ CUSTOM_CATEGORY_LOADERS.update({
     'monitor': _agent_exp_loader_monitor,
     'testing-catalog': _agent_exp_loader_testing_catalog
 })
+
+
+@app.route('/api/latest-preview', methods=['GET'])
+def latest_preview_feed():
+    timeframe = request.args.get('timeframe', 'day')
+    days_param = request.args.get('days')
+    include_hype = request.args.get('include_hype', 'false').lower() in {'1', 'true', 'yes', 'on'}
+    cache_bust = request.args.get('cache_bust', 'false').lower() == 'true'
+    limit_param = request.args.get('limit')
+    try:
+        limit_value = int(limit_param)
+        limit_value = max(1, min(limit_value, 50))
+    except (TypeError, ValueError):
+        limit_value = LATEST_PREVIEW_LIMIT
+    payload = _get_latest_preview_payload(
+        timeframe=timeframe,
+        days=days_param,
+        include_hype=include_hype,
+        limit=limit_value,
+        force_refresh=cache_bust
+    )
+    return jsonify(payload)
 
 
 @app.route('/latest', methods=['GET'])
