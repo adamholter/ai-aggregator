@@ -29,7 +29,7 @@ from decimal import Decimal
 from collections import defaultdict, deque
 from threading import Lock
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
-from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.security import check_password_hash
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 
@@ -246,6 +246,20 @@ def _find_user_by_email(email, users=None):
         if _normalize_email(entry.get('email')) == normalized:
             return entry
     return None
+
+
+def _password_matches(user_entry, password):
+    if not isinstance(user_entry, dict):
+        return False
+    candidate = user_entry.get('password') or user_entry.get('password_hash') or ''
+    if not candidate:
+        return False
+    if isinstance(candidate, str) and candidate.startswith('pbkdf2:'):
+        try:
+            return check_password_hash(candidate, password or '')
+        except ValueError:
+            return False
+    return candidate == (password or '')
 
 
 def _serialize_user(user):
@@ -9071,7 +9085,8 @@ def _validate_credentials(email, password):
 @app.route('/auth/register', methods=['POST'])
 def auth_register():
     data = request.get_json(silent=True) or {}
-    email, error = _validate_credentials(data.get('email'), data.get('password'))
+    password_value = data.get('password') or ''
+    email, error = _validate_credentials(data.get('email'), password_value)
     if error:
         return jsonify({'error': error}), 400
     users = _load_users()
@@ -9080,7 +9095,7 @@ def auth_register():
     user_entry = {
         'id': str(uuid.uuid4()),
         'email': email,
-        'password': generate_password_hash(data.get('password')),
+        'password': password_value,
         'created_at': datetime.utcnow().replace(microsecond=0).isoformat() + 'Z'
     }
     users.append(user_entry)
@@ -9096,7 +9111,7 @@ def auth_login():
     if error:
         return jsonify({'error': error}), 400
     user_entry = _find_user_by_email(email)
-    if not user_entry or not check_password_hash(user_entry.get('password', ''), data.get('password') or ''):
+    if not user_entry or not _password_matches(user_entry, data.get('password')):
         return jsonify({'error': 'Invalid email or password.'}), 401
     session['user_email'] = email
     return jsonify({'user': _serialize_user(user_entry)})
