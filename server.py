@@ -30,6 +30,8 @@ from collections import defaultdict, deque
 from threading import Lock
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 from werkzeug.security import generate_password_hash, check_password_hash
+from bs4 import BeautifulSoup
+from urllib.parse import urljoin
 
 app = Flask(__name__, static_folder='.', static_url_path='')
 CORS(app)
@@ -108,6 +110,7 @@ _MONITOR_CACHE = {
 }
 MONITOR_CACHE_TTL = timedelta(minutes=15)
 
+TESTING_CATALOG_BASE_URL = 'https://www.testingcatalog.com/'
 TESTING_CATALOG_RSS_URL = 'https://www.testingcatalog.com/rss/'
 TESTING_CATALOG_CACHE_TTL = timedelta(hours=24)
 _TESTING_CATALOG_CACHE = {
@@ -117,6 +120,7 @@ _TESTING_CATALOG_CACHE = {
 TESTING_CATALOG_LOG_PATH = os.path.join(BASE_DIR, 'logs', 'testing_catalog.jsonl')
 TESTING_CATALOG_HISTORY_PATH = os.path.join(BASE_DIR, 'logs', 'testing_catalog_history.json')
 FAST_TESTING_CATALOG_PREVIEW_LIMIT = 6
+TESTING_CATALOG_MAX_PAGES = max(int(os.environ.get('TESTING_CATALOG_MAX_PAGES', '20')), 1)
 _TESTING_CATALOG_LOG_LOCK = Lock()
 USAGE_HISTORY_LIMIT = 400
 USAGE_STATS = defaultdict(int)
@@ -2086,35 +2090,10 @@ def _sanitize_basic_html(html_text):
     return sanitized
 
 
-def _get_tag_once(tag, xml):
-    pattern = re.compile(rf'<{tag}>([\s\S]*?)</{tag}>', re.IGNORECASE)
-    match = pattern.search(xml)
-    return match.group(1) if match else ''
-
-
-def _get_cdata(tag, xml):
-    raw = _get_tag_once(tag, xml)
-    if not raw:
+def _normalize_testing_catalog_url(path):
+    if not path:
         return ''
-    match = re.search(r'<!\[CDATA\[([\s\S]*?)\]\]>', raw, re.IGNORECASE)
-    return match.group(1) if match else raw
-
-
-def _get_all_cdata(tag, xml):
-    pattern = re.compile(rf'<{tag}><!\[CDATA\[([\s\S]*?)\]\]></{tag}>', re.IGNORECASE)
-    return [match.group(1) for match in pattern.finditer(xml)]
-
-
-def _first_image_from_html(html_text):
-    if not html_text:
-        return ''
-    match = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', html_text, re.IGNORECASE)
-    return match.group(1) if match else ''
-
-
-def _media_content_url(xml_item):
-    match = re.search(r'<media:content[^>]*url="([^"]+)"', xml_item, re.IGNORECASE)
-    return match.group(1) if match else ''
+    return urljoin(TESTING_CATALOG_BASE_URL, path)
 
 
 def _canonicalize_url(link):
@@ -2137,82 +2116,99 @@ def _two_sentence_summary(text):
     return ' '.join(sentences[:2]).strip()
 
 
-def _parse_testing_catalog_feed(xml_text, limit=None):
-    if not xml_text:
-        return []
+def _extract_best_image(srcset_value, fallback_src):
+    if srcset_value:
+        candidates = [segment.strip() for segment in srcset_value.split(',') if segment.strip()]
+        if candidates:
+            last_entry = candidates[-1].split()
+            if last_entry:
+                return _normalize_testing_catalog_url(last_entry[0])
+    if fallback_src:
+        return _normalize_testing_catalog_url(fallback_src)
+    return ''
 
-    now_utc = datetime.utcnow().replace(tzinfo=timezone.utc)
-    cutoff = now_utc - timedelta(days=1)
+
+def _parse_testing_catalog_listing(html_text, limit=None):
+    if not html_text:
+        return [], ''
+
     items = []
-    seen = set()
+    soup = BeautifulSoup(html_text, 'html.parser')
+    articles = soup.select('article.story')
+    for article in articles:
+        if limit is not None and len(items) >= limit:
+            break
 
-    for match in re.finditer(r'<item>([\s\S]*?)</item>', xml_text, re.IGNORECASE):
-        item_xml = match.group(1)
-
-        pub_date_raw = _decode_basic_html(_get_tag_once('pubDate', item_xml))
-        if not pub_date_raw:
-            continue
-        try:
-            pub_dt = parsedate_to_datetime(pub_date_raw)
-        except (TypeError, ValueError):
-            try:
-                pub_dt = datetime.fromisoformat(pub_date_raw.replace('Z', '+00:00'))
-            except ValueError:
-                continue
-        if pub_dt is None:
-            continue
-        if pub_dt.tzinfo is None:
-            pub_dt = pub_dt.replace(tzinfo=timezone.utc)
-        else:
-            pub_dt = pub_dt.astimezone(timezone.utc)
-
-        if pub_dt > now_utc or pub_dt < cutoff:
+        title_tag = article.select_one('.story-title a, h2 a')
+        title = title_tag.get_text(strip=True) if title_tag else 'TestingCatalog Update'
+        href = title_tag.get('href') if title_tag else ''
+        link = _canonicalize_url(_normalize_testing_catalog_url(href))
+        if not link:
             continue
 
-        link = _canonicalize_url(_decode_basic_html(_get_tag_once('link', item_xml)))
-        if not link or link in seen:
-            continue
-        seen.add(link)
-
-        title = _decode_basic_html(_get_cdata('title', item_xml)).strip()
-        description_html = _decode_basic_html(_get_cdata('description', item_xml))
-        content_html_raw = _decode_basic_html(_get_cdata('content:encoded', item_xml)) or description_html
-        sanitized_html = _sanitize_basic_html(content_html_raw).strip()
+        summary_tag = article.select_one('.story-excerpt')
+        summary_html = summary_tag.get_text(' ', strip=True) if summary_tag else ''
+        sanitized_html = _sanitize_basic_html(summary_html)
         text_content = _strip_basic_html(sanitized_html)
-        word_count = len(text_content.split()) if text_content else 0
+        summary = _two_sentence_summary(text_content) if text_content else summary_html
 
-        categories = [_decode_basic_html(value).strip() for value in _get_all_cdata('category', item_xml)]
-        categories = [value for value in categories if value]
-        section = categories[0] if categories else ''
-        tags = categories[1:]
+        time_tag = article.find('time', attrs={'datetime': True})
+        published_date = ''
+        published_time = '00:00:00Z'
+        if time_tag:
+            dt_value = (time_tag.get('datetime') or '').strip()
+            if dt_value:
+                if 'T' in dt_value:
+                    date_part, time_part = dt_value.split('T', 1)
+                    published_date = date_part.strip()
+                    published_time = time_part.strip() or published_time
+                else:
+                    published_date = dt_value[:10]
 
-        image_url = (_media_content_url(item_xml)
-                     or _first_image_from_html(sanitized_html)
-                     or '')
+        section_link = article.select_one('figure a')
+        section = section_link.get_text(strip=True) if section_link else ''
+        tags = []
+        if section:
+            tags.append(section)
+        for tag_link in article.select('.story-tags a'):
+            label = tag_link.get_text(strip=True)
+            if label and label not in tags:
+                tags.append(label)
 
-        summary = _two_sentence_summary(text_content)
-
-        iso = pub_dt.isoformat().replace('+00:00', 'Z')
-        date_part, time_part = iso.split('T')
+        image_tag = article.select_one('.story-image img')
+        image_url = ''
+        if image_tag:
+            image_url = _extract_best_image(
+                image_tag.get('data-srcset') or image_tag.get('srcset'),
+                image_tag.get('data-src') or image_tag.get('src')
+            )
 
         items.append({
-            'title': title,
+            'title': title or 'TestingCatalog Update',
             'url': link,
-            'published_date': date_part,
-            'published_time': time_part,
+            'published_date': published_date,
+            'published_time': published_time,
             'section': section,
             'tags': tags,
             'summary': summary,
             'image_url': image_url,
             'source': 'testingcatalog.com',
-            'word_count': word_count,
+            'word_count': len(text_content.split()) if text_content else None,
             'content_html': sanitized_html,
             'content_text': text_content
         })
-        if limit and len(items) >= limit:
-            break
 
-    return items
+    next_link = ''
+    head_next = soup.find('link', attrs={'rel': 'next'})
+    if head_next and head_next.get('href'):
+        next_link = head_next['href']
+    if not next_link:
+        nav_next = soup.select_one('a.older-posts')
+        if nav_next and nav_next.get('href'):
+            next_link = nav_next['href']
+
+    next_url = _normalize_testing_catalog_url(next_link) if next_link else ''
+    return items, next_url
 
 
 def _extract_wp_featured_image(embedded):
@@ -2362,47 +2358,51 @@ def _record_usage_event():
         _USAGE_HISTORY.appendleft(entry)
 
 
-def _extract_next_testing_catalog_url(xml_text):
-    if not xml_text:
-        return ''
-    match = re.search(r'<link[^>]+rel=["\\\']next["\\\'][^>]*href=["\\\']([^"\\\']+)["\\\']', xml_text, re.IGNORECASE)
-    if match:
-        return match.group(1)
-    return ''
-
-
-def _collect_testing_catalog_pages(force_refresh, max_pages=5, fast_limit=None):
+def _collect_testing_catalog_pages(force_refresh, max_pages=None, fast_limit=None):
     items = []
-    seen_urls = set()
-    next_urls = [TESTING_CATALOG_RSS_URL]
+    seen_links = set()
     session = requests.Session()
+    next_url = TESTING_CATALOG_BASE_URL
     page_counter = 0
-    while next_urls and page_counter < max_pages:
-        url = next_urls.pop(0)
-        if not url or url in seen_urls:
-            continue
-        seen_urls.add(url)
+    max_pages = max_pages or TESTING_CATALOG_MAX_PAGES
+
+    while next_url and page_counter < max_pages:
         try:
             response = session.get(
-                url,
+                next_url,
                 headers={'User-Agent': 'ai-dashboard/1.0 (+https://adam.holter.com)'},
                 timeout=300
             )
             response.raise_for_status()
-            xml_text = response.text
+            html_text = response.text
         except requests.exceptions.RequestException as exc:
             if items:
                 break
             raise RuntimeError(f'Failed to fetch TestingCatalog feed: {exc}') from exc
-        items.extend(_parse_testing_catalog_feed(xml_text, limit=fast_limit))
-        next_url = _extract_next_testing_catalog_url(xml_text)
-        if next_url and next_url not in seen_urls:
-            next_urls.append(next_url)
+
+        remaining = None
+        if fast_limit is not None:
+            remaining = max(fast_limit - len(items), 0)
+            if remaining == 0:
+                break
+
+        page_items, discovered_next = _parse_testing_catalog_listing(html_text, limit=remaining)
+        for entry in page_items:
+            url = entry.get('url')
+            if url and url not in seen_links:
+                seen_links.add(url)
+                items.append(entry)
+        if fast_limit is not None and len(items) >= fast_limit:
+            break
         page_counter += 1
+        if not discovered_next:
+            break
+        next_url = discovered_next
+
     return items
 
 
-def fetch_testing_catalog_feed(force_refresh=False, fast_limit=None, update_history=True, max_pages=5):
+def fetch_testing_catalog_feed(force_refresh=False, fast_limit=None, update_history=True, max_pages=None):
     now = datetime.utcnow()
     cached_payload = _TESTING_CATALOG_CACHE.get('payload')
     cached_timestamp = _TESTING_CATALOG_CACHE.get('timestamp')
@@ -2422,7 +2422,7 @@ def fetch_testing_catalog_feed(force_refresh=False, fast_limit=None, update_hist
 
     items = _collect_testing_catalog_pages(
         force_refresh=force_refresh,
-        max_pages=max_pages,
+        max_pages=max_pages or TESTING_CATALOG_MAX_PAGES,
         fast_limit=fast_limit
     )
 
