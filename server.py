@@ -3401,11 +3401,10 @@ def fetch_data_for_categories(categories, limit_per_category=None, recency=None,
     seen = set()
     errors = []
 
-    for category in normalized_categories:
+    def process_category(category):
         category_id, config = resolve_category_config(category)
-        if not category_id or category_id in seen or not config:
-            continue
-        seen.add(category_id)
+        if not category_id or not config:
+            return None
 
         try:
             payload = None
@@ -3472,10 +3471,9 @@ def fetch_data_for_categories(categories, limit_per_category=None, recency=None,
 
             if not items:
                 if category_id == 'fal' and fal_category_label:
-                    errors.append({'category': category_id, 'warning': f'No fal.ai entries for category filter \"{fal_category_label}\".'})
-                continue
+                    return {'error': {'category': category_id, 'warning': f'No fal.ai entries for category filter \"{fal_category_label}\".'}}
+                return None
 
-            datasets[category_id] = items
             metadata_entry = {
                 'id': category_id,
                 'label': config.get('label', category_id.title()),
@@ -3492,12 +3490,36 @@ def fetch_data_for_categories(categories, limit_per_category=None, recency=None,
                 for key, value in loader_metadata.items():
                     if value is not None and key not in metadata_entry:
                         metadata_entry[key] = value
-            metadata.append(metadata_entry)
+            
+            result = {
+                'category_id': category_id,
+                'items': items,
+                'metadata': metadata_entry
+            }
             if fallback_used:
-                errors.append({'category': category_id, 'warning': 'Using cached fallback dataset.'})
+                result['warning'] = {'category': category_id, 'warning': 'Using cached fallback dataset.'}
+            return result
+
         except Exception as exc:
             print(f"WARNING: Failed to load category '{category_id}': {exc}")
-            errors.append({'category': category_id, 'error': str(exc)})
+            return {'error': {'category': category_id, 'error': str(exc)}}
+
+    # Execute fetches in parallel
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        future_to_cat = {executor.submit(process_category, cat): cat for cat in normalized_categories}
+        for future in concurrent.futures.as_completed(future_to_cat):
+            try:
+                result = future.result()
+                if result:
+                    if 'error' in result:
+                        errors.append(result['error'])
+                    elif 'category_id' in result:
+                        datasets[result['category_id']] = result['items']
+                        metadata.append(result['metadata'])
+                        if 'warning' in result:
+                            errors.append(result['warning'])
+            except Exception as exc:
+                print(f"ERROR: Category fetch task failed: {exc}")
             continue
 
     if not datasets:
@@ -5298,6 +5320,17 @@ def get_fal_models():
             print(f"DEBUG: Updated {cache_dirty} model URLs in cache")
 
         print(f"DEBUG: Returning {len(normalized_models)} normalized models from cache")
+        
+        # Apply limit if requested
+        limit = request.args.get('limit')
+        if limit:
+            try:
+                limit_val = int(limit)
+                if limit_val > 0:
+                    normalized_models = normalized_models[:limit_val]
+            except ValueError:
+                pass
+                
         return jsonify(normalized_models)
     
     try:
@@ -6802,6 +6835,8 @@ def _parse_latest_window_days(timeframe, days_override=None):
     return 1
 
 
+import concurrent.futures
+
 def generate_latest_feed_payload(timeframe='day', days=None, force_refresh=False, include_hype=False, cache_result=True):
     window_days = _parse_latest_window_days(timeframe, days_override=days)
     window_hours = max(1, window_days) * 24
@@ -6817,73 +6852,82 @@ def generate_latest_feed_payload(timeframe='day', days=None, force_refresh=False
         entries.append(copied)
         source_counts[copied.get('source', 'unknown')] += 1
 
-    # Blog posts
-    try:
-        per_page_override = 50 if window_days <= 1 else BLOG_POSTS_PER_PAGE
-        max_pages_override = 3 if window_days <= 1 else BLOG_POSTS_MAX_PAGES
-        blog_payload = fetch_blog_posts(
-            force_refresh=force_refresh,
-            per_page_override=per_page_override,
-            max_pages_override=max_pages_override
-        )
-        for post in blog_payload.get('posts', []):
-            dt = _coerce_timestamp_utc(post.get('date') or post.get('date_gmt') or post.get('modified'))
-            if not dt or dt < cutoff:
-                continue
-            append_entry({
-                'id': f"blog:{post.get('id') or post.get('slug') or post.get('link')}",
-                'title': post.get('title') or 'Untitled Post',
-                'source': 'blog',
-                'source_label': 'Blog Post',
-                'excerpt': _truncate_text(post.get('excerpt') or ''),
-                'timestamp_dt': dt,
-                'url': post.get('link') or '',
-                'badge': f"{post.get('reading_time_minutes')} min read" if post.get('reading_time_minutes') else '',
-                'tags': post.get('tags') or []
-            })
-    except Exception as exc:
-        print(f"WARNING: Failed to aggregate blog posts for latest feed: {exc}")
+    # Define fetch functions for each source
+    def fetch_blog_source():
+        try:
+            per_page_override = 50 if window_days <= 1 else BLOG_POSTS_PER_PAGE
+            max_pages_override = 3 if window_days <= 1 else BLOG_POSTS_MAX_PAGES
+            blog_payload = fetch_blog_posts(
+                force_refresh=force_refresh,
+                per_page_override=per_page_override,
+                max_pages_override=max_pages_override
+            )
+            local_entries = []
+            for post in blog_payload.get('posts', []):
+                dt = _coerce_timestamp_utc(post.get('date') or post.get('date_gmt') or post.get('modified'))
+                if not dt or dt < cutoff:
+                    continue
+                local_entries.append({
+                    'id': f"blog:{post.get('id') or post.get('slug') or post.get('link')}",
+                    'title': post.get('title') or 'Untitled Post',
+                    'source': 'blog',
+                    'source_label': 'Blog Post',
+                    'excerpt': _truncate_text(post.get('excerpt') or ''),
+                    'timestamp_dt': dt,
+                    'url': post.get('link') or '',
+                    'badge': f"{post.get('reading_time_minutes')} min read" if post.get('reading_time_minutes') else '',
+                    'tags': post.get('tags') or []
+                })
+            return local_entries
+        except Exception as exc:
+            print(f"WARNING: Failed to aggregate blog posts for latest feed: {exc}")
+            return []
 
-    # TestingCatalog feed
-    try:
-        testing_payload = fetch_testing_catalog_feed(force_refresh=force_refresh)
-        for item in testing_payload.get('items', []):
-            date_part = item.get('published_date')
-            time_part = item.get('published_time')
-            if not date_part or not time_part:
-                continue
-            dt_str = f"{date_part}T{time_part}"
-            try:
-                dt = datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
-            except ValueError:
-                continue
-            if dt < cutoff:
-                continue
-            append_entry({
-                'id': f"testingcatalog:{item.get('url')}",
-                'title': item.get('title') or 'TestingCatalog Update',
-                'source': 'testingcatalog',
-                'source_label': 'Testing Catalog',
-                'excerpt': item.get('summary') or item.get('content_text') or '',
-                'timestamp_dt': dt,
-                'url': item.get('url') or '',
-                'badge': item.get('section') or '',
-                'tags': item.get('tags') or []
-            })
-    except Exception as exc:
-        print(f"WARNING: Failed to aggregate TestingCatalog feed: {exc}")
+    def fetch_testing_source():
+        try:
+            testing_payload = fetch_testing_catalog_feed(force_refresh=force_refresh)
+            local_entries = []
+            for item in testing_payload.get('items', []):
+                date_part = item.get('published_date')
+                time_part = item.get('published_time')
+                if not date_part or not time_part:
+                    continue
+                dt_str = f"{date_part}T{time_part}"
+                try:
+                    dt = datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
+                except ValueError:
+                    continue
+                if dt < cutoff:
+                    continue
+                local_entries.append({
+                    'id': f"testingcatalog:{item.get('url')}",
+                    'title': item.get('title') or 'TestingCatalog Update',
+                    'source': 'testingcatalog',
+                    'source_label': 'Testing Catalog',
+                    'excerpt': item.get('summary') or item.get('content_text') or '',
+                    'timestamp_dt': dt,
+                    'url': item.get('url') or '',
+                    'badge': item.get('section') or '',
+                    'tags': item.get('tags') or []
+                })
+            return local_entries
+        except Exception as exc:
+            print(f"WARNING: Failed to aggregate TestingCatalog feed: {exc}")
+            return []
 
-    # Hype
-    if include_hype:
+    def fetch_hype_source():
+        if not include_hype:
+            return []
         try:
             hype_window_days = 7 if window_hours > 48 else 2
             hype_payload = fetch_hype_feed_payload(limit=HYPE_MAX_LIMIT, window_days=hype_window_days)
+            local_entries = []
             for item in hype_payload.get('items', []):
                 dt = _coerce_timestamp_utc(item.get('updated_at') or item.get('inserted_at') or item.get('created_at'))
                 if not dt or dt < cutoff:
                     continue
                 label = _format_hype_source_label(item.get('source'))
-                append_entry({
+                local_entries.append({
                     'id': f"hype:{item.get('url') or item.get('name')}",
                     'title': item.get('name') or 'Trending Project',
                     'source': 'hype',
@@ -6894,87 +6938,121 @@ def generate_latest_feed_payload(timeframe='day', days=None, force_refresh=False
                     'badge': label,
                     'tags': item.get('tags') or []
                 })
+            return local_entries
         except Exception as exc:
             print(f"WARNING: Failed to aggregate hype feed for latest feed: {exc}")
+            return []
 
-    # OpenRouter models
-    try:
-        models = load_openrouter_models(force_refresh=force_refresh)
-        for model in models or []:
-            created_value = model.get('created') or model.get('created_at') or model.get('updated_at')
-            dt = _coerce_timestamp_utc(created_value)
-            if not dt or dt < cutoff:
-                continue
-            description = model.get('description') or ''
-            url = model.get('url') or ''
-            if not url and model.get('id'):
-                url = f"https://openrouter.ai/models/{model['id']}"
-            append_entry({
-                'id': f"openrouter:{model.get('id') or model.get('name')}",
-                'title': model.get('name') or model.get('id') or 'OpenRouter Model',
-                'source': 'openrouter',
-                'source_label': 'OpenRouter Model',
-                'excerpt': _truncate_text(description),
-                'timestamp_dt': dt,
-                'url': url,
-                'badge': model.get('vendor') or '',
-                'tags': model.get('tags') or []
-            })
-    except Exception as exc:
-        print(f"WARNING: Failed to aggregate OpenRouter models for latest feed: {exc}")
+    def fetch_openrouter_source():
+        try:
+            models = load_openrouter_models(force_refresh=force_refresh)
+            local_entries = []
+            for model in models or []:
+                created_value = model.get('created') or model.get('created_at') or model.get('updated_at')
+                dt = _coerce_timestamp_utc(created_value)
+                if not dt or dt < cutoff:
+                    continue
+                description = model.get('description') or ''
+                url = model.get('url') or ''
+                if not url and model.get('id'):
+                    url = f"https://openrouter.ai/models/{model['id']}"
+                local_entries.append({
+                    'id': f"openrouter:{model.get('id') or model.get('name')}",
+                    'title': model.get('name') or model.get('id') or 'OpenRouter Model',
+                    'source': 'openrouter',
+                    'source_label': 'OpenRouter Model',
+                    'excerpt': _truncate_text(description),
+                    'timestamp_dt': dt,
+                    'url': url,
+                    'badge': model.get('vendor') or '',
+                    'tags': model.get('tags') or []
+                })
+            return local_entries
+        except Exception as exc:
+            print(f"WARNING: Failed to aggregate OpenRouter models for latest feed: {exc}")
+            return []
 
-    # Replicate models
-    try:
-        replicate_items = load_category_items_simple('replicate')
-        for model in replicate_items:
-            dt = _coerce_timestamp_utc(model.get('created_at') or model.get('published_at'))
-            if not dt or dt < cutoff:
-                continue
-            append_entry({
-                'id': f"replicate:{model.get('id') or model.get('name')}",
-                'title': model.get('name') or 'Replicate Model',
-                'source': 'replicate',
-                'source_label': 'Replicate Model',
-                'excerpt': _truncate_text(model.get('description') or ''),
-                'timestamp_dt': dt,
-                'url': model.get('url') or '',
-                'badge': model.get('owner') or '',
-                'tags': model.get('tags') or []
-            })
-    except Exception as exc:
-        print(f"WARNING: Failed to aggregate Replicate models for latest feed: {exc}")
+    def fetch_replicate_source():
+        try:
+            replicate_items = load_category_items_simple('replicate')
+            local_entries = []
+            for model in replicate_items:
+                dt = _coerce_timestamp_utc(model.get('created_at') or model.get('published_at'))
+                if not dt or dt < cutoff:
+                    continue
+                local_entries.append({
+                    'id': f"replicate:{model.get('id') or model.get('name')}",
+                    'title': model.get('name') or 'Replicate Model',
+                    'source': 'replicate',
+                    'source_label': 'Replicate Model',
+                    'excerpt': _truncate_text(model.get('description') or ''),
+                    'timestamp_dt': dt,
+                    'url': model.get('url') or '',
+                    'badge': model.get('owner') or '',
+                    'tags': model.get('tags') or []
+                })
+            return local_entries
+        except Exception as exc:
+            print(f"WARNING: Failed to aggregate Replicate models for latest feed: {exc}")
+            return []
 
-    # fal.ai models
-    try:
-        fal_items = load_category_items_simple('fal')
-        for model in fal_items:
-            dt = _coerce_timestamp_utc(model.get('date') or model.get('updated_at'))
-            if not dt or dt < cutoff:
-                continue
-            append_entry({
-                'id': f"fal:{model.get('id') or model.get('title')}",
-                'title': model.get('title') or 'fal.ai Release',
-                'source': 'fal',
-                'source_label': 'fal.ai Release',
-                'excerpt': _truncate_text(model.get('shortDescription') or model.get('description') or ''),
-                'timestamp_dt': dt,
-                'url': model.get('modelUrl') or '',
-                'badge': model.get('category') or '',
-                'tags': model.get('tags') or []
-            })
-    except Exception as exc:
-        print(f"WARNING: Failed to aggregate fal.ai models for latest feed: {exc}")
+    def fetch_fal_source():
+        try:
+            fal_items = load_category_items_simple('fal')
+            local_entries = []
+            for model in fal_items:
+                dt = _coerce_timestamp_utc(model.get('date') or model.get('updated_at'))
+                if not dt or dt < cutoff:
+                    continue
+                local_entries.append({
+                    'id': f"fal:{model.get('id') or model.get('title')}",
+                    'title': model.get('title') or 'fal.ai Release',
+                    'source': 'fal',
+                    'source_label': 'fal.ai Release',
+                    'excerpt': _truncate_text(model.get('shortDescription') or model.get('description') or ''),
+                    'timestamp_dt': dt,
+                    'url': model.get('modelUrl') or '',
+                    'badge': model.get('category') or '',
+                    'tags': model.get('tags') or []
+                })
+            return local_entries
+        except Exception as exc:
+            print(f"WARNING: Failed to aggregate fal.ai models for latest feed: {exc}")
+            return []
 
-    # Monitor sheet entries
-    try:
-        monitor_items = load_monitor_feed(force_refresh=force_refresh, limit=10 if window_hours <= 24 else 100)
-        for entry in monitor_items:
-            dt = entry.get('timestamp_dt')
-            if not dt or dt < cutoff:
-                continue
-            append_entry(entry)
-    except Exception as exc:
-        print(f"WARNING: Failed to aggregate monitor feed for latest feed: {exc}")
+    def fetch_monitor_source():
+        try:
+            monitor_items = load_monitor_feed(force_refresh=force_refresh, limit=10 if window_hours <= 24 else 100)
+            local_entries = []
+            for entry in monitor_items:
+                dt = entry.get('timestamp_dt')
+                if not dt or dt < cutoff:
+                    continue
+                local_entries.append(entry)
+            return local_entries
+        except Exception as exc:
+            print(f"WARNING: Failed to aggregate monitor feed for latest feed: {exc}")
+            return []
+
+    # Execute fetches in parallel
+    with concurrent.futures.ThreadPoolExecutor(max_workers=7) as executor:
+        futures = [
+            executor.submit(fetch_blog_source),
+            executor.submit(fetch_testing_source),
+            executor.submit(fetch_hype_source),
+            executor.submit(fetch_openrouter_source),
+            executor.submit(fetch_replicate_source),
+            executor.submit(fetch_fal_source),
+            executor.submit(fetch_monitor_source)
+        ]
+        
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                result = future.result()
+                for entry in result:
+                    append_entry(entry)
+            except Exception as exc:
+                print(f"ERROR: A fetch task failed: {exc}")
 
     entries.sort(key=lambda entry: entry['timestamp_dt'], reverse=True)
     for entry in entries:

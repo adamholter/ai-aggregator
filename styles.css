@@ -1031,12 +1031,27 @@ body {
     font-weight: 500;
 }
 
+.source-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    background: var(--info-bg);
+    color: var(--info-text);
+    margin-bottom: 10px;
+    border: 1px solid transparent;
+}
+
 [data-theme="source"] .model-card[data-source="aa-llm"] {
     border-top-color: var(--source-llm);
 }
 
 [data-theme="source"] .model-card[data-source="aa-llm"] .source-badge {
+    background: rgba(37, 99, 235, 0.12);
     color: var(--source-llm);
+    border-color: rgba(37, 99, 235, 0.2);
 }
 
 [data-theme="source"] .model-card[data-source="aa-media"] {
@@ -1044,7 +1059,9 @@ body {
 }
 
 [data-theme="source"] .model-card[data-source="aa-media"] .source-badge {
+    background: rgba(14, 165, 233, 0.12);
     color: var(--source-media);
+    border-color: rgba(14, 165, 233, 0.2);
 }
 
 [data-theme="source"] .model-card[data-source="fal"] {
@@ -1052,7 +1069,9 @@ body {
 }
 
 [data-theme="source"] .model-card[data-source="fal"] .source-badge {
+    background: rgba(245, 158, 11, 0.12);
     color: var(--source-fal);
+    border-color: rgba(245, 158, 11, 0.2);
 }
 
 [data-theme="source"] .model-card[data-source="replicate"] {
@@ -1060,7 +1079,9 @@ body {
 }
 
 [data-theme="source"] .model-card[data-source="replicate"] .source-badge {
+    background: rgba(16, 185, 129, 0.12);
     color: var(--source-replicate);
+    border-color: rgba(16, 185, 129, 0.2);
 }
 
 [data-theme="source"] .model-card[data-source="openrouter"] {
@@ -1068,7 +1089,9 @@ body {
 }
 
 [data-theme="source"] .model-card[data-source="openrouter"] .source-badge {
+    background: rgba(124, 58, 237, 0.12);
     color: var(--source-openrouter);
+    border-color: rgba(124, 58, 237, 0.2);
 }
 
 [data-theme="source"] .model-card[data-source="hype"] {
@@ -1076,7 +1099,9 @@ body {
 }
 
 [data-theme="source"] .model-card[data-source="hype"] .source-badge {
+    background: rgba(236, 72, 153, 0.12);
     color: var(--source-hype);
+    border-color: rgba(236, 72, 153, 0.2);
 }
 
 [data-theme="source"] .model-card[data-source="blog"] {
@@ -1084,7 +1109,9 @@ body {
 }
 
 [data-theme="source"] .model-card[data-source="blog"] .source-badge {
+    background: rgba(249, 115, 22, 0.12);
     color: var(--source-blog);
+    border-color: rgba(249, 115, 22, 0.2);
 }
 
 [data-theme="source"] .model-card[data-source="monitor"] {
@@ -1092,7 +1119,9 @@ body {
 }
 
 [data-theme="source"] .model-card[data-source="monitor"] .source-badge {
+    background: rgba(220, 38, 38, 0.12);
     color: var(--source-monitor);
+    border-color: rgba(220, 38, 38, 0.2);
 }
 
 [data-theme="source"] .model-card[data-source="testingcatalog"] {
@@ -1100,7 +1129,9 @@ body {
 }
 
 [data-theme="source"] .model-card[data-source="testingcatalog"] .source-badge {
+    background: rgba(4, 120, 87, 0.12);
     color: var(--source-testingcatalog);
+    border-color: rgba(4, 120, 87, 0.2);
 }
 
 /* Model stats */

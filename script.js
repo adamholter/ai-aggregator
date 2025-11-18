@@ -900,22 +900,22 @@ function similarity(a, b) {
 }
 
 // Initialize the dashboard
-document.addEventListener('DOMContentLoaded', async function() {
+document.addEventListener('DOMContentLoaded', async function () {
     console.info('The quick brown fox jumped over the lazy dogs – experimental canary build active.');
     await preloadModelConfig();
-   ensureExperimentalSections();
-  ensureExperimentalNavButtons();
-  setupNavigation();
-   initializeTheme();
-   initializeAuthControls();
+    ensureExperimentalSections();
+    ensureExperimentalNavButtons();
+    setupNavigation();
+    initializeTheme();
+    initializeAuthControls();
     setupFilterControls();
     setupFilterSettings();
-   applyAgentDefaults();
-   setupOpenRouterControls();
-   populateAgentDropdown();
-   initializeAgentExp();
-   loadLLMData(); // Load LLM data by default
-   setupImageUpload();
+    applyAgentDefaults();
+    setupOpenRouterControls();
+    populateAgentDropdown();
+    initializeAgentExp();
+    loadLLMData(); // Load LLM data by default
+    setupImageUpload();
     const pinnedRefreshButton = document.getElementById('pinned-refresh');
     if (pinnedRefreshButton) {
         pinnedRefreshButton.addEventListener('click', () => {
@@ -1830,14 +1830,14 @@ function setupNavigation() {
     navButtons.forEach(button => {
         button.addEventListener('click', () => {
             const targetSection = button.getAttribute('data-section');
-            
+
             // Update active states
             navButtons.forEach(btn => btn.classList.remove('active'));
             sections.forEach(section => section.classList.remove('active'));
-            
+
             button.classList.add('active');
             document.getElementById(targetSection).classList.add('active');
-            
+
             // Load data for the selected section
             loadSectionData(targetSection);
         });
@@ -1846,7 +1846,7 @@ function setupNavigation() {
 
 // Load data based on selected section
 function loadSectionData(section) {
-    switch(section) {
+    switch (section) {
         case 'llms':
             if (!cachedData.llms) loadLLMData();
             break;
@@ -1974,7 +1974,7 @@ async function loadLLMData() {
         const data = await makeAPICall('/api/llms', null);
         cachedData.llms = data;
         rawData.llms = data.data;
-        
+
         filterLLMData();
         loadingElement.style.display = 'none';
     } catch (error) {
@@ -2045,10 +2045,10 @@ function createLLMCard(model) {
     card.className = 'model-card clickable';
     card.dataset.source = 'aa-llm';
     card.onclick = () => openModelModal(model, 'llm');
-    
+
     const evaluations = model.evaluations || {};
     const pricing = model.pricing || {};
-    
+
     card.innerHTML = `
         <div class="source-badge">Artificial Analysis</div>
         <h3>${model.name}</h3>
@@ -2099,7 +2099,7 @@ async function loadTextToImageData() {
         const data = await makeAPICall('/api/text-to-image?include_categories=true', null);
         cachedData.textToImage = data;
         rawData.textToImage = data.data;
-        
+
         filterTextToImageData();
         loadingElement.style.display = 'none';
     } catch (error) {
@@ -2123,7 +2123,7 @@ async function loadImageEditingData() {
         const data = await makeAPICall('/api/image-editing', null);
         cachedData.imageEditing = data;
         rawData.imageEditing = data.data;
-        
+
         displayMediaData(data.data, 'image-editing');
         loadingElement.style.display = 'none';
     } catch (error) {
@@ -2147,7 +2147,7 @@ async function loadTextToSpeechData() {
         const data = await makeAPICall('/api/text-to-speech', null);
         cachedData.textToSpeech = data;
         rawData.textToSpeech = data.data;
-        
+
         displayMediaData(data.data, 'text-to-speech');
         loadingElement.style.display = 'none';
     } catch (error) {
@@ -2171,7 +2171,7 @@ async function loadTextToVideoData() {
         const data = await makeAPICall('/api/text-to-video', null);
         cachedData.textToVideo = data;
         rawData.textToVideo = data.data;
-        
+
         displayMediaData(data.data, 'text-to-video');
         loadingElement.style.display = 'none';
     } catch (error) {
@@ -2195,7 +2195,7 @@ async function loadImageToVideoData() {
         const data = await makeAPICall('/api/image-to-video', null);
         cachedData.imageToVideo = data;
         rawData.imageToVideo = data.data;
-        
+
         displayMediaData(data.data, 'image-to-video');
         loadingElement.style.display = 'none';
     } catch (error) {
@@ -2205,18 +2205,24 @@ async function loadImageToVideoData() {
     }
 }
 
-async function fetchFalModelsData(forceRefresh = false) {
-    if (cachedData.falModels && !forceRefresh) {
+async function fetchFalModelsData(forceRefresh = false, limit = null) {
+    if (cachedData.falModels && !forceRefresh && !limit) {
         return cachedData.falModels;
     }
-    const url = forceRefresh ? '/api/fal-models?cache_bust=true' : '/api/fal-models';
+    let url = forceRefresh ? '/api/fal-models?cache_bust=true' : '/api/fal-models';
+    if (limit) {
+        url += (url.includes('?') ? '&' : '?') + `limit=${limit}`;
+    }
     const data = await makeAPICall(url, null);
-    cachedData.falModels = data;
-    rawData.falModels = data;
+
+    if (!limit) {
+        cachedData.falModels = data;
+        rawData.falModels = data;
+    }
     return data;
 }
 
-// Load Fal.ai Models data
+// Load Fal.ai Models data with progressive loading
 async function loadFalModelsData(forceRefresh = false) {
     const loadingElement = document.getElementById('fal-models-loading');
     const errorElement = document.getElementById('fal-models-error');
@@ -2227,10 +2233,23 @@ async function loadFalModelsData(forceRefresh = false) {
         errorElement.style.display = 'none';
         dataElement.innerHTML = '';
 
-        await fetchFalModelsData(forceRefresh);
-        
+        // Step 1: Load initial batch for fast UI
+        const initialData = await fetchFalModelsData(forceRefresh, 20);
+        rawData.falModels = initialData; // Temporary set for rendering
         filterFalModelsData();
         loadingElement.style.display = 'none';
+
+        // Step 2: Load the rest in background
+        setTimeout(async () => {
+            try {
+                const fullData = await fetchFalModelsData(forceRefresh);
+                rawData.falModels = fullData;
+                filterFalModelsData();
+            } catch (bgError) {
+                console.warn('Background fetch for Fal.ai failed:', bgError);
+            }
+        }, 100);
+
     } catch (error) {
         loadingElement.style.display = 'none';
         errorElement.textContent = `Failed to load Fal.ai models data: ${error.message}`;
@@ -2261,7 +2280,7 @@ async function loadReplicateModelsData(forceRefresh = false) {
         dataElement.innerHTML = '';
 
         await fetchReplicateModelsData(forceRefresh);
-        
+
         filterReplicateModelsData();
         loadingElement.style.display = 'none';
     } catch (error) {
@@ -2835,7 +2854,7 @@ function createTestingCatalogCard(item) {
 function populateTestingCatalogTags() {
     const tagFilter = document.getElementById('testing-catalog-tag-filter');
     const items = rawData.testingCatalog || [];
-    
+
     if (!tagFilter || !items.length) {
         return;
     }
@@ -2877,7 +2896,7 @@ function filterTestingCatalogByTag() {
     const tagFilter = document.getElementById('testing-catalog-tag-filter');
     const resultsInfo = document.getElementById('testing-catalog-results-info');
     const items = rawData.testingCatalog || [];
-    
+
     if (!tagFilter || !items.length) {
         return;
     }
@@ -3373,7 +3392,7 @@ function createLatestCard(item) {
     const actionLabel = item.action_label || item.actionLabel || 'Open Link';
     const linkMarkup = item.url
         ? `<a class="chart-btn secondary" href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">`
-            + `${escapeHtml(actionLabel)}</a>`
+        + `${escapeHtml(actionLabel)}</a>`
         : '';
 
     const metaParts = [
@@ -3765,7 +3784,7 @@ function createMediaCard(model, mediaCategory = '') {
         decoratedModel.mediaCategory = mediaCategory;
     }
     card.onclick = () => openModelModal(decoratedModel, 'media');
-    
+
     card.innerHTML = `
         <div class="source-badge">Artificial Analysis</div>
         <h3>${model.name}</h3>
@@ -3897,7 +3916,7 @@ function clearChatHistory() {
     chatMessages.innerHTML = '';
     agentConfig.conversationHistory = [];
     resetImageUploads();
-    
+
     // Add a welcome message
     const welcomeMessage = document.createElement('div');
     welcomeMessage.className = 'message ai';
@@ -3915,7 +3934,7 @@ function clearChatHistory() {
         </div>
     `;
     chatMessages.appendChild(welcomeMessage);
-    
+
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
@@ -4176,6 +4195,15 @@ async function sendAgentExpMessage(event) {
     }
 }
 
+if (submitButton) {
+    submitButton.disabled = false;
+}
+    }
+}
+
+// Safety timeout to prevent infinite hanging
+const AGENT_STREAM_TIMEOUT_MS = 60000; // 60 seconds
+
 async function streamAgentExpResponse(message) {
     const form = document.getElementById('agent-exp-form');
     const submitButton = form ? form.querySelector('button[type="submit"]') : null;
@@ -4192,6 +4220,25 @@ async function streamAgentExpResponse(message) {
     agentExpState.activeMessage = assistantMessage;
     setAgentExpStatus(`Calling ${agentExpState.model}...`);
 
+    // Setup safety timeout
+    const timeoutId = setTimeout(() => {
+        if (agentExpState.streaming) {
+            console.warn('Agent stream timed out');
+            setAgentExpStatus('Request timed out.', true);
+            if (assistantMessage) {
+                assistantMessage.classList.remove('streaming');
+            }
+            if (responseContent && !responseContent.textContent.trim()) {
+                responseContent.innerHTML = '<div class="error-content">❌ Request timed out. Please try again.</div>';
+            }
+            agentExpState.activeMessage = null;
+            agentExpState.streaming = false;
+            if (submitButton) {
+                submitButton.disabled = false;
+            }
+        }
+    }, AGENT_STREAM_TIMEOUT_MS);
+
     try {
         const response = await fetch('/api/agent-exp', {
             method: 'POST',
@@ -4206,6 +4253,8 @@ async function streamAgentExpResponse(message) {
                 stream: true
             })
         });
+
+        clearTimeout(timeoutId); // Clear timeout on response start
 
         if (!response.ok) {
             let errorMessage = `HTTP error ${response.status}`;
@@ -4253,6 +4302,7 @@ async function streamAgentExpResponse(message) {
             processAgentExpLine(remaining, assistantMessage, responseContent);
         }
     } catch (error) {
+        clearTimeout(timeoutId);
         const errorMessage = error && error.message ? error.message : 'Agent streaming failed.';
         setAgentExpStatus(errorMessage, true);
         if (assistantMessage && responseContent) {
@@ -4469,8 +4519,8 @@ async function handleStreamingWithFetch(userMessage, attachments, resolve, rejec
 
                         try {
                             const parsed = JSON.parse(data);
-                            
-                            switch(parsed.type) {
+
+                            switch (parsed.type) {
                                 case 'traces':
                                     traces = parsed.traces;
                                     break;
@@ -4509,7 +4559,7 @@ async function handleStreamingWithFetch(userMessage, attachments, resolve, rejec
                     }
                 }
             }
-            
+
             resolve({ response: fixEncodingArtifacts(fullResponse), traces: traces });
         } finally {
             reader.cancel();
@@ -4570,15 +4620,15 @@ async function handleNonStreamingFallback(userMessage, attachments, resolve, rej
 function updateStreamingResponse(content, traces) {
     const chatMessages = document.getElementById('chat-messages');
     const sanitizedContent = fixEncodingArtifacts(content || '');
-    
+
     // Only remove initial loading indicator if we have traces to show
     const loadingIndicator = chatMessages.querySelector('.message.ai.loading-initial');
     if (loadingIndicator && traces && traces.length > 0) {
         loadingIndicator.remove();
     }
-    
+
     let aiMessage = chatMessages.querySelector('.message.ai.streaming');
-    
+
     if (!aiMessage) {
         // Create the AI message container if it doesn't exist, but only if we have traces or content
         if ((traces && traces.length > 0) || content) {
@@ -4586,7 +4636,7 @@ function updateStreamingResponse(content, traces) {
             if (loadingIndicator) {
                 loadingIndicator.remove();
             }
-            
+
             aiMessage = document.createElement('div');
             aiMessage.className = 'message ai streaming';
             chatMessages.appendChild(aiMessage);
@@ -4595,15 +4645,15 @@ function updateStreamingResponse(content, traces) {
             return;
         }
     }
-    
+
     // Clear and rebuild the message
     aiMessage.innerHTML = '';
-    
+
     // Add traces if available
     if (traces && traces.length > 0) {
         const tracesContainer = document.createElement('div');
         tracesContainer.className = 'traces-container';
-        
+
         const tracesHeader = document.createElement('div');
         tracesHeader.className = 'traces-header';
         tracesHeader.innerHTML = `
@@ -4611,10 +4661,10 @@ function updateStreamingResponse(content, traces) {
             <span class="traces-toggle">▼</span>
         `;
         tracesHeader.onclick = () => toggleTraces(tracesContainer);
-        
+
         const tracesList = document.createElement('div');
         tracesList.className = 'traces-list collapsed';
-        
+
         traces.forEach((trace, index) => {
             const traceItem = document.createElement('div');
             traceItem.className = 'trace-item';
@@ -4626,16 +4676,16 @@ function updateStreamingResponse(content, traces) {
             `;
             tracesList.appendChild(traceItem);
         });
-        
+
         tracesContainer.appendChild(tracesHeader);
         tracesContainer.appendChild(tracesList);
         aiMessage.appendChild(tracesContainer);
     }
-    
+
     // Add streaming content
     const responseContent = document.createElement('div');
     responseContent.className = 'response-content';
-    
+
     if (sanitizedContent) {
         if (typeof marked !== 'undefined' && marked.parse) {
             try {
@@ -4650,9 +4700,9 @@ function updateStreamingResponse(content, traces) {
     } else {
         responseContent.innerHTML = '<div class="typing-indicator">Thinking...</div>';
     }
-    
+
     aiMessage.appendChild(responseContent);
-    
+
     // Scroll to bottom
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
@@ -4661,7 +4711,7 @@ function updateStreamingResponse(content, traces) {
 function toggleTraces(container) {
     const tracesList = container.querySelector('.traces-list');
     const toggle = container.querySelector('.traces-toggle');
-    
+
     if (tracesList.classList.contains('collapsed')) {
         tracesList.classList.remove('collapsed');
         toggle.textContent = '▲';
@@ -4674,7 +4724,7 @@ function toggleTraces(container) {
 // Prepare context for AI agent
 function prepareAIContext() {
     let context = 'Current AI Model Data:\n\n';
-    
+
     if (cachedData.llms && cachedData.llms.data) {
         context += 'LLM Models:\n';
         cachedData.llms.data.slice(0, 5).forEach(model => {
@@ -4685,7 +4735,7 @@ function prepareAIContext() {
         });
         context += '\n';
     }
-    
+
     if (cachedData.textToImage && cachedData.textToImage.data) {
         context += 'Text-to-Image Models:\n';
         cachedData.textToImage.data.slice(0, 5).forEach(model => {
@@ -4694,13 +4744,13 @@ function prepareAIContext() {
         });
         context += '\n';
     }
-    
+
     return context;
 }
 
 // Format evaluation keys for display
 function formatEvaluationKey(key) {
-    return key.split('_').map(word => 
+    return key.split('_').map(word =>
         word.charAt(0).toUpperCase() + word.slice(1)
     ).join(' ');
 }
@@ -4708,22 +4758,22 @@ function formatEvaluationKey(key) {
 // Filtering and sorting functions
 function filterLLMData() {
     if (!rawData.llms) return;
-    
+
     const searchTerm = document.getElementById('llm-search').value.toLowerCase();
     const sortBy = document.getElementById('llm-sort').value;
-    
+
     let filteredData = rawData.llms.filter(model => {
         return model.name.toLowerCase().includes(searchTerm) ||
-               model.model_creator.name.toLowerCase().includes(searchTerm);
+            model.model_creator.name.toLowerCase().includes(searchTerm);
     });
-    
+
     // Sort data
     filteredData = sortLLMData(filteredData, sortBy);
-    
+
     // Display results
     const displayModels = getFilteredItems('llms', filteredData);
     displayLLMData(displayModels);
-    
+
     // Update results info
     const resultsInfo = document.getElementById('llms-results-info');
     resultsInfo.textContent = `Showing ${displayModels.length} of ${rawData.llms.length} models`;
@@ -4731,8 +4781,8 @@ function filterLLMData() {
 
 function sortLLMData(data, sortBy) {
     const sortedData = [...data];
-    
-    switch(sortBy) {
+
+    switch (sortBy) {
         case 'intelligence':
             return sortedData.sort((a, b) => {
                 const aVal = a.evaluations?.artificial_analysis_intelligence_index || 0;
@@ -4762,21 +4812,21 @@ function sortLLMData(data, sortBy) {
 
 function filterTextToImageData() {
     if (!rawData.textToImage) return;
-    
+
     const searchTerm = document.getElementById('text-to-image-search').value.toLowerCase();
     const sortBy = document.getElementById('text-to-image-sort').value;
-    
+
     let filteredData = rawData.textToImage.filter(model => {
         return model.name.toLowerCase().includes(searchTerm) ||
-               model.model_creator.name.toLowerCase().includes(searchTerm);
+            model.model_creator.name.toLowerCase().includes(searchTerm);
     });
-    
+
     // Sort data
     filteredData = sortTextToImageData(filteredData, sortBy);
-    
+
     // Display results
     displayMediaData(filteredData, 'text-to-image');
-    
+
     // Update results info
     const resultsInfo = document.getElementById('text-to-image-results-info');
     resultsInfo.textContent = `Showing ${filteredData.length} of ${rawData.textToImage.length} models`;
@@ -4784,8 +4834,8 @@ function filterTextToImageData() {
 
 function sortTextToImageData(data, sortBy) {
     const sortedData = [...data];
-    
-    switch(sortBy) {
+
+    switch (sortBy) {
         case 'elo':
             return sortedData.sort((a, b) => (b.elo || 0) - (a.elo || 0));
         case 'rank':
@@ -4800,27 +4850,27 @@ function sortTextToImageData(data, sortBy) {
 // Filtering and sorting functions for Fal.ai models
 function filterFalModelsData() {
     if (!rawData.falModels) return;
-    
+
     const searchTerm = document.getElementById('fal-models-search').value.toLowerCase();
     const sortBy = document.getElementById('fal-models-sort').value;
     const categoryFilter = document.getElementById('fal-models-category').value;
-    
+
     let filteredData = rawData.falModels.filter(model => {
         const matchesSearch = model.title.toLowerCase().includes(searchTerm) ||
-                             model.description.toLowerCase().includes(searchTerm) ||
-                             model.tags.some(tag => tag.toLowerCase().includes(searchTerm));
-        
+            model.description.toLowerCase().includes(searchTerm) ||
+            model.tags.some(tag => tag.toLowerCase().includes(searchTerm));
+
         const matchesCategory = !categoryFilter || model.category === categoryFilter;
-        
+
         return matchesSearch && matchesCategory;
     });
-    
+
     // Sort data
     filteredData = sortFalModelsData(filteredData, sortBy);
-    
+
     const displayModels = getFilteredItems('fal', filteredData);
     displayFalModelsData(displayModels);
-    
+
     // Update results info
     const resultsInfo = document.getElementById('fal-models-results-info');
     resultsInfo.textContent = `Showing ${displayModels.length} of ${rawData.falModels.length} models`;
@@ -4828,8 +4878,8 @@ function filterFalModelsData() {
 
 function sortFalModelsData(data, sortBy) {
     const sortedData = [...data];
-    
-    switch(sortBy) {
+
+    switch (sortBy) {
         case 'date':
             return sortedData.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
         case 'category':
@@ -4860,18 +4910,18 @@ function createFalModelCard(model) {
     card.className = 'model-card clickable';
     card.dataset.source = 'fal';
     card.onclick = () => openModelModal(model, 'fal-models');
-    
+
     // Format date
     const date = model.date ? new Date(model.date).toLocaleDateString() : 'N/A';
-    
+
     // Format tags
     const tags = model.tags && model.tags.length > 0
         ? model.tags.map(tag => `<span class="tag">${tag}</span>`).join('')
         : '';
-    
+
     // Format pricing info
     const pricing = model.pricing || 'Pricing details available on platform';
-    
+
     card.innerHTML = `
         <div class="source-badge">fal.ai</div>
         <h3>${model.title}</h3>
@@ -4930,13 +4980,13 @@ function createReplicateModelCard(model) {
     card.className = 'model-card clickable';
     card.dataset.source = 'replicate';
     card.onclick = () => openModelModal(model, 'replicate-models');
-    
+
     // Format date
     const date = model.created_at ? new Date(model.created_at).toLocaleDateString() : 'N/A';
-    
+
     // Format run count
     const runCount = model.run_count ? model.run_count.toLocaleString() : 'N/A';
-    
+
     card.innerHTML = `
         <div class="source-badge">Replicate</div>
         <h3>${model.name}</h3>
@@ -5000,24 +5050,24 @@ function displayReplicateModelsData(models) {
 // Filtering and sorting functions for Replicate models
 function filterReplicateModelsData() {
     if (!rawData.replicateModels) return;
-    
+
     const searchTerm = document.getElementById('replicate-models-search').value.toLowerCase();
     const sortBy = document.getElementById('replicate-models-sort').value;
     const categoryFilter = document.getElementById('replicate-models-category').value;
-    
+
     let filteredData = rawData.replicateModels.filter(model => {
         const matchesSearch = model.name.toLowerCase().includes(searchTerm) ||
-                             model.description.toLowerCase().includes(searchTerm) ||
-                             model.owner.toLowerCase().includes(searchTerm);
-        
+            model.description.toLowerCase().includes(searchTerm) ||
+            model.owner.toLowerCase().includes(searchTerm);
+
         const matchesCategory = !categoryFilter || model.category === categoryFilter;
-        
+
         return matchesSearch && matchesCategory;
     });
-    
+
     // Sort data
     filteredData = sortReplicateModelsData(filteredData, sortBy);
-    
+
     const displayModels = getFilteredItems('replicate', filteredData);
     displayReplicateModelsData(displayModels);
 
@@ -5028,8 +5078,8 @@ function filterReplicateModelsData() {
 
 function sortReplicateModelsData(data, sortBy) {
     const sortedData = [...data];
-    
-    switch(sortBy) {
+
+    switch (sortBy) {
         case 'popularity':
             return sortedData.sort((a, b) => (b.run_count || 0) - (a.run_count || 0));
         case 'date':
@@ -5044,10 +5094,10 @@ function sortReplicateModelsData(data, sortBy) {
 }
 
 // Add enter key support for AI agent
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     const userInput = document.getElementById('user-input');
     if (userInput) {
-        userInput.addEventListener('keypress', function(e) {
+        userInput.addEventListener('keypress', function (e) {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 sendMessage();
@@ -5061,7 +5111,7 @@ function toggleSpeedMode() {
     if (speedModeCheckbox) {
         agentConfig.speedMode = speedModeCheckbox.checked;
         console.log('Speed mode:', agentConfig.speedMode ? 'enabled' : 'disabled');
-        
+
         // Update model selection when speed mode is toggled
         updateModelForSpeedMode();
     }
@@ -5070,7 +5120,7 @@ function toggleSpeedMode() {
 function updateModelForSpeedMode() {
     const modelSelect = document.getElementById('agent-model');
     if (!modelSelect) return;
-    
+
     if (agentConfig.speedMode) {
         // Switch to speed mode model if not already selected
         const speedModelId = localStorage.getItem('dashboard-speed-model') || agentConfig.speedModeModel || 'openai/gpt-4o-mini';
@@ -6305,7 +6355,7 @@ async function fetchOpenRouterModels() {
 // Filter models based on search query
 function filterModels(query) {
     if (!query) return openRouterModels.slice(0, 20); // Show top 20 if no query
-    
+
     const lowerQuery = query.toLowerCase();
     return openRouterModels.filter(model =>
         model.id.toLowerCase().includes(lowerQuery) ||
@@ -6318,17 +6368,17 @@ function createModelOption(model) {
     const option = document.createElement('div');
     option.className = 'model-option';
     option.dataset.modelId = model.id;
-    
+
     const pricing = model.pricing || {};
     const prompt = pricing.prompt ? `$${pricing.prompt}` : 'N/A';
     const completion = pricing.completion ? `$${pricing.completion}` : 'N/A';
-    
+
     option.innerHTML = `
         <div class="model-option-name">${model.name}</div>
         <div class="model-option-details">${model.id}</div>
         <div class="model-option-price">Input: ${prompt}/1M • Output: ${completion}/1M tokens</div>
     `;
-    
+
     return option;
 }
 
@@ -6341,11 +6391,11 @@ function showModelDropdown(inputId, dropdownId, query = '') {
     if (!dropdown || !loading) {
         return;
     }
-    
+
     if (openRouterModels.length === 0) {
         loading.style.display = 'block';
         dropdown.style.display = 'none';
-        
+
         fetchOpenRouterModels().then(models => {
             loading.style.display = 'none';
             if (models.length > 0) {
@@ -6354,10 +6404,10 @@ function showModelDropdown(inputId, dropdownId, query = '') {
         });
         return;
     }
-    
+
     const filteredModels = filterModels(query);
     dropdown.innerHTML = '';
-    
+
     if (filteredModels.length === 0) {
         dropdown.innerHTML = '<div class="loading-indicator">No models found</div>';
     } else {
@@ -6367,7 +6417,7 @@ function showModelDropdown(inputId, dropdownId, query = '') {
             dropdown.appendChild(option);
         });
     }
-    
+
     dropdown.style.display = 'block';
 }
 
@@ -6388,7 +6438,7 @@ function selectModel(inputId, dropdownId, model) {
     const input = document.getElementById(inputId);
     input.value = model.id;
     hideModelDropdown(dropdownId);
-    
+
     // Special handling for fallback models and available models
     if (inputId === 'setting-fallback-models') {
         addFallbackModel(model);
@@ -6403,7 +6453,7 @@ function addFallbackModel(model) {
         selectedFallbackModels.push(model);
         updateFallbackModelsDisplay();
     }
-    
+
     // Clear the input
     document.getElementById('setting-fallback-models').value = '';
     hideModelDropdown('fallback-models-dropdown');
@@ -6422,7 +6472,7 @@ function updateFallbackModelsDisplay() {
         return;
     }
     container.innerHTML = '';
-    
+
     selectedFallbackModels.forEach(model => {
         const tag = document.createElement('div');
         tag.className = 'selected-model-tag';
@@ -6441,7 +6491,7 @@ function addAvailableModel(model) {
         updateAvailableModelsDisplay();
         populateAgentDropdown();
     }
-    
+
     // Clear the input
     document.getElementById('setting-available-models').value = '';
     hideModelDropdown('available-models-dropdown');
@@ -6461,7 +6511,7 @@ function updateAvailableModelsDisplay() {
         return;
     }
     container.innerHTML = '';
-    
+
     selectedAvailableModels.forEach(model => {
         const tag = document.createElement('div');
         tag.className = 'selected-model-tag';
@@ -6477,16 +6527,16 @@ function updateAvailableModelsDisplay() {
 function populateAgentDropdown() {
     const agentSelect = document.getElementById('agent-model');
     if (!agentSelect) return;
-    
+
     const currentValue = agentSelect.value;
     agentSelect.innerHTML = '';
-    
+
     if (selectedAvailableModels.length === 0) {
         agentSelect.innerHTML = '<option value="" disabled>No models configured - check settings</option>';
         agentConfig.model = '';
         return;
     }
-    
+
     // Add regular models
     selectedAvailableModels.forEach(model => {
         const option = document.createElement('option');
@@ -6501,14 +6551,14 @@ function populateAgentDropdown() {
     speedModeOption.value = `speed:${speedModel}`;
     speedModeOption.textContent = `⚡ Speed Mode (${getModelDisplayName(speedModel)})`;
     agentSelect.appendChild(speedModeOption);
-    
+
     // Restore previous selection or set default
     if (currentValue && [...agentSelect.options].some(opt => opt.value === currentValue)) {
         agentSelect.value = currentValue;
     } else if (selectedAvailableModels.length > 0) {
         agentSelect.value = selectedAvailableModels[0].id;
     }
-    
+
     // Update agent config
     updateAgentModel();
 }
@@ -6523,7 +6573,7 @@ function getModelDisplayName(modelId) {
 function updateAgentModel() {
     const agentSelect = document.getElementById('agent-model');
     if (!agentSelect) return;
-    
+
     const selectedValue = agentSelect.value;
     if (!selectedValue) {
         return;
@@ -6545,19 +6595,19 @@ function updateAgentModel() {
 function setupModelDropdown(inputId, dropdownId) {
     const input = document.getElementById(inputId);
     const dropdown = document.getElementById(dropdownId);
-    
+
     if (!input || !dropdown) return;
-    
+
     // Show dropdown on focus
     input.addEventListener('focus', () => {
         showModelDropdown(inputId, dropdownId, input.value);
     });
-    
+
     // Filter on input
     input.addEventListener('input', (e) => {
         showModelDropdown(inputId, dropdownId, e.target.value);
     });
-    
+
     // Hide dropdown when clicking outside
     document.addEventListener('click', (e) => {
         if (!input || !dropdown) {
@@ -6573,19 +6623,19 @@ function setupModelDropdown(inputId, dropdownId) {
 function setupModelDropdown(inputId, dropdownId) {
     const input = document.getElementById(inputId);
     const dropdown = document.getElementById(dropdownId);
-    
+
     if (!input || !dropdown) return;
-    
+
     // Show dropdown on focus
     input.addEventListener('focus', () => {
         showModelDropdown(inputId, dropdownId, input.value);
     });
-    
+
     // Filter on input
     input.addEventListener('input', (e) => {
         showModelDropdown(inputId, dropdownId, e.target.value);
     });
-    
+
     // Hide dropdown when clicking outside
     document.addEventListener('click', (e) => {
         if (!input.contains(e.target) && !dropdown.contains(e.target)) {
@@ -6595,13 +6645,13 @@ function setupModelDropdown(inputId, dropdownId) {
 }
 
 // Main settings functionality
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     const settingsBtn = document.getElementById('settings-btn');
     const settingsModal = document.getElementById('settings-modal');
     const settingsClose = document.getElementById('settings-close');
     const settingsSave = document.getElementById('settings-save');
     const settingsCancel = document.getElementById('settings-cancel');
-    
+
     // Setup dropdowns
     setupModelDropdown('setting-speed-model', 'speed-model-dropdown');
     setupModelDropdown('setting-analysis-model', 'analysis-model-dropdown');
@@ -6681,17 +6731,17 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-    
+
     // Initialize agent dropdown on page load
     setTimeout(() => {
         fetchOpenRouterModels().then(() => {
             loadSavedSettings();
         });
     }, 100);
-    
+
     if (settingsBtn && settingsModal) {
         // Open settings modal
-        settingsBtn.addEventListener('click', function() {
+        settingsBtn.addEventListener('click', function () {
             settingsModal.style.display = 'flex';
             // Pre-fetch models when opening settings
             if (openRouterModels.length === 0) {
@@ -6700,11 +6750,11 @@ document.addEventListener('DOMContentLoaded', function() {
             refreshOpenRouterKeyField();
             attachOpenRouterKeyHandlers();
         });
-        
+
         // Close modal handlers
         [settingsClose, settingsCancel].forEach(btn => {
             if (btn) {
-                btn.addEventListener('click', function() {
+                btn.addEventListener('click', function () {
                     settingsModal.style.display = 'none';
                     // Hide any open dropdowns
                     hideModelDropdown('speed-model-dropdown');
@@ -6714,9 +6764,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
             }
         });
-        
+
         // Close on overlay click
-        settingsModal.addEventListener('click', function(e) {
+        settingsModal.addEventListener('click', function (e) {
             if (e.target === settingsModal) {
                 settingsModal.style.display = 'none';
                 // Hide any open dropdowns
@@ -6726,10 +6776,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 hideModelDropdown('available-models-dropdown');
             }
         });
-        
+
         // Save settings
         if (settingsSave) {
-            settingsSave.addEventListener('click', function() {
+            settingsSave.addEventListener('click', function () {
                 // Save settings to localStorage
                 const openRouterInput = document.getElementById('setting-openrouter-key');
                 if (openRouterInput) {
@@ -6752,7 +6802,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const fallbackModelsString = selectedFallbackModels.map(m => m.id).join(', ');
                 const availableModelsString = selectedAvailableModels.map(m => m.id).join(', ');
                 const experimentalToggle = document.getElementById('setting-experimental-mode');
-                
+
                 if (speedModel) localStorage.setItem('dashboard-speed-model', speedModel);
                 if (analysisModel) localStorage.setItem('dashboard-analysis-model', analysisModel);
                 if (fallbackModelsString) localStorage.setItem('dashboard-fallback-models', fallbackModelsString);
@@ -6769,7 +6819,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 settingsModal.style.display = 'none';
                 refreshOpenRouterKeyField();
-                
+
                 // Show success message
                 const originalText = settingsSave.textContent;
                 settingsSave.textContent = 'Settings Saved!';
