@@ -140,4 +140,5 @@ This project is for educational and research purposes. Please ensure compliance 
 For issues or questions:
 1. Check the [`NEXT_STEPS.md`](NEXT_STEPS.md) for current development status
 2. Review the [`PROJECT_STRUCTURE.md`](PROJECT_STRUCTURE.md) for technical details
-3. Check server logs for error information
+3. See [`BUGS.md`](BUGS.md) for known issues and [`IMPROVEMENTS.md`](IMPROVEMENTS.md) for planned enhancements
+4. Check server logs for error information
