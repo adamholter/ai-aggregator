@@ -95,41 +95,17 @@ Existing endpoint that generates the Latest feed aggregated from multiple source
 
 When recurring runtime issues occur the endpoint may respond with `503`; unexpected failures return `500`.
 
-## Authentication endpoints
-These power the UI login modal and keep pins tied to your user.
-
-### `POST /auth/register`
-
-Creates a new account with `email` and `password` fields (`password` must be ≥6 characters). Successful requests return the created user and set a session cookie.
-
-### `POST /auth/login`
-
-Logs in with `email` and `password`. Returns the user record on success and sets the same session cookie used across the dashboard.
-
-### `POST /auth/logout`
-
-Clears the session on the server and client.
-
-### `GET /api/me`
-
-Returns `{ authenticated: true, user: { id, email, created_at } }` when logged in, otherwise `{ authenticated: false }`. The client uses this to render the header button and refresh PINs.
-
-## Pinned cards API
-When logged in you can synchronize pinned cards across devices. The UI pins cards locally when unauthenticated.
-
-- `GET /api/pins` – lists the current user’s pins.
-- `POST /api/pins` – body must include `category`, `item`, and optionally `key`. Creates a pin entry with `id`, `key`, `category`, `item`, and `created_at`.
-- `DELETE /api/pins/<pin_id>` – removes the pin with that `id`.
-- `DELETE /api/pins?key=:pinKey` – removes the pin matching the provided key (used for summary workflows too).
-
-Responses include the updated pins list (or `success: true` for deletes).
-
 ## Experimental filtering
-Guarded by the experimental mode toggle in the UI. Requires you to save an OpenRouter key in Settings.
+For automatic filtering via Gemini 2.5 Flash 0905. Requires an OpenRouter API key passed as `Authorization: Bearer <your-key>` (no server-side key fallback).
 
 - `POST /api/experimental-filter`
-    - Body: `category`, `items` (array of entries), optional `instructions` (text), and optional `system_prompt`.
-    - The server converts the first ~60 entries into TOON, calls the configured Gemini 2.5 Flash Preview model, and expects a TOON table named `filtered[...]` in response.
-    - Returns `{"items":[...]}` where each item mirrors the TOON fields returned (title/summary/link/timestamp). Errors are relayed alongside HTTP 400/502 responses.
+    - Headers: `Authorization: Bearer <OPENROUTER_KEY>`
+    - Body:
+        - `category` (required): dataset category label (e.g., `llms`, `openrouter`, etc.)
+        - `items` (required): array of entries with `title`, `summary`, `link`, `timestamp`
+        - `instructions` (optional): user guidance; defaults to surfacing the most important, time-sensitive entries
+        - `system_prompt` (optional): overrides the default filtering prompt (TOON-only, no prose)
+        - `model_id` (optional): overrides the default `google/gemini-2.5-flash-0905`
+    - Returns `{"items":[...]}` where each item mirrors the TOON fields returned (title/summary/link/timestamp). Errors return `400` for bad input or `502` for upstream failures.
 
-Use these filtered items to power the refreshed “AI Filter” widgets that appear under each tab when experimental mode is enabled.
+Use these filtered items to power “AI Filter” style experiences or front-end cards that need pre-filtered lists.

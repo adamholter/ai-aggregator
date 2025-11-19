@@ -75,13 +75,14 @@ FALLBACK_CATEGORY_FILES = {
     'fal': os.path.join(BASE_DIR, 'data', 'fallback', 'fal_models.json'),
     'replicate': os.path.join(BASE_DIR, 'data', 'fallback', 'replicate_models.json')
 }
-EXPERIMENTAL_FILTER_MODEL = os.environ.get('EXPERIMENTAL_FILTER_MODEL', 'google/gemini-2.5-flash-lite-preview-09-2025')
+EXPERIMENTAL_FILTER_MODEL = os.environ.get('EXPERIMENTAL_FILTER_MODEL', 'google/gemini-2.5-flash-0905')
 DEFAULT_FILTER_SYSTEM_PROMPT = (
-    "You are an AI assistant that filters dashboard entries. Each dataset is provided in TOON format "
-    "with fields such as title, summary, link, and timestamp. Rank and select the most important, "
-    "timely items (novel launches, major updates, highly impactful releases). Always respond with a "
-    "single TOON table named filtered[...] using the same fields from the input. Escape commas inside "
-    "fields with a backslash. Do not add explanations outside the table."
+    "You are an AI assistant that filters dashboard entries. Each dataset in the `Input TOON` table "
+    "contains title, summary, link, and timestamp fields. Select only the most important and timely "
+    "items (novel launches, major updates, highly impactful releases). Strictly respond with ONE TOON "
+    "table named filtered[...] using the same headers from the input. Do not emit prose, bullet points, "
+    "or code fences. Escape commas inside fields with a backslash. If nothing qualifies, return an empty "
+    "filtered[...] TOON table."
 )
 
 GOOGLE_SHEETS_API_KEY = (os.environ.get('GOOGLE_SHEETS_API_KEY') or '').strip()
