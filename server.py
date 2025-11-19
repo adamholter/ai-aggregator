@@ -5028,6 +5028,12 @@ def about_page():
     return app.send_static_file('about.html')
 
 
+@app.route('/docs')
+def docs_page():
+    """Serve the API/LLM documentation page."""
+    return app.send_static_file('docs.html')
+
+
 @app.route('/api/model-config', methods=['GET'])
 def get_model_config_api():
     """Expose model configuration to the frontend."""
