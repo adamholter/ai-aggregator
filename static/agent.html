@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI News Agent</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+  <link rel="icon" type="image/svg+xml" href="/u86mkqMgI0HOjDhIVO1WF.svg">
+  <style>
+    body {
+      background: radial-gradient(circle at 20% 20%, rgba(0,0,0,0.03), transparent 25%),
+        radial-gradient(circle at 80% 0%, rgba(0,0,0,0.025), transparent 22%),
+        #f7f7f7;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    }
+    ::-webkit-scrollbar { width: 10px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #d6d6d6; border-radius: 9999px; }
+    .stack-card { border: 1px solid #e5e5e5; border-radius: 10px; background: linear-gradient(180deg, #fff, #fafafa); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04); }
+    .message { border: none; border-radius: 0; background: transparent; box-shadow: none; }
+    .user-bubble { border: 1px solid #e5e5e5; border-radius: 10px; background: #fff; box-shadow: 0 10px 24px rgba(0, 0, 0, 0.04); }
+    .pill { display: inline-flex; align-items: center; gap: 0.25rem; padding: 6px 10px; border-radius: 9999px; border: 1px solid #e5e5e5; background: #fdfdfd; font-size: 12px; color: #555; }
+    .trace-block { border: 1px solid #e5e5e5; border-radius: 10px; background: linear-gradient(180deg, #fff, #fafafa); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04); }
+    .trace-step { display: flex; align-items: flex-start; gap: 0.75rem; padding: 0.65rem 0.75rem; border-radius: 8px; border: none; background: transparent; }
+    .trace-toggle { cursor: pointer; }
+    .trace-chip { display: inline-flex; align-items: center; gap: 0.35rem; padding: 6px 12px; border-radius: 9999px; border: 1px solid #e5e5e5; background: linear-gradient(90deg, #f7f7f7 0%, #ffffff 50%, #f7f7f7 100%); background-size: 200% 100%; animation: shimmer 2s infinite; cursor: pointer; font-size: 12px; color: #444; font-family: 'Courier New', monospace; }
+    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+    .dot { width: 8px; height: 8px; border-radius: 9999px; }
+    code, pre { font-family: 'Monaco', 'Menlo', 'Courier New', monospace; }
+  </style>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { grotesk: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'sans-serif'] },
+          colors: { ink: '#111', offwhite: '#f7f7f7', softline: '#e5e5e5', accent: '#0f172a' }
+        }
+      }
+    };
+  </script>
+</head>
+<body class="bg-offwhite text-ink font-grotesk antialiased">
+  <div class="min-h-screen flex flex-col">
+    <header class="border-b border-softline bg-white">
+      <div class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+        <h1 class="text-xl font-semibold text-ink">Agent</h1>
+        <div class="flex items-center gap-4 text-sm">
+          <label class="flex items-center gap-2 text-neutral-600">
+            Model:
+            <select id="modelSelect" class="border border-softline rounded-lg px-2 py-1 text-sm bg-white">
+              <option value="x-ai/grok-4-fast">x-ai/grok-4-fast</option>
+              <option value="anthropic/claude-3.5-sonnet">anthropic/claude-3.5-sonnet</option>
+              <option value="openai/gpt-4.1-mini">openai/gpt-4.1-mini</option>
+            </select>
+          </label>
+          <button id="refreshBtn" class="rounded-full px-4 py-2 border border-softline text-sm hover:-translate-y-0.5 transition bg-white">Refresh</button>
+          <div class="flex items-center gap-2 text-xs text-neutral-500">
+            <span class="h-2 w-2 bg-emerald-500 rounded-full"></span> Live
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto px-6 py-8 grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 w-full">
+      <section class="lg:col-span-2 border border-softline rounded-2xl bg-white shadow-sm flex flex-col">
+        <div class="border-b border-softline px-6 py-3 flex items-center">
+          <h2 class="text-lg font-semibold text-ink">Agent</h2>
+        </div>
+
+        <div id="chatArea" class="px-6 py-6 space-y-4 flex-1 overflow-y-auto">
+          <div class="text-sm text-neutral-500">Ready. Ask something like “What’s new with Gemini?” or “Any fresh model launches today?”</div>
+        </div>
+
+        <form id="chatForm" class="border-t border-softline px-6 py-4 bg-offwhite/60 flex flex-col gap-2">
+          <div class="flex items-center gap-2">
+            <label for="fileInput" class="h-12 w-12 rounded-xl border border-softline bg-white flex items-center justify-center hover:-translate-y-0.5 transition cursor-pointer">
+              <svg viewBox="0 0 24 24" class="h-5 w-5 text-neutral-600" aria-hidden="true">
+                <path fill="currentColor" d="M7.75 4A3.25 3.25 0 0 0 4.5 7.25v9.5a3.75 3.75 0 1 0 7.5 0v-8a2.25 2.25 0 1 0-4.5 0v7.75a.75.75 0 1 0 1.5 0V8.75a.75.75 0 1 1 1.5 0v8a2.25 2.25 0 0 1-4.5 0v-9.5A1.75 1.75 0 0 1 7.75 5.5h8.5a2.25 2.25 0 0 1 0 4.5h-2.5a.75.75 0 0 0 0 1.5h2.5a3.75 3.75 0 0 0 0-7.5h-8.5Z"/>
+              </svg>
+            </label>
+            <input id="fileInput" type="file" accept="image/*" multiple class="hidden" />
+            <input id="questionInput" type="text" autocomplete="off" placeholder="Type a question about AI news..." class="flex-1 px-4 py-3 border border-softline rounded-xl focus:ring-2 focus:ring-ink/60 outline-none bg-white" />
+            <button type="submit" class="h-12 w-12 rounded-xl bg-ink text-white font-semibold hover:-translate-y-0.5 transition flex items-center justify-center">
+              <svg viewBox="0 0 24 24" class="h-5 w-5 text-white"><path fill="currentColor" d="M3.4 20.6 21 12 3.4 3.4 3 10l11 2-11 2z"/></svg>
+            </button>
+          </div>
+          <div id="attachmentsBar" class="flex items-center gap-2 flex-wrap text-xs text-neutral-500"></div>
+        </form>
+      </section>
+
+      <section class="border border-softline rounded-2xl bg-white shadow-sm flex flex-col sticky top-24 max-h-[calc(100vh-140px)] overflow-hidden">
+        <div class="px-5 py-4 border-b border-softline flex items-center justify-between">
+          <div>
+            <p class="text-xs uppercase tracking-[0.2em] text-neutral-400">Data</p>
+            <h3 class="text-lg font-semibold text-ink">Pulled feeds</h3>
+          </div>
+        </div>
+        <div id="dataSidebar" class="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+          <div class="text-sm text-neutral-500">No data yet. Run a query to load Latest and OpenRouter previews.</div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/static/agent.js"></script>
+</body>
+</html>
