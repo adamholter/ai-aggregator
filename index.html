@@ -6,6 +6,7 @@
     <title>AI Model Analysis Dashboard</title>
     <link rel="stylesheet" href="static/styles.css">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
     <link rel="icon" type="image/svg+xml" href="/u86mkqMgI0HOjDhIVO1WF.svg">
 </head>
 <body>
@@ -349,26 +350,59 @@
 
             <!-- Agent Section -->
             <section id="agent-exp" class="content-section">
-                <div class="section-header">
-                    <h2>Agent</h2>
-                    <div class="controls">
-                        <select id="agent-exp-model" aria-label="Agent model selector">
-                            <option value="" disabled>Loading models...</option>
-                        </select>
-                        <button id="agent-exp-clear" type="button" class="chart-btn secondary" style="margin-left: 8px;">Clear Chat</button>
-                    </div>
-                    <div class="agent-warning experimental-warning">⚡ Lightweight Gemini 2.5 Flash Preview (09-2025) assistant with dashboard data + Perplexity tools.</div>
+                <div class="agent-shell">
+                    <header class="agent-header">
+                        <h2>Agent</h2>
+                        <div class="agent-controls">
+                            <label class="agent-model-label">
+                                Model:
+                                <select id="modelSelect" class="agent-model-select">
+                                    <option value="x-ai/grok-4-fast">x-ai/grok-4-fast</option>
+                                    <option value="anthropic/claude-3.5-sonnet">anthropic/claude-3.5-sonnet</option>
+                                    <option value="openai/gpt-4.1-mini">openai/gpt-4.1-mini</option>
+                                </select>
+                            </label>
+                            <button id="refreshBtn" class="agent-btn">Refresh</button>
+                            <div class="agent-live-indicator">
+                                <span class="dot live"></span> Live
+                            </div>
+                        </div>
+                    </header>
+
+                    <main class="agent-grid">
+                        <section class="agent-chat">
+                            <div class="agent-chat-header">
+                                <h3>Agent</h3>
+                            </div>
+                            <div id="chatArea" class="agent-chat-body">
+                                <div class="agent-placeholder">Ready. Ask something like “What’s new with Gemini?” or “Any fresh model launches today?”</div>
+                            </div>
+                            <form id="chatForm" class="agent-chat-form">
+                                <div class="agent-input-row">
+                                    <label for="fileInput" class="agent-file-btn" title="Attach images">
+                                        <svg viewBox="0 0 24 24" class="icon"><path fill="currentColor" d="M7.75 4A3.25 3.25 0 0 0 4.5 7.25v9.5a3.75 3.75 0 1 0 7.5 0v-8a2.25 2.25 0 1 0-4.5 0v7.75a.75.75 0 1 0 1.5 0V8.75a.75.75 0 1 1 1.5 0v8a2.25 2.25 0 0 1-4.5 0v-9.5A1.75 1.75 0 0 1 7.75 5.5h8.5a2.25 2.25 0 0 1 0 4.5h-2.5a.75.75 0 0 0 0 1.5h2.5a3.75 3.75 0 0 0 0-7.5h-8.5Z"/></svg>
+                                    </label>
+                                    <input id="fileInput" type="file" accept="image/*" multiple class="hidden" />
+                                    <input id="questionInput" type="text" autocomplete="off" placeholder="Type a question about AI news..." class="agent-text-input" />
+                                    <button type="submit" class="agent-send-btn">
+                                        <svg viewBox="0 0 24 24" class="icon send"><path fill="currentColor" d="M3.4 20.6 21 12 3.4 3.4 3 10l11 2-11 2z"/></svg>
+                                    </button>
+                                </div>
+                                <div id="attachmentsBar" class="agent-attachments"></div>
+                            </form>
+                        </section>
+
+                        <section class="agent-sidebar">
+                            <div class="agent-sidebar-header">
+                                <p class="eyebrow">Data</p>
+                                <h3>Pulled feeds</h3>
+                            </div>
+                            <div id="dataSidebar" class="agent-sidebar-body">
+                                <div class="agent-placeholder">No data yet. Run a query to load Latest and OpenRouter previews.</div>
+                            </div>
+                        </section>
+                    </main>
                 </div>
-                <div class="ai-agent-container agent-exp-container">
-                    <div class="chat-container">
-                        <div class="chat-messages" id="agent-exp-messages"></div>
-                        <form id="agent-exp-form" class="chat-input">
-                            <textarea id="agent-exp-input" placeholder="Ask about models, launches, pricing, or benchmarks..."></textarea>
-                            <button type="submit">Send</button>
-                        </form>
-                    </div>
-                </div>
-                <div class="agent-exp-status" id="agent-exp-status" aria-live="polite"></div>
             </section>
 
             <!-- About Section -->
@@ -593,6 +627,7 @@
         </div>
     </div>
 
+    <script src="static/agent.js"></script>
     <script src="static/script.js"></script>
 </body>
 </html>

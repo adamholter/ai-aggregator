@@ -1830,12 +1830,6 @@ function setupNavigation() {
     navButtons.forEach(button => {
         button.addEventListener('click', () => {
             const targetSection = button.getAttribute('data-section');
-
-            // Redirect the Agent tab to the standalone agent page
-            if (targetSection === 'agent-exp') {
-                window.location.href = '/agent';
-                return;
-            }
             
             // Update active states
             navButtons.forEach(btn => btn.classList.remove('active'));

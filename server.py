@@ -5029,12 +5029,6 @@ def about_page():
     return app.send_static_file('about.html')
 
 
-@app.route('/agent')
-def agent_page():
-    """Serve the standalone agent page."""
-    return app.send_static_file('static/agent.html')
-
-
 @app.route('/docs')
 def docs_page():
     """Serve the API/LLM documentation page."""
