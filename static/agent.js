@@ -2,7 +2,7 @@
 const BASE_URL = window.location.origin;
 const USER_OPENROUTER_KEY_STORAGE = 'dashboard-user-openrouter-key';
 const AGENT_MODEL_STORAGE = 'dashboard-agent-exp-model';
-const DEFAULT_MODEL = localStorage.getItem(AGENT_MODEL_STORAGE) || 'x-ai/grok-4-fast';
+const DEFAULT_MODEL = (typeof localStorage !== 'undefined' && localStorage.getItem(AGENT_MODEL_STORAGE)) || 'x-ai/grok-4-fast';
 
 const SOURCES = [
   { key: 'latest', label: 'Latest', icon: 'news', params: { tabs: 'latest', limit: 40, include_hype: 'true', cache_bust: '1' } },
@@ -21,6 +21,12 @@ const refreshBtn = document.getElementById('refreshBtn');
 const fileInput = document.getElementById('fileInput');
 const attachmentsBar = document.getElementById('attachmentsBar');
 const modelSelect = document.getElementById('modelSelect');
+
+// If the agent markup isn't present, bail early to avoid blocking the main page.
+if (!chatArea || !dataSidebar || !questionInput || !chatForm || !refreshBtn || !fileInput || !attachmentsBar || !modelSelect) {
+  console.warn('Agent UI not found on page; skipping agent.js init.');
+  return;
+}
 
 let lastQuestion = '';
 let conversation = [];
@@ -97,8 +103,15 @@ function updateAttachmentsBar() {
   });
 }
 
+function safeSanitize(html) {
+  if (typeof DOMPurify !== 'undefined') {
+    return DOMPurify.sanitize(html);
+  }
+  return html;
+}
+
 function renderMarkdown(content) {
-  const html = DOMPurify.sanitize(marked.parse(content || ''));
+  const html = safeSanitize(marked.parse(content || ''));
   const wrapper = document.createElement('div');
   wrapper.className = 'prose prose-sm max-w-none text-ink';
   wrapper.innerHTML = html;
