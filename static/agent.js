@@ -3,7 +3,8 @@
 const BASE_URL = window.location.origin;
 const USER_OPENROUTER_KEY_STORAGE = 'dashboard-user-openrouter-key';
 const AGENT_MODEL_STORAGE = 'dashboard-agent-exp-model';
-const DEFAULT_MODEL = (typeof localStorage !== 'undefined' && localStorage.getItem(AGENT_MODEL_STORAGE)) || 'x-ai/grok-4-fast';
+let DEFAULT_MODEL = (typeof localStorage !== 'undefined' && localStorage.getItem(AGENT_MODEL_STORAGE)) || 'x-ai/grok-4-fast';
+const AVAILABLE_MODELS_STORAGE = 'dashboard-available-models';
 
 const SOURCES = [
   { key: 'latest', label: 'Latest', icon: 'news', params: { tabs: 'latest', limit: 40, include_hype: 'true', cache_bust: '1' } },
@@ -41,11 +42,54 @@ let lastLLMResponse = null;
 const debugRuns = [];
 let lastTraceAnchor = null;
 let pendingAttachments = [];
+let availableModels = [];
 
-modelSelect.value = DEFAULT_MODEL;
+function hydrateModelsFromStorageOrConfig(agentConfig = {}) {
+  const stored = (typeof localStorage !== 'undefined' && localStorage.getItem(AVAILABLE_MODELS_STORAGE)) || '';
+  const storedList = stored ? stored.split(',').map((s) => s.trim()).filter(Boolean) : [];
+  const configList = Array.isArray(agentConfig.availableModels) ? agentConfig.availableModels : [];
+  availableModels = storedList.length ? storedList : configList;
+  if (!availableModels.length && agentConfig.defaultModel) {
+    availableModels = [agentConfig.defaultModel];
+  }
+  DEFAULT_MODEL = (typeof localStorage !== 'undefined' && localStorage.getItem(AGENT_MODEL_STORAGE)) || agentConfig.defaultModel || availableModels[0] || DEFAULT_MODEL;
+}
+
+async function loadConfigAndModels() {
+  try {
+    const res = await fetch('/api/model-config');
+    if (res.ok) {
+      const cfg = await res.json();
+      hydrateModelsFromStorageOrConfig((cfg && cfg.agent) || {});
+    } else {
+      hydrateModelsFromStorageOrConfig({});
+    }
+  } catch (_) {
+    hydrateModelsFromStorageOrConfig({});
+  }
+
+  modelSelect.innerHTML = '';
+  if (!availableModels.length) {
+    availableModels = [DEFAULT_MODEL];
+  }
+  availableModels.forEach((id) => {
+    const opt = document.createElement('option');
+    opt.value = id;
+    opt.textContent = id;
+    modelSelect.appendChild(opt);
+  });
+
+  const chosen = availableModels.includes(DEFAULT_MODEL) ? DEFAULT_MODEL : availableModels[0];
+  modelSelect.value = chosen;
+  localStorage.setItem(AGENT_MODEL_STORAGE, chosen);
+}
+
 modelSelect.addEventListener('change', () => {
   localStorage.setItem(AGENT_MODEL_STORAGE, modelSelect.value);
 });
+
+// hydrate options before wiring the rest of the UI
+loadConfigAndModels();
 
 chatForm.addEventListener('submit', (e) => {
   e.preventDefault();
