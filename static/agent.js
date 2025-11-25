@@ -1,3 +1,4 @@
+(() => {
 // Agent page script (uses user-supplied OpenRouter key from Settings)
 const BASE_URL = window.location.origin;
 const USER_OPENROUTER_KEY_STORAGE = 'dashboard-user-openrouter-key';
@@ -27,7 +28,7 @@ if (!chatArea || !dataSidebar || !questionInput || !chatForm || !refreshBtn || !
   if (typeof console !== 'undefined') {
     console.warn('Agent UI not found on page; skipping agent.js init.');
   }
-  // Do not return inside iframe; but if not present, simply no-op.
+  return;
 }
 
 let lastQuestion = '';
@@ -559,3 +560,5 @@ window.debugAgent = {
 if (!getUserOpenRouterKey()) {
   addMessage('system', 'Add your OpenRouter key in Settings on the main dashboard, then reload this page.');
 }
+
+})(); // end IIFE
