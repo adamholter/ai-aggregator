@@ -24,7 +24,9 @@ const modelSelect = document.getElementById('modelSelect');
 
 // If the agent markup isn't present, bail early to avoid blocking the main page.
 if (!chatArea || !dataSidebar || !questionInput || !chatForm || !refreshBtn || !fileInput || !attachmentsBar || !modelSelect) {
-  console.warn('Agent UI not found on page; skipping agent.js init.');
+  if (typeof console !== 'undefined') {
+    console.warn('Agent UI not found on page; skipping agent.js init.');
+  }
   return;
 }
 
