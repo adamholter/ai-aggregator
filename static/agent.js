@@ -91,6 +91,20 @@ modelSelect.addEventListener('change', () => {
 // hydrate options before wiring the rest of the UI
 loadConfigAndModels();
 
+function resetAgentUI() {
+  chatArea.innerHTML = '<div class="agent-placeholder">Ready. Ask something like “What’s new with Gemini?” or “Any fresh model launches today?”</div>';
+  dataSidebar.innerHTML = '<div class="agent-placeholder">No data yet. Run a query to load Latest and OpenRouter previews.</div>';
+  attachmentsBar.innerHTML = '';
+  conversation = [];
+  currentTrace = [];
+  lastLLMPayload = null;
+  lastLLMResponse = null;
+  latestDataCache = {};
+  openrouterDataCache = {};
+  lastQuestion = '';
+  renderTraceInline();
+}
+
 chatForm.addEventListener('submit', (e) => {
   e.preventDefault();
   const question = questionInput.value.trim();
@@ -107,12 +121,7 @@ chatForm.addEventListener('submit', (e) => {
 });
 
 refreshBtn.addEventListener('click', () => {
-  if (lastQuestion) {
-    addMessage('system', 'Refreshed run with cached question.');
-    runAgent(lastQuestion);
-  } else {
-    addMessage('system', 'Ask a question to see the agent in action.');
-  }
+  resetAgentUI();
 });
 
 fileInput.addEventListener('change', async (e) => {
@@ -206,8 +215,8 @@ function updateSidebar(previews) {
   }
   previews.forEach(({ label, items }) => {
     const card = document.createElement('div');
-    card.className = 'stack-card p-3';
-    card.innerHTML = `<p class="pill mb-2">${label}</p>${items}`;
+    card.className = 'feed-card';
+    card.innerHTML = `<p class="pill-chip mb-2">${label}</p>${items}`;
     dataSidebar.appendChild(card);
   });
 }
@@ -217,7 +226,7 @@ function renderTraceInline(anchor = lastTraceAnchor) {
   if (!currentTrace.length && !anchor) return;
 
   const container = document.createElement('div');
-  container.className = 'trace-container p-0 mb-2';
+  container.className = 'trace-container';
 
   const chip = document.createElement('div');
   chip.className = 'trace-chip';
@@ -227,18 +236,11 @@ function renderTraceInline(anchor = lastTraceAnchor) {
   body.className = 'hidden mt-3 space-y-2';
 
   currentTrace.forEach((step) => {
-    const dotColor =
-      step.status === 'done'
-        ? 'bg-emerald-500'
-        : step.status === 'error'
-          ? 'bg-rose-500'
-          : step.status === 'running'
-            ? 'bg-amber-500'
-            : 'bg-neutral-300';
+    const statusClass = `status-dot ${step.status || 'pending'}`;
     const block = document.createElement('div');
     block.className = 'trace-step';
     block.innerHTML = `
-      <span class="dot ${dotColor} mt-1"></span>
+      <span class="${statusClass}"></span>
       <div class="flex-1 space-y-1">
         <p class="text-sm font-semibold text-ink">${step.title}</p>
         <p class="text-sm text-neutral-600">${step.detail}</p>
