@@ -3960,6 +3960,10 @@ body {
     border-color: var(--border-color);
 }
 
+.hidden {
+    display: none !important;
+}
+
 /* Embedded Agent (new) */
 .agent-shell {
     background: #f7f7f7;
@@ -4092,6 +4096,16 @@ body {
     flex-wrap: wrap;
     color: #6b7280;
     font-size: 0.85rem;
+}
+.agent-attachments .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border: 1px solid #e5e5e5;
+    border-radius: 999px;
+    background: #fff;
+    max-width: 200px;
 }
 .agent-sidebar-body {
     padding: 12px 14px;

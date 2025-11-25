@@ -97,7 +97,7 @@ function updateAttachmentsBar() {
   if (!pendingAttachments.length) return;
   pendingAttachments.forEach((att) => {
     const chip = document.createElement('div');
-    chip.className = 'inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-softline rounded-full text-xs';
+    chip.className = 'chip';
     chip.innerHTML = `<span class="truncate max-w-[140px]">${escapeHtml(att.name)}</span>`;
     attachmentsBar.appendChild(chip);
   });
