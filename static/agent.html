@@ -9,99 +9,104 @@
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
   <link rel="icon" type="image/svg+xml" href="/u86mkqMgI0HOjDhIVO1WF.svg">
   <style>
+    :root { color-scheme: light; }
     body {
-      background: radial-gradient(circle at 20% 20%, rgba(0,0,0,0.03), transparent 25%),
-        radial-gradient(circle at 80% 0%, rgba(0,0,0,0.025), transparent 22%),
-        #f7f7f7;
+      background: #f5f6f8;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      color: #0f172a;
     }
-    ::-webkit-scrollbar { width: 10px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: #d6d6d6; border-radius: 9999px; }
-    .stack-card { border: 1px solid #e5e5e5; border-radius: 10px; background: linear-gradient(180deg, #fff, #fafafa); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04); }
-    .message { border: none; border-radius: 0; background: transparent; box-shadow: none; }
-    .user-bubble { border: 1px solid #e5e5e5; border-radius: 10px; background: #fff; box-shadow: 0 10px 24px rgba(0, 0, 0, 0.04); }
-    .pill { display: inline-flex; align-items: center; gap: 0.25rem; padding: 6px 10px; border-radius: 9999px; border: 1px solid #e5e5e5; background: #fdfdfd; font-size: 12px; color: #555; }
-    .trace-block { border: 1px solid #e5e5e5; border-radius: 10px; background: linear-gradient(180deg, #fff, #fafafa); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04); }
-    .trace-step { display: flex; align-items: flex-start; gap: 0.75rem; padding: 0.65rem 0.75rem; border-radius: 8px; border: none; background: transparent; }
-    .trace-toggle { cursor: pointer; }
-    .trace-chip { display: inline-flex; align-items: center; gap: 0.35rem; padding: 6px 12px; border-radius: 9999px; border: 1px solid #e5e5e5; background: linear-gradient(90deg, #f7f7f7 0%, #ffffff 50%, #f7f7f7 100%); background-size: 200% 100%; animation: shimmer 2s infinite; cursor: pointer; font-size: 12px; color: #444; font-family: 'Courier New', monospace; }
-    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+    .agent-app { max-width: 1280px; margin: 0 auto; padding: 24px 18px 32px; }
+    .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; box-shadow: 0 12px 30px rgba(15, 23, 42, 0.04); }
+    .badge { border: 1px solid #e5e7eb; border-radius: 10px; padding: 6px 10px; font-size: 12px; background: #f8fafc; color: #475569; }
+    .pill-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; border: 1px solid #e5e7eb; background: #f8fafc; font-size: 12px; color: #475569; }
     .dot { width: 8px; height: 8px; border-radius: 9999px; }
-    code, pre { font-family: 'Monaco', 'Menlo', 'Courier New', monospace; }
+    .dot.live { background: #10b981; }
+    .agent-chat-body { padding: 14px; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; min-height: 360px; }
+    .chat-bubble { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 14px 16px; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.03); }
+    .chat-bubble.user { border-color: #c7d2fe; background: #eef2ff; }
+    .agent-chat-form { border-top: 1px solid #e5e7eb; padding: 12px 14px; background: #f9fafb; display: flex; flex-direction: column; gap: 8px; }
+    .agent-input-row { display: flex; gap: 10px; align-items: center; }
+    .agent-file-btn { height: 46px; width: 46px; border: 1px solid #e5e7eb; border-radius: 12px; background: #fff; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; transition: transform 0.15s ease; }
+    .agent-file-btn:hover { transform: translateY(-2px); }
+    .agent-text-input { flex: 1; border: 1px solid #e5e7eb; border-radius: 12px; padding: 12px; font-size: 0.95rem; outline: none; }
+    .agent-send { height: 46px; width: 46px; border: none; border-radius: 12px; background: #0f172a; color: #fff; cursor: pointer; transition: transform 0.15s ease; }
+    .agent-send:hover { transform: translateY(-2px); }
+    .agent-attachments { display: flex; gap: 8px; flex-wrap: wrap; color: #6b7280; font-size: 0.85rem; }
+    .agent-attachments .chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1px solid #e5e7eb; border-radius: 999px; background: #fff; max-width: 200px; }
+    .trace-card { border: 1px solid #e5e7eb; border-radius: 14px; background: #fff; padding: 12px 14px; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.03); }
+    .trace-step-row { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid #f1f5f9; }
+    .trace-step-row:last-child { border-bottom: none; }
+    .status-dot { width: 12px; height: 12px; border-radius: 999px; margin-top: 4px; }
+    .status-dot.done { background: #10b981; }
+    .status-dot.running { background: #f59e0b; }
+    .status-dot.error { background: #ef4444; }
+    .status-dot.pending { background: #cbd5e1; }
+    .trace-preview { font-size: 0.9rem; color: #475569; margin-top: 4px; }
+    .feed-card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 10px; background: #fff; }
+    .feed-card h4 { margin: 0 0 4px 0; font-size: 0.95rem; color: #0f172a; }
+    .feed-card p { margin: 0; color: #475569; font-size: 0.85rem; }
+    .feed-meta { font-size: 11px; color: #94a3b8; }
   </style>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          fontFamily: { grotesk: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'sans-serif'] },
-          colors: { ink: '#111', offwhite: '#f7f7f7', softline: '#e5e5e5', accent: '#0f172a' }
-        }
-      }
-    };
-  </script>
 </head>
-<body class="bg-offwhite text-ink font-grotesk antialiased">
-  <div class="min-h-screen flex flex-col">
-    <header class="border-b border-softline bg-white">
-      <div class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-        <h1 class="text-xl font-semibold text-ink">Agent</h1>
-        <div class="flex items-center gap-4 text-sm">
-          <label class="flex items-center gap-2 text-neutral-600">
-            Model:
-            <select id="modelSelect" class="border border-softline rounded-lg px-2 py-1 text-sm bg-white">
-              <option value="x-ai/grok-4-fast">x-ai/grok-4-fast</option>
-              <option value="anthropic/claude-3.5-sonnet">anthropic/claude-3.5-sonnet</option>
-              <option value="openai/gpt-4.1-mini">openai/gpt-4.1-mini</option>
-            </select>
-          </label>
-          <button id="refreshBtn" class="rounded-full px-4 py-2 border border-softline text-sm hover:-translate-y-0.5 transition bg-white">Refresh</button>
-          <div class="flex items-center gap-2 text-xs text-neutral-500">
-            <span class="h-2 w-2 bg-emerald-500 rounded-full"></span> Live
-          </div>
-        </div>
+<body>
+  <div class="agent-app">
+    <header class="flex items-center justify-between mb-4">
+      <div>
+        <p class="badge">Agent</p>
+        <h1 class="text-2xl font-semibold mt-2">AI News Agent</h1>
+      </div>
+      <div class="flex items-center gap-3">
+        <label class="agent-model-label">
+          Model:
+          <select id="modelSelect" class="agent-model-select"></select>
+        </label>
+        <button id="refreshBtn" class="agent-btn">Refresh</button>
+        <span class="pill-chip"><span class="dot live"></span> Live</span>
       </div>
     </header>
 
-    <main class="max-w-6xl mx-auto px-6 py-8 grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 w-full">
-      <section class="lg:col-span-2 border border-softline rounded-2xl bg-white shadow-sm flex flex-col">
-        <div class="border-b border-softline px-6 py-3 flex items-center">
-          <h2 class="text-lg font-semibold text-ink">Agent</h2>
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <section class="lg:col-span-2 card p-4 flex flex-col gap-3">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-xs uppercase tracking-wide text-gray-500 mb-1">Agent</p>
+            <h2 class="text-lg font-semibold">Conversation</h2>
+          </div>
         </div>
-
-        <div id="chatArea" class="px-6 py-6 space-y-4 flex-1 overflow-y-auto">
-          <div class="text-sm text-neutral-500">Ready. Ask something like “What’s new with Gemini?” or “Any fresh model launches today?”</div>
+        <div id="chatArea" class="agent-chat-body">
+          <div class="agent-placeholder">Ready. Ask something like “What’s new with Gemini?” or “Any fresh model launches today?”</div>
         </div>
-
-        <form id="chatForm" class="border-t border-softline px-6 py-4 bg-offwhite/60 flex flex-col gap-2">
-          <div class="flex items-center gap-2">
-            <label for="fileInput" class="h-12 w-12 rounded-xl border border-softline bg-white flex items-center justify-center hover:-translate-y-0.5 transition cursor-pointer">
-              <svg viewBox="0 0 24 24" class="h-5 w-5 text-neutral-600" aria-hidden="true">
-                <path fill="currentColor" d="M7.75 4A3.25 3.25 0 0 0 4.5 7.25v9.5a3.75 3.75 0 1 0 7.5 0v-8a2.25 2.25 0 1 0-4.5 0v7.75a.75.75 0 1 0 1.5 0V8.75a.75.75 0 1 1 1.5 0v8a2.25 2.25 0 0 1-4.5 0v-9.5A1.75 1.75 0 0 1 7.75 5.5h8.5a2.25 2.25 0 0 1 0 4.5h-2.5a.75.75 0 0 0 0 1.5h2.5a3.75 3.75 0 0 0 0-7.5h-8.5Z"/>
-              </svg>
+        <form id="chatForm" class="agent-chat-form">
+          <div class="agent-input-row">
+            <label for="fileInput" class="agent-file-btn" title="Attach images">
+              <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path fill="currentColor" d="M7.75 4A3.25 3.25 0 0 0 4.5 7.25v9.5a3.75 3.75 0 1 0 7.5 0v-8a2.25 2.25 0 1 0-4.5 0v7.75a.75.75 0 1 0 1.5 0V8.75a.75.75 0 1 1 1.5 0v8a2.25 2.25 0 0 1-4.5 0v-9.5A1.75 1.75 0 0 1 7.75 5.5h8.5a2.25 2.25 0 0 1 0 4.5h-2.5a.75.75 0 0 0 0 1.5h2.5a3.75 3.75 0 0 0 0-7.5h-8.5Z"/></svg>
             </label>
             <input id="fileInput" type="file" accept="image/*" multiple class="hidden" />
-            <input id="questionInput" type="text" autocomplete="off" placeholder="Type a question about AI news..." class="flex-1 px-4 py-3 border border-softline rounded-xl focus:ring-2 focus:ring-ink/60 outline-none bg-white" />
-            <button type="submit" class="h-12 w-12 rounded-xl bg-ink text-white font-semibold hover:-translate-y-0.5 transition flex items-center justify-center">
-              <svg viewBox="0 0 24 24" class="h-5 w-5 text-white"><path fill="currentColor" d="M3.4 20.6 21 12 3.4 3.4 3 10l11 2-11 2z"/></svg>
+            <input id="questionInput" type="text" autocomplete="off" placeholder="Type a question about AI news..." class="agent-text-input" />
+            <button type="submit" class="agent-send">
+              <svg viewBox="0 0 24 24" class="icon send"><path fill="currentColor" d="M3.4 20.6 21 12 3.4 3.4 3 10l11 2-11 2z"/></svg>
             </button>
           </div>
-          <div id="attachmentsBar" class="flex items-center gap-2 flex-wrap text-xs text-neutral-500"></div>
+          <div id="attachmentsBar" class="agent-attachments"></div>
         </form>
+        <div id="traceContainer" class="trace-card hidden">
+          <button id="traceToggle" class="agent-btn" type="button">View stack trace</button>
+          <div id="traceBody" class="hidden mt-3"></div>
+        </div>
       </section>
 
-      <section class="border border-softline rounded-2xl bg-white shadow-sm flex flex-col sticky top-24 max-h-[calc(100vh-140px)] overflow-hidden">
-        <div class="px-5 py-4 border-b border-softline flex items-center justify-between">
+      <section class="card p-4 flex flex-col gap-3">
+        <div class="flex items-center justify-between">
           <div>
-            <p class="text-xs uppercase tracking-[0.2em] text-neutral-400">Data</p>
-            <h3 class="text-lg font-semibold text-ink">Pulled feeds</h3>
+            <p class="text-xs uppercase tracking-wide text-gray-500 mb-1">Data</p>
+            <h3 class="text-lg font-semibold">Pulled feeds</h3>
           </div>
         </div>
-        <div id="dataSidebar" class="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-          <div class="text-sm text-neutral-500">No data yet. Run a query to load Latest and OpenRouter previews.</div>
+        <div id="dataSidebar" class="agent-sidebar-body">
+          <div class="agent-placeholder">No data yet. Run a query to load Latest and OpenRouter previews.</div>
         </div>
       </section>
-    </main>
+    </div>
   </div>
 
   <script src="/static/agent.js"></script>
