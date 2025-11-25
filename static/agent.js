@@ -27,7 +27,7 @@ if (!chatArea || !dataSidebar || !questionInput || !chatForm || !refreshBtn || !
   if (typeof console !== 'undefined') {
     console.warn('Agent UI not found on page; skipping agent.js init.');
   }
-  return;
+  // Do not return inside iframe; but if not present, simply no-op.
 }
 
 let lastQuestion = '';
