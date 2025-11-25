@@ -16,6 +16,7 @@
       color: #0f172a;
     }
     .agent-app { max-width: 1200px; margin: 0 auto; padding: 18px 14px 24px; }
+    .shell { background: linear-gradient(180deg, #ffffff, #f7f8fb); border: 1px solid #e5e7eb; border-radius: 18px; box-shadow: 0 18px 48px rgba(15, 23, 42, 0.06); padding: 18px; }
     .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; box-shadow: 0 12px 30px rgba(15, 23, 42, 0.04); }
     .pill-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; border: 1px solid #e5e7eb; background: #f8fafc; font-size: 12px; color: #475569; }
     .dot { width: 8px; height: 8px; border-radius: 9999px; }
@@ -42,7 +43,7 @@
     .status-dot.running { background: #f59e0b; }
     .status-dot.error { background: #ef4444; }
     .status-dot.pending { background: #cbd5e1; }
-    .feed-card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 10px; background: #fff; }
+    .feed-card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 10px; background: #fff; box-shadow: 0 6px 16px rgba(0,0,0,0.03); }
     .feed-card h4 { margin: 0 0 4px 0; font-size: 0.95rem; color: #0f172a; }
     .feed-card p { margin: 0; color: #475569; font-size: 0.85rem; }
     .feed-meta { font-size: 11px; color: #94a3b8; }
@@ -50,62 +51,64 @@
 </head>
 <body>
   <div class="agent-app">
-    <header class="flex items-center justify-between mb-4">
-      <div>
-        <h1 class="text-2xl font-semibold mt-1">AI News Agent</h1>
-        <p class="text-sm text-gray-500">Search latest + OpenRouter feeds, then summarize.</p>
-      </div>
-      <div class="flex items-center gap-3">
-        <label class="agent-model-label">
-          Model:
-          <select id="modelSelect" class="agent-model-select"></select>
-        </label>
-        <button id="refreshBtn" class="agent-btn">Clear</button>
-        <span class="pill-chip"><span class="dot live"></span> Live</span>
-      </div>
-    </header>
+    <div class="shell">
+      <header class="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div>
+          <h1 class="text-2xl font-semibold mt-1">AI News Agent</h1>
+          <p class="text-sm text-gray-500">Search Latest + OpenRouter, then summarize cleanly.</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <label class="agent-model-label">
+            Model:
+            <select id="modelSelect" class="agent-model-select"></select>
+          </label>
+          <button id="refreshBtn" class="agent-btn">Clear</button>
+          <span class="pill-chip"><span class="dot live"></span> Live</span>
+        </div>
+      </header>
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-      <section class="lg:col-span-2 card p-4 flex flex-col gap-3">
-        <div class="flex items-center justify-between">
-          <div>
-            <p class="text-xs uppercase tracking-wide text-gray-500 mb-1">Agent</p>
-            <h2 class="text-lg font-semibold">Conversation</h2>
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <section class="lg:col-span-2 card p-4 flex flex-col gap-3">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-xs uppercase tracking-wide text-gray-500 mb-1">Conversation</p>
+              <h2 class="text-lg font-semibold">Ask, see data, then read the answer.</h2>
+            </div>
           </div>
-        </div>
-        <div id="chatArea" class="agent-chat-body">
-          <div class="agent-placeholder">Ready. Ask something like “What’s new with Gemini?” or “Any fresh model launches today?”</div>
-        </div>
-        <form id="chatForm" class="agent-chat-form">
-          <div class="agent-input-row">
-            <label for="fileInput" class="agent-file-btn" title="Attach images">
-              <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path fill="currentColor" d="M7.75 4A3.25 3.25 0 0 0 4.5 7.25v9.5a3.75 3.75 0 1 0 7.5 0v-8a2.25 2.25 0 1 0-4.5 0v7.75a.75.75 0 1 0 1.5 0V8.75a.75.75 0 1 1 1.5 0v8a2.25 2.25 0 0 1-4.5 0v-9.5A1.75 1.75 0 0 1 7.75 5.5h8.5a2.25 2.25 0 0 1 0 4.5h-2.5a.75.75 0 0 0 0 1.5h2.5a3.75 3.75 0 0 0 0-7.5h-8.5Z"/></svg>
-            </label>
-            <input id="fileInput" type="file" accept="image/*" multiple class="hidden" />
-            <input id="questionInput" type="text" autocomplete="off" placeholder="Type a question about AI news..." class="agent-text-input" />
-            <button type="submit" class="agent-send">
-              <svg viewBox="0 0 24 24" class="icon send"><path fill="currentColor" d="M3.4 20.6 21 12 3.4 3.4 3 10l11 2-11 2z"/></svg>
-            </button>
+          <div id="chatArea" class="agent-chat-body">
+            <div class="agent-placeholder">Ready. Ask something like “What’s new with Gemini?” or “Any fresh model launches today?”</div>
           </div>
-          <div id="attachmentsBar" class="agent-attachments"></div>
-        </form>
-        <div id="traceContainer" class="trace-card hidden">
-          <button id="traceToggle" class="agent-btn" type="button">View stack trace</button>
-          <div id="traceBody" class="hidden mt-3"></div>
-        </div>
-      </section>
+          <form id="chatForm" class="agent-chat-form">
+            <div class="agent-input-row">
+              <label for="fileInput" class="agent-file-btn" title="Attach images">
+                <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path fill="currentColor" d="M7.75 4A3.25 3.25 0 0 0 4.5 7.25v9.5a3.75 3.75 0 1 0 7.5 0v-8a2.25 2.25 0 1 0-4.5 0v7.75a.75.75 0 1 0 1.5 0V8.75a.75.75 0 1 1 1.5 0v8a2.25 2.25 0 0 1-4.5 0v-9.5A1.75 1.75 0 0 1 7.75 5.5h8.5a2.25 2.25 0 0 1 0 4.5h-2.5a.75.75 0 0 0 0 1.5h2.5a3.75 3.75 0 0 0 0-7.5h-8.5Z"/></svg>
+              </label>
+              <input id="fileInput" type="file" accept="image/*" multiple class="hidden" />
+              <input id="questionInput" type="text" autocomplete="off" placeholder="Ask about AI news or models..." class="agent-text-input" />
+              <button type="submit" class="agent-send">
+                <svg viewBox="0 0 24 24" class="icon send"><path fill="currentColor" d="M3.4 20.6 21 12 3.4 3.4 3 10l11 2-11 2z"/></svg>
+              </button>
+            </div>
+            <div id="attachmentsBar" class="agent-attachments"></div>
+          </form>
+          <div id="traceContainer" class="trace-container hidden">
+            <button id="traceToggle" class="agent-btn" type="button">View stack trace</button>
+            <div id="traceBody" class="hidden mt-3"></div>
+          </div>
+        </section>
 
-      <section class="card p-4 flex flex-col gap-3">
-        <div class="flex items-center justify-between">
-          <div>
-            <p class="text-xs uppercase tracking-wide text-gray-500 mb-1">Data</p>
-            <h3 class="text-lg font-semibold">Pulled feeds</h3>
+        <section class="card p-4 flex flex-col gap-3">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-xs uppercase tracking-wide text-gray-500 mb-1">Data</p>
+              <h3 class="text-lg font-semibold">Pulled feeds</h3>
+            </div>
           </div>
-        </div>
-        <div id="dataSidebar" class="agent-sidebar-body">
-          <div class="agent-placeholder">No data yet. Run a query to load Latest and OpenRouter previews.</div>
-        </div>
-      </section>
+          <div id="dataSidebar" class="agent-sidebar-body">
+            <div class="agent-placeholder">No data yet. Run a query to load Latest and OpenRouter previews.</div>
+          </div>
+        </section>
+      </div>
     </div>
   </div>
 
