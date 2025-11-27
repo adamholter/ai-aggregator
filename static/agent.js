@@ -93,7 +93,7 @@ loadConfigAndModels();
 
 function resetAgentUI() {
   chatArea.innerHTML = '<div class="agent-placeholder">Ready. Ask something like “What’s new with Gemini?” or “Any fresh model launches today?”</div>';
-  dataSidebar.innerHTML = '<div class="agent-placeholder">No data yet. Run a query to load Latest and OpenRouter previews.</div>';
+  dataSidebar.innerHTML = '<div class="agent-placeholder p-3">No data yet. Run a query to load Latest and OpenRouter previews.</div>';
   attachmentsBar.innerHTML = '';
   conversation = [];
   currentTrace = [];
@@ -154,7 +154,7 @@ function updateAttachmentsBar() {
   pendingAttachments.forEach((att) => {
     const chip = document.createElement('div');
     chip.className = 'chip';
-    chip.innerHTML = `<span class="truncate max-w-[140px]">${escapeHtml(att.name)}</span>`;
+    chip.innerHTML = `<span class="chip-text">${escapeHtml(att.name)}</span>`;
     attachmentsBar.appendChild(chip);
   });
 }
@@ -169,29 +169,31 @@ function safeSanitize(html) {
 function renderMarkdown(content) {
   const html = safeSanitize(marked.parse(content || ''));
   const wrapper = document.createElement('div');
-  wrapper.className = 'prose prose-sm max-w-none text-ink';
+  wrapper.className = 'markdown-body response-content';
   wrapper.innerHTML = html;
   return wrapper;
 }
 
 function addMessage(role, content, images = []) {
   const wrapper = document.createElement('div');
-  wrapper.className = 'message p-4';
+  wrapper.className = 'message';
   if (role === 'user') wrapper.classList.add('user-bubble');
+  else wrapper.classList.add('assistant');
+
   const label = document.createElement('div');
-  label.className = 'text-xs uppercase tracking-[0.2em] text-neutral-400 mb-1';
+  label.className = 'message-label';
   label.textContent = role === 'user' ? 'You' : role === 'assistant' ? 'Agent' : 'System';
   const text = renderMarkdown(content);
   wrapper.appendChild(label);
   wrapper.appendChild(text);
   if (images.length) {
     const gallery = document.createElement('div');
-    gallery.className = 'flex gap-3 flex-wrap mt-2';
+    gallery.className = 'attachment-gallery';
     images.forEach((img) => {
       const el = document.createElement('img');
       el.src = img.url;
       el.alt = img.name;
-      el.className = 'h-20 w-20 object-cover rounded-md border border-softline';
+      el.className = 'attachment-thumb';
       gallery.appendChild(el);
     });
     wrapper.appendChild(gallery);
@@ -210,13 +212,13 @@ function addStackStep(title, detail, status = 'pending', previewHtml = '') {
 function updateSidebar(previews) {
   dataSidebar.innerHTML = '';
   if (!previews.length) {
-    dataSidebar.innerHTML = '<div class="text-sm text-neutral-500">No data yet.</div>';
+    dataSidebar.innerHTML = '<div class="agent-placeholder">No data yet.</div>';
     return;
   }
   previews.forEach(({ label, items }) => {
     const card = document.createElement('div');
     card.className = 'feed-card';
-    card.innerHTML = `<p class="pill-chip mb-2">${label}</p>${items}`;
+    card.innerHTML = `<p class="feed-badge">${label}</p>${items}`;
     dataSidebar.appendChild(card);
   });
 }
@@ -230,10 +232,10 @@ function renderTraceInline(anchor = lastTraceAnchor) {
 
   const chip = document.createElement('div');
   chip.className = 'trace-chip';
-  chip.innerHTML = `<span class="dot bg-emerald-500"></span><span>View stack trace</span>`;
+  chip.innerHTML = `<span class="dot active"></span><span>View stack trace</span>`;
 
   const body = document.createElement('div');
-  body.className = 'hidden mt-3 space-y-2';
+  body.className = 'trace-body hidden';
 
   currentTrace.forEach((step) => {
     const statusClass = `status-dot ${step.status || 'pending'}`;
@@ -241,9 +243,9 @@ function renderTraceInline(anchor = lastTraceAnchor) {
     block.className = 'trace-step';
     block.innerHTML = `
       <span class="${statusClass}"></span>
-      <div class="flex-1 space-y-1">
-        <p class="text-sm font-semibold text-ink">${step.title}</p>
-        <p class="text-sm text-neutral-600">${step.detail}</p>
+      <div class="trace-content">
+        <p class="trace-title">${step.title}</p>
+        <p class="trace-detail">${step.detail}</p>
         ${step.previewHtml || ''}
       </div>
     `;
@@ -252,7 +254,7 @@ function renderTraceInline(anchor = lastTraceAnchor) {
 
   chip.addEventListener('click', () => {
     body.classList.toggle('hidden');
-    chip.classList.toggle('animate-none');
+    // Removed animate-none logic as it was tailwind specific
   });
 
   container.append(chip, body);
@@ -413,16 +415,16 @@ function buildPreviewCards(letter, items = [], iconType = 'letter') {
       const link = item.link || item.url || '';
       const icon =
         iconType === 'openrouter'
-          ? `<img src="https://uxwing.com/wp-content/themes/uxwing/download/brands-and-social-media/openrouter-icon.png" class="h-6 w-6 flex-shrink-0" alt="OpenRouter"/>`
+          ? `<img src="https://uxwing.com/wp-content/themes/uxwing/download/brands-and-social-media/openrouter-icon.png" class="preview-icon" alt="OpenRouter"/>`
           : iconType === 'latest'
-            ? `<svg viewBox="0 0 24 24" class="h-6 w-6 text-ink flex-shrink-0"><path fill="currentColor" d="M4 5h13a1 1 0 0 1 1 1v11a2 2 0 0 0 2 2H7a3 3 0 0 1-3-3V5zm2 2v9a1 1 0 0 0 1 1h9V7H6zm10 0h2v10a1 1 0 0 1-1 1h-1V7zm-8 2h7v2H8V9zm0 4h5v2H8v-2z"></path></svg>`
-            : `<div class="h-8 w-8 rounded-full bg-ink text-white flex items-center justify-center text-xs font-semibold flex-shrink-0">${letter}</div>`;
-      return `<div class="flex items-start gap-3 p-3 border border-softline rounded-xl bg-white">
+            ? `<svg viewBox="0 0 24 24" class="preview-icon text-ink"><path fill="currentColor" d="M4 5h13a1 1 0 0 1 1 1v11a2 2 0 0 0 2 2H7a3 3 0 0 1-3-3V5zm2 2v9a1 1 0 0 0 1 1h9V7H6zm10 0h2v10a1 1 0 0 1-1 1h-1V7zm-8 2h7v2H8V9zm0 4h5v2H8v-2z"></path></svg>`
+            : `<div class="preview-letter">${letter}</div>`;
+      return `<div class="preview-card">
         ${icon}
         <div>
-          <p class="text-sm font-semibold text-ink line-clamp-2 leading-snug">${escapeHtml(title)}</p>
-          ${link ? `<a href="${escapeHtml(link)}" target="_blank" rel="noopener" class="text-[11px] text-neutral-500 underline break-all">${escapeHtml(link)}</a>` : ''}
-          <p class="text-xs text-neutral-500">${escapeHtml(author)}</p>
+          <p class="preview-title">${escapeHtml(title)}</p>
+          ${link ? `<a href="${escapeHtml(link)}" target="_blank" rel="noopener" class="preview-link">${escapeHtml(link)}</a>` : ''}
+          <p class="preview-meta">${escapeHtml(author)}</p>
         </div>
       </div>`;
     })
@@ -442,8 +444,8 @@ function buildTracePreview(label, items = [], iconType = 'letter') {
   const link = first.link || first.url || '';
   const icon =
     iconType === 'openrouter'
-      ? `<img src="https://uxwing.com/wp-content/themes/uxwing/download/brands-and-social-media/openrouter-icon.png" class="h-4 w-4 flex-shrink-0" alt="OpenRouter"/>`
-      : `<svg viewBox="0 0 24 24" class="h-5 w-5 text-ink flex-shrink-0"><path fill="currentColor" d="M4 5h13a1 1 0 0 1 1 1v11a2 2 0 0 0 2 2H7a3 3 0 0 1-3-3V5zm2 2v9a1 1 0 0 0 1 1h9V7H6zm10 0h2v10a1 1 0 0 1-1 1h-1V7zm-8 2h7v2H8V9zm0 4h5v2H8v-2z"></path></svg>`;
+      ? `<img src="https://uxwing.com/wp-content/themes/uxwing/download/brands-and-social-media/openrouter-icon.png" class="preview-icon-sm" alt="OpenRouter"/>`
+      : `<svg viewBox="0 0 24 24" class="preview-icon-sm text-ink"><path fill="currentColor" d="M4 5h13a1 1 0 0 1 1 1v11a2 2 0 0 0 2 2H7a3 3 0 0 1-3-3V5zm2 2v9a1 1 0 0 0 1 1h9V7H6zm10 0h2v10a1 1 0 0 1-1 1h-1V7zm-8 2h7v2H8V9zm0 4h5v2H8v-2z"></path></svg>`;
   return `
     <div class="flex items-center gap-2 pill">
       ${icon}
