@@ -24,20 +24,6 @@
       margin: 0 auto;
       padding: 18px 14px 28px;
     }
-    .agent-header {
-      text-align: center;
-      margin-bottom: 18px;
-    }
-    .agent-header h1 {
-      font-size: 26px;
-      font-weight: 700;
-      margin: 4px 0;
-    }
-    .agent-header p {
-      color: #5b6473;
-      font-size: 14px;
-      margin: 4px 0 8px;
-    }
     .agent-shell {
       background: #ffffff;
       border: 1px solid #e5e7eb;
@@ -263,18 +249,22 @@
       font-size: 14px;
     }
     @media (max-width: 960px) {
-      .agent-grid { grid-template-columns: 1fr; }
-      .agent-chat-panel { min-height: 480px; }
+      .agent-app { padding: 12px 10px 18px; }
+      .agent-shell { padding: 12px; border-radius: 12px; }
+      .agent-grid { grid-template-columns: 1fr; gap: 12px; }
+      .agent-chat-panel { min-height: 420px; padding: 12px; }
+      .chat-toolbar { justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+      .chat-toolbar label { width: 100%; justify-content: space-between; }
+      .chat-toolbar select { width: 100%; }
+      .chat-toolbar button { width: 100%; }
+      .chat-form { flex-wrap: wrap; }
+      .chat-form .agent-text-input { min-width: 0; }
+      .side-card { padding: 12px; }
     }
   </style>
 </head>
 <body>
   <div class="agent-app">
-    <div class="agent-header">
-      <h1>AI Model Analysis Dashboard</h1>
-      <p>Powered by Artificial Analysis, OpenRouter, Fal, and Replicate APIs</p>
-    </div>
-
     <div class="agent-shell">
       <div class="agent-grid">
         <section class="agent-chat-panel">

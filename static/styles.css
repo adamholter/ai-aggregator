@@ -2196,19 +2196,31 @@ body {
         padding: 15px;
     }
     
+    .main-content {
+        padding: 16px;
+    }
+    
     .header h1 {
         font-size: 1.5rem;
+    }
+    
+    .header {
+        flex-direction: column;
+        gap: 12px;
+        align-items: flex-start;
     }
     
     .navigation {
         flex-direction: column;
         align-items: center;
+        gap: 6px;
     }
     
     .nav-btn {
         width: 100%;
         max-width: 300px;
         text-align: center;
+        padding: 10px 12px;
     }
     
     .section-header {
@@ -2237,6 +2249,10 @@ body {
         position: static;
         margin-bottom: 20px;
         align-self: flex-end;
+    }
+    
+    .card {
+        width: 100%;
     }
 }
 
