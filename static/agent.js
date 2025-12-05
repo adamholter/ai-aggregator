@@ -23,9 +23,10 @@ const refreshBtn = document.getElementById('refreshBtn');
 const fileInput = document.getElementById('fileInput');
 const attachmentsBar = document.getElementById('attachmentsBar');
 const modelSelect = document.getElementById('modelSelect');
+const activityLog = document.getElementById('activityLog');
 
 // If the agent markup isn't present, bail early to avoid blocking the main page.
-if (!chatArea || !dataSidebar || !questionInput || !chatForm || !refreshBtn || !fileInput || !attachmentsBar || !modelSelect) {
+if (!chatArea || !dataSidebar || !questionInput || !chatForm || !refreshBtn || !fileInput || !attachmentsBar || !modelSelect || !activityLog) {
   if (typeof console !== 'undefined') {
     console.warn('Agent UI not found on page; skipping agent.js init.');
   }
@@ -40,7 +41,6 @@ let currentTrace = [];
 let lastLLMPayload = null;
 let lastLLMResponse = null;
 const debugRuns = [];
-let lastTraceAnchor = null;
 let pendingAttachments = [];
 let availableModels = [];
 
@@ -93,7 +93,12 @@ loadConfigAndModels();
 
 function resetAgentUI() {
   chatArea.innerHTML = '<div class="agent-placeholder">Ready. Ask something like “What’s new with Gemini?” or “Any fresh model launches today?”</div>';
-  dataSidebar.innerHTML = '<div class="agent-placeholder p-3">No data yet. Run a query to load Latest and OpenRouter previews.</div>';
+  dataSidebar.innerHTML = `
+    <li>OpenRouter</li>
+    <li>Fal.ai</li>
+    <li>Replicate</li>
+    <li>Blog</li>
+  `;
   attachmentsBar.innerHTML = '';
   conversation = [];
   currentTrace = [];
@@ -102,7 +107,7 @@ function resetAgentUI() {
   latestDataCache = {};
   openrouterDataCache = {};
   lastQuestion = '';
-  renderTraceInline();
+  renderActivityLog();
 }
 
 chatForm.addEventListener('submit', (e) => {
@@ -111,10 +116,9 @@ chatForm.addEventListener('submit', (e) => {
   if (!question) return;
   lastQuestion = question;
   questionInput.value = '';
-  const userNode = addMessage('user', question, pendingAttachments);
-  lastTraceAnchor = userNode;
+  addMessage('user', question, pendingAttachments);
   conversation.push({ role: 'user', content: question, images: pendingAttachments });
-  renderTraceInline(); // show shimmer immediately
+  renderActivityLog(); // show shimmer immediately
   pendingAttachments = [];
   updateAttachmentsBar();
   runAgent(question);
@@ -154,9 +158,14 @@ function updateAttachmentsBar() {
   pendingAttachments.forEach((att) => {
     const chip = document.createElement('div');
     chip.className = 'chip';
-    chip.innerHTML = `<span class="chip-text">${escapeHtml(att.name)}</span>`;
+    chip.innerHTML = `<span class="truncate max-w-[140px]">${escapeHtml(att.name)}</span>`;
     attachmentsBar.appendChild(chip);
   });
+}
+
+function formatTime(date) {
+  if (!(date instanceof Date)) return '';
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
 function safeSanitize(html) {
@@ -169,7 +178,7 @@ function safeSanitize(html) {
 function renderMarkdown(content) {
   const html = safeSanitize(marked.parse(content || ''));
   const wrapper = document.createElement('div');
-  wrapper.className = 'markdown-body response-content';
+  wrapper.className = 'prose prose-sm max-w-none text-gray-900';
   wrapper.innerHTML = html;
   return wrapper;
 }
@@ -178,22 +187,22 @@ function addMessage(role, content, images = []) {
   const wrapper = document.createElement('div');
   wrapper.className = 'message';
   if (role === 'user') wrapper.classList.add('user-bubble');
-  else wrapper.classList.add('assistant');
-
+  if (role === 'assistant') wrapper.classList.add('assistant-bubble');
+  if (role === 'system') wrapper.classList.add('system-bubble');
   const label = document.createElement('div');
-  label.className = 'message-label';
+  label.className = 'text-xs uppercase tracking-[0.2em] text-neutral-400 mb-1';
   label.textContent = role === 'user' ? 'You' : role === 'assistant' ? 'Agent' : 'System';
   const text = renderMarkdown(content);
   wrapper.appendChild(label);
   wrapper.appendChild(text);
   if (images.length) {
     const gallery = document.createElement('div');
-    gallery.className = 'attachment-gallery';
+    gallery.className = 'flex gap-3 flex-wrap mt-2';
     images.forEach((img) => {
       const el = document.createElement('img');
       el.src = img.url;
       el.alt = img.name;
-      el.className = 'attachment-thumb';
+      el.className = 'h-20 w-20 object-cover rounded-md border border-gray-200';
       gallery.appendChild(el);
     });
     wrapper.appendChild(gallery);
@@ -204,66 +213,68 @@ function addMessage(role, content, images = []) {
 }
 
 function addStackStep(title, detail, status = 'pending', previewHtml = '') {
-  const step = { title, detail, status, previewHtml };
+  const step = { title, detail, status, previewHtml, created: new Date() };
   currentTrace.push(step);
   return step;
 }
 
 function updateSidebar(previews) {
+  if (!dataSidebar) return;
   dataSidebar.innerHTML = '';
   if (!previews.length) {
-    dataSidebar.innerHTML = '<div class="agent-placeholder">No data yet.</div>';
+    dataSidebar.innerHTML = `
+      <li>OpenRouter</li>
+      <li>Fal.ai</li>
+      <li>Replicate</li>
+      <li>Blog</li>
+    `;
     return;
   }
-  previews.forEach(({ label, items }) => {
-    const card = document.createElement('div');
-    card.className = 'feed-card';
-    card.innerHTML = `<p class="feed-badge">${label}</p>${items}`;
-    dataSidebar.appendChild(card);
+  previews.forEach(({ label, count }) => {
+    const li = document.createElement('li');
+    const countText = typeof count === 'number' ? ` (${count})` : '';
+    li.textContent = `${label}${countText}`;
+    dataSidebar.appendChild(li);
   });
 }
 
-function renderTraceInline(anchor = lastTraceAnchor) {
-  document.querySelectorAll('.trace-container').forEach((el) => el.remove());
-  if (!currentTrace.length && !anchor) return;
+function renderActivityLog() {
+  if (!activityLog) return;
+  activityLog.innerHTML = '';
 
-  const container = document.createElement('div');
-  container.className = 'trace-container';
+  if (!currentTrace.length) {
+    activityLog.innerHTML = '<div class="agent-placeholder">Waiting for a question...</div>';
+    return;
+  }
 
-  const chip = document.createElement('div');
-  chip.className = 'trace-chip';
-  chip.innerHTML = `<span class="dot active"></span><span>View stack trace</span>`;
-
-  const body = document.createElement('div');
-  body.className = 'trace-body hidden';
+  const timeline = document.createElement('div');
+  timeline.className = 'timeline';
 
   currentTrace.forEach((step) => {
-    const statusClass = `status-dot ${step.status || 'pending'}`;
-    const block = document.createElement('div');
-    block.className = 'trace-step';
-    block.innerHTML = `
-      <span class="${statusClass}"></span>
-      <div class="trace-content">
-        <p class="trace-title">${step.title}</p>
-        <p class="trace-detail">${step.detail}</p>
-        ${step.previewHtml || ''}
-      </div>
-    `;
-    body.appendChild(block);
+    const row = document.createElement('div');
+    row.className = 'timeline-row';
+
+    const dot = document.createElement('span');
+    dot.className = `timeline-dot ${step.status || 'pending'}`;
+
+    const body = document.createElement('div');
+    body.className = 'timeline-body';
+
+    const title = document.createElement('p');
+    title.className = 'timeline-title';
+    title.textContent = step.title;
+
+    const detail = document.createElement('p');
+    detail.className = 'timeline-detail';
+    const timestamp = formatTime(step.created);
+    detail.textContent = timestamp ? `${timestamp} — ${step.detail || ''}` : (step.detail || '');
+
+    body.append(title, detail);
+    row.append(dot, body);
+    timeline.appendChild(row);
   });
 
-  chip.addEventListener('click', () => {
-    body.classList.toggle('hidden');
-    // Removed animate-none logic as it was tailwind specific
-  });
-
-  container.append(chip, body);
-  if (anchor && anchor.parentNode === chatArea) {
-    chatArea.insertBefore(container, anchor);
-  } else {
-    chatArea.appendChild(container);
-  }
-  chatArea.scrollTop = chatArea.scrollHeight;
+  activityLog.appendChild(timeline);
 }
 
 function getUserOpenRouterKey() {
@@ -286,11 +297,11 @@ async function runAgent(question) {
     plannedQueries = await planTools(question, key);
     planStep.status = 'done';
     planStep.detail = `Planned: Latest="${plannedQueries.latest}" | OpenRouter="${plannedQueries.openrouter}"`;
-    renderTraceInline();
+    renderActivityLog();
   } catch (err) {
     planStep.status = 'error';
     planStep.detail = `Plan failed, using raw question. (${err.message})`;
-    renderTraceInline();
+    renderActivityLog();
   }
 
   // 2) Execute tool calls
@@ -300,7 +311,7 @@ async function runAgent(question) {
   selectedSources.forEach((src) => {
     traceMap[src.key] = addStackStep(`Searching ${src.label}`, 'Fetching and filtering...', 'running');
   });
-  renderTraceInline();
+  renderActivityLog();
 
   try {
     const fetches = selectedSources.map((src) =>
@@ -323,13 +334,13 @@ async function runAgent(question) {
         if (entry.key === 'latest') latestDataCache = entry.data.raw;
         if (entry.key === 'openrouter') openrouterDataCache = entry.data.raw;
       }
-      renderTraceInline();
+      renderActivityLog();
     });
 
     updateSidebar(
       results.map((entry) => ({
-        label: `${entry.label} preview`,
-        items: buildPreviewCards(entry.label[0] || 'X', entry.data.items, entry.icon)
+        label: entry.label,
+        count: Array.isArray(entry.data?.items) ? entry.data.items.length : 0
       }))
     );
 
@@ -353,14 +364,14 @@ async function runAgent(question) {
       conversation.push({ role: 'assistant', content: 'Something went wrong reaching OpenRouter.' });
     }
 
-    renderTraceInline(assistantNode);
+    renderActivityLog();
   } catch (err) {
     Object.values(traceMap).forEach((step) => {
       step.status = 'error';
       step.detail = `Fetch failed: ${err.message}`;
     });
     addMessage('assistant', 'Tools failed. Try again shortly.');
-    renderTraceInline();
+    renderActivityLog();
   }
 }
 
