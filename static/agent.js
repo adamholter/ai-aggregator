@@ -24,6 +24,7 @@ const fileInput = document.getElementById('fileInput');
 const attachmentsBar = document.getElementById('attachmentsBar');
 const modelSelect = document.getElementById('modelSelect');
 const activityLog = document.getElementById('activityLog');
+const fullscreenToggle = document.getElementById('fullscreenToggle');
 
 // If the agent markup isn't present, bail early to avoid blocking the main page.
 if (!chatArea || !dataSidebar || !questionInput || !chatForm || !refreshBtn || !fileInput || !attachmentsBar || !modelSelect || !activityLog) {
@@ -127,6 +128,26 @@ chatForm.addEventListener('submit', (e) => {
 refreshBtn.addEventListener('click', () => {
   resetAgentUI();
 });
+
+if (fullscreenToggle) {
+  fullscreenToggle.addEventListener('click', () => {
+    try {
+      if (!document.fullscreenElement) {
+        (document.documentElement.requestFullscreen || document.body.requestFullscreen || (() => {})).call(document.documentElement);
+        fullscreenToggle.textContent = 'Exit Full Screen';
+      } else {
+        document.exitFullscreen && document.exitFullscreen();
+        fullscreenToggle.textContent = 'Full Screen';
+      }
+    } catch (err) {
+      console.warn('Fullscreen toggle failed', err);
+    }
+  });
+  document.addEventListener('fullscreenchange', () => {
+    if (!fullscreenToggle) return;
+    fullscreenToggle.textContent = document.fullscreenElement ? 'Exit Full Screen' : 'Full Screen';
+  });
+}
 
 fileInput.addEventListener('change', async (e) => {
   const files = Array.from(e.target.files || []);

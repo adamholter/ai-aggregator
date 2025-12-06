@@ -12,6 +12,7 @@
   <style>
     :root { color-scheme: light; }
     * { box-sizing: border-box; }
+    html, body { height: 100%; }
     body {
       margin: 0;
       padding: 0;
@@ -23,6 +24,9 @@
       max-width: 1180px;
       margin: 0 auto;
       padding: 18px 14px 28px;
+      min-height: 100%;
+      display: flex;
+      flex-direction: column;
     }
     .agent-shell {
       background: #ffffff;
@@ -30,11 +34,17 @@
       border-radius: 14px;
       box-shadow: 0 12px 28px rgba(0, 0, 0, 0.05);
       padding: 14px 16px 18px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
     }
     .agent-grid {
       display: grid;
       grid-template-columns: 2fr 1fr;
       gap: 18px;
+      flex: 1;
+      min-height: 0;
     }
     .agent-chat-panel {
       background: #fafafa;
@@ -45,6 +55,7 @@
       display: flex;
       flex-direction: column;
       gap: 10px;
+      min-height: 0;
     }
     .chat-toolbar {
       display: flex;
@@ -84,6 +95,7 @@
       display: flex;
       flex-direction: column;
       gap: 12px;
+      min-height: 320px;
     }
     .message {
       max-width: 96%;
@@ -174,6 +186,7 @@
       display: flex;
       flex-direction: column;
       gap: 12px;
+      min-height: 0;
     }
     .side-card {
       background: #ffffff;
@@ -248,6 +261,23 @@
       text-align: center;
       font-size: 14px;
     }
+    .fullscreen-bar {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 10px;
+    }
+    .fullscreen-btn {
+      border: 1px solid #d4d4d8;
+      background: #ffffff;
+      color: #0f172a;
+      border-radius: 10px;
+      padding: 8px 12px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: box-shadow 0.15s ease, transform 0.15s ease;
+    }
+    .fullscreen-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+
     @media (max-width: 960px) {
       .agent-app { padding: 12px 10px 18px; }
       .agent-shell { padding: 12px; border-radius: 12px; }
@@ -263,10 +293,13 @@
     }
   </style>
 </head>
-<body>
-  <div class="agent-app">
-    <div class="agent-shell">
-      <div class="agent-grid">
+  <body>
+    <div class="agent-app">
+      <div class="fullscreen-bar">
+        <button id="fullscreenToggle" class="fullscreen-btn" type="button">Full Screen</button>
+      </div>
+      <div class="agent-shell">
+        <div class="agent-grid">
         <section class="agent-chat-panel">
           <div class="chat-toolbar">
             <label for="modelSelect">
