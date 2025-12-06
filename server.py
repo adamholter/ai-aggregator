@@ -4941,7 +4941,7 @@ def determine_agent_categories(message):
     if not message:
         return ['llms', 'openrouter']
 
-    text = message.lower()
+    text = (message or '').lower()
     categories = []
 
     def add_categories(*cats):
@@ -4950,23 +4950,37 @@ def determine_agent_categories(message):
             if normalized and normalized not in categories:
                 categories.append(normalized)
 
-    if any(keyword in text for keyword in ['image', 'visual', 'picture', 'art', 'graphic']):
-        add_categories('text-to-image', 'fal', 'replicate')
-    if any(keyword in text for keyword in ['video', 'animation', 'frame']):
-        add_categories('text-to-video', 'image-to-video', 'fal', 'replicate')
-    if any(keyword in text for keyword in ['speech', 'audio', 'voice', 'tts']):
-        add_categories('text-to-speech', 'fal', 'replicate')
+    wants_images = any(keyword in text for keyword in ['image', 'visual', 'picture', 'art', 'graphic', 'render', 'flux', 'sdxl', 'photo'])
+    wants_video = any(keyword in text for keyword in ['video', 'animation', 'frame'])
+    wants_speech = any(keyword in text for keyword in ['speech', 'audio', 'voice', 'tts'])
+    wants_llm = any(keyword in text for keyword in ['llm', 'language model', 'chatbot', 'gpt', 'claude', 'reasoning'])
+    wants_benchmarks = any(keyword in text for keyword in ['benchmark', 'leaderboard', 'elo', 'eval', 'score'])
+
+    if wants_images:
+        add_categories('text-to-image', 'image-editing', 'openrouter')
+    if wants_video:
+        add_categories('text-to-video', 'image-to-video', 'openrouter')
+    if wants_speech:
+        add_categories('text-to-speech', 'openrouter')
+    if wants_llm:
+        add_categories('llms', 'openrouter')
+
+    # Catalog-specific hints
     if 'fal' in text:
         add_categories('fal')
     if 'replicate' in text:
         add_categories('replicate')
-    if any(keyword in text for keyword in ['router', 'openrouter']):
+    if 'openrouter' in text or 'router' in text:
         add_categories('openrouter')
-    if any(keyword in text for keyword in ['llm', 'language model', 'chatbot', 'gpt', 'claude', 'model', 'reasoning']):
-        add_categories('llms', 'openrouter')
+
+    # Benchmark/leaderboard queries: include relevant AA feeds plus monitor
+    if wants_benchmarks and wants_images:
+        add_categories('text-to-image', 'image-editing', 'monitor')
+    elif wants_benchmarks:
+        add_categories('llms', 'monitor')
 
     if not categories:
-        add_categories('llms', 'openrouter')
+        add_categories('llms', 'openrouter', 'latest')
 
     return categories
 
