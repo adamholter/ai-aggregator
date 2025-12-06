@@ -9,6 +9,12 @@ const AVAILABLE_MODELS_STORAGE = 'dashboard-available-models';
 const SOURCES = [
   { key: 'latest', label: 'Latest', icon: 'news', params: { tabs: 'latest', limit: 40, include_hype: 'true', cache_bust: '1' } },
   { key: 'openrouter', label: 'OpenRouter', icon: 'openrouter', params: { tabs: 'openrouter', limit: 40, recency: 'week', include_hype: 'true', cache_bust: '1' } },
+  { key: 'text-to-image', label: 'AA — Text-to-Image', icon: 'news', params: { tabs: 'text-to-image', limit: 40, cache_bust: '1' } },
+  { key: 'image-editing', label: 'AA — Image Editing', icon: 'news', params: { tabs: 'image-editing', limit: 30, cache_bust: '1' } },
+  { key: 'text-to-video', label: 'AA — Text-to-Video', icon: 'news', params: { tabs: 'text-to-video', limit: 20, cache_bust: '1' } },
+  { key: 'image-to-video', label: 'AA — Image-to-Video', icon: 'news', params: { tabs: 'image-to-video', limit: 20, cache_bust: '1' } },
+  { key: 'text-to-speech', label: 'AA — Text-to-Speech', icon: 'news', params: { tabs: 'text-to-speech', limit: 20, cache_bust: '1' } },
+  { key: 'llms', label: 'AA — LLMs', icon: 'news', params: { tabs: 'llms', limit: 30, cache_bust: '1' } },
   { key: 'hype', label: 'Hype', icon: 'news', params: { tabs: 'hype', limit: 30, include_hype: 'true', cache_bust: '1' } },
   { key: 'monitor', label: 'Monitor', icon: 'news', params: { tabs: 'monitor', limit: 30, cache_bust: '1' } },
   { key: 'blog', label: 'Blog', icon: 'news', params: { tabs: 'blog', limit: 24, cache_bust: '1' } },
@@ -531,27 +537,57 @@ async function planTools(question, key) {
 
 function chooseSources(query) {
   const keywords = query.toLowerCase();
-  const picks = [SOURCES.find((s) => s.key === 'latest'), SOURCES.find((s) => s.key === 'openrouter')];
+  const picks = [];
 
+  const add = (key) => {
+    const src = SOURCES.find((s) => s.key === key);
+    if (src && !picks.includes(src)) picks.push(src);
+  };
+
+  const wantsImages = /image|photo|picture|art|graphic|render|sdxl|flux/.test(keywords);
+  const wantsVideo = /video|animation|frame/.test(keywords);
+  const wantsSpeech = /speech|audio|voice|tts/.test(keywords);
   const wantsBenchmarks = /benchmark|eval|score|latency|performance|leaderboard/.test(keywords);
   const wantsHype = /hype|trend|buzz|social|reddit/.test(keywords);
   const wantsBlog = /blog|article|writeup|post/.test(keywords);
   const wantsTesting = /test|testing|catalog/.test(keywords);
+  const wantsLLM = /llm|language model|chatbot|gpt|claude|model|reasoning/.test(keywords);
 
-  if (wantsHype || keywords.includes('trend')) picks.push(SOURCES.find((s) => s.key === 'hype'));
-  if (wantsBenchmarks || keywords.includes('monitor')) picks.push(SOURCES.find((s) => s.key === 'monitor'));
-  if (wantsBlog || keywords.includes('blog')) picks.push(SOURCES.find((s) => s.key === 'blog'));
-  if (wantsTesting || keywords.includes('catalog')) picks.push(SOURCES.find((s) => s.key === 'testing-catalog'));
+  // Always include a general recency feed
+  add('latest');
 
-  if (picks.length < 5) {
-    ['hype', 'monitor', 'blog', 'testing-catalog'].forEach((k) => {
-      if (picks.length < 5) {
-        const src = SOURCES.find((s) => s.key === k);
-        if (src && !picks.includes(src)) picks.push(src);
-      }
-    });
+  if (wantsImages) {
+    add('text-to-image');
+    add('image-editing');
+    add('openrouter'); // model catalogue often includes vision entries
   }
-  return picks.filter(Boolean).slice(0, 5);
+  if (wantsVideo) {
+    add('text-to-video');
+    add('image-to-video');
+    add('openrouter');
+  }
+  if (wantsSpeech) {
+    add('text-to-speech');
+    add('openrouter');
+  }
+  if (wantsLLM) {
+    add('llms');
+    add('openrouter');
+  }
+
+  // If no targeted intent detected, keep the primary catalogues
+  if (!picks.length) {
+    add('llms');
+    add('openrouter');
+  }
+
+  if (wantsBenchmarks || keywords.includes('monitor')) add('monitor');
+  if (wantsHype || keywords.includes('trend')) add('hype');
+  if (wantsBlog || keywords.includes('blog')) add('blog');
+  if (wantsTesting || keywords.includes('catalog')) add('testing-catalog');
+
+  // Cap to avoid over-fetching noise
+  return picks.filter(Boolean).slice(0, 6);
 }
 
 function itemsToMarkdown(items, label) {
