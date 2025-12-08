@@ -51,8 +51,131 @@ except ImportError as e:
 try:
     from backend.app.routes.experimental_agent import experimental_agent_bp
     app.register_blueprint(experimental_agent_bp)
+    print("Experimental agent blueprint loaded from backend.app.routes")
 except ImportError as e:
-    print(f"Note: Experimental agent blueprint not loaded ({e})")
+    print(f"Note: Experimental agent blueprint not loaded ({e}), using inline routes")
+    
+    # ============================================================
+    # INLINE EXPERIMENTAL AGENT (fallback when blueprint fails)
+    # Direct OpenRouter tool calling - no external dependencies
+    # ============================================================
+    import asyncio
+    import httpx
+    from dataclasses import dataclass, field
+    from typing import Callable
+    
+    @dataclass
+    class ToolCall:
+        tool: str
+        args: dict
+        result: str = ""
+        status: str = "pending"
+    
+    @dataclass
+    class AgentRun:
+        question: str
+        model: str
+        tool_calls: list = field(default_factory=list)
+        response: str = ""
+        error: str = ""
+    
+    AGENT_TOOLS = [
+        {"type": "function", "function": {"name": "fetch_latest_feed", "description": "Fetch latest AI news", "parameters": {"type": "object", "properties": {"query": {"type": "string"}, "limit": {"type": "integer", "default": 20}}, "required": []}}},
+        {"type": "function", "function": {"name": "search_openrouter_models", "description": "Search OpenRouter models", "parameters": {"type": "object", "properties": {"query": {"type": "string"}, "limit": {"type": "integer", "default": 20}}, "required": []}}},
+        {"type": "function", "function": {"name": "fetch_image_models", "description": "Get image generation models", "parameters": {"type": "object", "properties": {"limit": {"type": "integer", "default": 15}}, "required": []}}},
+        {"type": "function", "function": {"name": "fetch_llm_benchmarks", "description": "Get LLM benchmark data", "parameters": {"type": "object", "properties": {"limit": {"type": "integer", "default": 15}}, "required": []}}},
+        {"type": "function", "function": {"name": "fetch_hype_feed", "description": "Get trending AI repos", "parameters": {"type": "object", "properties": {"query": {"type": "string"}, "limit": {"type": "integer", "default": 20}}, "required": []}}}
+    ]
+    
+    AGENT_SYSTEM_PROMPT = "You are a helpful AI assistant that answers questions about AI models and news. USE THE TOOLS to gather information before answering. Keep responses scannable with bullet points."
+    
+    async def _execute_tool(tool_name: str, args: dict, base_url: str) -> str:
+        tab_map = {"fetch_latest_feed": "latest", "search_openrouter_models": "openrouter", "fetch_image_models": "text-to-image", "fetch_llm_benchmarks": "llms", "fetch_hype_feed": "hype"}
+        tab = tab_map.get(tool_name, "latest")
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            try:
+                resp = await client.get(f"{base_url}/api/fetch", params={"tabs": tab, "limit": args.get("limit", 20)})
+                resp.raise_for_status()
+                data = resp.json()
+                datasets = data.get("datasets", {})
+                items = next(iter(datasets.values()), [])
+                if isinstance(items, dict): items = items.get("items", [])
+                query = args.get("query", "").lower()
+                if query:
+                    items = [i for i in items if query in str(i.get("title", "")).lower() or query in str(i.get("name", "")).lower()]
+                lines = [f"## {tool_name.replace('_', ' ').title()} ({len(items[:10])} items)"]
+                for i in items[:10]:
+                    title = i.get("title") or i.get("name") or "Untitled"
+                    lines.append(f"- **{title}**")
+                return "\n".join(lines) or "No results found."
+            except Exception as ex:
+                return f"Error: {ex}"
+    
+    async def _run_inline_agent(question: str, api_key: str, model_id: str, base_url: str) -> AgentRun:
+        run = AgentRun(question=question, model=model_id)
+        messages = [{"role": "system", "content": AGENT_SYSTEM_PROMPT}, {"role": "user", "content": question}]
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            for _ in range(5):
+                try:
+                    resp = await client.post("https://openrouter.ai/api/v1/chat/completions", headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}, json={"model": model_id, "messages": messages, "tools": AGENT_TOOLS, "tool_choice": "auto"})
+                    resp.raise_for_status()
+                    result = resp.json()
+                except Exception as ex:
+                    run.error = str(ex)
+                    return run
+                choice = result.get("choices", [{}])[0]
+                msg = choice.get("message", {})
+                tool_calls = msg.get("tool_calls", [])
+                if tool_calls:
+                    messages.append(msg)
+                    for tc in tool_calls:
+                        fn = tc.get("function", {})
+                        name = fn.get("name", "")
+                        try: args = json.loads(fn.get("arguments", "{}"))
+                        except: args = {}
+                        tool_result = await _execute_tool(name, args, base_url)
+                        run.tool_calls.append(ToolCall(tool=name, args=args, result=tool_result, status="done"))
+                        messages.append({"role": "tool", "tool_call_id": tc.get("id", ""), "content": tool_result})
+                elif msg.get("content"):
+                    run.response = msg["content"]
+                    break
+                else:
+                    break
+        if not run.response and not run.error:
+            run.response = "No response from agent."
+        return run
+    
+    @app.route('/experimental-agent')
+    def inline_exp_agent_page():
+        return app.send_static_file('experimental-agent.html')
+    
+    @app.route('/api/experimental-agent', methods=['POST'])
+    def inline_exp_agent_api():
+        data = request.get_json() or {}
+        question = data.get('question', '').strip()
+        if not question:
+            return jsonify({'error': 'No question provided'}), 400
+        api_key = data.get('api_key', '')
+        if not api_key:
+            auth = request.headers.get('Authorization', '')
+            if auth.lower().startswith('bearer '): api_key = auth[7:].strip()
+        if not api_key:
+            return jsonify({'error': 'API key required'}), 401
+        model_id = data.get('model', 'google/gemini-2.5-flash')
+        base_url = request.host_url.rstrip('/')
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            run = loop.run_until_complete(_run_inline_agent(question, api_key, model_id, base_url))
+            loop.close()
+            return jsonify({'response': run.response, 'tool_calls': [{'tool': t.tool, 'args': t.args, 'result': t.result[:500], 'status': t.status} for t in run.tool_calls], 'model': model_id, 'error': run.error or None})
+        except Exception as ex:
+            return jsonify({'error': str(ex)}), 500
+    
+    @app.route('/api/experimental-agent/tools', methods=['GET'])
+    def inline_exp_agent_tools():
+        return jsonify({'tools': [{'name': t['function']['name'], 'description': t['function']['description']} for t in AGENT_TOOLS]})
+
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, 'data')
