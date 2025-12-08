@@ -4,39 +4,31 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Experimental Agent — AI Dashboard</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>Agent</title>
+    <link rel="stylesheet" href="/static/styles.css">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
-    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
     <style>
-        :root {
-            --ink: #111827;
-            --paper: #ffffff;
-            --muted: #6b7280;
-            --accent: #3b82f6;
-            --border: #e5e7eb;
-            --success: #10b981;
-            --error: #ef4444;
-        }
-
+        /* Agent-specific overrides to match the shell look */
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: var(--paper);
-            color: var(--ink);
-            margin: 0;
+            background-color: var(--bg-color);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
         }
 
-        .agent-container {
+        .agent-layout {
             display: grid;
-            grid-template-columns: 1fr 380px;
-            min-height: 100vh;
-            max-width: 1400px;
+            grid-template-columns: 1fr 320px;
+            height: 100%;
+            max-width: 1600px;
             margin: 0 auto;
+            width: 100%;
         }
 
         @media (max-width: 900px) {
-            .agent-container {
+            .agent-layout {
                 grid-template-columns: 1fr;
             }
 
@@ -45,368 +37,402 @@
             }
         }
 
-        .main-area {
-            padding: 24px;
+        /* Main Chat Area */
+        .chat-panel {
             display: flex;
             flex-direction: column;
-            border-right: 1px solid var(--border);
+            height: 100%;
+            position: relative;
+            background: var(--bg-color);
         }
 
-        .sidebar {
-            padding: 20px;
-            background: #fafafa;
-            overflow-y: auto;
-            max-height: 100vh;
-            position: sticky;
-            top: 0;
-        }
-
-        .header {
+        .chat-header {
+            padding: 16px 24px;
+            border-bottom: 1px solid var(--border-color);
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding-bottom: 16px;
-            border-bottom: 1px solid var(--border);
-            margin-bottom: 16px;
+            background: var(--bg-color);
+            z-index: 10;
         }
 
-        .badge {
-            background: #dbeafe;
-            color: #1d4ed8;
-            padding: 4px 10px;
-            border-radius: 9999px;
-            font-size: 11px;
-            font-weight: 600;
+        .model-selector {
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            background: var(--input-bg);
+            color: var(--text-color);
+            font-size: 0.9rem;
+            cursor: pointer;
+            min-width: 200px;
         }
 
-        .messages {
+        .chat-messages {
             flex: 1;
             overflow-y: auto;
-            padding-bottom: 120px;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
         }
 
         .message {
-            margin-bottom: 16px;
-            padding: 16px;
-            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            max-width: 85%;
+            animation: fadeIn 0.2s ease-out;
         }
 
         .message.user {
-            background: #f3f4f6;
-            margin-left: 48px;
+            align-self: flex-end;
+            align-items: flex-end;
         }
 
         .message.assistant {
-            background: #f0f9ff;
-            border: 1px solid #bae6fd;
+            align-self: flex-start;
         }
 
         .message.system {
-            background: #fef3c7;
-            border: 1px solid #fcd34d;
-            font-size: 14px;
+            align-self: center;
+            max-width: 100%;
+            background: var(--info-bg);
+            padding: 8px 16px;
+            border-radius: 99px;
+            font-size: 0.85rem;
+            color: var(--info-text);
         }
 
-        .message-label {
-            font-size: 11px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-            color: var(--muted);
-            margin-bottom: 8px;
+        .bubble {
+            padding: 12px 18px;
+            border-radius: 12px;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            position: relative;
         }
 
-        /* Activity Log Styles */
-        .activity-header {
-            font-size: 12px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-            color: var(--muted);
-            margin-bottom: 16px;
+        .message.user .bubble {
+            background: var(--button-bg);
+            color: var(--button-text);
+            border-bottom-right-radius: 2px;
+        }
+
+        .message.assistant .bubble {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            border-bottom-left-radius: 2px;
+        }
+
+        .message-meta {
+            font-size: 0.75rem;
+            color: var(--info-text);
+            margin: 0 4px;
+        }
+
+        /* Input Area */
+        .input-container {
+            padding: 20px 24px;
+            border-top: 1px solid var(--border-color);
+            background: var(--bg-color);
+        }
+
+        .input-box {
             display: flex;
+            gap: 12px;
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 6px;
+            transition: border-color 0.2s;
+        }
+
+        .input-box:focus-within {
+            border-color: var(--text-color);
+        }
+
+        .input-field {
+            flex: 1;
+            border: none;
+            background: transparent;
+            padding: 10px 12px;
+            font-size: 0.95rem;
+            color: var(--text-color);
+            outline: none;
+        }
+
+        .send-btn {
+            background: var(--button-bg);
+            color: var(--button-text);
+            border: none;
+            border-radius: 8px;
+            padding: 0 20px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        .send-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Sidebar (Stack Trace) */
+        .sidebar {
+            border-left: 1px solid var(--border-color);
+            background: var(--card-bg);
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        .sidebar-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border-color);
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: var(--text-color);
+            display: flex;
+            justify-content: space-between;
             align-items: center;
-            gap: 8px;
         }
 
-        .activity-header .count {
-            background: var(--accent);
-            color: white;
+        .step-count {
+            background: var(--info-bg);
+            color: var(--text-color);
             padding: 2px 8px;
-            border-radius: 9999px;
-            font-size: 11px;
+            border-radius: 12px;
+            font-size: 0.75rem;
         }
 
-        /* Collapsible Tool Step */
-        .tool-step {
-            margin-bottom: 12px;
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            background: white;
+        .trace-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .trace-item {
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--bg-color);
             overflow: hidden;
+            transition: all 0.2s;
         }
 
-        .tool-step-header {
+        .trace-header {
+            padding: 10px 12px;
             display: flex;
             align-items: center;
             gap: 10px;
-            padding: 12px 14px;
             cursor: pointer;
             user-select: none;
-            transition: background 0.15s;
         }
 
-        .tool-step-header:hover {
-            background: #f9fafb;
+        .trace-header:hover {
+            background: var(--info-bg);
         }
 
-        .tool-step-dot {
-            width: 10px;
-            height: 10px;
+        .status-dot {
+            width: 8px;
+            height: 8px;
             border-radius: 50%;
             flex-shrink: 0;
         }
 
-        .tool-step-dot.pending {
-            background: var(--border);
+        .status-dot.running {
+            background: #f59e0b;
+            animation: pulse 1s infinite;
         }
 
-        .tool-step-dot.running {
-            background: var(--accent);
-            animation: pulse 1.2s infinite;
+        .status-dot.done {
+            background: #10b981;
         }
 
-        .tool-step-dot.done {
-            background: var(--success);
+        .status-dot.error {
+            background: #ef4444;
         }
 
-        .tool-step-dot.error {
-            background: var(--error);
+        .status-dot.pending {
+            background: var(--border-color);
         }
 
-        @keyframes pulse {
-
-            0%,
-            100% {
-                opacity: 1;
-                transform: scale(1);
-            }
-
-            50% {
-                opacity: 0.6;
-                transform: scale(0.9);
-            }
-        }
-
-        .tool-step-info {
+        .trace-title {
             flex: 1;
-            min-width: 0;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: var(--text-color);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
-        .tool-step-title {
-            font-weight: 600;
-            font-size: 13px;
-            color: var(--ink);
+        .trace-time {
+            font-size: 0.7rem;
+            color: var(--info-text);
         }
 
-        .tool-step-meta {
-            font-size: 11px;
-            color: var(--muted);
-            margin-top: 2px;
-        }
-
-        .tool-step-chevron {
-            width: 16px;
-            height: 16px;
-            color: var(--muted);
-            transition: transform 0.2s;
-        }
-
-        .tool-step.expanded .tool-step-chevron {
-            transform: rotate(180deg);
-        }
-
-        .tool-step-content {
+        .trace-details {
             display: none;
-            padding: 0 14px 14px;
+            padding: 12px;
+            border-top: 1px solid var(--border-color);
+            background: var(--info-bg);
+            font-size: 0.8rem;
         }
 
-        .tool-step.expanded .tool-step-content {
+        .trace-item.expanded .trace-details {
             display: block;
         }
 
-        .tool-step-args {
-            font-family: 'SF Mono', Monaco, monospace;
-            font-size: 11px;
-            background: #f3f4f6;
-            padding: 10px;
-            border-radius: 6px;
+        .code-block {
+            font-family: monospace;
+            background: var(--card-bg);
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
             overflow-x: auto;
-            color: var(--muted);
-            margin-bottom: 10px;
+            margin-top: 4px;
+            color: var(--text-color);
         }
 
-        .tool-step-preview {
-            font-size: 12px;
-            color: var(--ink);
-            background: #f9fafb;
-            padding: 10px;
-            border-radius: 6px;
-            max-height: 200px;
-            overflow-y: auto;
-            white-space: pre-wrap;
-            word-break: break-word;
-            border: 1px solid var(--border);
-        }
-
-        .tool-step-preview-label {
-            font-size: 10px;
-            font-weight: 600;
+        .label {
+            font-size: 0.7rem;
             text-transform: uppercase;
-            color: var(--muted);
-            margin-bottom: 6px;
-        }
-
-        .input-area {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background: var(--paper);
-            border-top: 1px solid var(--border);
-            padding: 16px;
-        }
-
-        .input-wrapper {
-            max-width: 700px;
-            margin: 0 auto;
-            display: flex;
-            gap: 12px;
-        }
-
-        .input-wrapper input {
-            flex: 1;
-            padding: 12px 16px;
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            font-size: 15px;
-        }
-
-        .input-wrapper input:focus {
-            outline: none;
-            border-color: var(--accent);
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-        }
-
-        .input-wrapper button {
-            padding: 12px 24px;
-            background: var(--ink);
-            color: white;
-            border: none;
-            border-radius: 12px;
+            color: var(--info-text);
             font-weight: 600;
-            cursor: pointer;
+            margin-bottom: 4px;
+            display: block;
         }
 
-        .input-wrapper button:disabled {
-            background: #9ca3af;
-            cursor: not-allowed;
+        @keyframes pulse {
+            0% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+
+            100% {
+                opacity: 1;
+            }
         }
 
-        .model-select {
-            padding: 8px 12px;
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            font-size: 12px;
-            background: white;
-            min-width: 180px;
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(5px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
-        .prose {
-            line-height: 1.6;
-            font-size: 14px;
+        /* Markdown Styles */
+        .prose p {
+            margin-bottom: 0.5em;
         }
 
-        .prose h2 {
-            font-size: 15px;
-            font-weight: 600;
-            margin: 10px 0 6px;
-        }
-
-        .prose ul {
-            list-style: disc;
-            padding-left: 18px;
-        }
-
-        .prose li {
-            margin: 3px 0;
+        .prose p:last-child {
+            margin-bottom: 0;
         }
 
         .prose a {
-            color: var(--accent);
+            color: inherit;
             text-decoration: underline;
         }
 
-        .back-link {
-            color: var(--muted);
-            font-size: 13px;
-            text-decoration: none;
+        .prose ul,
+        .prose ol {
+            margin: 0.5em 0;
+            padding-left: 1.2em;
         }
 
-        .back-link:hover {
-            color: var(--ink);
+        .prose code {
+            background: rgba(0, 0, 0, 0.1);
+            padding: 2px 4px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 0.9em;
         }
 
-        .empty-state {
-            color: var(--muted);
-            font-size: 13px;
-            text-align: center;
-            padding: 32px 16px;
+        .message.user .prose code {
+            background: rgba(255, 255, 255, 0.2);
         }
     </style>
 </head>
 
 <body>
-    <div class="agent-container">
-        <div class="main-area">
-            <div class="header">
-                <div>
-                    <a href="/" class="back-link">← Back to Dashboard</a>
-                    <h1 class="text-lg font-bold mt-1">Experimental Agent</h1>
-                </div>
-                <div class="flex items-center gap-3">
-                    <span class="badge">Direct Tool Calling</span>
-                    <select id="modelSelect" class="model-select">
-                        <option value="x-ai/grok-4-fast">Loading...</option>
-                    </select>
-                </div>
+    <div class="agent-layout">
+        <!-- Chat Area -->
+        <div class="chat-panel">
+            <div class="chat-header">
+                <select id="modelSelect" class="model-selector">
+                    <option value="x-ai/grok-4-fast">Loading models...</option>
+                </select>
+                <button onclick="location.reload()" class="theme-toggle"
+                    style="border:none; background:none; cursor:pointer; font-size:1.2rem;" title="Reset">
+                    ↺
+                </button>
             </div>
 
-            <div id="messages" class="messages">
+            <div id="messages" class="chat-messages">
                 <div class="message system">
-                    <p><strong>Experimental Agent v2</strong> — Direct OpenRouter tool calling for reliability.</p>
-                    <p>Try: "What are the best image models?" or "What's new with Claude?"</p>
+                    Experimental Agent v2 — Direct Tool Calling
+                </div>
+            </div>
+
+            <div class="input-container">
+                <form id="chatForm" class="input-box">
+                    <input type="text" id="questionInput" class="input-field"
+                        placeholder="Ask about AI models, benchmarks, or news..." autocomplete="off">
+                    <button type="submit" id="submitBtn" class="send-btn">Send</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <span>Live Trace</span>
+                <span id="stepCount" class="step-count">0</span>
+            </div>
+            <div id="activityLog" class="trace-list">
+                <div style="text-align:center; color:var(--info-text); font-size:0.85rem; margin-top:20px;">
+                    Ready to start
                 </div>
             </div>
         </div>
-
-        <div class="sidebar">
-            <div class="activity-header">
-                Agent Activity
-                <span class="count" id="stepCount">0</span>
-            </div>
-            <div id="activityLog"></div>
-        </div>
-    </div>
-
-    <div class="input-area">
-        <form id="chatForm" class="input-wrapper">
-            <input type="text" id="questionInput" placeholder="Ask about AI models..." autocomplete="off">
-            <button type="submit" id="submitBtn">Send</button>
-        </form>
     </div>
 
     <script>
+        // Theme handling
+        function syncTheme() {
+            try {
+                const parentTheme = window.parent.document.documentElement.getAttribute('data-theme');
+                if (parentTheme) {
+                    document.documentElement.setAttribute('data-theme', parentTheme);
+                }
+            } catch (e) {
+                // Fallback if not in iframe or cross-origin
+                if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                    document.documentElement.setAttribute('data-theme', 'dark');
+                }
+            }
+        }
+        syncTheme();
+        // Listen for theme changes if possible
+        window.addEventListener('message', (event) => {
+            if (event.data && event.data.type === 'theme-change') {
+                document.documentElement.setAttribute('data-theme', event.data.theme);
+            }
+        });
+
+        // App Logic
         const USER_KEY = 'dashboard-user-openrouter-key';
         const MODEL_KEY = 'dashboard-agent-exp-model';
         const MODELS_KEY = 'dashboard-available-models';
@@ -469,17 +495,25 @@
         function addMessage(role, content) {
             const msg = document.createElement('div');
             msg.className = `message ${role}`;
-            msg.innerHTML = `
-        <div class="message-label">${role === 'user' ? 'You' : role === 'assistant' ? 'Agent' : 'System'}</div>
-        <div class="prose">${renderMarkdown(content)}</div>
-      `;
+
+            const meta = document.createElement('div');
+            meta.className = 'message-meta';
+            meta.textContent = role === 'user' ? 'You' : 'Agent';
+
+            const bubble = document.createElement('div');
+            bubble.className = 'bubble prose';
+            bubble.innerHTML = renderMarkdown(content);
+
+            if (role !== 'system') msg.appendChild(meta);
+            msg.appendChild(bubble);
+
             messagesEl.appendChild(msg);
             messagesEl.scrollTop = messagesEl.scrollHeight;
         }
 
         function addToolStep(title, status = 'running', args = null, result = null) {
             const step = {
-                id: Date.now(),
+                id: Date.now() + Math.random(),
                 title,
                 status,
                 args,
@@ -504,31 +538,27 @@
             stepCount.textContent = toolSteps.length;
 
             if (!toolSteps.length) {
-                activityLog.innerHTML = '<div class="empty-state">Waiting for activity...</div>';
+                activityLog.innerHTML = '<div style="text-align:center; color:var(--info-text); font-size:0.85rem; margin-top:20px;">Ready to start</div>';
                 return;
             }
 
             activityLog.innerHTML = toolSteps.map(step => `
-        <div class="tool-step ${step.expanded ? 'expanded' : ''}" data-id="${step.id}">
-          <div class="tool-step-header" onclick="toggleStep(${step.id})">
-            <div class="tool-step-dot ${step.status}"></div>
-            <div class="tool-step-info">
-              <div class="tool-step-title">${escapeHtml(step.title)}</div>
-              <div class="tool-step-meta">${formatTime(step.time)}</div>
-            </div>
-            <svg class="tool-step-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-            </svg>
+        <div class="trace-item ${step.expanded ? 'expanded' : ''}">
+          <div class="trace-header" onclick="toggleStep(${step.id})">
+            <div class="status-dot ${step.status}"></div>
+            <div class="trace-title" title="${escapeHtml(step.title)}">${escapeHtml(step.title)}</div>
+            <div class="trace-time">${formatTime(step.time)}</div>
           </div>
-          <div class="tool-step-content">
+          <div class="trace-details">
             ${step.args ? `
-              <div class="tool-step-preview-label">Arguments</div>
-              <div class="tool-step-args">${escapeHtml(JSON.stringify(step.args, null, 2))}</div>
+              <span class="label">Input</span>
+              <div class="code-block">${escapeHtml(JSON.stringify(step.args, null, 2))}</div>
             ` : ''}
             ${step.result ? `
-              <div class="tool-step-preview-label">Result Preview</div>
-              <div class="tool-step-preview">${escapeHtml(step.result.slice(0, 800))}${step.result.length > 800 ? '...' : ''}</div>
+              <span class="label" style="margin-top:8px">Result</span>
+              <div class="code-block">${escapeHtml(step.result.slice(0, 500))}${step.result.length > 500 ? '...' : ''}</div>
             ` : ''}
+            ${!step.args && !step.result ? '<span style="color:var(--info-text)">No details available</span>' : ''}
           </div>
         </div>
       `).join('');
@@ -555,7 +585,7 @@
 
             const apiKey = getApiKey();
             if (!apiKey) {
-                addMessage('system', '⚠️ Add your OpenRouter API key in Settings on the main dashboard.');
+                addMessage('system', '⚠️ Please add your OpenRouter API key in the main dashboard settings.');
                 return;
             }
 
@@ -567,7 +597,7 @@
             input.value = '';
             submitBtn.disabled = true;
 
-            const initStep = addToolStep('Starting agent', 'running');
+            const initStep = addToolStep('Initializing agent', 'running');
 
             try {
                 const response = await fetch('/api/experimental-agent', {
@@ -582,10 +612,9 @@
                     })
                 });
 
-                // Check for HTML error page
                 const contentType = response.headers.get('content-type') || '';
                 if (contentType.includes('text/html')) {
-                    throw new Error(`Server error (${response.status}). Try refreshing.`);
+                    throw new Error(`Server returned HTML (status ${response.status}). Service may be restarting.`);
                 }
 
                 const data = await response.json();
@@ -594,13 +623,13 @@
                     throw new Error(data.error);
                 }
 
-                updateToolStep(initStep.id, { status: 'done', title: 'Agent initialized' });
+                updateToolStep(initStep.id, { status: 'done', title: 'Agent ready' });
 
                 // Show tool calls
                 if (data.tool_calls && data.tool_calls.length) {
                     data.tool_calls.forEach(tc => {
                         addToolStep(
-                            `Tool: ${tc.tool}`,
+                            tc.tool,
                             tc.status || 'done',
                             tc.args,
                             tc.result
@@ -608,7 +637,7 @@
                     });
                 }
 
-                addToolStep('Response ready', 'done');
+                addToolStep('Final response', 'done');
 
                 if (data.response) {
                     addMessage('assistant', data.response);
@@ -618,7 +647,7 @@
 
             } catch (error) {
                 console.error('Agent error:', error);
-                updateToolStep(initStep.id, { status: 'error', title: error.message });
+                updateToolStep(initStep.id, { status: 'error', title: 'Error: ' + error.message });
                 addMessage('system', `Error: ${error.message}`);
             } finally {
                 submitBtn.disabled = false;
@@ -628,7 +657,7 @@
 
         loadModels();
         if (!getApiKey()) {
-            addMessage('system', '⚠️ Add your OpenRouter API key in Settings, then reload.');
+            addMessage('system', '⚠️ Please add your OpenRouter API key in the main dashboard settings.');
         }
     </script>
 </body>
