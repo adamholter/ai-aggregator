@@ -1,11 +1,11 @@
 """
-Flask blueprint for the experimental Pydantic AI agent.
+Flask blueprint for the experimental agent.
 
 Provides /experimental-agent page and /api/experimental-agent endpoint.
 """
 import asyncio
 import json
-from flask import Blueprint, request, jsonify, Response, render_template_string, send_from_directory
+from flask import Blueprint, request, jsonify, Response, send_from_directory
 import os
 
 
@@ -32,13 +32,12 @@ def experimental_agent_page():
 @experimental_agent_bp.route('/api/experimental-agent', methods=['POST'])
 def experimental_agent_api():
     """
-    Run the experimental Pydantic AI agent.
+    Run the experimental agent.
     
     Request JSON:
         {
-            "question": "What's new with Gemini?",
-            "model": "x-ai/grok-4-fast",
-            "api_key": "sk-or-..."  (optional, uses header if not provided)
+            "question": "What's the best image model?",
+            "model": "x-ai/grok-4-fast"
         }
     
     Response:
@@ -74,25 +73,33 @@ def experimental_agent_api():
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
-            result = loop.run_until_complete(
+            run = loop.run_until_complete(
                 run_agent(question, api_key, model_id, base_url)
             )
         finally:
             loop.close()
         
-        return jsonify(result)
+        return jsonify({
+            'response': run.response,
+            'tool_calls': [
+                {'tool': tc.tool, 'args': tc.args, 'result': tc.result[:500], 'status': tc.status}
+                for tc in run.tool_calls
+            ],
+            'model': model_id,
+            'error': run.error or None
+        })
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 
 @experimental_agent_bp.route('/api/experimental-agent/stream', methods=['POST'])
 def experimental_agent_stream():
     """
-    Stream the experimental agent response.
-    
-    Uses Server-Sent Events (SSE) format.
+    Stream the experimental agent with SSE events.
     """
-    _, run_agent_stream = get_agent_module()
+    run_agent, run_agent_stream = get_agent_module()
     
     data = request.get_json() or {}
     question = data.get('question', '').strip()
@@ -117,21 +124,18 @@ def experimental_agent_stream():
         asyncio.set_event_loop(loop)
         
         try:
-            async def stream_events():
-                async for event in run_agent_stream(question, api_key, model_id, base_url):
-                    yield f"data: {json.dumps(event)}\n\n"
-            
-            # Collect all events
-            async def collect():
+            async def collect_events():
                 events = []
                 async for event in run_agent_stream(question, api_key, model_id, base_url):
                     events.append(event)
                 return events
             
-            events = loop.run_until_complete(collect())
+            events = loop.run_until_complete(collect_events())
             for event in events:
                 yield f"data: {json.dumps(event)}\n\n"
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
         finally:
             loop.close()
@@ -152,30 +156,10 @@ def list_tools():
     """List available tools for the experimental agent."""
     return jsonify({
         'tools': [
-            {
-                'name': 'fetch_latest_feed',
-                'description': 'Fetch the latest AI news and updates',
-                'parameters': ['query', 'limit']
-            },
-            {
-                'name': 'search_openrouter_models',
-                'description': 'Search OpenRouter model catalog',
-                'parameters': ['query', 'limit']
-            },
-            {
-                'name': 'fetch_llm_benchmarks',
-                'description': 'Get LLM benchmark data from Artificial Analysis',
-                'parameters': ['limit']
-            },
-            {
-                'name': 'fetch_hype_feed',
-                'description': 'Get trending AI repos from GitHub, HuggingFace, Reddit',
-                'parameters': ['query', 'limit']
-            },
-            {
-                'name': 'fetch_media_models',
-                'description': 'Get media generation models (image, video, speech)',
-                'parameters': ['category', 'limit']
-            }
+            {'name': 'fetch_latest_feed', 'description': 'Fetch the latest AI news and updates'},
+            {'name': 'search_openrouter_models', 'description': 'Search OpenRouter model catalog'},
+            {'name': 'fetch_image_models', 'description': 'Get image generation models'},
+            {'name': 'fetch_llm_benchmarks', 'description': 'Get LLM benchmark data'},
+            {'name': 'fetch_hype_feed', 'description': 'Get trending AI repos'}
         ]
     })

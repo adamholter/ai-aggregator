@@ -1,50 +1,202 @@
 """
-Experimental Pydantic AI Agent.
+Experimental Agent v2 - Direct OpenRouter tool calling.
 
-A more reliable agent implementation using Pydantic AI for typed tool calling.
-Uses OpenRouter as the LLM provider.
-
-NOTE: This module creates agents dynamically at runtime to defer API key requirement.
+Simpler, more reliable approach using OpenRouter's native tool calling.
+No Pydantic AI - direct control over the agent loop.
 """
-import os
 import json
-from typing import Any
-from dataclasses import dataclass
-from datetime import datetime
-
 import httpx
-from pydantic import BaseModel, Field
-from pydantic_ai import Agent, RunContext
+from typing import Any, Callable
+from dataclasses import dataclass, field
 
 
-# Agent dependencies - injected at runtime
 @dataclass
-class AgentDependencies:
-    """Dependencies for the agent."""
-    api_key: str
-    model_id: str = "x-ai/grok-4-fast"
-    base_url: str = ""  # For fetching dashboard data
+class ToolCall:
+    """A tool call made by the agent."""
+    tool: str
+    args: dict
+    result: str = ""
+    status: str = "pending"  # pending, running, done, error
 
 
-# Tool result types
-class FeedItem(BaseModel):
-    """A single item from a feed."""
-    title: str = ""
-    summary: str = ""
-    url: str = ""
-    source: str = ""
-    timestamp: str = ""
-    provider: str = ""
+@dataclass 
+class AgentRun:
+    """Tracks a single agent run with all tool calls and events."""
+    question: str
+    model: str
+    tool_calls: list[ToolCall] = field(default_factory=list)
+    response: str = ""
+    error: str = ""
 
 
-class FeedResult(BaseModel):
-    """Result from fetching a feed."""
-    items: list[FeedItem] = Field(default_factory=list)
-    total: int = 0
-    query: str = ""
+# Tool definitions for OpenRouter
+TOOL_DEFINITIONS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "fetch_latest_feed",
+            "description": "Fetch the latest AI news and updates from multiple sources",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search terms to filter results (e.g., 'Gemini', 'GPT', 'image generation')"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of items to return",
+                        "default": 20
+                    }
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_openrouter_models",
+            "description": "Search OpenRouter's catalog of AI models",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search terms (e.g., 'vision', 'Claude', 'cheap', 'fast')"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of models to return",
+                        "default": 20
+                    }
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "fetch_image_models",
+            "description": "Get image generation models from text-to-image benchmarks",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of models to return",
+                        "default": 15
+                    }
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "fetch_llm_benchmarks",
+            "description": "Get LLM benchmark data with quality scores and performance metrics",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of models to return",
+                        "default": 15
+                    }
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "fetch_hype_feed",
+            "description": "Get trending AI repositories and releases from GitHub, HuggingFace, Reddit",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search terms to filter"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum items to return",
+                        "default": 20
+                    }
+                },
+                "required": []
+            }
+        }
+    }
+]
 
 
-# Helper functions
+SYSTEM_PROMPT = """You are a helpful AI assistant that answers questions about AI models and news.
+You have access to tools to fetch data from various sources. USE THE TOOLS to gather information before answering.
+Keep responses scannable with bullet points when appropriate.
+Always cite sources and include links when available."""
+
+
+async def execute_tool(tool_name: str, args: dict, base_url: str) -> str:
+    """Execute a tool and return the result as markdown."""
+    
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        try:
+            if tool_name == "fetch_latest_feed":
+                params = {"tabs": "latest", "limit": args.get("limit", 20), "include_hype": "true"}
+                response = await client.get(f"{base_url}/api/fetch", params=params)
+                response.raise_for_status()
+                data = response.json()
+                items = _extract_items(data)
+                filtered = _filter_items(items, args.get("query", ""))
+                return _items_to_markdown(filtered[:args.get("limit", 20)], "Latest Feed")
+            
+            elif tool_name == "search_openrouter_models":
+                params = {"tabs": "openrouter", "limit": args.get("limit", 20), "recency": "week"}
+                response = await client.get(f"{base_url}/api/fetch", params=params)
+                response.raise_for_status()
+                data = response.json()
+                items = _extract_items(data)
+                filtered = _filter_items(items, args.get("query", ""))
+                return _items_to_markdown(filtered[:args.get("limit", 20)], "OpenRouter Models")
+            
+            elif tool_name == "fetch_image_models":
+                params = {"tabs": "text-to-image", "limit": args.get("limit", 15)}
+                response = await client.get(f"{base_url}/api/fetch", params=params)
+                response.raise_for_status()
+                data = response.json()
+                items = _extract_items(data)
+                return _items_to_markdown(items[:args.get("limit", 15)], "Image Generation Models")
+            
+            elif tool_name == "fetch_llm_benchmarks":
+                params = {"tabs": "llms", "limit": args.get("limit", 15)}
+                response = await client.get(f"{base_url}/api/fetch", params=params)
+                response.raise_for_status()
+                data = response.json()
+                items = _extract_items(data)
+                return _items_to_markdown(items[:args.get("limit", 15)], "LLM Benchmarks")
+            
+            elif tool_name == "fetch_hype_feed":
+                params = {"tabs": "hype", "limit": args.get("limit", 20)}
+                response = await client.get(f"{base_url}/api/fetch", params=params)
+                response.raise_for_status()
+                data = response.json()
+                items = _extract_items(data)
+                filtered = _filter_items(items, args.get("query", ""))
+                return _items_to_markdown(filtered[:args.get("limit", 20)], "Trending AI")
+            
+            else:
+                return f"Unknown tool: {tool_name}"
+                
+        except Exception as e:
+            return f"Error executing {tool_name}: {str(e)}"
+
+
 def _extract_items(data: dict) -> list[dict]:
     """Extract items from API response."""
     datasets = data.get("datasets", {})
@@ -84,249 +236,147 @@ def _items_to_markdown(items: list[dict], label: str) -> str:
     if not items:
         return f"*No {label} items found.*"
     
-    lines = [f"## {label}\n"]
-    for item in items:
+    lines = [f"## {label} ({len(items)} items)\n"]
+    for item in items[:10]:  # Limit preview
         title = item.get("title") or item.get("name") or "Untitled"
         url = item.get("link") or item.get("url") or ""
         summary = item.get("summary") or item.get("description") or ""
         provider = item.get("provider") or item.get("source") or ""
         
-        link_part = f" [link]({url})" if url else ""
+        link_part = f" [→]({url})" if url else ""
         provider_part = f" ({provider})" if provider else ""
         
         lines.append(f"- **{title}**{provider_part}{link_part}")
         if summary:
-            lines.append(f"  {summary[:200]}{'...' if len(summary) > 200 else ''}")
+            lines.append(f"  {summary[:150]}{'...' if len(summary) > 150 else ''}")
+    
+    if len(items) > 10:
+        lines.append(f"\n*...and {len(items) - 10} more*")
     
     return "\n".join(lines)
-
-
-def create_agent(api_key: str, model_id: str = "x-ai/grok-4-fast") -> Agent:
-    """
-    Create a fresh agent instance with the given API key.
-    
-    This is needed because Pydantic AI requires the API key at agent creation.
-    """
-    # Set API key in environment before creating agent
-    os.environ["OPENROUTER_API_KEY"] = api_key
-    
-    agent = Agent(
-        f"openrouter:{model_id}",
-        deps_type=AgentDependencies,
-        system_prompt="""You are a helpful AI assistant that answers questions about AI models and news.
-You have access to tools to fetch data from various sources like OpenRouter, Latest feeds, and benchmarks.
-Use the tools to gather relevant information, then provide a clear, concise answer.
-Keep responses scannable with bullet points when appropriate.
-Always cite sources and include links when available."""
-    )
-    
-    # Register tools on the agent
-    @agent.tool
-    async def fetch_latest_feed(
-        ctx: RunContext[AgentDependencies],
-        query: str = "",
-        limit: int = 20
-    ) -> str:
-        """
-        Fetch the latest AI news and updates.
-        
-        Args:
-            query: Search terms to filter results (e.g., "Gemini", "GPT", "image generation")
-            limit: Maximum number of items to return
-        
-        Returns:
-            Markdown-formatted list of latest items
-        """
-        base_url = ctx.deps.base_url or "http://localhost:5001"
-        params = {
-            "tabs": "latest",
-            "limit": min(limit, 40),
-            "include_hype": "true"
-        }
-        
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(f"{base_url}/api/fetch", params=params)
-            response.raise_for_status()
-            data = response.json()
-        
-        items = _extract_items(data)
-        filtered = _filter_items(items, query)
-        return _items_to_markdown(filtered[:limit], "Latest Feed")
-
-    @agent.tool
-    async def search_openrouter_models(
-        ctx: RunContext[AgentDependencies],
-        query: str = "",
-        limit: int = 20
-    ) -> str:
-        """
-        Search OpenRouter's model catalog.
-        
-        Args:
-            query: Search terms (e.g., "vision", "Claude", "cheap", "fast")
-            limit: Maximum number of models to return
-        
-        Returns:
-            Markdown-formatted list of matching models
-        """
-        base_url = ctx.deps.base_url or "http://localhost:5001"
-        params = {
-            "tabs": "openrouter",
-            "limit": min(limit, 40),
-            "recency": "week"
-        }
-        
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(f"{base_url}/api/fetch", params=params)
-            response.raise_for_status()
-            data = response.json()
-        
-        items = _extract_items(data)
-        filtered = _filter_items(items, query)
-        return _items_to_markdown(filtered[:limit], "OpenRouter Models")
-
-    @agent.tool
-    async def fetch_llm_benchmarks(
-        ctx: RunContext[AgentDependencies],
-        limit: int = 15
-    ) -> str:
-        """
-        Get LLM benchmark data from Artificial Analysis.
-        
-        Args:
-            limit: Maximum number of models to return
-        
-        Returns:
-            Markdown-formatted list of LLM benchmarks
-        """
-        base_url = ctx.deps.base_url or "http://localhost:5001"
-        params = {
-            "tabs": "llms",
-            "limit": min(limit, 30)
-        }
-        
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(f"{base_url}/api/fetch", params=params)
-            response.raise_for_status()
-            data = response.json()
-        
-        items = _extract_items(data)
-        return _items_to_markdown(items[:limit], "LLM Benchmarks")
-
-    @agent.tool
-    async def fetch_hype_feed(
-        ctx: RunContext[AgentDependencies],
-        query: str = "",
-        limit: int = 20
-    ) -> str:
-        """
-        Get trending AI repositories and releases from GitHub, HuggingFace, Reddit.
-        
-        Args:
-            query: Search terms to filter
-            limit: Maximum items to return
-        
-        Returns:
-            Markdown-formatted list of trending items
-        """
-        base_url = ctx.deps.base_url or "http://localhost:5001"
-        params = {
-            "tabs": "hype",
-            "limit": min(limit, 30)
-        }
-        
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(f"{base_url}/api/fetch", params=params)
-            response.raise_for_status()
-            data = response.json()
-        
-        items = _extract_items(data)
-        filtered = _filter_items(items, query)
-        return _items_to_markdown(filtered[:limit], "Hype Feed")
-
-    @agent.tool
-    async def fetch_media_models(
-        ctx: RunContext[AgentDependencies],
-        category: str = "text-to-image",
-        limit: int = 15
-    ) -> str:
-        """
-        Get media generation models (image, video, speech).
-        
-        Args:
-            category: One of 'text-to-image', 'text-to-video', 'image-to-video', 'text-to-speech'
-            limit: Maximum items to return
-        
-        Returns:
-            Markdown-formatted list of media models
-        """
-        valid_categories = ["text-to-image", "text-to-video", "image-to-video", "text-to-speech", "image-editing"]
-        if category not in valid_categories:
-            category = "text-to-image"
-        
-        base_url = ctx.deps.base_url or "http://localhost:5001"
-        params = {
-            "tabs": category,
-            "limit": min(limit, 30)
-        }
-        
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(f"{base_url}/api/fetch", params=params)
-            response.raise_for_status()
-            data = response.json()
-        
-        items = _extract_items(data)
-        return _items_to_markdown(items[:limit], category.replace("-", " ").title())
-
-    return agent
 
 
 async def run_agent(
     question: str,
     api_key: str,
     model_id: str = "x-ai/grok-4-fast",
-    base_url: str = ""
-) -> dict:
+    base_url: str = "",
+    on_event: Callable[[dict], None] = None
+) -> AgentRun:
     """
-    Run the agent with a question.
+    Run the agent with explicit tool calling loop.
     
     Args:
         question: User's question
         api_key: OpenRouter API key
         model_id: Model ID to use
         base_url: Base URL for the dashboard API
+        on_event: Optional callback for streaming events
     
     Returns:
-        Dict with 'response' and 'tool_calls' keys
+        AgentRun with all tool calls and final response
     """
-    deps = AgentDependencies(
-        api_key=api_key,
-        model_id=model_id,
-        base_url=base_url
-    )
+    run = AgentRun(question=question, model=model_id)
     
-    # Create agent dynamically with the API key
-    agent = create_agent(api_key, model_id)
+    def emit(event_type: str, **data):
+        if on_event:
+            on_event({"type": event_type, **data})
     
-    result = await agent.run(question, deps=deps)
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": question}
+    ]
     
-    # Extract tool calls from run
-    tool_calls = []
-    if hasattr(result, 'all_messages'):
-        for msg in result.all_messages():
-            if hasattr(msg, 'parts'):
-                for part in msg.parts:
-                    if hasattr(part, 'tool_name'):
-                        tool_calls.append({
-                            'tool': part.tool_name,
-                            'args': getattr(part, 'args', {})
-                        })
+    emit("start", question=question, model=model_id)
     
-    return {
-        "response": result.data,
-        "tool_calls": tool_calls,
-        "model": model_id
-    }
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        max_iterations = 5
+        iteration = 0
+        
+        while iteration < max_iterations:
+            iteration += 1
+            emit("llm_call", iteration=iteration)
+            
+            # Call OpenRouter
+            try:
+                response = await client.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": model_id,
+                        "messages": messages,
+                        "tools": TOOL_DEFINITIONS,
+                        "tool_choice": "auto"
+                    }
+                )
+                response.raise_for_status()
+                result = response.json()
+            except Exception as e:
+                run.error = str(e)
+                emit("error", error=str(e))
+                return run
+            
+            choice = result.get("choices", [{}])[0]
+            message = choice.get("message", {})
+            finish_reason = choice.get("finish_reason", "")
+            
+            # Check for tool calls
+            tool_calls = message.get("tool_calls", [])
+            
+            if tool_calls:
+                # Add assistant message with tool calls
+                messages.append(message)
+                
+                for tc in tool_calls:
+                    func = tc.get("function", {})
+                    tool_name = func.get("name", "unknown")
+                    try:
+                        tool_args = json.loads(func.get("arguments", "{}"))
+                    except:
+                        tool_args = {}
+                    
+                    tool_call = ToolCall(tool=tool_name, args=tool_args, status="running")
+                    run.tool_calls.append(tool_call)
+                    
+                    emit("tool_start", tool=tool_name, args=tool_args)
+                    
+                    # Execute the tool
+                    tool_result = await execute_tool(tool_name, tool_args, base_url)
+                    tool_call.result = tool_result
+                    tool_call.status = "done"
+                    
+                    emit("tool_end", tool=tool_name, result=tool_result[:500])
+                    
+                    # Add tool result to messages
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc.get("id", ""),
+                        "content": tool_result
+                    })
+            
+            elif message.get("content"):
+                # Final response - no more tool calls
+                run.response = message["content"]
+                emit("response", content=message["content"])
+                break
+            
+            else:
+                # No content and no tool calls - something's wrong
+                run.response = "Agent finished without response."
+                break
+        
+        if not run.response and not run.error:
+            run.response = "Agent reached maximum iterations."
+    
+    emit("done", response=run.response, tool_calls=[
+        {"tool": tc.tool, "args": tc.args, "preview": tc.result[:200]} 
+        for tc in run.tool_calls
+    ])
+    
+    return run
 
 
 async def run_agent_stream(
@@ -336,21 +386,14 @@ async def run_agent_stream(
     base_url: str = ""
 ):
     """
-    Run the agent with streaming, yielding events.
-    
-    Yields dicts with 'type' (tool_start, tool_end, text, done) and relevant data.
+    Generator version that yields events as they happen.
     """
-    deps = AgentDependencies(
-        api_key=api_key,
-        model_id=model_id,
-        base_url=base_url
-    )
+    events = []
     
-    # Create agent dynamically
-    agent = create_agent(api_key, model_id)
+    def collect_event(event):
+        events.append(event)
     
-    async with agent.run_stream(question, deps=deps) as result:
-        async for text in result.stream_text():
-            yield {"type": "text", "content": text}
-        
-        yield {"type": "done", "response": result.data if hasattr(result, 'data') else ""}
+    run = await run_agent(question, api_key, model_id, base_url, on_event=collect_event)
+    
+    for event in events:
+        yield event

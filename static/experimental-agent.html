@@ -11,23 +11,25 @@
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
     <style>
         :root {
-            color-scheme: light;
             --ink: #111827;
             --paper: #ffffff;
             --muted: #6b7280;
             --accent: #3b82f6;
             --border: #e5e7eb;
+            --success: #10b981;
+            --error: #ef4444;
         }
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: var(--paper);
             color: var(--ink);
+            margin: 0;
         }
 
         .agent-container {
             display: grid;
-            grid-template-columns: 1fr 320px;
+            grid-template-columns: 1fr 380px;
             min-height: 100vh;
             max-width: 1400px;
             margin: 0 auto;
@@ -51,9 +53,12 @@
         }
 
         .sidebar {
-            padding: 24px;
+            padding: 20px;
             background: #fafafa;
             overflow-y: auto;
+            max-height: 100vh;
+            position: sticky;
+            top: 0;
         }
 
         .header {
@@ -66,18 +71,18 @@
         }
 
         .badge {
-            background: #fef3c7;
-            color: #92400e;
-            padding: 4px 12px;
+            background: #dbeafe;
+            color: #1d4ed8;
+            padding: 4px 10px;
             border-radius: 9999px;
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 600;
         }
 
         .messages {
             flex: 1;
             overflow-y: auto;
-            padding-bottom: 100px;
+            padding-bottom: 120px;
         }
 
         .message {
@@ -111,47 +116,72 @@
             margin-bottom: 8px;
         }
 
-        /* Stack trace / activity log */
+        /* Activity Log Styles */
         .activity-header {
-            font-size: 13px;
-            font-weight: 600;
+            font-size: 12px;
+            font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.1em;
             color: var(--muted);
             margin-bottom: 16px;
-        }
-
-        .timeline {
-            position: relative;
-        }
-
-        .timeline-item {
             display: flex;
-            gap: 12px;
-            margin-bottom: 12px;
-            position: relative;
+            align-items: center;
+            gap: 8px;
         }
 
-        .timeline-dot {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            background: var(--border);
-            flex-shrink: 0;
-            margin-top: 4px;
-        }
-
-        .timeline-dot.running {
+        .activity-header .count {
             background: var(--accent);
-            animation: pulse 1.5s infinite;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 9999px;
+            font-size: 11px;
         }
 
-        .timeline-dot.done {
-            background: #10b981;
+        /* Collapsible Tool Step */
+        .tool-step {
+            margin-bottom: 12px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: white;
+            overflow: hidden;
         }
 
-        .timeline-dot.error {
-            background: #ef4444;
+        .tool-step-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 14px;
+            cursor: pointer;
+            user-select: none;
+            transition: background 0.15s;
+        }
+
+        .tool-step-header:hover {
+            background: #f9fafb;
+        }
+
+        .tool-step-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .tool-step-dot.pending {
+            background: var(--border);
+        }
+
+        .tool-step-dot.running {
+            background: var(--accent);
+            animation: pulse 1.2s infinite;
+        }
+
+        .tool-step-dot.done {
+            background: var(--success);
+        }
+
+        .tool-step-dot.error {
+            background: var(--error);
         }
 
         @keyframes pulse {
@@ -159,39 +189,82 @@
             0%,
             100% {
                 opacity: 1;
+                transform: scale(1);
             }
 
             50% {
-                opacity: 0.5;
+                opacity: 0.6;
+                transform: scale(0.9);
             }
         }
 
-        .timeline-content {
+        .tool-step-info {
             flex: 1;
+            min-width: 0;
         }
 
-        .timeline-title {
+        .tool-step-title {
             font-weight: 600;
             font-size: 13px;
             color: var(--ink);
         }
 
-        .timeline-detail {
-            font-size: 12px;
+        .tool-step-meta {
+            font-size: 11px;
             color: var(--muted);
             margin-top: 2px;
         }
 
-        .timeline-preview {
-            font-size: 11px;
+        .tool-step-chevron {
+            width: 16px;
+            height: 16px;
             color: var(--muted);
-            background: white;
-            padding: 8px;
+            transition: transform 0.2s;
+        }
+
+        .tool-step.expanded .tool-step-chevron {
+            transform: rotate(180deg);
+        }
+
+        .tool-step-content {
+            display: none;
+            padding: 0 14px 14px;
+        }
+
+        .tool-step.expanded .tool-step-content {
+            display: block;
+        }
+
+        .tool-step-args {
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 11px;
+            background: #f3f4f6;
+            padding: 10px;
             border-radius: 6px;
-            margin-top: 6px;
+            overflow-x: auto;
+            color: var(--muted);
+            margin-bottom: 10px;
+        }
+
+        .tool-step-preview {
+            font-size: 12px;
+            color: var(--ink);
+            background: #f9fafb;
+            padding: 10px;
+            border-radius: 6px;
+            max-height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-word;
             border: 1px solid var(--border);
-            max-height: 100px;
-            overflow: hidden;
+        }
+
+        .tool-step-preview-label {
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-bottom: 6px;
         }
 
         .input-area {
@@ -233,11 +306,6 @@
             border-radius: 12px;
             font-weight: 600;
             cursor: pointer;
-            transition: background 0.2s;
-        }
-
-        .input-wrapper button:hover {
-            background: #374151;
         }
 
         .input-wrapper button:disabled {
@@ -246,31 +314,32 @@
         }
 
         .model-select {
-            padding: 10px 12px;
+            padding: 8px 12px;
             border: 1px solid var(--border);
-            border-radius: 12px;
-            font-size: 13px;
+            border-radius: 10px;
+            font-size: 12px;
             background: white;
-            min-width: 200px;
+            min-width: 180px;
         }
 
         .prose {
             line-height: 1.6;
+            font-size: 14px;
         }
 
         .prose h2 {
-            font-size: 16px;
+            font-size: 15px;
             font-weight: 600;
-            margin: 12px 0 6px;
+            margin: 10px 0 6px;
         }
 
         .prose ul {
             list-style: disc;
-            padding-left: 20px;
+            padding-left: 18px;
         }
 
         .prose li {
-            margin: 4px 0;
+            margin: 3px 0;
         }
 
         .prose a {
@@ -278,16 +347,9 @@
             text-decoration: underline;
         }
 
-        .prose code {
-            background: #f3f4f6;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-size: 13px;
-        }
-
         .back-link {
             color: var(--muted);
-            font-size: 14px;
+            font-size: 13px;
             text-decoration: none;
         }
 
@@ -299,7 +361,7 @@
             color: var(--muted);
             font-size: 13px;
             text-align: center;
-            padding: 32px;
+            padding: 32px 16px;
         }
     </style>
 </head>
@@ -310,70 +372,67 @@
             <div class="header">
                 <div>
                     <a href="/" class="back-link">← Back to Dashboard</a>
-                    <h1 class="text-xl font-bold mt-1">Experimental Agent</h1>
+                    <h1 class="text-lg font-bold mt-1">Experimental Agent</h1>
                 </div>
                 <div class="flex items-center gap-3">
-                    <span class="badge">Pydantic AI</span>
+                    <span class="badge">Direct Tool Calling</span>
                     <select id="modelSelect" class="model-select">
-                        <option value="x-ai/grok-4-fast">Loading models...</option>
+                        <option value="x-ai/grok-4-fast">Loading...</option>
                     </select>
                 </div>
             </div>
 
             <div id="messages" class="messages">
                 <div class="message system">
-                    <p><strong>Experimental Agent</strong> — Uses Pydantic AI for typed tool calling.</p>
-                    <p>Try: "What's the best image model?" or "What's new with Gemini?"</p>
+                    <p><strong>Experimental Agent v2</strong> — Direct OpenRouter tool calling for reliability.</p>
+                    <p>Try: "What are the best image models?" or "What's new with Claude?"</p>
                 </div>
             </div>
         </div>
 
         <div class="sidebar">
-            <div class="activity-header">Agent Activity</div>
-            <div id="activityLog" class="timeline">
-                <div class="empty-state">Waiting for a question...</div>
+            <div class="activity-header">
+                Agent Activity
+                <span class="count" id="stepCount">0</span>
             </div>
+            <div id="activityLog"></div>
         </div>
     </div>
 
     <div class="input-area">
         <form id="chatForm" class="input-wrapper">
-            <input type="text" id="questionInput" placeholder="Ask about AI models and news..." autocomplete="off">
+            <input type="text" id="questionInput" placeholder="Ask about AI models..." autocomplete="off">
             <button type="submit" id="submitBtn">Send</button>
         </form>
     </div>
 
     <script>
-        const USER_OPENROUTER_KEY_STORAGE = 'dashboard-user-openrouter-key';
-        const AGENT_MODEL_STORAGE = 'dashboard-agent-exp-model';
-        const AVAILABLE_MODELS_STORAGE = 'dashboard-available-models';
+        const USER_KEY = 'dashboard-user-openrouter-key';
+        const MODEL_KEY = 'dashboard-agent-exp-model';
+        const MODELS_KEY = 'dashboard-available-models';
 
-        const messagesContainer = document.getElementById('messages');
-        const chatForm = document.getElementById('chatForm');
-        const questionInput = document.getElementById('questionInput');
+        const messagesEl = document.getElementById('messages');
+        const form = document.getElementById('chatForm');
+        const input = document.getElementById('questionInput');
         const submitBtn = document.getElementById('submitBtn');
         const modelSelect = document.getElementById('modelSelect');
         const activityLog = document.getElementById('activityLog');
+        const stepCount = document.getElementById('stepCount');
 
-        let currentTrace = [];
+        let toolSteps = [];
 
         function getApiKey() {
-            return (localStorage.getItem(USER_OPENROUTER_KEY_STORAGE) || '').trim();
+            return (localStorage.getItem(USER_KEY) || '').trim();
         }
 
-        function formatTime(date) {
-            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        function formatTime(d) {
+            return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         }
 
-        // Load models from settings (same as main agent)
         async function loadModels() {
-            const stored = localStorage.getItem(AVAILABLE_MODELS_STORAGE) || '';
-            const storedList = stored ? stored.split(',').map(s => s.trim()).filter(Boolean) : [];
-            const savedModel = localStorage.getItem(AGENT_MODEL_STORAGE);
+            const stored = localStorage.getItem(MODELS_KEY) || '';
+            let models = stored ? stored.split(',').map(s => s.trim()).filter(Boolean) : [];
 
-            let models = storedList;
-
-            // If no stored models, try to fetch from config
             if (!models.length) {
                 try {
                     const res = await fetch('/api/model-config');
@@ -384,32 +443,20 @@
                 } catch (_) { }
             }
 
-            // Fallback defaults
             if (!models.length) {
-                models = [
-                    'x-ai/grok-4-fast',
-                    'anthropic/claude-sonnet-4',
-                    'openai/gpt-4.1',
-                    'google/gemini-2.5-flash'
-                ];
+                models = ['x-ai/grok-4-fast', 'anthropic/claude-sonnet-4', 'openai/gpt-4.1', 'google/gemini-2.5-flash'];
             }
 
-            modelSelect.innerHTML = '';
-            models.forEach(id => {
-                const opt = document.createElement('option');
-                opt.value = id;
-                opt.textContent = id.split('/').pop();
-                modelSelect.appendChild(opt);
-            });
+            modelSelect.innerHTML = models.map(id =>
+                `<option value="${id}">${id.split('/').pop()}</option>`
+            ).join('');
 
-            // Restore saved selection
-            if (savedModel && models.includes(savedModel)) {
-                modelSelect.value = savedModel;
-            }
+            const saved = localStorage.getItem(MODEL_KEY);
+            if (saved && models.includes(saved)) modelSelect.value = saved;
         }
 
         modelSelect.addEventListener('change', () => {
-            localStorage.setItem(AGENT_MODEL_STORAGE, modelSelect.value);
+            localStorage.setItem(MODEL_KEY, modelSelect.value);
         });
 
         function renderMarkdown(content) {
@@ -422,80 +469,108 @@
         function addMessage(role, content) {
             const msg = document.createElement('div');
             msg.className = `message ${role}`;
-
-            const label = document.createElement('div');
-            label.className = 'message-label';
-            label.textContent = role === 'user' ? 'You' : role === 'assistant' ? 'Agent' : 'System';
-            msg.appendChild(label);
-
-            const body = document.createElement('div');
-            body.className = 'prose';
-            body.innerHTML = renderMarkdown(content);
-            msg.appendChild(body);
-
-            messagesContainer.appendChild(msg);
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-            return msg;
+            msg.innerHTML = `
+        <div class="message-label">${role === 'user' ? 'You' : role === 'assistant' ? 'Agent' : 'System'}</div>
+        <div class="prose">${renderMarkdown(content)}</div>
+      `;
+            messagesEl.appendChild(msg);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
         }
 
-        function addTraceStep(title, detail, status = 'running', preview = '') {
-            const step = { title, detail, status, preview, created: new Date() };
-            currentTrace.push(step);
+        function addToolStep(title, status = 'running', args = null, result = null) {
+            const step = {
+                id: Date.now(),
+                title,
+                status,
+                args,
+                result,
+                time: new Date(),
+                expanded: false
+            };
+            toolSteps.push(step);
             renderActivityLog();
             return step;
         }
 
-        function updateTraceStep(index, updates) {
-            if (currentTrace[index]) {
-                Object.assign(currentTrace[index], updates);
+        function updateToolStep(stepId, updates) {
+            const step = toolSteps.find(s => s.id === stepId);
+            if (step) {
+                Object.assign(step, updates);
                 renderActivityLog();
             }
         }
 
         function renderActivityLog() {
-            if (!currentTrace.length) {
-                activityLog.innerHTML = '<div class="empty-state">Waiting for a question...</div>';
+            stepCount.textContent = toolSteps.length;
+
+            if (!toolSteps.length) {
+                activityLog.innerHTML = '<div class="empty-state">Waiting for activity...</div>';
                 return;
             }
 
-            activityLog.innerHTML = currentTrace.map(step => `
-        <div class="timeline-item">
-          <div class="timeline-dot ${step.status}"></div>
-          <div class="timeline-content">
-            <div class="timeline-title">${step.title}</div>
-            <div class="timeline-detail">${formatTime(step.created)} — ${step.detail}</div>
-            ${step.preview ? `<div class="timeline-preview">${step.preview}</div>` : ''}
+            activityLog.innerHTML = toolSteps.map(step => `
+        <div class="tool-step ${step.expanded ? 'expanded' : ''}" data-id="${step.id}">
+          <div class="tool-step-header" onclick="toggleStep(${step.id})">
+            <div class="tool-step-dot ${step.status}"></div>
+            <div class="tool-step-info">
+              <div class="tool-step-title">${escapeHtml(step.title)}</div>
+              <div class="tool-step-meta">${formatTime(step.time)}</div>
+            </div>
+            <svg class="tool-step-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+            </svg>
+          </div>
+          <div class="tool-step-content">
+            ${step.args ? `
+              <div class="tool-step-preview-label">Arguments</div>
+              <div class="tool-step-args">${escapeHtml(JSON.stringify(step.args, null, 2))}</div>
+            ` : ''}
+            ${step.result ? `
+              <div class="tool-step-preview-label">Result Preview</div>
+              <div class="tool-step-preview">${escapeHtml(step.result.slice(0, 800))}${step.result.length > 800 ? '...' : ''}</div>
+            ` : ''}
           </div>
         </div>
       `).join('');
         }
 
-        chatForm.addEventListener('submit', async (e) => {
+        window.toggleStep = function (id) {
+            const step = toolSteps.find(s => s.id === id);
+            if (step) {
+                step.expanded = !step.expanded;
+                renderActivityLog();
+            }
+        };
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
+        form.addEventListener('submit', async (e) => {
             e.preventDefault();
 
-            const question = questionInput.value.trim();
+            const question = input.value.trim();
             if (!question) return;
 
             const apiKey = getApiKey();
             if (!apiKey) {
-                addMessage('system', '⚠️ No OpenRouter API key. Add your key in Settings on the main dashboard.');
+                addMessage('system', '⚠️ Add your OpenRouter API key in Settings on the main dashboard.');
                 return;
             }
 
-            // Reset trace
-            currentTrace = [];
+            // Reset
+            toolSteps = [];
+            renderActivityLog();
 
-            // Add user message
             addMessage('user', question);
-            questionInput.value = '';
+            input.value = '';
             submitBtn.disabled = true;
 
-            // Start trace
-            const initStep = addTraceStep('Initializing', 'Preparing agent request...', 'running');
+            const initStep = addToolStep('Starting agent', 'running');
 
             try {
-                // Use streaming endpoint for live updates
-                const response = await fetch('/api/experimental-agent/stream', {
+                const response = await fetch('/api/experimental-agent', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -507,80 +582,53 @@
                     })
                 });
 
-                if (!response.ok) {
-                    // Check if response is HTML (404/error page)
-                    const contentType = response.headers.get('content-type') || '';
-                    if (contentType.includes('text/html')) {
-                        throw new Error(`Server returned HTML (status ${response.status}). The experimental agent may not be deployed yet.`);
-                    }
-                    const err = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
-                    throw new Error(err.error || `Request failed: ${response.status}`);
+                // Check for HTML error page
+                const contentType = response.headers.get('content-type') || '';
+                if (contentType.includes('text/html')) {
+                    throw new Error(`Server error (${response.status}). Try refreshing.`);
                 }
 
-                updateTraceStep(0, { status: 'done', detail: 'Agent ready' });
+                const data = await response.json();
 
-                const toolStep = addTraceStep('Calling tools', 'Fetching data...', 'running');
-
-                // Read SSE stream
-                const reader = response.body.getReader();
-                const decoder = new TextDecoder();
-                let fullText = '';
-                let buffer = '';
-
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-
-                    buffer += decoder.decode(value, { stream: true });
-                    const lines = buffer.split('\n');
-                    buffer = lines.pop() || '';
-
-                    for (const line of lines) {
-                        if (line.startsWith('data: ')) {
-                            try {
-                                const event = JSON.parse(line.slice(6));
-
-                                if (event.type === 'text') {
-                                    fullText += event.content;
-                                    updateTraceStep(1, { detail: `Receiving response...` });
-                                } else if (event.type === 'tool_call') {
-                                    addTraceStep(`Tool: ${event.tool}`, JSON.stringify(event.args || {}), 'done');
-                                } else if (event.type === 'error') {
-                                    throw new Error(event.error);
-                                } else if (event.type === 'done') {
-                                    fullText = event.response || fullText;
-                                }
-                            } catch (parseErr) {
-                                console.warn('SSE parse error:', parseErr);
-                            }
-                        }
-                    }
+                if (data.error) {
+                    throw new Error(data.error);
                 }
 
-                updateTraceStep(1, { status: 'done', detail: 'Response complete' });
-                addTraceStep('Done', 'Agent finished', 'done');
+                updateToolStep(initStep.id, { status: 'done', title: 'Agent initialized' });
 
-                if (fullText) {
-                    addMessage('assistant', fullText);
+                // Show tool calls
+                if (data.tool_calls && data.tool_calls.length) {
+                    data.tool_calls.forEach(tc => {
+                        addToolStep(
+                            `Tool: ${tc.tool}`,
+                            tc.status || 'done',
+                            tc.args,
+                            tc.result
+                        );
+                    });
+                }
+
+                addToolStep('Response ready', 'done');
+
+                if (data.response) {
+                    addMessage('assistant', data.response);
                 } else {
-                    addMessage('system', 'No response received from agent.');
+                    addMessage('system', 'Agent returned no response.');
                 }
 
             } catch (error) {
                 console.error('Agent error:', error);
-                updateTraceStep(currentTrace.length - 1, { status: 'error', detail: error.message });
+                updateToolStep(initStep.id, { status: 'error', title: error.message });
                 addMessage('system', `Error: ${error.message}`);
             } finally {
                 submitBtn.disabled = false;
-                questionInput.focus();
+                input.focus();
             }
         });
 
-        // Initialize
         loadModels();
-
         if (!getApiKey()) {
-            addMessage('system', '⚠️ No OpenRouter API key. Add your key in Settings on the main dashboard, then reload.');
+            addMessage('system', '⚠️ Add your OpenRouter API key in Settings, then reload.');
         }
     </script>
 </body>
