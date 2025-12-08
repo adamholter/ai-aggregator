@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Experimental Agent — AI Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <style>
+        :root {
+            color-scheme: light;
+            --ink: #111827;
+            --paper: #ffffff;
+            --muted: #6b7280;
+            --accent: #3b82f6;
+            --border: #e5e7eb;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--paper);
+            color: var(--ink);
+        }
+
+        .chat-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 24px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 24px;
+        }
+
+        .badge {
+            background: #fef3c7;
+            color: #92400e;
+            padding: 4px 12px;
+            border-radius: 9999px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            padding-bottom: 100px;
+        }
+
+        .message {
+            margin-bottom: 20px;
+            padding: 16px;
+            border-radius: 12px;
+        }
+
+        .message.user {
+            background: #f3f4f6;
+            margin-left: 48px;
+        }
+
+        .message.assistant {
+            background: #f0f9ff;
+            border: 1px solid #bae6fd;
+        }
+
+        .message.system {
+            background: #fef3c7;
+            border: 1px solid #fcd34d;
+            font-size: 14px;
+        }
+
+        .message-label {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--muted);
+            margin-bottom: 8px;
+        }
+
+        .tool-call {
+            background: #f8fafc;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px;
+            margin: 8px 0;
+            font-size: 13px;
+        }
+
+        .tool-call-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+            color: var(--accent);
+        }
+
+        .tool-call-args {
+            color: var(--muted);
+            font-family: monospace;
+            font-size: 12px;
+            margin-top: 4px;
+        }
+
+        .input-area {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--paper);
+            border-top: 1px solid var(--border);
+            padding: 16px;
+        }
+
+        .input-wrapper {
+            max-width: 800px;
+            margin: 0 auto;
+            display: flex;
+            gap: 12px;
+        }
+
+        .input-wrapper input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            font-size: 15px;
+        }
+
+        .input-wrapper input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .input-wrapper button {
+            padding: 12px 24px;
+            background: var(--ink);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .input-wrapper button:hover {
+            background: #374151;
+        }
+
+        .input-wrapper button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+
+        .model-select {
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            font-size: 14px;
+            background: white;
+        }
+
+        .loading-dots {
+            display: inline-flex;
+            gap: 4px;
+        }
+
+        .loading-dots span {
+            width: 8px;
+            height: 8px;
+            background: var(--accent);
+            border-radius: 50%;
+            animation: bounce 1.4s infinite ease-in-out;
+        }
+
+        .loading-dots span:nth-child(1) {
+            animation-delay: -0.32s;
+        }
+
+        .loading-dots span:nth-child(2) {
+            animation-delay: -0.16s;
+        }
+
+        @keyframes bounce {
+
+            0%,
+            80%,
+            100% {
+                transform: scale(0);
+            }
+
+            40% {
+                transform: scale(1);
+            }
+        }
+
+        .prose {
+            line-height: 1.6;
+        }
+
+        .prose h2 {
+            font-size: 18px;
+            font-weight: 600;
+            margin: 16px 0 8px;
+        }
+
+        .prose ul {
+            list-style: disc;
+            padding-left: 20px;
+        }
+
+        .prose li {
+            margin: 4px 0;
+        }
+
+        .prose a {
+            color: var(--accent);
+            text-decoration: underline;
+        }
+
+        .prose code {
+            background: #f3f4f6;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+
+        .back-link {
+            color: var(--muted);
+            font-size: 14px;
+            text-decoration: none;
+        }
+
+        .back-link:hover {
+            color: var(--ink);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="chat-container">
+        <div class="header">
+            <div>
+                <a href="/" class="back-link">← Back to Dashboard</a>
+                <h1 class="text-xl font-bold mt-1">Experimental Agent</h1>
+            </div>
+            <div class="flex items-center gap-3">
+                <span class="badge">Pydantic AI</span>
+                <select id="modelSelect" class="model-select">
+                    <option value="x-ai/grok-4-fast">Grok 4 Fast</option>
+                    <option value="anthropic/claude-sonnet-4">Claude Sonnet 4</option>
+                    <option value="openai/gpt-4.1">GPT-4.1</option>
+                    <option value="google/gemini-2.5-flash">Gemini 2.5 Flash</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="messages" class="messages">
+            <div class="message system">
+                <p><strong>Experimental Agent</strong> — This version uses Pydantic AI for more reliable tool calling.
+                </p>
+                <p>Try asking: "What's new with Gemini?" or "Show me trending image generation models"</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="input-area">
+        <form id="chatForm" class="input-wrapper">
+            <input type="text" id="questionInput" placeholder="Ask about AI models and news..." autocomplete="off">
+            <button type="submit" id="submitBtn">Send</button>
+        </form>
+    </div>
+
+    <script>
+        const USER_OPENROUTER_KEY_STORAGE = 'dashboard-user-openrouter-key';
+        const messagesContainer = document.getElementById('messages');
+        const chatForm = document.getElementById('chatForm');
+        const questionInput = document.getElementById('questionInput');
+        const submitBtn = document.getElementById('submitBtn');
+        const modelSelect = document.getElementById('modelSelect');
+
+        function getApiKey() {
+            return (localStorage.getItem(USER_OPENROUTER_KEY_STORAGE) || '').trim();
+        }
+
+        function renderMarkdown(content) {
+            if (typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
+                return DOMPurify.sanitize(marked.parse(content || ''));
+            }
+            return content;
+        }
+
+        function addMessage(role, content, toolCalls = []) {
+            const msg = document.createElement('div');
+            msg.className = `message ${role}`;
+
+            const label = document.createElement('div');
+            label.className = 'message-label';
+            label.textContent = role === 'user' ? 'You' : role === 'assistant' ? 'Agent' : 'System';
+            msg.appendChild(label);
+
+            // Render tool calls if any
+            if (toolCalls.length > 0) {
+                const toolsDiv = document.createElement('div');
+                toolsDiv.className = 'mb-3';
+                toolCalls.forEach(tc => {
+                    const toolEl = document.createElement('div');
+                    toolEl.className = 'tool-call';
+                    toolEl.innerHTML = `
+            <div class="tool-call-header">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+              </svg>
+              ${tc.tool}
+            </div>
+            <div class="tool-call-args">${JSON.stringify(tc.args || {})}</div>
+          `;
+                    toolsDiv.appendChild(toolEl);
+                });
+                msg.appendChild(toolsDiv);
+            }
+
+            const body = document.createElement('div');
+            body.className = 'prose';
+            body.innerHTML = renderMarkdown(content);
+            msg.appendChild(body);
+
+            messagesContainer.appendChild(msg);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            return msg;
+        }
+
+        function addLoadingMessage() {
+            const msg = document.createElement('div');
+            msg.className = 'message assistant';
+            msg.id = 'loading-msg';
+            msg.innerHTML = `
+        <div class="message-label">Agent</div>
+        <div class="loading-dots">
+          <span></span><span></span><span></span>
+        </div>
+        <span class="ml-2 text-sm text-gray-500">Thinking and calling tools...</span>
+      `;
+            messagesContainer.appendChild(msg);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            return msg;
+        }
+
+        function removeLoadingMessage() {
+            const loading = document.getElementById('loading-msg');
+            if (loading) loading.remove();
+        }
+
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const question = questionInput.value.trim();
+            if (!question) return;
+
+            const apiKey = getApiKey();
+            if (!apiKey) {
+                addMessage('system', '⚠️ No OpenRouter API key found. Please add your key in Settings on the main dashboard.');
+                return;
+            }
+
+            // Add user message
+            addMessage('user', question);
+            questionInput.value = '';
+            submitBtn.disabled = true;
+
+            // Show loading
+            addLoadingMessage();
+
+            try {
+                const response = await fetch('/api/experimental-agent', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify({
+                        question: question,
+                        model: modelSelect.value
+                    })
+                });
+
+                removeLoadingMessage();
+
+                if (!response.ok) {
+                    const err = await response.json();
+                    addMessage('system', `Error: ${err.error || 'Request failed'}`);
+                    return;
+                }
+
+                const result = await response.json();
+                addMessage('assistant', result.response, result.tool_calls || []);
+
+            } catch (error) {
+                removeLoadingMessage();
+                addMessage('system', `Error: ${error.message}`);
+            } finally {
+                submitBtn.disabled = false;
+                questionInput.focus();
+            }
+        });
+
+        // Check for API key on load
+        if (!getApiKey()) {
+            addMessage('system', '⚠️ No OpenRouter API key found. Please add your key in Settings on the main dashboard, then reload this page.');
+        }
+    </script>
+</body>
+
+</html>

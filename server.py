@@ -48,6 +48,12 @@ try:
 except ImportError as e:
     print(f"Note: Charts blueprint not loaded ({e})")
 
+try:
+    from backend.app.routes.experimental_agent import experimental_agent_bp
+    app.register_blueprint(experimental_agent_bp)
+except ImportError as e:
+    print(f"Note: Experimental agent blueprint not loaded ({e})")
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, 'data')
 
