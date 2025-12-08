@@ -41,8 +41,16 @@ app.secret_key = os.environ.get('APP_SECRET_KEY') or 'change-me-in-production'
 app.config['JSON_AS_ASCII'] = False
 app.config['JSONIFY_MIMETYPE'] = 'application/json; charset=utf-8'
 
+# Register modular blueprints
+try:
+    from backend.app.routes.charts import charts_bp
+    app.register_blueprint(charts_bp)
+except ImportError as e:
+    print(f"Note: Charts blueprint not loaded ({e})")
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, 'data')
+
 USERS_DB_PATH = os.path.join(DATA_DIR, 'users.json')
 PINS_DB_PATH = os.path.join(DATA_DIR, 'pins.json')
 

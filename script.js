@@ -6909,3 +6909,272 @@ window.removeAvailableModel = removeAvailableModel;
 window.clearChatHistory = clearChatHistory;
 window.updateAgentModel = updateAgentModel;
 window.loadMonitorFeed = loadMonitorFeed;
+
+// ============================================
+// Chart Comparison Functions
+// ============================================
+
+// Store models selected for comparison
+let chartComparisonModels = [];
+
+const CHART_AVAILABLE_METRICS = [
+    { id: 'quality', label: 'Quality Score' },
+    { id: 'speed', label: 'Speed' },
+    { id: 'price', label: 'Price' },
+    { id: 'latency', label: 'Latency' },
+    { id: 'context_length', label: 'Context Length' }
+];
+
+/**
+ * Add a model to the comparison list
+ * @param {Object} model - Model data object
+ */
+function addToComparison(model) {
+    if (!model) return;
+
+    const modelId = model.id || model.name || model.model;
+    if (!modelId) return;
+
+    // Check if already in list
+    if (chartComparisonModels.some(m => (m.id || m.name) === modelId)) {
+        showToast('Model already in comparison', 'warning');
+        return;
+    }
+
+    // Limit to 8 models
+    if (chartComparisonModels.length >= 8) {
+        showToast('Maximum 8 models for comparison', 'warning');
+        return;
+    }
+
+    chartComparisonModels.push(model);
+    showToast(`Added ${model.name || modelId} to comparison (${chartComparisonModels.length}/8)`, 'info');
+    updateCompareButtonStates();
+}
+
+/**
+ * Remove a model from comparison
+ * @param {string} modelId - Model identifier
+ */
+function removeFromComparison(modelId) {
+    chartComparisonModels = chartComparisonModels.filter(m => (m.id || m.name) !== modelId);
+    updateCompareButtonStates();
+}
+
+/**
+ * Clear all models from comparison
+ */
+function clearComparison() {
+    chartComparisonModels = [];
+    updateCompareButtonStates();
+}
+
+/**
+ * Update compare button states across the UI
+ */
+function updateCompareButtonStates() {
+    // Update any compare buttons in cards
+    document.querySelectorAll('[data-compare-id]').forEach(btn => {
+        const modelId = btn.dataset.compareId;
+        const isInComparison = chartComparisonModels.some(m => (m.id || m.name) === modelId);
+        btn.classList.toggle('active', isInComparison);
+        btn.textContent = isInComparison ? '✓ Compare' : 'Compare';
+    });
+
+    // Update floating compare button if exists
+    updateFloatingCompareButton();
+}
+
+/**
+ * Create or update the floating compare button
+ */
+function updateFloatingCompareButton() {
+    let floatBtn = document.getElementById('floating-compare-btn');
+
+    if (chartComparisonModels.length >= 2) {
+        if (!floatBtn) {
+            floatBtn = document.createElement('button');
+            floatBtn.id = 'floating-compare-btn';
+            floatBtn.className = 'floating-compare-btn';
+            floatBtn.onclick = () => openChartModal();
+            document.body.appendChild(floatBtn);
+
+            // Add styles if not present
+            if (!document.getElementById('chart-float-styles')) {
+                const style = document.createElement('style');
+                style.id = 'chart-float-styles';
+                style.textContent = `
+                    .floating-compare-btn {
+                        position: fixed;
+                        bottom: 24px;
+                        right: 24px;
+                        background: #111827;
+                        color: white;
+                        border: none;
+                        border-radius: 50px;
+                        padding: 14px 24px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+                        z-index: 1000;
+                        transition: transform 0.2s, box-shadow 0.2s;
+                    }
+                    .floating-compare-btn:hover {
+                        transform: translateY(-2px);
+                        box-shadow: 0 6px 24px rgba(0,0,0,0.3);
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+        }
+        floatBtn.textContent = `Compare ${chartComparisonModels.length} Models`;
+        floatBtn.style.display = 'block';
+    } else if (floatBtn) {
+        floatBtn.style.display = 'none';
+    }
+}
+
+/**
+ * Open the chart comparison modal
+ */
+function openChartModal() {
+    if (chartComparisonModels.length < 2) {
+        showToast('Select at least 2 models to compare', 'warning');
+        return;
+    }
+
+    const modal = document.getElementById('chart-modal');
+    if (!modal) return;
+
+    modal.style.display = 'flex';
+
+    // Initialize metrics toggles
+    const metricsContainer = document.getElementById('chart-metrics-container');
+    if (metricsContainer) {
+        metricsContainer.innerHTML = CHART_AVAILABLE_METRICS.map(m => `
+            <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;padding:6px 10px;background:#f3f4f6;border-radius:6px;">
+                <input type="checkbox" class="chart-metric-toggle" value="${m.id}" ${['quality', 'speed', 'price'].includes(m.id) ? 'checked' : ''}>
+                ${m.label}
+            </label>
+        `).join('');
+
+        // Add event listeners
+        metricsContainer.querySelectorAll('.chart-metric-toggle').forEach(cb => {
+            cb.addEventListener('change', () => renderChart());
+        });
+    }
+
+    // Add chart type listener
+    const typeSelect = document.getElementById('chart-type-select');
+    if (typeSelect && !typeSelect.dataset.listenerAttached) {
+        typeSelect.addEventListener('change', () => renderChart());
+        typeSelect.dataset.listenerAttached = 'true';
+    }
+
+    // Render initial chart
+    renderChart();
+
+    // Update models list
+    const modelsList = document.getElementById('chart-models-list');
+    if (modelsList) {
+        modelsList.innerHTML = `Comparing: ${chartComparisonModels.map(m => m.name || m.id).join(', ')}`;
+    }
+}
+
+/**
+ * Close the chart modal
+ */
+function closeChartModal() {
+    const modal = document.getElementById('chart-modal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+/**
+ * Get selected metrics from UI
+ */
+function getSelectedMetrics() {
+    const checked = document.querySelectorAll('.chart-metric-toggle:checked');
+    return Array.from(checked).map(cb => cb.value);
+}
+
+/**
+ * Render the chart using the API
+ */
+async function renderChart() {
+    const container = document.getElementById('chart-container');
+    if (!container) return;
+
+    container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:400px;color:#6b7280;">Loading chart...</div>';
+
+    const chartType = document.getElementById('chart-type-select')?.value || 'bar';
+    const metrics = getSelectedMetrics();
+
+    if (metrics.length === 0) {
+        container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:400px;color:#6b7280;">Select at least one metric</div>';
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/charts/model-comparison', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                models: chartComparisonModels,
+                chart_type: chartType,
+                metrics: metrics,
+                title: `Model Comparison (${chartComparisonModels.length} models)`
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        const result = await response.json();
+
+        if (result.error) {
+            throw new Error(result.error);
+        }
+
+        // Render with Plotly
+        if (typeof Plotly !== 'undefined' && result.plotly_data && result.plotly_layout) {
+            container.innerHTML = '';
+            Plotly.newPlot(container, result.plotly_data, result.plotly_layout, {
+                responsive: true,
+                displayModeBar: true,
+                displaylogo: false
+            });
+        } else {
+            container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:400px;color:#ef4444;">Plotly not loaded or invalid data</div>';
+        }
+    } catch (error) {
+        console.error('Chart render error:', error);
+        container.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:400px;color:#ef4444;">Error: ${error.message}</div>`;
+    }
+}
+
+// Setup chart modal close handlers
+document.addEventListener('DOMContentLoaded', () => {
+    const chartClose = document.getElementById('chart-close');
+    if (chartClose) {
+        chartClose.addEventListener('click', closeChartModal);
+    }
+
+    const chartModal = document.getElementById('chart-modal');
+    if (chartModal) {
+        chartModal.addEventListener('click', (e) => {
+            if (e.target === chartModal) {
+                closeChartModal();
+            }
+        });
+    }
+});
+
+// Export chart functions globally
+window.addToComparison = addToComparison;
+window.removeFromComparison = removeFromComparison;
+window.clearComparison = clearComparison;
+window.openChartModal = openChartModal;
+window.closeChartModal = closeChartModal;
