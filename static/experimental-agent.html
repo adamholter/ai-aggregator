@@ -25,13 +25,35 @@
             color: var(--ink);
         }
 
-        .chat-container {
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 24px;
+        .agent-container {
+            display: grid;
+            grid-template-columns: 1fr 320px;
             min-height: 100vh;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        @media (max-width: 900px) {
+            .agent-container {
+                grid-template-columns: 1fr;
+            }
+
+            .sidebar {
+                display: none;
+            }
+        }
+
+        .main-area {
+            padding: 24px;
             display: flex;
             flex-direction: column;
+            border-right: 1px solid var(--border);
+        }
+
+        .sidebar {
+            padding: 24px;
+            background: #fafafa;
+            overflow-y: auto;
         }
 
         .header {
@@ -40,7 +62,7 @@
             align-items: center;
             padding-bottom: 16px;
             border-bottom: 1px solid var(--border);
-            margin-bottom: 24px;
+            margin-bottom: 16px;
         }
 
         .badge {
@@ -59,7 +81,7 @@
         }
 
         .message {
-            margin-bottom: 20px;
+            margin-bottom: 16px;
             padding: 16px;
             border-radius: 12px;
         }
@@ -89,28 +111,87 @@
             margin-bottom: 8px;
         }
 
-        .tool-call {
-            background: #f8fafc;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 12px;
-            margin: 8px 0;
+        /* Stack trace / activity log */
+        .activity-header {
             font-size: 13px;
-        }
-
-        .tool-call-header {
-            display: flex;
-            align-items: center;
-            gap: 8px;
             font-weight: 600;
-            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--muted);
+            margin-bottom: 16px;
         }
 
-        .tool-call-args {
-            color: var(--muted);
-            font-family: monospace;
-            font-size: 12px;
+        .timeline {
+            position: relative;
+        }
+
+        .timeline-item {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 12px;
+            position: relative;
+        }
+
+        .timeline-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--border);
+            flex-shrink: 0;
             margin-top: 4px;
+        }
+
+        .timeline-dot.running {
+            background: var(--accent);
+            animation: pulse 1.5s infinite;
+        }
+
+        .timeline-dot.done {
+            background: #10b981;
+        }
+
+        .timeline-dot.error {
+            background: #ef4444;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        .timeline-content {
+            flex: 1;
+        }
+
+        .timeline-title {
+            font-weight: 600;
+            font-size: 13px;
+            color: var(--ink);
+        }
+
+        .timeline-detail {
+            font-size: 12px;
+            color: var(--muted);
+            margin-top: 2px;
+        }
+
+        .timeline-preview {
+            font-size: 11px;
+            color: var(--muted);
+            background: white;
+            padding: 8px;
+            border-radius: 6px;
+            margin-top: 6px;
+            border: 1px solid var(--border);
+            max-height: 100px;
+            overflow: hidden;
         }
 
         .input-area {
@@ -124,7 +205,7 @@
         }
 
         .input-wrapper {
-            max-width: 800px;
+            max-width: 700px;
             margin: 0 auto;
             display: flex;
             gap: 12px;
@@ -165,45 +246,12 @@
         }
 
         .model-select {
-            padding: 12px;
+            padding: 10px 12px;
             border: 1px solid var(--border);
             border-radius: 12px;
-            font-size: 14px;
+            font-size: 13px;
             background: white;
-        }
-
-        .loading-dots {
-            display: inline-flex;
-            gap: 4px;
-        }
-
-        .loading-dots span {
-            width: 8px;
-            height: 8px;
-            background: var(--accent);
-            border-radius: 50%;
-            animation: bounce 1.4s infinite ease-in-out;
-        }
-
-        .loading-dots span:nth-child(1) {
-            animation-delay: -0.32s;
-        }
-
-        .loading-dots span:nth-child(2) {
-            animation-delay: -0.16s;
-        }
-
-        @keyframes bounce {
-
-            0%,
-            80%,
-            100% {
-                transform: scale(0);
-            }
-
-            40% {
-                transform: scale(1);
-            }
+            min-width: 200px;
         }
 
         .prose {
@@ -211,9 +259,9 @@
         }
 
         .prose h2 {
-            font-size: 18px;
+            font-size: 16px;
             font-weight: 600;
-            margin: 16px 0 8px;
+            margin: 12px 0 6px;
         }
 
         .prose ul {
@@ -246,32 +294,44 @@
         .back-link:hover {
             color: var(--ink);
         }
+
+        .empty-state {
+            color: var(--muted);
+            font-size: 13px;
+            text-align: center;
+            padding: 32px;
+        }
     </style>
 </head>
 
 <body>
-    <div class="chat-container">
-        <div class="header">
-            <div>
-                <a href="/" class="back-link">← Back to Dashboard</a>
-                <h1 class="text-xl font-bold mt-1">Experimental Agent</h1>
+    <div class="agent-container">
+        <div class="main-area">
+            <div class="header">
+                <div>
+                    <a href="/" class="back-link">← Back to Dashboard</a>
+                    <h1 class="text-xl font-bold mt-1">Experimental Agent</h1>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="badge">Pydantic AI</span>
+                    <select id="modelSelect" class="model-select">
+                        <option value="x-ai/grok-4-fast">Loading models...</option>
+                    </select>
+                </div>
             </div>
-            <div class="flex items-center gap-3">
-                <span class="badge">Pydantic AI</span>
-                <select id="modelSelect" class="model-select">
-                    <option value="x-ai/grok-4-fast">Grok 4 Fast</option>
-                    <option value="anthropic/claude-sonnet-4">Claude Sonnet 4</option>
-                    <option value="openai/gpt-4.1">GPT-4.1</option>
-                    <option value="google/gemini-2.5-flash">Gemini 2.5 Flash</option>
-                </select>
+
+            <div id="messages" class="messages">
+                <div class="message system">
+                    <p><strong>Experimental Agent</strong> — Uses Pydantic AI for typed tool calling.</p>
+                    <p>Try: "What's the best image model?" or "What's new with Gemini?"</p>
+                </div>
             </div>
         </div>
 
-        <div id="messages" class="messages">
-            <div class="message system">
-                <p><strong>Experimental Agent</strong> — This version uses Pydantic AI for more reliable tool calling.
-                </p>
-                <p>Try asking: "What's new with Gemini?" or "Show me trending image generation models"</p>
+        <div class="sidebar">
+            <div class="activity-header">Agent Activity</div>
+            <div id="activityLog" class="timeline">
+                <div class="empty-state">Waiting for a question...</div>
             </div>
         </div>
     </div>
@@ -285,15 +345,72 @@
 
     <script>
         const USER_OPENROUTER_KEY_STORAGE = 'dashboard-user-openrouter-key';
+        const AGENT_MODEL_STORAGE = 'dashboard-agent-exp-model';
+        const AVAILABLE_MODELS_STORAGE = 'dashboard-available-models';
+
         const messagesContainer = document.getElementById('messages');
         const chatForm = document.getElementById('chatForm');
         const questionInput = document.getElementById('questionInput');
         const submitBtn = document.getElementById('submitBtn');
         const modelSelect = document.getElementById('modelSelect');
+        const activityLog = document.getElementById('activityLog');
+
+        let currentTrace = [];
 
         function getApiKey() {
             return (localStorage.getItem(USER_OPENROUTER_KEY_STORAGE) || '').trim();
         }
+
+        function formatTime(date) {
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        }
+
+        // Load models from settings (same as main agent)
+        async function loadModels() {
+            const stored = localStorage.getItem(AVAILABLE_MODELS_STORAGE) || '';
+            const storedList = stored ? stored.split(',').map(s => s.trim()).filter(Boolean) : [];
+            const savedModel = localStorage.getItem(AGENT_MODEL_STORAGE);
+
+            let models = storedList;
+
+            // If no stored models, try to fetch from config
+            if (!models.length) {
+                try {
+                    const res = await fetch('/api/model-config');
+                    if (res.ok) {
+                        const cfg = await res.json();
+                        models = (cfg.agent && cfg.agent.availableModels) || [];
+                    }
+                } catch (_) { }
+            }
+
+            // Fallback defaults
+            if (!models.length) {
+                models = [
+                    'x-ai/grok-4-fast',
+                    'anthropic/claude-sonnet-4',
+                    'openai/gpt-4.1',
+                    'google/gemini-2.5-flash'
+                ];
+            }
+
+            modelSelect.innerHTML = '';
+            models.forEach(id => {
+                const opt = document.createElement('option');
+                opt.value = id;
+                opt.textContent = id.split('/').pop();
+                modelSelect.appendChild(opt);
+            });
+
+            // Restore saved selection
+            if (savedModel && models.includes(savedModel)) {
+                modelSelect.value = savedModel;
+            }
+        }
+
+        modelSelect.addEventListener('change', () => {
+            localStorage.setItem(AGENT_MODEL_STORAGE, modelSelect.value);
+        });
 
         function renderMarkdown(content) {
             if (typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
@@ -302,7 +419,7 @@
             return content;
         }
 
-        function addMessage(role, content, toolCalls = []) {
+        function addMessage(role, content) {
             const msg = document.createElement('div');
             msg.className = `message ${role}`;
 
@@ -310,27 +427,6 @@
             label.className = 'message-label';
             label.textContent = role === 'user' ? 'You' : role === 'assistant' ? 'Agent' : 'System';
             msg.appendChild(label);
-
-            // Render tool calls if any
-            if (toolCalls.length > 0) {
-                const toolsDiv = document.createElement('div');
-                toolsDiv.className = 'mb-3';
-                toolCalls.forEach(tc => {
-                    const toolEl = document.createElement('div');
-                    toolEl.className = 'tool-call';
-                    toolEl.innerHTML = `
-            <div class="tool-call-header">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
-              </svg>
-              ${tc.tool}
-            </div>
-            <div class="tool-call-args">${JSON.stringify(tc.args || {})}</div>
-          `;
-                    toolsDiv.appendChild(toolEl);
-                });
-                msg.appendChild(toolsDiv);
-            }
 
             const body = document.createElement('div');
             body.className = 'prose';
@@ -342,25 +438,36 @@
             return msg;
         }
 
-        function addLoadingMessage() {
-            const msg = document.createElement('div');
-            msg.className = 'message assistant';
-            msg.id = 'loading-msg';
-            msg.innerHTML = `
-        <div class="message-label">Agent</div>
-        <div class="loading-dots">
-          <span></span><span></span><span></span>
-        </div>
-        <span class="ml-2 text-sm text-gray-500">Thinking and calling tools...</span>
-      `;
-            messagesContainer.appendChild(msg);
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-            return msg;
+        function addTraceStep(title, detail, status = 'running', preview = '') {
+            const step = { title, detail, status, preview, created: new Date() };
+            currentTrace.push(step);
+            renderActivityLog();
+            return step;
         }
 
-        function removeLoadingMessage() {
-            const loading = document.getElementById('loading-msg');
-            if (loading) loading.remove();
+        function updateTraceStep(index, updates) {
+            if (currentTrace[index]) {
+                Object.assign(currentTrace[index], updates);
+                renderActivityLog();
+            }
+        }
+
+        function renderActivityLog() {
+            if (!currentTrace.length) {
+                activityLog.innerHTML = '<div class="empty-state">Waiting for a question...</div>';
+                return;
+            }
+
+            activityLog.innerHTML = currentTrace.map(step => `
+        <div class="timeline-item">
+          <div class="timeline-dot ${step.status}"></div>
+          <div class="timeline-content">
+            <div class="timeline-title">${step.title}</div>
+            <div class="timeline-detail">${formatTime(step.created)} — ${step.detail}</div>
+            ${step.preview ? `<div class="timeline-preview">${step.preview}</div>` : ''}
+          </div>
+        </div>
+      `).join('');
         }
 
         chatForm.addEventListener('submit', async (e) => {
@@ -371,20 +478,24 @@
 
             const apiKey = getApiKey();
             if (!apiKey) {
-                addMessage('system', '⚠️ No OpenRouter API key found. Please add your key in Settings on the main dashboard.');
+                addMessage('system', '⚠️ No OpenRouter API key. Add your key in Settings on the main dashboard.');
                 return;
             }
+
+            // Reset trace
+            currentTrace = [];
 
             // Add user message
             addMessage('user', question);
             questionInput.value = '';
             submitBtn.disabled = true;
 
-            // Show loading
-            addLoadingMessage();
+            // Start trace
+            const initStep = addTraceStep('Initializing', 'Preparing agent request...', 'running');
 
             try {
-                const response = await fetch('/api/experimental-agent', {
+                // Use streaming endpoint for live updates
+                const response = await fetch('/api/experimental-agent/stream', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -396,19 +507,68 @@
                     })
                 });
 
-                removeLoadingMessage();
-
                 if (!response.ok) {
-                    const err = await response.json();
-                    addMessage('system', `Error: ${err.error || 'Request failed'}`);
-                    return;
+                    // Check if response is HTML (404/error page)
+                    const contentType = response.headers.get('content-type') || '';
+                    if (contentType.includes('text/html')) {
+                        throw new Error(`Server returned HTML (status ${response.status}). The experimental agent may not be deployed yet.`);
+                    }
+                    const err = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+                    throw new Error(err.error || `Request failed: ${response.status}`);
                 }
 
-                const result = await response.json();
-                addMessage('assistant', result.response, result.tool_calls || []);
+                updateTraceStep(0, { status: 'done', detail: 'Agent ready' });
+
+                const toolStep = addTraceStep('Calling tools', 'Fetching data...', 'running');
+
+                // Read SSE stream
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let fullText = '';
+                let buffer = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop() || '';
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const event = JSON.parse(line.slice(6));
+
+                                if (event.type === 'text') {
+                                    fullText += event.content;
+                                    updateTraceStep(1, { detail: `Receiving response...` });
+                                } else if (event.type === 'tool_call') {
+                                    addTraceStep(`Tool: ${event.tool}`, JSON.stringify(event.args || {}), 'done');
+                                } else if (event.type === 'error') {
+                                    throw new Error(event.error);
+                                } else if (event.type === 'done') {
+                                    fullText = event.response || fullText;
+                                }
+                            } catch (parseErr) {
+                                console.warn('SSE parse error:', parseErr);
+                            }
+                        }
+                    }
+                }
+
+                updateTraceStep(1, { status: 'done', detail: 'Response complete' });
+                addTraceStep('Done', 'Agent finished', 'done');
+
+                if (fullText) {
+                    addMessage('assistant', fullText);
+                } else {
+                    addMessage('system', 'No response received from agent.');
+                }
 
             } catch (error) {
-                removeLoadingMessage();
+                console.error('Agent error:', error);
+                updateTraceStep(currentTrace.length - 1, { status: 'error', detail: error.message });
                 addMessage('system', `Error: ${error.message}`);
             } finally {
                 submitBtn.disabled = false;
@@ -416,9 +576,11 @@
             }
         });
 
-        // Check for API key on load
+        // Initialize
+        loadModels();
+
         if (!getApiKey()) {
-            addMessage('system', '⚠️ No OpenRouter API key found. Please add your key in Settings on the main dashboard, then reload this page.');
+            addMessage('system', '⚠️ No OpenRouter API key. Add your key in Settings on the main dashboard, then reload.');
         }
     </script>
 </body>
