@@ -89,47 +89,70 @@ except ImportError as e:
     
     AGENT_SYSTEM_PROMPT = "You are a helpful AI assistant that answers questions about AI models and news. USE THE TOOLS to gather information before answering. Keep responses scannable with bullet points."
     
-    async def _execute_tool(tool_name: str, args: dict, base_url: str) -> str:
-        """Execute tool by calling external APIs directly - NOT our own server (avoids deadlock)."""
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            try:
-                if tool_name == "search_openrouter_models" or tool_name == "fetch_llm_benchmarks":
-                    # Call OpenRouter models API directly
-                    resp = await client.get("https://openrouter.ai/api/v1/models")
-                    resp.raise_for_status()
-                    models = resp.json().get("data", [])[:15]
-                    query = args.get("query", "").lower()
-                    if query:
-                        models = [m for m in models if query in m.get("id", "").lower() or query in m.get("name", "").lower()][:10]
-                    lines = [f"## Models ({len(models)} found)"]
-                    for m in models[:10]:
-                        lines.append(f"- **{m.get('name', m.get('id'))}** - ${m.get('pricing', {}).get('prompt', 'N/A')}/1M tokens")
-                    return "\n".join(lines)
-                
-                elif tool_name == "fetch_image_models":
-                    # Return hard-coded top image models (avoid self-call)
-                    return """## Top Image Models
-- **FLUX.1 Pro** - Best quality, by Black Forest Labs
-- **FLUX.1 Dev** - Fast development model
-- **Midjourney v6** - Popular creative tool
-- **DALL-E 3** - OpenAI's latest
-- **Stable Diffusion XL** - Open source standard
-- **Ideogram 2.0** - Great for text in images
-- **Leonardo.ai** - Gaming/concept art focused"""
-                
-                elif tool_name == "fetch_latest_feed" or tool_name == "fetch_hype_feed":
-                    # Return curated info (avoid self-call)
-                    return """## Latest AI Updates
-- **Claude 4** - Anthropic's newest model with improved reasoning
-- **GPT-4.1** - OpenAI's latest update  
-- **Gemini 2.5** - Google's multimodal model
-- **FLUX.1** - New image generation standard
-- **Llama 3.3** - Meta's open source LLM"""
-                
-                else:
-                    return f"Tool {tool_name} executed successfully."
-            except Exception as ex:
-                return f"Error: {ex}"
+    def _execute_tool_sync(tool_name: str, args: dict) -> str:
+        """Execute tool by calling internal functions directly (no HTTP, no deadlock)."""
+        try:
+            # Map tool names to category IDs
+            tool_to_category = {
+                "fetch_latest_feed": "latest",
+                "search_openrouter_models": "openrouter",
+                "fetch_image_models": "text-to-image",
+                "fetch_llm_benchmarks": "llms",
+                "fetch_hype_feed": "hype"
+            }
+            
+            category = tool_to_category.get(tool_name)
+            if not category:
+                return f"Unknown tool: {tool_name}"
+            
+            # Call the internal function directly
+            result = fetch_data_for_categories([category], limit_per_category=args.get("limit", 15))
+            
+            datasets = result.get("datasets", {})
+            items = []
+            for cat_id, cat_items in datasets.items():
+                if isinstance(cat_items, list):
+                    items.extend(cat_items)
+            
+            if not items:
+                return f"No data found for {tool_name}"
+            
+            # Filter by query if provided
+            query = args.get("query", "").lower()
+            if query:
+                filtered = []
+                for item in items:
+                    haystack = " ".join([
+                        str(item.get("title", "")),
+                        str(item.get("name", "")),
+                        str(item.get("summary", "")),
+                        str(item.get("description", "")),
+                        str(item.get("provider", ""))
+                    ]).lower()
+                    if query in haystack:
+                        filtered.append(item)
+                items = filtered if filtered else items
+            
+            # Format as markdown
+            lines = [f"## {tool_name.replace('_', ' ').title()} ({len(items[:10])} items)"]
+            for item in items[:10]:
+                title = item.get("title") or item.get("name") or item.get("id", "Untitled")
+                provider = item.get("provider") or item.get("source") or ""
+                url = item.get("link") or item.get("url") or ""
+                line = f"- **{title}**"
+                if provider:
+                    line += f" ({provider})"
+                if url:
+                    line += f" [→]({url})"
+                lines.append(line)
+                summary = item.get("summary") or item.get("description") or ""
+                if summary:
+                    lines.append(f"  {summary[:100]}...")
+            
+            return "\n".join(lines)
+            
+        except Exception as ex:
+            return f"Error executing {tool_name}: {ex}"
 
     
     async def _run_inline_agent(question: str, api_key: str, model_id: str, base_url: str) -> AgentRun:
@@ -154,7 +177,7 @@ except ImportError as e:
                         name = fn.get("name", "")
                         try: args = json.loads(fn.get("arguments", "{}"))
                         except: args = {}
-                        tool_result = await _execute_tool(name, args, base_url)
+                        tool_result = _execute_tool_sync(name, args)
                         run.tool_calls.append(ToolCall(tool=name, args=args, result=tool_result, status="done"))
                         messages.append({"role": "tool", "tool_call_id": tc.get("id", ""), "content": tool_result})
                 elif msg.get("content"):
