@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -8,11 +9,21 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
-  <link rel="icon" type="image/svg+xml" href="/u86mkqMgI0HOjDhIVO1WF.svg">
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
   <style>
-    :root { color-scheme: light; }
-    * { box-sizing: border-box; }
-    html, body { height: 100%; }
+    :root {
+      color-scheme: light;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      height: 100%;
+    }
+
     body {
       margin: 0;
       padding: 0;
@@ -20,6 +31,7 @@
       font-family: "Helvetica Neue", Arial, sans-serif;
       color: #0f172a;
     }
+
     .agent-app {
       max-width: 1180px;
       margin: 0 auto;
@@ -28,6 +40,7 @@
       display: flex;
       flex-direction: column;
     }
+
     .agent-shell {
       background: #ffffff;
       border: 1px solid #e5e7eb;
@@ -39,6 +52,7 @@
       flex-direction: column;
       min-height: 0;
     }
+
     .agent-grid {
       display: grid;
       grid-template-columns: 2fr 1fr;
@@ -46,6 +60,7 @@
       flex: 1;
       min-height: 0;
     }
+
     .agent-chat-panel {
       background: #fafafa;
       border: 1px solid #e5e5e5;
@@ -57,6 +72,7 @@
       gap: 10px;
       min-height: 0;
     }
+
     .chat-toolbar {
       display: flex;
       align-items: center;
@@ -65,11 +81,13 @@
       font-size: 13px;
       color: #6b7280;
     }
+
     .chat-toolbar label {
       display: inline-flex;
       align-items: center;
       gap: 6px;
     }
+
     .chat-toolbar select {
       border: 1px solid #d4d4d8;
       border-radius: 8px;
@@ -78,6 +96,7 @@
       font-size: 13px;
       color: #111827;
     }
+
     .chat-toolbar button {
       border: 1px solid #d4d4d8;
       background: #ffffff;
@@ -87,7 +106,12 @@
       cursor: pointer;
       transition: box-shadow 0.15s ease, transform 0.15s ease;
     }
-    .chat-toolbar button:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
+
+    .chat-toolbar button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+    }
+
     .chat-area {
       flex: 1;
       overflow-y: auto;
@@ -97,39 +121,48 @@
       gap: 12px;
       min-height: 320px;
     }
+
     .message {
       max-width: 96%;
       border-radius: 16px;
       padding: 14px 16px;
-      box-shadow: 0 10px 24px rgba(0,0,0,0.08);
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
       border: 1px solid #dcdfe3;
       width: fit-content;
       align-self: flex-start;
     }
+
     .message.user-bubble {
       align-self: flex-start;
       background: linear-gradient(180deg, #f0f0f0, #e6e6e6);
       color: #0f172a;
     }
+
     .message.assistant-bubble {
       align-self: flex-start;
       background: linear-gradient(180deg, #e5f4ff, #d3eafb);
       border-color: #c2dff7;
       color: #0b2740;
     }
+
     .message.system-bubble {
       align-self: flex-start;
       background: #f8fafc;
       color: #475569;
       border-style: dashed;
     }
-    .message .text-xs { color: #6b7280; }
+
+    .message .text-xs {
+      color: #6b7280;
+    }
+
     .chat-form {
       display: flex;
       gap: 10px;
       align-items: center;
       padding-top: 6px;
     }
+
     .chat-form .agent-file-btn {
       display: inline-flex;
       align-items: center;
@@ -142,7 +175,12 @@
       cursor: pointer;
       transition: box-shadow 0.15s ease, transform 0.15s ease;
     }
-    .chat-form .agent-file-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
+
+    .chat-form .agent-file-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+    }
+
     .chat-form .agent-text-input {
       flex: 1;
       border: 1px solid #d4d4d8;
@@ -152,6 +190,7 @@
       outline: none;
       background: #fff;
     }
+
     .chat-form .agent-send {
       border: none;
       background: linear-gradient(180deg, #111827, #0b1220);
@@ -163,7 +202,12 @@
       font-weight: 600;
       transition: box-shadow 0.15s ease, transform 0.15s ease;
     }
-    .chat-form .agent-send:hover { transform: translateY(-1px); box-shadow: 0 8px 16px rgba(0,0,0,0.15); }
+
+    .chat-form .agent-send:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+    }
+
     .agent-attachments {
       display: flex;
       gap: 8px;
@@ -172,6 +216,7 @@
       font-size: 0.85rem;
       padding: 0 2px;
     }
+
     .agent-attachments .chip {
       display: inline-flex;
       align-items: center;
@@ -182,6 +227,7 @@
       background: #fff;
       max-width: 220px;
     }
+
     .side-panel {
       display: flex;
       flex-direction: column;
@@ -192,19 +238,22 @@
       height: fit-content;
       align-self: flex-start;
     }
+
     .side-card {
       background: #ffffff;
       border: 1px solid #e5e7eb;
       border-radius: 12px;
       padding: 14px 16px;
-      box-shadow: 0 8px 18px rgba(0,0,0,0.05);
+      box-shadow: 0 8px 18px rgba(0, 0, 0, 0.05);
     }
+
     .side-card h3 {
       margin: 0 0 8px;
       font-size: 15px;
       font-weight: 700;
       color: #0f172a;
     }
+
     .data-list {
       margin: 0;
       padding-left: 18px;
@@ -212,17 +261,23 @@
       font-size: 14px;
       line-height: 1.5;
     }
-    .data-list li { margin-bottom: 6px; }
+
+    .data-list li {
+      margin-bottom: 6px;
+    }
+
     .activity-log {
       display: flex;
       flex-direction: column;
       gap: 8px;
       min-height: 140px;
     }
+
     .timeline {
       position: relative;
       padding-left: 14px;
     }
+
     .timeline::before {
       content: '';
       position: absolute;
@@ -232,12 +287,14 @@
       width: 2px;
       background: #e5e7eb;
     }
+
     .timeline-row {
       position: relative;
       display: flex;
       gap: 10px;
       padding: 6px 0 6px 10px;
     }
+
     .timeline-dot {
       position: absolute;
       left: -1px;
@@ -249,13 +306,39 @@
       border: 2px solid #fff;
       box-shadow: 0 0 0 2px #e5e7eb;
     }
-    .timeline-dot.done { background: #10b981; }
-    .timeline-dot.running { background: #f59e0b; }
-    .timeline-dot.error { background: #ef4444; }
-    .timeline-dot.pending { background: #cbd5e1; }
-    .timeline-body { color: #1f2937; }
-    .timeline-title { margin: 0; font-size: 13px; font-weight: 700; }
-    .timeline-detail { margin: 2px 0 0; font-size: 13px; color: #6b7280; }
+
+    .timeline-dot.done {
+      background: #10b981;
+    }
+
+    .timeline-dot.running {
+      background: #f59e0b;
+    }
+
+    .timeline-dot.error {
+      background: #ef4444;
+    }
+
+    .timeline-dot.pending {
+      background: #cbd5e1;
+    }
+
+    .timeline-body {
+      color: #1f2937;
+    }
+
+    .timeline-title {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .timeline-detail {
+      margin: 2px 0 0;
+      font-size: 13px;
+      color: #6b7280;
+    }
+
     .agent-placeholder {
       background: #fff;
       border: 1px dashed #d4d4d8;
@@ -265,11 +348,13 @@
       text-align: center;
       font-size: 14px;
     }
+
     .fullscreen-bar {
       display: flex;
       justify-content: flex-end;
       margin-bottom: 10px;
     }
+
     .fullscreen-btn {
       border: 1px solid #d4d4d8;
       background: #ffffff;
@@ -280,31 +365,77 @@
       font-weight: 600;
       transition: box-shadow 0.15s ease, transform 0.15s ease;
     }
-    .fullscreen-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+
+    .fullscreen-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    }
 
     @media (max-width: 960px) {
-      .agent-app { padding: 12px 10px 18px; }
-      .agent-shell { padding: 12px; border-radius: 12px; }
-      .agent-grid { grid-template-columns: 1fr; gap: 12px; }
-      .agent-chat-panel { min-height: 420px; padding: 12px; }
-      .chat-toolbar { justify-content: space-between; flex-wrap: wrap; gap: 8px; }
-      .chat-toolbar label { width: 100%; justify-content: space-between; }
-      .chat-toolbar select { width: 100%; }
-      .chat-toolbar button { width: 100%; }
-      .chat-form { flex-wrap: wrap; }
-      .chat-form .agent-text-input { min-width: 0; }
-      .side-panel { position: static; }
-      .side-card { padding: 12px; }
+      .agent-app {
+        padding: 12px 10px 18px;
+      }
+
+      .agent-shell {
+        padding: 12px;
+        border-radius: 12px;
+      }
+
+      .agent-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+
+      .agent-chat-panel {
+        min-height: 420px;
+        padding: 12px;
+      }
+
+      .chat-toolbar {
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .chat-toolbar label {
+        width: 100%;
+        justify-content: space-between;
+      }
+
+      .chat-toolbar select {
+        width: 100%;
+      }
+
+      .chat-toolbar button {
+        width: 100%;
+      }
+
+      .chat-form {
+        flex-wrap: wrap;
+      }
+
+      .chat-form .agent-text-input {
+        min-width: 0;
+      }
+
+      .side-panel {
+        position: static;
+      }
+
+      .side-card {
+        padding: 12px;
+      }
     }
   </style>
 </head>
-  <body>
-    <div class="agent-app">
-      <div class="fullscreen-bar">
-        <button id="fullscreenToggle" class="fullscreen-btn" type="button">Full Screen</button>
-      </div>
-      <div class="agent-shell">
-        <div class="agent-grid">
+
+<body>
+  <div class="agent-app">
+    <div class="fullscreen-bar">
+      <button id="fullscreenToggle" class="fullscreen-btn" type="button">Full Screen</button>
+    </div>
+    <div class="agent-shell">
+      <div class="agent-grid">
         <section class="agent-chat-panel">
           <div class="chat-toolbar">
             <label for="modelSelect">
@@ -318,10 +449,14 @@
           </div>
           <form id="chatForm" class="chat-form">
             <label for="fileInput" class="agent-file-btn" title="Attach images">
-              <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path fill="currentColor" d="M7.75 4A3.25 3.25 0 0 0 4.5 7.25v9.5a3.75 3.75 0 1 0 7.5 0v-8a2.25 2.25 0 1 0-4.5 0v7.75a.75.75 0 1 0 1.5 0V8.75a.75.75 0 1 1 1.5 0v8a2.25 2.25 0 0 1-4.5 0v-9.5A1.75 1.75 0 0 1 7.75 5.5h8.5a2.25 2.25 0 0 1 0 4.5h-2.5a.75.75 0 0 0 0 1.5h2.5a3.75 3.75 0 0 0 0-7.5h-8.5Z"/></svg>
+              <svg viewBox="0 0 24 24" class="icon" aria-hidden="true">
+                <path fill="currentColor"
+                  d="M7.75 4A3.25 3.25 0 0 0 4.5 7.25v9.5a3.75 3.75 0 1 0 7.5 0v-8a2.25 2.25 0 1 0-4.5 0v7.75a.75.75 0 1 0 1.5 0V8.75a.75.75 0 1 1 1.5 0v8a2.25 2.25 0 0 1-4.5 0v-9.5A1.75 1.75 0 0 1 7.75 5.5h8.5a2.25 2.25 0 0 1 0 4.5h-2.5a.75.75 0 0 0 0 1.5h2.5a3.75 3.75 0 0 0 0-7.5h-8.5Z" />
+              </svg>
             </label>
             <input id="fileInput" type="file" accept="image/*" multiple class="hidden" />
-            <input id="questionInput" type="text" autocomplete="off" placeholder="Ask for the latest image-to-video models..." class="agent-text-input" />
+            <input id="questionInput" type="text" autocomplete="off"
+              placeholder="Ask for the latest image-to-video models..." class="agent-text-input" />
             <button type="submit" class="agent-send">Send</button>
           </form>
           <div id="attachmentsBar" class="agent-attachments"></div>
@@ -350,4 +485,5 @@
 
   <script src="/static/agent.js"></script>
 </body>
+
 </html>
