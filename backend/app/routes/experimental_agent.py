@@ -18,7 +18,7 @@ experimental_agent_bp = Blueprint(
 
 def get_agent_module():
     """Lazy import to avoid circular dependencies."""
-    from backend.app.services.pydantic_agent import run_agent, run_agent_stream
+    from backend.app.services.experimental_agent_service import run_agent, run_agent_stream
     return run_agent, run_agent_stream
 
 
