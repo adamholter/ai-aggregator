@@ -10,4 +10,3 @@ scipy==1.14.1
 scikit-learn==1.5.2
 gunicorn==21.2.0
 beautifulsoup4==4.12.3
-httpx>=0.27.0

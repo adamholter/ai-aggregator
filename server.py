@@ -56,28 +56,11 @@ except ImportError as e:
     print(f"Note: Experimental agent blueprint not loaded ({e}), using inline routes")
     
     # ============================================================
-    # INLINE EXPERIMENTAL AGENT (fallback when blueprint fails)
-    # Direct OpenRouter tool calling - no external dependencies
+    # INLINE EXPERIMENTAL AGENT - Pure sync, no async, no httpx
+    # Uses requests library (already imported at top of file)
     # ============================================================
-    import asyncio
-    import httpx
-    from dataclasses import dataclass, field
-    from typing import Callable
     
-    @dataclass
-    class ToolCall:
-        tool: str
-        args: dict
-        result: str = ""
-        status: str = "pending"
-    
-    @dataclass
-    class AgentRun:
-        question: str
-        model: str
-        tool_calls: list = field(default_factory=list)
-        response: str = ""
-        error: str = ""
+    print("Setting up inline experimental agent routes...")
     
     AGENT_TOOLS = [
         {"type": "function", "function": {"name": "fetch_latest_feed", "description": "Fetch latest AI news", "parameters": {"type": "object", "properties": {"query": {"type": "string"}, "limit": {"type": "integer", "default": 20}}, "required": []}}},
@@ -87,107 +70,7 @@ except ImportError as e:
         {"type": "function", "function": {"name": "fetch_hype_feed", "description": "Get trending AI repos", "parameters": {"type": "object", "properties": {"query": {"type": "string"}, "limit": {"type": "integer", "default": 20}}, "required": []}}}
     ]
     
-    AGENT_SYSTEM_PROMPT = "You are a helpful AI assistant that answers questions about AI models and news. USE THE TOOLS to gather information before answering. Keep responses scannable with bullet points."
-    
-    def _execute_tool_sync(tool_name: str, args: dict) -> str:
-        """Execute tool by calling internal functions directly (no HTTP, no deadlock)."""
-        try:
-            # Map tool names to category IDs
-            tool_to_category = {
-                "fetch_latest_feed": "latest",
-                "search_openrouter_models": "openrouter",
-                "fetch_image_models": "text-to-image",
-                "fetch_llm_benchmarks": "llms",
-                "fetch_hype_feed": "hype"
-            }
-            
-            category = tool_to_category.get(tool_name)
-            if not category:
-                return f"Unknown tool: {tool_name}"
-            
-            # Call the internal function directly
-            result = fetch_data_for_categories([category], limit_per_category=args.get("limit", 15))
-            
-            datasets = result.get("datasets", {})
-            items = []
-            for cat_id, cat_items in datasets.items():
-                if isinstance(cat_items, list):
-                    items.extend(cat_items)
-            
-            if not items:
-                return f"No data found for {tool_name}"
-            
-            # Filter by query if provided
-            query = args.get("query", "").lower()
-            if query:
-                filtered = []
-                for item in items:
-                    haystack = " ".join([
-                        str(item.get("title", "")),
-                        str(item.get("name", "")),
-                        str(item.get("summary", "")),
-                        str(item.get("description", "")),
-                        str(item.get("provider", ""))
-                    ]).lower()
-                    if query in haystack:
-                        filtered.append(item)
-                items = filtered if filtered else items
-            
-            # Format as markdown
-            lines = [f"## {tool_name.replace('_', ' ').title()} ({len(items[:10])} items)"]
-            for item in items[:10]:
-                title = item.get("title") or item.get("name") or item.get("id", "Untitled")
-                provider = item.get("provider") or item.get("source") or ""
-                url = item.get("link") or item.get("url") or ""
-                line = f"- **{title}**"
-                if provider:
-                    line += f" ({provider})"
-                if url:
-                    line += f" [→]({url})"
-                lines.append(line)
-                summary = item.get("summary") or item.get("description") or ""
-                if summary:
-                    lines.append(f"  {summary[:100]}...")
-            
-            return "\n".join(lines)
-            
-        except Exception as ex:
-            return f"Error executing {tool_name}: {ex}"
-
-    
-    async def _run_inline_agent(question: str, api_key: str, model_id: str, base_url: str) -> AgentRun:
-        run = AgentRun(question=question, model=model_id)
-        messages = [{"role": "system", "content": AGENT_SYSTEM_PROMPT}, {"role": "user", "content": question}]
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            for _ in range(5):
-                try:
-                    resp = await client.post("https://openrouter.ai/api/v1/chat/completions", headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}, json={"model": model_id, "messages": messages, "tools": AGENT_TOOLS, "tool_choice": "auto"})
-                    resp.raise_for_status()
-                    result = resp.json()
-                except Exception as ex:
-                    run.error = str(ex)
-                    return run
-                choice = result.get("choices", [{}])[0]
-                msg = choice.get("message", {})
-                tool_calls = msg.get("tool_calls", [])
-                if tool_calls:
-                    messages.append(msg)
-                    for tc in tool_calls:
-                        fn = tc.get("function", {})
-                        name = fn.get("name", "")
-                        try: args = json.loads(fn.get("arguments", "{}"))
-                        except: args = {}
-                        tool_result = _execute_tool_sync(name, args)
-                        run.tool_calls.append(ToolCall(tool=name, args=args, result=tool_result, status="done"))
-                        messages.append({"role": "tool", "tool_call_id": tc.get("id", ""), "content": tool_result})
-                elif msg.get("content"):
-                    run.response = msg["content"]
-                    break
-                else:
-                    break
-        if not run.response and not run.error:
-            run.response = "No response from agent."
-        return run
+    AGENT_SYSTEM_PROMPT = "You are a helpful AI assistant. USE THE TOOLS to gather information before answering. Keep responses scannable with bullet points."
     
     @app.route('/experimental-agent')
     def inline_exp_agent_page():
@@ -195,30 +78,111 @@ except ImportError as e:
     
     @app.route('/api/experimental-agent', methods=['POST'])
     def inline_exp_agent_api():
+        """Run the agent - 100% synchronous, uses requests library."""
         data = request.get_json() or {}
         question = data.get('question', '').strip()
         if not question:
             return jsonify({'error': 'No question provided'}), 400
+        
         api_key = data.get('api_key', '')
         if not api_key:
             auth = request.headers.get('Authorization', '')
-            if auth.lower().startswith('bearer '): api_key = auth[7:].strip()
+            if auth.lower().startswith('bearer '): 
+                api_key = auth[7:].strip()
         if not api_key:
             return jsonify({'error': 'API key required'}), 401
+        
         model_id = data.get('model', 'google/gemini-2.5-flash')
-        base_url = request.host_url.rstrip('/')
+        
+        # Build messages
+        messages = [
+            {"role": "system", "content": AGENT_SYSTEM_PROMPT},
+            {"role": "user", "content": question}
+        ]
+        
+        tool_calls_made = []
+        final_response = ""
+        error_msg = None
+        
         try:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            run = loop.run_until_complete(_run_inline_agent(question, api_key, model_id, base_url))
-            loop.close()
-            return jsonify({'response': run.response, 'tool_calls': [{'tool': t.tool, 'args': t.args, 'result': t.result[:500], 'status': t.status} for t in run.tool_calls], 'model': model_id, 'error': run.error or None})
+            # Agent loop - max 5 iterations
+            for iteration in range(5):
+                # Call OpenRouter API (sync, using requests)
+                resp = requests.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                    json={"model": model_id, "messages": messages, "tools": AGENT_TOOLS, "tool_choice": "auto"},
+                    timeout=45
+                )
+                
+                if resp.status_code != 200:
+                    error_msg = f"OpenRouter API error: {resp.status_code} - {resp.text[:200]}"
+                    break
+                
+                result = resp.json()
+                choice = result.get("choices", [{}])[0]
+                msg = choice.get("message", {})
+                tool_calls = msg.get("tool_calls", [])
+                
+                if tool_calls:
+                    # Model wants to call tools
+                    messages.append(msg)
+                    
+                    for tc in tool_calls:
+                        fn = tc.get("function", {})
+                        tool_name = fn.get("name", "")
+                        try:
+                            tool_args = json.loads(fn.get("arguments", "{}"))
+                        except:
+                            tool_args = {}
+                        
+                        # Execute tool using internal function (defined later in file)
+                        tool_result = _execute_agent_tool(tool_name, tool_args)
+                        
+                        tool_calls_made.append({
+                            "tool": tool_name,
+                            "args": tool_args,
+                            "result": tool_result[:500],
+                            "status": "done"
+                        })
+                        
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": tc.get("id", ""),
+                            "content": tool_result
+                        })
+                
+                elif msg.get("content"):
+                    # Final response
+                    final_response = msg["content"]
+                    break
+                else:
+                    # No content and no tools - done
+                    final_response = "Agent finished without response."
+                    break
+            
+            if not final_response and not error_msg:
+                final_response = "Agent reached maximum iterations."
+                
+        except requests.exceptions.Timeout:
+            error_msg = "Request timed out"
+        except requests.exceptions.RequestException as ex:
+            error_msg = f"Request error: {str(ex)}"
         except Exception as ex:
-            return jsonify({'error': str(ex)}), 500
+            error_msg = f"Error: {str(ex)}"
+        
+        return jsonify({
+            'response': final_response,
+            'tool_calls': tool_calls_made,
+            'model': model_id,
+            'error': error_msg
+        })
     
     @app.route('/api/experimental-agent/tools', methods=['GET'])
     def inline_exp_agent_tools():
         return jsonify({'tools': [{'name': t['function']['name'], 'description': t['function']['description']} for t in AGENT_TOOLS]})
+    
+    print("Inline experimental agent routes registered successfully")
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -3733,6 +3697,77 @@ def fetch_data_for_categories(categories, limit_per_category=None, recency=None,
     if errors:
         result['errors'] = errors
     return result
+
+
+# ============================================================
+# AGENT TOOL EXECUTION - Defined here after fetch_data_for_categories
+# This is called by the inline experimental agent routes above
+# ============================================================
+def _execute_agent_tool(tool_name, tool_args):
+    """Execute an agent tool by calling internal data functions directly."""
+    try:
+        # Map tool names to category IDs
+        tool_to_category = {
+            "fetch_latest_feed": "latest",
+            "search_openrouter_models": "openrouter",
+            "fetch_image_models": "text-to-image",
+            "fetch_llm_benchmarks": "llms",
+            "fetch_hype_feed": "hype"
+        }
+        
+        category = tool_to_category.get(tool_name)
+        if not category:
+            return f"Unknown tool: {tool_name}"
+        
+        # Call the internal function directly
+        result = fetch_data_for_categories([category], limit_per_category=tool_args.get("limit", 15))
+        
+        datasets = result.get("datasets", {})
+        items = []
+        for cat_id, cat_items in datasets.items():
+            if isinstance(cat_items, list):
+                items.extend(cat_items)
+        
+        if not items:
+            return f"No data found for {tool_name}"
+        
+        # Filter by query if provided
+        query = str(tool_args.get("query", "")).lower()
+        if query:
+            filtered = []
+            for item in items:
+                haystack = " ".join([
+                    str(item.get("title", "")),
+                    str(item.get("name", "")),
+                    str(item.get("summary", "")),
+                    str(item.get("description", "")),
+                    str(item.get("provider", ""))
+                ]).lower()
+                if query in haystack:
+                    filtered.append(item)
+            items = filtered if filtered else items
+        
+        # Format as markdown
+        lines = [f"## {tool_name.replace('_', ' ').title()} ({len(items[:10])} items)"]
+        for item in items[:10]:
+            title = item.get("title") or item.get("name") or item.get("id", "Untitled")
+            provider = item.get("provider") or item.get("source") or ""
+            url = item.get("link") or item.get("url") or ""
+            line = f"- **{title}**"
+            if provider:
+                line += f" ({provider})"
+            if url:
+                line += f" [→]({url})"
+            lines.append(line)
+            summary = item.get("summary") or item.get("description") or ""
+            if summary:
+                lines.append(f"  {str(summary)[:100]}...")
+        
+        return "\n".join(lines)
+        
+    except Exception as ex:
+        return f"Error executing {tool_name}: {str(ex)}"
+
 
 def initialize_fetch_context():
     return {
