@@ -1,8 +1,0 @@
-services:
-  - type: web
-    name: ai-dashboard
-    env: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn server:app --timeout 300 --workers 1 --threads 4 --worker-class gthread --keep-alive 30
-    healthCheckPath: /health
-    autoDeploy: true
