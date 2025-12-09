@@ -94,12 +94,21 @@ def inline_exp_agent_api():
         return jsonify({'error': 'API key required'}), 401
     
     model_id = data.get('model', 'google/gemini-2.5-flash')
+    history = data.get('history', [])  # Get conversation history from frontend
     
-    # Build messages
-    messages = [
-        {"role": "system", "content": AGENT_SYSTEM_PROMPT},
-        {"role": "user", "content": question}
-    ]
+    # Build messages with conversation history
+    messages = [{"role": "system", "content": AGENT_SYSTEM_PROMPT}]
+    
+    # Add conversation history (filter to only user/assistant roles)
+    for msg in history:
+        role = msg.get('role', '')
+        content = msg.get('content', '')
+        if role in ('user', 'assistant') and content:
+            messages.append({"role": role, "content": content})
+    
+    # If history doesn't include the current question, add it
+    if not history or history[-1].get('content') != question:
+        messages.append({"role": "user", "content": question})
     
     tool_calls_made = []
     final_response = ""
