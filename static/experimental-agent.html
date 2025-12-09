@@ -129,19 +129,14 @@
             border-bottom-left-radius: 2px;
         }
 
-        .message-meta {
-            font-size: 0.75rem;
-            color: var(--info-text);
-            margin: 0 4px;
-        }
+        /* Removed message-meta styles */
 
         /* Input Area */
         .input-container {
             flex-shrink: 0;
-            /* Never shrink, always visible */
-            padding: 20px 24px;
-            border-top: 1px solid var(--border-color);
+            padding: 24px;
             background: var(--bg-color);
+            /* Removed top border for cleaner look, maybe add subtle shadow if needed */
         }
 
         .input-box {
@@ -227,6 +222,12 @@
             background: var(--bg-color);
             overflow: hidden;
             transition: all 0.2s;
+            margin-bottom: 8px;
+            /* Ensure spacing */
+        }
+
+        .trace-item:last-child {
+            margin-bottom: 0;
         }
 
         .trace-header {
@@ -367,6 +368,30 @@
             font-size: 0.9em;
         }
 
+        /* Markdown Styles & Tables */
+        .prose table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1em 0;
+            font-size: 0.9em;
+        }
+
+        .prose th,
+        .prose td {
+            padding: 8px 12px;
+            border: 1px solid var(--border-color);
+            text-align: left;
+        }
+
+        .prose th {
+            background: var(--input-bg);
+            font-weight: 600;
+        }
+
+        .prose tr:nth-child(even) {
+            background: rgba(0, 0, 0, 0.02);
+        }
+
         .message.user .prose code {
             background: rgba(255, 255, 255, 0.2);
         }
@@ -504,15 +529,11 @@
             const msg = document.createElement('div');
             msg.className = `message ${role}`;
 
-            const meta = document.createElement('div');
-            meta.className = 'message-meta';
-            meta.textContent = role === 'user' ? 'You' : 'Agent';
-
             const bubble = document.createElement('div');
             bubble.className = 'bubble prose';
             bubble.innerHTML = renderMarkdown(content);
 
-            if (role !== 'system') msg.appendChild(meta);
+            // Removed message-meta generation
             msg.appendChild(bubble);
 
             messagesEl.appendChild(msg);
