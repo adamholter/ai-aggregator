@@ -64,55 +64,67 @@ print("Setting up inline experimental agent routes...")
 
 AGENT_TOOLS = [
     # News and Activity
-    {"type": "function", "function": {"name": "fetch_latest_feed", "description": "Fetch latest AI news and activity feed", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Optional search filter"}, "limit": {"type": "integer", "description": "Max items to return"}}, "required": []}}},
-    {"type": "function", "function": {"name": "fetch_hype_feed", "description": "Get trending AI repos from GitHub, HuggingFace, Reddit", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Optional search filter"}, "limit": {"type": "integer", "description": "Max items to return"}}, "required": []}}},
-    {"type": "function", "function": {"name": "fetch_blog_posts", "description": "Get AI blog posts and articles", "parameters": {"type": "object", "properties": {"limit": {"type": "integer", "description": "Max items to return"}}, "required": []}}},
+    {"type": "function", "function": {"name": "fetch_latest_feed", "description": "Get latest AI news, model releases, and industry updates. Returns headlines with links. Use for: current events, announcements, what's new.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Filter by keyword (e.g., 'openai', 'llama')"}, "limit": {"type": "integer", "description": "Max items (default 20)"}}, "required": []}}},
+    {"type": "function", "function": {"name": "fetch_hype_feed", "description": "Get trending AI repos and projects from GitHub, HuggingFace, Reddit. Shows popularity scores and descriptions. Use for: discovering hot projects, viral repos.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Filter by keyword"}, "limit": {"type": "integer", "description": "Max items (default 20)"}}, "required": []}}},
+    {"type": "function", "function": {"name": "fetch_blog_posts", "description": "Get AI research blog posts and articles. Use for: in-depth technical content, research papers, tutorials.", "parameters": {"type": "object", "properties": {"limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
     
-    # LLM Data
-    {"type": "function", "function": {"name": "fetch_llm_benchmarks", "description": "Get LLM benchmark data with pricing, speed, and quality metrics from Artificial Analysis", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Optional model name filter"}, "limit": {"type": "integer", "description": "Max items to return"}}, "required": []}}},
-    {"type": "function", "function": {"name": "search_openrouter_models", "description": "Search OpenRouter model catalog with pricing info", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Model name or provider to search"}, "limit": {"type": "integer", "description": "Max items to return"}}, "required": []}}},
+    # LLM Data - Two different sources!
+    {"type": "function", "function": {"name": "fetch_llm_benchmarks", "description": "ARTIFICIAL ANALYSIS DATA: Quality scores, speed (tokens/sec), latency, and pricing for LLMs. Authoritative benchmark data. Models include: GPT-4, Claude, Gemini, Llama, etc. Use for: performance comparisons, finding fastest/cheapest models.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Filter by model name"}, "limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
+    {"type": "function", "function": {"name": "search_openrouter_models", "description": "OPENROUTER CATALOG: API access info, per-token pricing, context lengths for 200+ models. Use for: finding models to use via API, checking availability, comparing API pricing. Different from benchmarks - this is the API marketplace.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Model name or provider (e.g., 'anthropic', 'gpt-4', 'llama')"}, "limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
     
-    # Image Generation
-    {"type": "function", "function": {"name": "fetch_image_models", "description": "Get text-to-image generation models with quality benchmarks from Artificial Analysis", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Optional model name filter"}, "limit": {"type": "integer", "description": "Max items to return"}}, "required": []}}},
-    {"type": "function", "function": {"name": "fetch_image_editing_models", "description": "Get image editing and manipulation models", "parameters": {"type": "object", "properties": {"limit": {"type": "integer", "description": "Max items to return"}}, "required": []}}},
+    # Image Generation - IMPORTANT: Multiple sources!
+    {"type": "function", "function": {"name": "fetch_image_models", "description": "ARTIFICIAL ANALYSIS LEADERBOARD: Quality rankings and benchmarks for image generation models. Shows ELO scores, quality ratings. Top models: FLUX.2 [pro], Imagen 4, Seedream 4.5, Midjourney. NOTE: 'Nano Banana Pro' = Google's Gemini 3 Pro Image (marketing name). Use for: finding best quality models, benchmark comparisons.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Filter by model name"}, "limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
+    {"type": "function", "function": {"name": "fetch_image_editing_models", "description": "Image editing, inpainting, outpainting, and manipulation models. Use for: editing existing images, not generation from scratch.", "parameters": {"type": "object", "properties": {"limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
     
     # Video Generation
-    {"type": "function", "function": {"name": "fetch_text_to_video_models", "description": "Get text-to-video generation models with benchmarks", "parameters": {"type": "object", "properties": {"limit": {"type": "integer", "description": "Max items to return"}}, "required": []}}},
-    {"type": "function", "function": {"name": "fetch_image_to_video_models", "description": "Get image-to-video animation models", "parameters": {"type": "object", "properties": {"limit": {"type": "integer", "description": "Max items to return"}}, "required": []}}},
+    {"type": "function", "function": {"name": "fetch_text_to_video_models", "description": "Text-to-video generation models with quality benchmarks. Includes Sora, Runway, Pika, Kling. Use for: generating videos from text prompts.", "parameters": {"type": "object", "properties": {"limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
+    {"type": "function", "function": {"name": "fetch_image_to_video_models", "description": "Image-to-video animation models. Take a static image and animate it. Use for: bringing images to life, animation.", "parameters": {"type": "object", "properties": {"limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
     
     # Audio
-    {"type": "function", "function": {"name": "fetch_text_to_speech_models", "description": "Get text-to-speech and voice synthesis models", "parameters": {"type": "object", "properties": {"limit": {"type": "integer", "description": "Max items to return"}}, "required": []}}},
+    {"type": "function", "function": {"name": "fetch_text_to_speech_models", "description": "Text-to-speech and voice synthesis models. Includes ElevenLabs, OpenAI TTS, etc. Use for: voice generation, audio content.", "parameters": {"type": "object", "properties": {"limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
     
-    # Model Platforms
-    {"type": "function", "function": {"name": "fetch_fal_models", "description": "Get models from Fal.ai platform with pricing", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Optional model name filter"}, "limit": {"type": "integer", "description": "Max items to return"}}, "required": []}}},
-    {"type": "function", "function": {"name": "fetch_replicate_models", "description": "Get models from Replicate platform with run counts and pricing", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Optional model name filter"}, "limit": {"type": "integer", "description": "Max items to return"}}, "required": []}}}
+    # Model Platforms - API providers with pricing!
+    {"type": "function", "function": {"name": "fetch_fal_models", "description": "FAL.AI PLATFORM: Fast inference API for image/video models. Shows per-request pricing, model names, and descriptions. Popular for: FLUX, Stable Diffusion, video models. Use alongside fetch_image_models for complete picture of image generation.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Filter by model name"}, "limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
+    {"type": "function", "function": {"name": "fetch_replicate_models", "description": "REPLICATE PLATFORM: Run open-source models via API. Shows run counts (popularity), pricing, and model descriptions. Wide variety of models. Use for: finding popular open-source models, API access.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Filter by model name"}, "limit": {"type": "integer", "description": "Max items"}}, "required": []}}}
 ]
 
-AGENT_SYSTEM_PROMPT = """You are an AI assistant with access to real-time data about AI models, benchmarks, and news. 
+AGENT_SYSTEM_PROMPT = """You are an AI analyst with access to real-time data about AI models from multiple sources.
 
-ALWAYS use tools to gather current information before answering questions about:
-- AI model names, capabilities, pricing
-- Benchmarks and performance comparisons
-- Latest AI news and trends
-- Model availability on platforms like OpenRouter, Fal.ai, Replicate
+## CRITICAL: CALL MULTIPLE TOOLS
+For comprehensive answers, you MUST call multiple tools in parallel:
+- IMAGE GENERATION questions → call BOTH fetch_image_models (benchmarks) AND fetch_fal_models (pricing/API)
+- LLM questions → call BOTH fetch_llm_benchmarks (quality) AND search_openrouter_models (API pricing)
+- For comparisons → always gather data from multiple sources first
 
-FORMAT GUIDELINES:
-- Use clear headers, bullet points, and tables when comparing items
-- Be specific with data from tools
+## DATA SOURCE GUIDE
+| Topic | Primary Tool | Secondary Tool(s) |
+|-------|-------------|-------------------|
+| Best image models | fetch_image_models | fetch_fal_models, fetch_replicate_models |
+| LLM performance | fetch_llm_benchmarks | search_openrouter_models |
+| API pricing | fetch_fal_models, search_openrouter_models | fetch_replicate_models |
+| Video generation | fetch_text_to_video_models | fetch_fal_models |
+| News/trends | fetch_latest_feed | fetch_hype_feed |
 
-CHART GENERATION:
-When comparing numeric data (prices, speeds, scores), you can generate interactive charts by including a JSON code block with Chart.js config. Example:
+## MODEL NAME MAPPINGS
+- "Nano Banana Pro" = Google Gemini 3 Pro Image (premium quality, NOT lightweight)
+- "Nano Banana" = Google Gemini 2.5 Flash Image (faster/lighter)
+- FLUX.2 [pro] = Black Forest Labs premium model
+- Seedream = ByteDance image model
+
+## CHART GENERATION
+For numeric comparisons, output a JSON code block (grayscale theme auto-applied):
 
 ```json
-{
-  "type": "bar",
-  "labels": ["Model A", "Model B", "Model C"],
-  "datasets": [{"label": "Price ($/1M tokens)", "data": [1.5, 2.0, 0.5]}]
-}
+{"type": "bar", "labels": ["Model A", "Model B"], "datasets": [{"label": "Score", "data": [95, 88]}]}
 ```
 
-Chart types: "bar", "line", "pie", "doughnut"
-Use charts for: pricing comparisons, benchmark scores, speed metrics, popularity rankings."""
+Types: bar, line, pie, doughnut. Use for: pricing, scores, speed, rankings.
+
+## RESPONSE STYLE
+- Use headers and bullet points
+- Be specific with numbers from tool data
+- Acknowledge data source (e.g., "According to Artificial Analysis...")
+- If data seems incomplete, mention what tool would have more info"""
 
 @app.route('/experimental-agent')
 def inline_exp_agent_page():
