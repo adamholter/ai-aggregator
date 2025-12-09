@@ -941,7 +941,8 @@
         const requestBody = {
           question: question,
           model: modelSelect.value,
-          history: conversationHistory.slice(-10)
+          history: conversationHistory.slice(-10),
+          deeper_mode: deeperModeToggle.checked
         };
 
         // Include image if attached

@@ -164,6 +164,10 @@ def inline_exp_agent_api():
     model_id = data.get('model', 'google/gemini-2.5-flash')
     history = data.get('history', [])  # Get conversation history from frontend
     image_data = data.get('image', None)  # Base64 image data if provided
+    deeper_mode = data.get('deeper_mode', False)  # More thorough research mode
+    
+    # Set iteration count based on mode (deeper = more iterations for thorough research)
+    max_iterations = 5 if deeper_mode else 3
     
     # Build messages with conversation history
     messages = [{"role": "system", "content": AGENT_SYSTEM_PROMPT}]
@@ -193,8 +197,8 @@ def inline_exp_agent_api():
     error_msg = None
     
     try:
-        # Agent loop - max 3 iterations (reduced from 5 for speed)
-        for iteration in range(3):
+        # Agent loop - iteration count depends on deeper_mode
+        for iteration in range(max_iterations):
             # Build the request payload
             payload = {
                 "model": model_id, 
