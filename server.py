@@ -74,7 +74,8 @@ AGENT_SYSTEM_PROMPT = "You are a helpful AI assistant. USE THE TOOLS to gather i
 
 @app.route('/experimental-agent')
 def inline_exp_agent_page():
-    return app.send_static_file('experimental-agent.html')
+    from flask import send_from_directory
+    return send_from_directory('static', 'experimental-agent.html')
 
 @app.route('/api/experimental-agent', methods=['POST'])
 def inline_exp_agent_api():
