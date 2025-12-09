@@ -63,14 +63,40 @@ except Exception as e:
 print("Setting up inline experimental agent routes...")
 
 AGENT_TOOLS = [
-    {"type": "function", "function": {"name": "fetch_latest_feed", "description": "Fetch latest AI news", "parameters": {"type": "object", "properties": {"query": {"type": "string"}, "limit": {"type": "integer", "default": 20}}, "required": []}}},
-    {"type": "function", "function": {"name": "search_openrouter_models", "description": "Search OpenRouter models", "parameters": {"type": "object", "properties": {"query": {"type": "string"}, "limit": {"type": "integer", "default": 20}}, "required": []}}},
-    {"type": "function", "function": {"name": "fetch_image_models", "description": "Get image generation models", "parameters": {"type": "object", "properties": {"limit": {"type": "integer", "default": 15}}, "required": []}}},
-    {"type": "function", "function": {"name": "fetch_llm_benchmarks", "description": "Get LLM benchmark data", "parameters": {"type": "object", "properties": {"limit": {"type": "integer", "default": 15}}, "required": []}}},
-    {"type": "function", "function": {"name": "fetch_hype_feed", "description": "Get trending AI repos", "parameters": {"type": "object", "properties": {"query": {"type": "string"}, "limit": {"type": "integer", "default": 20}}, "required": []}}}
+    # News and Activity
+    {"type": "function", "function": {"name": "fetch_latest_feed", "description": "Fetch latest AI news and activity feed", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Optional search filter"}, "limit": {"type": "integer", "description": "Max items to return"}}, "required": []}}},
+    {"type": "function", "function": {"name": "fetch_hype_feed", "description": "Get trending AI repos from GitHub, HuggingFace, Reddit", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Optional search filter"}, "limit": {"type": "integer", "description": "Max items to return"}}, "required": []}}},
+    {"type": "function", "function": {"name": "fetch_blog_posts", "description": "Get AI blog posts and articles", "parameters": {"type": "object", "properties": {"limit": {"type": "integer", "description": "Max items to return"}}, "required": []}}},
+    
+    # LLM Data
+    {"type": "function", "function": {"name": "fetch_llm_benchmarks", "description": "Get LLM benchmark data with pricing, speed, and quality metrics from Artificial Analysis", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Optional model name filter"}, "limit": {"type": "integer", "description": "Max items to return"}}, "required": []}}},
+    {"type": "function", "function": {"name": "search_openrouter_models", "description": "Search OpenRouter model catalog with pricing info", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Model name or provider to search"}, "limit": {"type": "integer", "description": "Max items to return"}}, "required": []}}},
+    
+    # Image Generation
+    {"type": "function", "function": {"name": "fetch_image_models", "description": "Get text-to-image generation models with quality benchmarks from Artificial Analysis", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Optional model name filter"}, "limit": {"type": "integer", "description": "Max items to return"}}, "required": []}}},
+    {"type": "function", "function": {"name": "fetch_image_editing_models", "description": "Get image editing and manipulation models", "parameters": {"type": "object", "properties": {"limit": {"type": "integer", "description": "Max items to return"}}, "required": []}}},
+    
+    # Video Generation
+    {"type": "function", "function": {"name": "fetch_text_to_video_models", "description": "Get text-to-video generation models with benchmarks", "parameters": {"type": "object", "properties": {"limit": {"type": "integer", "description": "Max items to return"}}, "required": []}}},
+    {"type": "function", "function": {"name": "fetch_image_to_video_models", "description": "Get image-to-video animation models", "parameters": {"type": "object", "properties": {"limit": {"type": "integer", "description": "Max items to return"}}, "required": []}}},
+    
+    # Audio
+    {"type": "function", "function": {"name": "fetch_text_to_speech_models", "description": "Get text-to-speech and voice synthesis models", "parameters": {"type": "object", "properties": {"limit": {"type": "integer", "description": "Max items to return"}}, "required": []}}},
+    
+    # Model Platforms
+    {"type": "function", "function": {"name": "fetch_fal_models", "description": "Get models from Fal.ai platform with pricing", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Optional model name filter"}, "limit": {"type": "integer", "description": "Max items to return"}}, "required": []}}},
+    {"type": "function", "function": {"name": "fetch_replicate_models", "description": "Get models from Replicate platform with run counts and pricing", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Optional model name filter"}, "limit": {"type": "integer", "description": "Max items to return"}}, "required": []}}}
 ]
 
-AGENT_SYSTEM_PROMPT = "You are a helpful AI assistant. USE THE TOOLS to gather information before answering. Keep responses scannable with bullet points."
+AGENT_SYSTEM_PROMPT = """You are an AI assistant with access to real-time data about AI models, benchmarks, and news. 
+
+ALWAYS use tools to gather current information before answering questions about:
+- AI model names, capabilities, pricing
+- Benchmarks and performance comparisons
+- Latest AI news and trends
+- Model availability on platforms like OpenRouter, Fal.ai, Replicate
+
+Format responses with clear headers, bullet points, and tables when comparing items. Be specific with data from tools."""
 
 @app.route('/experimental-agent')
 def inline_exp_agent_page():
@@ -3731,13 +3757,31 @@ def fetch_data_for_categories(categories, limit_per_category=None, recency=None,
 def _execute_agent_tool(tool_name, tool_args):
     """Execute an agent tool by calling internal data functions directly."""
     try:
-        # Map tool names to category IDs
+        # Map tool names to category IDs (matches FETCH_DATA_CATEGORY_CONFIG)
         tool_to_category = {
+            # News and Activity
             "fetch_latest_feed": "latest",
-            "search_openrouter_models": "openrouter",
-            "fetch_image_models": "text-to-image",
+            "fetch_hype_feed": "hype",
+            "fetch_blog_posts": "blog",
+            
+            # LLM Data
             "fetch_llm_benchmarks": "llms",
-            "fetch_hype_feed": "hype"
+            "search_openrouter_models": "openrouter",
+            
+            # Image Generation
+            "fetch_image_models": "text-to-image",
+            "fetch_image_editing_models": "image-editing",
+            
+            # Video Generation
+            "fetch_text_to_video_models": "text-to-video",
+            "fetch_image_to_video_models": "image-to-video",
+            
+            # Audio
+            "fetch_text_to_speech_models": "text-to-speech",
+            
+            # Model Platforms
+            "fetch_fal_models": "fal",
+            "fetch_replicate_models": "replicate"
         }
         
         category = tool_to_category.get(tool_name)
@@ -3745,7 +3789,8 @@ def _execute_agent_tool(tool_name, tool_args):
             return f"Unknown tool: {tool_name}"
         
         # Call the internal function directly
-        result = fetch_data_for_categories([category], limit_per_category=tool_args.get("limit", 15))
+        limit = tool_args.get("limit") or 20
+        result = fetch_data_for_categories([category], limit_per_category=limit)
         
         datasets = result.get("datasets", {})
         items = []
@@ -3766,27 +3811,46 @@ def _execute_agent_tool(tool_name, tool_args):
                     str(item.get("name", "")),
                     str(item.get("summary", "")),
                     str(item.get("description", "")),
-                    str(item.get("provider", ""))
+                    str(item.get("provider", "")),
+                    str(item.get("id", ""))
                 ]).lower()
                 if query in haystack:
                     filtered.append(item)
             items = filtered if filtered else items
         
-        # Format as markdown
-        lines = [f"## {tool_name.replace('_', ' ').title()} ({len(items[:10])} items)"]
-        for item in items[:10]:
+        # Format as markdown with more detail
+        lines = [f"## {tool_name.replace('_', ' ').title()} ({len(items)} items found)"]
+        
+        for item in items[:15]:  # Show up to 15 items
             title = item.get("title") or item.get("name") or item.get("id", "Untitled")
-            provider = item.get("provider") or item.get("source") or ""
+            provider = item.get("provider") or item.get("source") or item.get("creator") or ""
             url = item.get("link") or item.get("url") or ""
+            
+            # Build main line
             line = f"- **{title}**"
             if provider:
                 line += f" ({provider})"
-            if url:
-                line += f" [→]({url})"
             lines.append(line)
+            
+            # Add pricing if available
+            price_info = []
+            if item.get("price"):
+                price_info.append(f"${item['price']}")
+            if item.get("pricing"):
+                price_info.append(str(item['pricing']))
+            if item.get("input_cost") or item.get("output_cost"):
+                price_info.append(f"in: ${item.get('input_cost', 'N/A')}, out: ${item.get('output_cost', 'N/A')}")
+            if price_info:
+                lines.append(f"  💰 {', '.join(price_info)}")
+            
+            # Add summary/description
             summary = item.get("summary") or item.get("description") or ""
             if summary:
-                lines.append(f"  {str(summary)[:100]}...")
+                lines.append(f"  {str(summary)[:150]}...")
+            
+            # Add link if available
+            if url:
+                lines.append(f"  🔗 {url}")
         
         return "\n".join(lines)
         
