@@ -9,6 +9,7 @@
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         /* Agent-specific overrides to match the shell look */
         body {
@@ -93,6 +94,8 @@
         .message.user {
             align-self: flex-end;
             align-items: flex-end;
+            max-width: 70%;
+            margin-left: auto;
         }
 
         .message.assistant {
@@ -135,49 +138,70 @@
         /* Input Area */
         .input-container {
             flex-shrink: 0;
-            padding: 24px;
+            padding: 16px 24px 24px;
             background: var(--bg-color);
-            /* Removed top border for cleaner look, maybe add subtle shadow if needed */
         }
 
         .input-box {
             display: flex;
-            gap: 12px;
+            align-items: center;
+            gap: 8px;
             background: var(--input-bg);
             border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 6px;
-            transition: border-color 0.2s;
+            border-radius: 24px;
+            padding: 8px 12px;
+            transition: border-color 0.2s, box-shadow 0.2s;
         }
 
         .input-box:focus-within {
             border-color: var(--text-color);
+            box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.05);
         }
 
         .input-field {
             flex: 1;
             border: none;
             background: transparent;
-            padding: 10px 12px;
+            padding: 8px 4px;
             font-size: 0.95rem;
             color: var(--text-color);
             outline: none;
         }
 
-        .send-btn {
-            background: var(--button-bg);
-            color: var(--button-text);
+        .icon-btn {
+            background: none;
             border: none;
-            border-radius: 8px;
-            padding: 0 20px;
-            font-weight: 600;
+            padding: 8px;
             cursor: pointer;
-            transition: opacity 0.2s;
+            color: var(--info-text);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: background 0.15s, color 0.15s;
         }
 
-        .send-btn:disabled {
-            opacity: 0.5;
+        .icon-btn:hover {
+            background: var(--info-bg);
+            color: var(--text-color);
+        }
+
+        .icon-btn:disabled {
+            opacity: 0.4;
             cursor: not-allowed;
+        }
+
+        .icon-btn.send {
+            background: var(--button-bg);
+            color: var(--button-text);
+        }
+
+        .icon-btn.send:hover {
+            opacity: 0.9;
+        }
+
+        .icon-btn.send:disabled {
+            opacity: 0.4;
         }
 
         /* Sidebar (Stack Trace) */
@@ -222,13 +246,11 @@
             border-radius: 8px;
             background: var(--bg-color);
             overflow: hidden;
-            transition: all 0.2s;
-            margin-bottom: 8px;
-            /* Ensure spacing */
+            transition: all 0.15s;
         }
 
-        .trace-item:last-child {
-            margin-bottom: 0;
+        .trace-item+.trace-item {
+            margin-top: 8px;
         }
 
         .trace-header {
@@ -404,28 +426,36 @@
         <!-- Chat Area -->
         <div class="chat-panel">
             <div class="chat-header">
-                <select id="modelSelect" class="model-selector">
-                    <option value="x-ai/grok-4-fast">Loading models...</option>
-                </select>
-                <button onclick="location.reload()" class="theme-toggle"
-                    style="border:none; background:none; cursor:pointer; font-size:1.2rem;" title="Reset">
-                    ↺
+                <span style="font-weight: 600; font-size: 0.95rem;">AI Agent</span>
+                <button id="settingsBtn" class="icon-btn" title="Settings">
+                    <i data-lucide="settings" style="width:18px; height:18px;"></i>
                 </button>
             </div>
 
             <div id="messages" class="chat-messages">
                 <div class="message system">
-                    Experimental Agent v2 — Direct Tool Calling
+                    Ask me about AI models, benchmarks, pricing, or news.
                 </div>
             </div>
 
             <div class="input-container">
                 <form id="chatForm" class="input-box">
+                    <button type="button" id="attachBtn" class="icon-btn" title="Attach image">
+                        <i data-lucide="paperclip" style="width:18px; height:18px;"></i>
+                    </button>
                     <input type="text" id="questionInput" class="input-field"
                         placeholder="Ask about AI models, benchmarks, or news..." autocomplete="off">
-                    <button type="submit" id="submitBtn" class="send-btn">Send</button>
+                    <button type="submit" id="submitBtn" class="icon-btn send" title="Send">
+                        <i data-lucide="send" style="width:18px; height:18px;"></i>
+                    </button>
                 </form>
+                <input type="file" id="fileInput" accept="image/*" style="display:none;">
             </div>
+
+            <!-- Hidden model selector (accessed via settings) -->
+            <select id="modelSelect" style="display:none;">
+                <option value="x-ai/grok-4-fast">Loading models...</option>
+            </select>
         </div>
 
         <!-- Sidebar -->
@@ -443,6 +473,13 @@
     </div>
 
     <script>
+        // Initialize Lucide icons
+        document.addEventListener('DOMContentLoaded', () => {
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+        });
+
         // Theme handling
         function syncTheme() {
             try {
@@ -477,6 +514,40 @@
         const modelSelect = document.getElementById('modelSelect');
         const activityLog = document.getElementById('activityLog');
         const stepCount = document.getElementById('stepCount');
+        const settingsBtn = document.getElementById('settingsBtn');
+        const attachBtn = document.getElementById('attachBtn');
+        const fileInput = document.getElementById('fileInput');
+
+        let pendingImage = null; // For image attachments
+
+        // Settings button - show modal with model selection
+        settingsBtn.addEventListener('click', () => {
+            const currentModel = modelSelect.value;
+            const models = Array.from(modelSelect.options).map(o => o.value);
+            const choice = prompt(`Current model: ${currentModel}\n\nAvailable models:\n${models.join('\n')}\n\nEnter model name to switch:`);
+            if (choice && models.includes(choice)) {
+                modelSelect.value = choice;
+                localStorage.setItem(MODEL_KEY, choice);
+                addMessage('system', `Model switched to: ${choice.split('/').pop()}`);
+            } else if (choice) {
+                addMessage('system', `Model not found: ${choice}`);
+            }
+        });
+
+        // Attachment button
+        attachBtn.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    pendingImage = reader.result;
+                    addMessage('system', `📎 Image attached: ${file.name}`);
+                };
+                reader.readAsDataURL(file);
+            }
+            fileInput.value = ''; // Reset for next selection
+        });
 
         let toolSteps = [];
         let conversationHistory = []; // Track full conversation for context
