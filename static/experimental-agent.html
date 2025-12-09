@@ -949,24 +949,50 @@
           requestBody.image = currentImage;
         }
 
-        // Add frontend timeout with AbortController (120 seconds)
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 120000);
+        // Retry logic for transient 502 errors
+        const maxRetries = 3;
+        let lastError = null;
+        let response = null;
 
-        const response = await fetch('/api/experimental-agent', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`
-          },
-          body: JSON.stringify(requestBody),
-          signal: controller.signal,
-          mode: 'same-origin',
-          credentials: 'same-origin',
-          cache: 'no-store'
-        });
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+          try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 120000);
 
-        clearTimeout(timeoutId);
+            response = await fetch('/api/experimental-agent', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`
+              },
+              body: JSON.stringify(requestBody),
+              signal: controller.signal,
+              cache: 'no-store'
+            });
+
+            clearTimeout(timeoutId);
+
+            // Check for 502 specifically and retry
+            if (response.status === 502 && attempt < maxRetries - 1) {
+              const delay = Math.pow(2, attempt + 1) * 1000; // 2s, 4s, 8s
+              console.log(`Got 502, retrying in ${delay / 1000}s (attempt ${attempt + 1}/${maxRetries})`);
+              updateToolStep(initStep.id, { title: `Retrying... (attempt ${attempt + 2})` });
+              await new Promise(r => setTimeout(r, delay));
+              continue;
+            }
+
+            break; // Success or non-502 error
+          } catch (e) {
+            lastError = e;
+            if (attempt < maxRetries - 1 && e.name !== 'AbortError') {
+              const delay = Math.pow(2, attempt + 1) * 1000;
+              console.log(`Request failed, retrying in ${delay / 1000}s`);
+              await new Promise(r => setTimeout(r, delay));
+              continue;
+            }
+            throw e;
+          }
+        }
 
         const contentType = response.headers.get('content-type') || '';
         if (contentType.includes('text/html')) {
