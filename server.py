@@ -73,7 +73,7 @@ AGENT_TOOLS = [
     {"type": "function", "function": {"name": "search_openrouter_models", "description": "OPENROUTER CATALOG: API access info, per-token pricing, context lengths for 200+ models. Use for: finding models to use via API, checking availability, comparing API pricing. Different from benchmarks - this is the API marketplace.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Model name or provider (e.g., 'anthropic', 'gpt-4', 'llama')"}, "limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
     
     # Image Generation - IMPORTANT: Multiple sources!
-    {"type": "function", "function": {"name": "fetch_image_models", "description": "ARTIFICIAL ANALYSIS LEADERBOARD: Quality rankings and benchmarks for image generation models. Shows ELO scores, quality ratings. Top models: FLUX.2 [pro], Imagen 4, Seedream 4.5, Midjourney. NOTE: 'Nano Banana Pro' = Google's Gemini 3 Pro Image (marketing name). Use for: finding best quality models, benchmark comparisons.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Filter by model name"}, "limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
+    {"type": "function", "function": {"name": "fetch_image_models", "description": "ARTIFICIAL ANALYSIS LEADERBOARD: Quality rankings and benchmarks for image generation models. Shows ELO scores, quality ratings. Use for: finding best quality models, benchmark comparisons.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Filter by model name"}, "limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
     {"type": "function", "function": {"name": "fetch_image_editing_models", "description": "Image editing, inpainting, outpainting, and manipulation models. Use for: editing existing images, not generation from scratch.", "parameters": {"type": "object", "properties": {"limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
     
     # Video Generation
@@ -104,12 +104,6 @@ For comprehensive answers, you MUST call multiple tools in parallel:
 | API pricing | fetch_fal_models, search_openrouter_models | fetch_replicate_models |
 | Video generation | fetch_text_to_video_models | fetch_fal_models |
 | News/trends | fetch_latest_feed | fetch_hype_feed |
-
-## MODEL NAME MAPPINGS
-- "Nano Banana Pro" = Google Gemini 3 Pro Image (premium quality, NOT lightweight)
-- "Nano Banana" = Google Gemini 2.5 Flash Image (faster/lighter)
-- FLUX.2 [pro] = Black Forest Labs premium model
-- Seedream = ByteDance image model
 
 ## CHART GENERATION
 For numeric comparisons, output a JSON code block (grayscale theme auto-applied):
