@@ -52,137 +52,137 @@ try:
     from backend.app.routes.experimental_agent import experimental_agent_bp
     app.register_blueprint(experimental_agent_bp)
     print("Experimental agent blueprint loaded from backend.app.routes")
-except ImportError as e:
-    print(f"Note: Experimental agent blueprint not loaded ({e}), using inline routes")
+except Exception as e:
+    print(f"Note: Experimental agent blueprint not loaded ({e})")
+
+# ============================================================
+# INLINE EXPERIMENTAL AGENT - Always register these routes
+# Pure sync, uses requests library (already imported at top)
+# ============================================================
+
+print("Setting up inline experimental agent routes...")
+
+AGENT_TOOLS = [
+    {"type": "function", "function": {"name": "fetch_latest_feed", "description": "Fetch latest AI news", "parameters": {"type": "object", "properties": {"query": {"type": "string"}, "limit": {"type": "integer", "default": 20}}, "required": []}}},
+    {"type": "function", "function": {"name": "search_openrouter_models", "description": "Search OpenRouter models", "parameters": {"type": "object", "properties": {"query": {"type": "string"}, "limit": {"type": "integer", "default": 20}}, "required": []}}},
+    {"type": "function", "function": {"name": "fetch_image_models", "description": "Get image generation models", "parameters": {"type": "object", "properties": {"limit": {"type": "integer", "default": 15}}, "required": []}}},
+    {"type": "function", "function": {"name": "fetch_llm_benchmarks", "description": "Get LLM benchmark data", "parameters": {"type": "object", "properties": {"limit": {"type": "integer", "default": 15}}, "required": []}}},
+    {"type": "function", "function": {"name": "fetch_hype_feed", "description": "Get trending AI repos", "parameters": {"type": "object", "properties": {"query": {"type": "string"}, "limit": {"type": "integer", "default": 20}}, "required": []}}}
+]
+
+AGENT_SYSTEM_PROMPT = "You are a helpful AI assistant. USE THE TOOLS to gather information before answering. Keep responses scannable with bullet points."
+
+@app.route('/experimental-agent')
+def inline_exp_agent_page():
+    return app.send_static_file('experimental-agent.html')
+
+@app.route('/api/experimental-agent', methods=['POST'])
+def inline_exp_agent_api():
+    """Run the agent - 100% synchronous, uses requests library."""
+    data = request.get_json() or {}
+    question = data.get('question', '').strip()
+    if not question:
+        return jsonify({'error': 'No question provided'}), 400
     
-    # ============================================================
-    # INLINE EXPERIMENTAL AGENT - Pure sync, no async, no httpx
-    # Uses requests library (already imported at top of file)
-    # ============================================================
+    api_key = data.get('api_key', '')
+    if not api_key:
+        auth = request.headers.get('Authorization', '')
+        if auth.lower().startswith('bearer '): 
+            api_key = auth[7:].strip()
+    if not api_key:
+        return jsonify({'error': 'API key required'}), 401
     
-    print("Setting up inline experimental agent routes...")
+    model_id = data.get('model', 'google/gemini-2.5-flash')
     
-    AGENT_TOOLS = [
-        {"type": "function", "function": {"name": "fetch_latest_feed", "description": "Fetch latest AI news", "parameters": {"type": "object", "properties": {"query": {"type": "string"}, "limit": {"type": "integer", "default": 20}}, "required": []}}},
-        {"type": "function", "function": {"name": "search_openrouter_models", "description": "Search OpenRouter models", "parameters": {"type": "object", "properties": {"query": {"type": "string"}, "limit": {"type": "integer", "default": 20}}, "required": []}}},
-        {"type": "function", "function": {"name": "fetch_image_models", "description": "Get image generation models", "parameters": {"type": "object", "properties": {"limit": {"type": "integer", "default": 15}}, "required": []}}},
-        {"type": "function", "function": {"name": "fetch_llm_benchmarks", "description": "Get LLM benchmark data", "parameters": {"type": "object", "properties": {"limit": {"type": "integer", "default": 15}}, "required": []}}},
-        {"type": "function", "function": {"name": "fetch_hype_feed", "description": "Get trending AI repos", "parameters": {"type": "object", "properties": {"query": {"type": "string"}, "limit": {"type": "integer", "default": 20}}, "required": []}}}
+    # Build messages
+    messages = [
+        {"role": "system", "content": AGENT_SYSTEM_PROMPT},
+        {"role": "user", "content": question}
     ]
     
-    AGENT_SYSTEM_PROMPT = "You are a helpful AI assistant. USE THE TOOLS to gather information before answering. Keep responses scannable with bullet points."
+    tool_calls_made = []
+    final_response = ""
+    error_msg = None
     
-    @app.route('/experimental-agent')
-    def inline_exp_agent_page():
-        return app.send_static_file('experimental-agent.html')
-    
-    @app.route('/api/experimental-agent', methods=['POST'])
-    def inline_exp_agent_api():
-        """Run the agent - 100% synchronous, uses requests library."""
-        data = request.get_json() or {}
-        question = data.get('question', '').strip()
-        if not question:
-            return jsonify({'error': 'No question provided'}), 400
-        
-        api_key = data.get('api_key', '')
-        if not api_key:
-            auth = request.headers.get('Authorization', '')
-            if auth.lower().startswith('bearer '): 
-                api_key = auth[7:].strip()
-        if not api_key:
-            return jsonify({'error': 'API key required'}), 401
-        
-        model_id = data.get('model', 'google/gemini-2.5-flash')
-        
-        # Build messages
-        messages = [
-            {"role": "system", "content": AGENT_SYSTEM_PROMPT},
-            {"role": "user", "content": question}
-        ]
-        
-        tool_calls_made = []
-        final_response = ""
-        error_msg = None
-        
-        try:
-            # Agent loop - max 5 iterations
-            for iteration in range(5):
-                # Call OpenRouter API (sync, using requests)
-                resp = requests.post(
-                    "https://openrouter.ai/api/v1/chat/completions",
-                    headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-                    json={"model": model_id, "messages": messages, "tools": AGENT_TOOLS, "tool_choice": "auto"},
-                    timeout=45
-                )
-                
-                if resp.status_code != 200:
-                    error_msg = f"OpenRouter API error: {resp.status_code} - {resp.text[:200]}"
-                    break
-                
-                result = resp.json()
-                choice = result.get("choices", [{}])[0]
-                msg = choice.get("message", {})
-                tool_calls = msg.get("tool_calls", [])
-                
-                if tool_calls:
-                    # Model wants to call tools
-                    messages.append(msg)
-                    
-                    for tc in tool_calls:
-                        fn = tc.get("function", {})
-                        tool_name = fn.get("name", "")
-                        try:
-                            tool_args = json.loads(fn.get("arguments", "{}"))
-                        except:
-                            tool_args = {}
-                        
-                        # Execute tool using internal function (defined later in file)
-                        tool_result = _execute_agent_tool(tool_name, tool_args)
-                        
-                        tool_calls_made.append({
-                            "tool": tool_name,
-                            "args": tool_args,
-                            "result": tool_result[:500],
-                            "status": "done"
-                        })
-                        
-                        messages.append({
-                            "role": "tool",
-                            "tool_call_id": tc.get("id", ""),
-                            "content": tool_result
-                        })
-                
-                elif msg.get("content"):
-                    # Final response
-                    final_response = msg["content"]
-                    break
-                else:
-                    # No content and no tools - done
-                    final_response = "Agent finished without response."
-                    break
+    try:
+        # Agent loop - max 5 iterations
+        for iteration in range(5):
+            # Call OpenRouter API (sync, using requests)
+            resp = requests.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json={"model": model_id, "messages": messages, "tools": AGENT_TOOLS, "tool_choice": "auto"},
+                timeout=45
+            )
             
-            if not final_response and not error_msg:
-                final_response = "Agent reached maximum iterations."
+            if resp.status_code != 200:
+                error_msg = f"OpenRouter API error: {resp.status_code} - {resp.text[:200]}"
+                break
+            
+            result = resp.json()
+            choice = result.get("choices", [{}])[0]
+            msg = choice.get("message", {})
+            tool_calls = msg.get("tool_calls", [])
+            
+            if tool_calls:
+                # Model wants to call tools
+                messages.append(msg)
                 
-        except requests.exceptions.Timeout:
-            error_msg = "Request timed out"
-        except requests.exceptions.RequestException as ex:
-            error_msg = f"Request error: {str(ex)}"
-        except Exception as ex:
-            error_msg = f"Error: {str(ex)}"
+                for tc in tool_calls:
+                    fn = tc.get("function", {})
+                    tool_name = fn.get("name", "")
+                    try:
+                        tool_args = json.loads(fn.get("arguments", "{}"))
+                    except:
+                        tool_args = {}
+                    
+                    # Execute tool using internal function (defined later in file)
+                    tool_result = _execute_agent_tool(tool_name, tool_args)
+                    
+                    tool_calls_made.append({
+                        "tool": tool_name,
+                        "args": tool_args,
+                        "result": tool_result[:500],
+                        "status": "done"
+                    })
+                    
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc.get("id", ""),
+                        "content": tool_result
+                    })
+            
+            elif msg.get("content"):
+                # Final response
+                final_response = msg["content"]
+                break
+            else:
+                # No content and no tools - done
+                final_response = "Agent finished without response."
+                break
         
-        return jsonify({
-            'response': final_response,
-            'tool_calls': tool_calls_made,
-            'model': model_id,
-            'error': error_msg
-        })
+        if not final_response and not error_msg:
+            final_response = "Agent reached maximum iterations."
+            
+    except requests.exceptions.Timeout:
+        error_msg = "Request timed out"
+    except requests.exceptions.RequestException as ex:
+        error_msg = f"Request error: {str(ex)}"
+    except Exception as ex:
+        error_msg = f"Error: {str(ex)}"
     
-    @app.route('/api/experimental-agent/tools', methods=['GET'])
-    def inline_exp_agent_tools():
-        return jsonify({'tools': [{'name': t['function']['name'], 'description': t['function']['description']} for t in AGENT_TOOLS]})
-    
-    print("Inline experimental agent routes registered successfully")
+    return jsonify({
+        'response': final_response,
+        'tool_calls': tool_calls_made,
+        'model': model_id,
+        'error': error_msg
+    })
+
+@app.route('/api/experimental-agent/tools', methods=['GET'])
+def inline_exp_agent_tools():
+    return jsonify({'tools': [{'name': t['function']['name'], 'description': t['function']['description']} for t in AGENT_TOOLS]})
+
+print("Inline experimental agent routes registered successfully")
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
