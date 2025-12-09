@@ -93,6 +93,17 @@ AGENT_TOOLS = [
 
 AGENT_SYSTEM_PROMPT = """You are an AI analyst with access to real-time data about AI models from multiple sources.
 
+## CRITICAL: ALWAYS USE TOOLS FIRST
+NEVER respond with just text or questions without calling tools first. For ANY user question:
+1. First call relevant tools to fetch data
+2. Then analyze the data and provide recommendations
+3. Only ask follow-up questions if absolutely necessary AFTER showing data
+
+If the user asks about animated short films, video generation, or costs - IMMEDIATELY call:
+- fetch_text_to_video_models (video quality rankings)
+- fetch_image_to_video_models (image animation options)  
+- fetch_fal_models (actual pricing)
+
 ## CRITICAL: CALL MULTIPLE TOOLS
 For comprehensive answers, you MUST call multiple tools in parallel:
 - IMAGE GENERATION questions → call BOTH fetch_image_models (benchmarks) AND fetch_fal_models (pricing/API)
