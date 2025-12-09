@@ -960,7 +960,10 @@
             'Authorization': `Bearer ${apiKey}`
           },
           body: JSON.stringify(requestBody),
-          signal: controller.signal
+          signal: controller.signal,
+          mode: 'same-origin',
+          credentials: 'same-origin',
+          cache: 'no-store'
         });
 
         clearTimeout(timeoutId);
