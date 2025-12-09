@@ -108,16 +108,31 @@ def inline_exp_agent_api():
     try:
         # Agent loop - max 5 iterations
         for iteration in range(5):
+            # Build the request payload
+            payload = {
+                "model": model_id, 
+                "messages": messages, 
+                "tools": AGENT_TOOLS, 
+                "tool_choice": "auto"
+            }
+            
+            # Log the request for debugging
+            print(f"[Agent] Iteration {iteration + 1}, Model: {model_id}, API key prefix: {api_key[:20]}...")
+            
             # Call OpenRouter API (sync, using requests)
             resp = requests.post(
                 "https://openrouter.ai/api/v1/chat/completions",
                 headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-                json={"model": model_id, "messages": messages, "tools": AGENT_TOOLS, "tool_choice": "auto"},
+                json=payload,
                 timeout=45
             )
             
+            # Log the response
+            print(f"[Agent] Response status: {resp.status_code}")
+            
             if resp.status_code != 200:
-                error_msg = f"OpenRouter API error: {resp.status_code} - {resp.text[:200]}"
+                error_msg = f"OpenRouter API error: {resp.status_code} - {resp.text[:500]}"
+                print(f"[Agent] Error: {error_msg}")
                 break
             
             result = resp.json()
