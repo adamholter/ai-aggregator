@@ -69,23 +69,26 @@ AGENT_TOOLS = [
     {"type": "function", "function": {"name": "fetch_blog_posts", "description": "Get AI research blog posts and articles. Use for: in-depth technical content, research papers, tutorials.", "parameters": {"type": "object", "properties": {"limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
     
     # LLM Data - Two different sources!
-    {"type": "function", "function": {"name": "fetch_llm_benchmarks", "description": "ARTIFICIAL ANALYSIS DATA: Quality scores, speed (tokens/sec), latency, and pricing for LLMs. Authoritative benchmark data. Models include: GPT-4, Claude, Gemini, Llama, etc. Use for: performance comparisons, finding fastest/cheapest models.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Filter by model name"}, "limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
-    {"type": "function", "function": {"name": "search_openrouter_models", "description": "OPENROUTER CATALOG: API access info, per-token pricing, context lengths for 200+ models. Use for: finding models to use via API, checking availability, comparing API pricing. Different from benchmarks - this is the API marketplace.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Model name or provider (e.g., 'anthropic', 'gpt-4', 'llama')"}, "limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
+    {"type": "function", "function": {"name": "fetch_llm_benchmarks", "description": "ARTIFICIAL ANALYSIS DATA: Quality scores, speed (tokens/sec), latency, and pricing for LLMs. Higher quality score = better. Use for: performance comparisons, finding fastest/cheapest models.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Filter by model name"}, "limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
+    {"type": "function", "function": {"name": "search_openrouter_models", "description": "OPENROUTER CATALOG: API access info, per-token pricing, context lengths for 200+ models. Use for: finding models to use via API, checking availability, comparing API pricing.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Model name or provider (e.g., 'anthropic', 'gpt-4', 'llama')"}, "limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
     
     # Image Generation - IMPORTANT: Multiple sources!
-    {"type": "function", "function": {"name": "fetch_image_models", "description": "ARTIFICIAL ANALYSIS LEADERBOARD: Quality rankings and benchmarks for image generation models. Shows ELO scores, quality ratings. Use for: finding best quality models, benchmark comparisons.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Filter by model name"}, "limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
-    {"type": "function", "function": {"name": "fetch_image_editing_models", "description": "Image editing, inpainting, outpainting, and manipulation models. Use for: editing existing images, not generation from scratch.", "parameters": {"type": "object", "properties": {"limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
+    {"type": "function", "function": {"name": "fetch_image_models", "description": "ARTIFICIAL ANALYSIS LEADERBOARD: Quality rankings for image generation. Shows ELO scores (higher = better quality). The top-ranked model has the highest ELO. Use for: finding best quality models.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Filter by model name"}, "limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
+    {"type": "function", "function": {"name": "fetch_image_editing_models", "description": "Image editing leaderboard. Shows ELO scores (higher = better). Use for: inpainting, outpainting, editing existing images.", "parameters": {"type": "object", "properties": {"limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
     
     # Video Generation
-    {"type": "function", "function": {"name": "fetch_text_to_video_models", "description": "Text-to-video generation models with quality benchmarks. Includes Sora, Runway, Pika, Kling. Use for: generating videos from text prompts.", "parameters": {"type": "object", "properties": {"limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
-    {"type": "function", "function": {"name": "fetch_image_to_video_models", "description": "Image-to-video animation models. Take a static image and animate it. Use for: bringing images to life, animation.", "parameters": {"type": "object", "properties": {"limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
+    {"type": "function", "function": {"name": "fetch_text_to_video_models", "description": "Text-to-video generation leaderboard. Shows ELO scores (higher = better quality). Use for: generating videos from text prompts.", "parameters": {"type": "object", "properties": {"limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
+    {"type": "function", "function": {"name": "fetch_image_to_video_models", "description": "Image-to-video animation leaderboard. Shows ELO scores (higher = better). Use for: animating static images.", "parameters": {"type": "object", "properties": {"limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
     
     # Audio
     {"type": "function", "function": {"name": "fetch_text_to_speech_models", "description": "Text-to-speech and voice synthesis models. Includes ElevenLabs, OpenAI TTS, etc. Use for: voice generation, audio content.", "parameters": {"type": "object", "properties": {"limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
     
     # Model Platforms - API providers with pricing!
-    {"type": "function", "function": {"name": "fetch_fal_models", "description": "FAL.AI PLATFORM: Fast inference API for image/video models. Shows per-request pricing, model names, and descriptions. Popular for: FLUX, Stable Diffusion, video models. Use alongside fetch_image_models for complete picture of image generation.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Filter by model name"}, "limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
-    {"type": "function", "function": {"name": "fetch_replicate_models", "description": "REPLICATE PLATFORM: Run open-source models via API. Shows run counts (popularity), pricing, and model descriptions. Wide variety of models. Use for: finding popular open-source models, API access.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Filter by model name"}, "limit": {"type": "integer", "description": "Max items"}}, "required": []}}}
+    {"type": "function", "function": {"name": "fetch_fal_models", "description": "FAL.AI PLATFORM: Fast inference API for image/video models. Shows per-request pricing, model names. Use alongside benchmark tools for complete picture.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Filter by model name"}, "limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
+    {"type": "function", "function": {"name": "fetch_replicate_models", "description": "REPLICATE PLATFORM: Run open-source models via API. Shows run counts (popularity), pricing. Use for: finding popular open-source models.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Filter by model name"}, "limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
+    
+    # Web Search - Use sparingly, slower and more expensive
+    {"type": "function", "function": {"name": "ask_perplexity", "description": "LIVE WEB SEARCH via Perplexity. Use ONLY when other tools don't have the answer, or for real-time info not in databases. Slower and more expensive - reserve for complex research questions.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Natural language search question"}}, "required": ["query"]}}}
 ]
 
 AGENT_SYSTEM_PROMPT = """You are an AI analyst with access to real-time data about AI models from multiple sources.
@@ -3813,6 +3816,19 @@ def _execute_agent_tool(tool_name, tool_args):
         }
         
         category = tool_to_category.get(tool_name)
+        
+        # Handle ask_perplexity separately - uses OpenRouter API
+        if tool_name == "ask_perplexity":
+            query = tool_args.get("query", "")
+            if not query:
+                return "Error: ask_perplexity requires a query parameter"
+            try:
+                # Use the existing perplexity execution function
+                result, _ = _agent_exp_execute_perplexity(tool_args, None)
+                return result.get("content", str(result))
+            except Exception as e:
+                return f"Web search failed: {str(e)}"
+        
         if not category:
             return f"Unknown tool: {tool_name}"
         

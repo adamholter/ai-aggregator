@@ -542,6 +542,15 @@
       <select id="modelSelect">
         <option value="x-ai/grok-4-fast">Loading models...</option>
       </select>
+
+      <label style="display:flex; align-items:center; gap:8px; margin-top:12px; font-size:0.85rem; cursor:pointer;">
+        <input type="checkbox" id="deeperModeToggle" style="width:16px; height:16px;">
+        <span>Deeper Mode</span>
+      </label>
+      <p style="font-size:0.75rem; color:var(--info-text); margin:4px 0 12px 24px;">
+        Agent will research more before responding
+      </p>
+
       <div class="modal-actions">
         <button type="button" class="modal-btn" id="modalClose">Cancel</button>
         <button type="button" class="modal-btn primary" id="modalSave">Save</button>
@@ -599,9 +608,15 @@
     const settingsModal = document.getElementById('settingsModal');
     const modalClose = document.getElementById('modalClose');
     const modalSave = document.getElementById('modalSave');
+    const deeperModeToggle = document.getElementById('deeperModeToggle');
+    const DEEPER_MODE_KEY = 'dashboard-agent-deeper-mode';
+
+    // Load deeper mode setting
+    deeperModeToggle.checked = localStorage.getItem(DEEPER_MODE_KEY) === 'true';
 
     // Settings button - open modal
     settingsBtn.addEventListener('click', () => {
+      deeperModeToggle.checked = localStorage.getItem(DEEPER_MODE_KEY) === 'true';
       settingsModal.classList.add('active');
     });
 
@@ -613,7 +628,9 @@
     // Modal save
     modalSave.addEventListener('click', () => {
       localStorage.setItem(MODEL_KEY, modelSelect.value);
-      addMessage('system', `Model: ${modelSelect.value.split('/').pop()}`);
+      localStorage.setItem(DEEPER_MODE_KEY, deeperModeToggle.checked);
+      const modeNote = deeperModeToggle.checked ? ' (Deeper Mode ON)' : '';
+      addMessage('system', `Settings saved${modeNote}`);
       settingsModal.classList.remove('active');
     });
 
