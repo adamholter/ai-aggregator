@@ -9525,6 +9525,11 @@ def health_check():
         'cache_size': len(cache)
     })
 
+@app.route('/health', methods=['GET'])
+def root_health_check():
+    """Root-level health check for Render."""
+    return jsonify({'status': 'ok'})
+
 
 @app.route('/api/me', methods=['GET'])
 def current_user_profile():
