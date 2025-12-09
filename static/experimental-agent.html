@@ -605,6 +605,8 @@
     const fileInput = document.getElementById('fileInput');
 
     let pendingImage = null; // For image attachments
+    let traceHistory = []; // Store traces per message: [{msgIndex, traces}]
+    let currentMsgIndex = 0; // Track which message's trace is displayed
     const settingsModal = document.getElementById('settingsModal');
     const modalClose = document.getElementById('modalClose');
     const modalSave = document.getElementById('modalSave');
@@ -799,6 +801,7 @@
     }
 
     function addMessage(role, content) {
+      const msgIndex = traceHistory.length;
       const msg = document.createElement('div');
       msg.className = `message ${role}`;
 
@@ -806,15 +809,31 @@
       bubble.className = 'bubble prose';
       bubble.innerHTML = renderMarkdown(content);
 
-      // Removed message-meta generation
-      msg.appendChild(bubble);
+      // Make assistant messages clickable to show their trace
+      if (role === 'assistant') {
+        msg.style.cursor = 'pointer';
+        msg.title = 'Click to view trace for this response';
+        msg.addEventListener('click', () => showTraceForMessage(msgIndex));
+        // Store current toolSteps for this message
+        traceHistory.push({ msgIndex, traces: [...toolSteps] });
+      }
 
+      msg.appendChild(bubble);
       messagesEl.appendChild(msg);
       messagesEl.scrollTop = messagesEl.scrollHeight;
 
       // Try to render any charts in the message
       if (role === 'assistant') {
         setTimeout(() => renderCharts(bubble), 100);
+      }
+    }
+
+    function showTraceForMessage(msgIndex) {
+      const entry = traceHistory.find(h => h.msgIndex === msgIndex);
+      if (entry) {
+        toolSteps = entry.traces;
+        currentMsgIndex = msgIndex;
+        renderActivityLog();
       }
     }
 
@@ -900,26 +919,43 @@
       toolSteps = [];
       renderActivityLog();
 
+      // Build user content (text + optional image)
+      let userContent = question;
+      const currentImage = pendingImage;
+      if (currentImage) {
+        // Show indicator that image is attached
+        addMessage('user', `📷 [Image attached]\n\n${question}`);
+        pendingImage = null; // Clear for next message
+      } else {
+        addMessage('user', question);
+      }
+
       // Add user message to history
       conversationHistory.push({ role: 'user', content: question });
-      addMessage('user', question);
       input.value = '';
       submitBtn.disabled = true;
 
       const initStep = addToolStep('Initializing agent', 'running');
 
       try {
+        const requestBody = {
+          question: question,
+          model: modelSelect.value,
+          history: conversationHistory.slice(-10)
+        };
+
+        // Include image if attached
+        if (currentImage) {
+          requestBody.image = currentImage;
+        }
+
         const response = await fetch('/api/experimental-agent', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${apiKey}`
           },
-          body: JSON.stringify({
-            question: question,
-            model: modelSelect.value,
-            history: conversationHistory.slice(-10) // Send last 10 messages for context
-          })
+          body: JSON.stringify(requestBody)
         });
 
         const contentType = response.headers.get('content-type') || '';

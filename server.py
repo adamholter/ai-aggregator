@@ -152,6 +152,7 @@ def inline_exp_agent_api():
     
     model_id = data.get('model', 'google/gemini-2.5-flash')
     history = data.get('history', [])  # Get conversation history from frontend
+    image_data = data.get('image', None)  # Base64 image data if provided
     
     # Build messages with conversation history
     messages = [{"role": "system", "content": AGENT_SYSTEM_PROMPT}]
@@ -164,8 +165,17 @@ def inline_exp_agent_api():
             messages.append({"role": role, "content": content})
     
     # If history doesn't include the current question, add it
+    # For image requests, format as multimodal content
     if not history or history[-1].get('content') != question:
-        messages.append({"role": "user", "content": question})
+        if image_data:
+            # Format as multimodal message for vision models
+            user_content = [
+                {"type": "text", "text": question},
+                {"type": "image_url", "image_url": {"url": image_data}}
+            ]
+            messages.append({"role": "user", "content": user_content})
+        else:
+            messages.append({"role": "user", "content": question})
     
     tool_calls_made = []
     final_response = ""
