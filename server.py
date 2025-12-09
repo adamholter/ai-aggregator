@@ -182,13 +182,6 @@ def inline_exp_agent_api():
     error_msg = None
     
     try:
-        # Create session with retry logic
-        session = requests.Session()
-        from requests.adapters import HTTPAdapter
-        from urllib3.util.retry import Retry
-        retries = Retry(total=2, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
-        session.mount('https://', HTTPAdapter(max_retries=retries, pool_connections=5, pool_maxsize=5))
-        
         # Agent loop - max 3 iterations (reduced from 5 for speed)
         for iteration in range(3):
             # Build the request payload
@@ -202,16 +195,15 @@ def inline_exp_agent_api():
             # Log the request for debugging
             print(f"[Agent] Iteration {iteration + 1}, Model: {model_id}")
             
-            # Call OpenRouter API with retry-enabled session
-            resp = session.post(
+            # Call OpenRouter API
+            resp = requests.post(
                 "https://openrouter.ai/api/v1/chat/completions",
                 headers={
                     "Authorization": f"Bearer {api_key}", 
-                    "Content-Type": "application/json",
-                    "Connection": "keep-alive"
+                    "Content-Type": "application/json"
                 },
                 json=payload,
-                timeout=(10, 60)  # (connect timeout, read timeout)
+                timeout=60
             )
             
             # Log the response
