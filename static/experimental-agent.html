@@ -949,14 +949,21 @@
           requestBody.image = currentImage;
         }
 
+        // Add frontend timeout with AbortController (120 seconds)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 120000);
+
         const response = await fetch('/api/experimental-agent', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${apiKey}`
           },
-          body: JSON.stringify(requestBody)
+          body: JSON.stringify(requestBody),
+          signal: controller.signal
         });
+
+        clearTimeout(timeoutId);
 
         const contentType = response.headers.get('content-type') || '';
         if (contentType.includes('text/html')) {

@@ -182,8 +182,15 @@ def inline_exp_agent_api():
     error_msg = None
     
     try:
-        # Agent loop - max 5 iterations
-        for iteration in range(5):
+        # Create session with retry logic
+        session = requests.Session()
+        from requests.adapters import HTTPAdapter
+        from urllib3.util.retry import Retry
+        retries = Retry(total=2, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
+        session.mount('https://', HTTPAdapter(max_retries=retries, pool_connections=5, pool_maxsize=5))
+        
+        # Agent loop - max 3 iterations (reduced from 5 for speed)
+        for iteration in range(3):
             # Build the request payload
             payload = {
                 "model": model_id, 
@@ -193,21 +200,25 @@ def inline_exp_agent_api():
             }
             
             # Log the request for debugging
-            print(f"[Agent] Iteration {iteration + 1}, Model: {model_id}, API key prefix: {api_key[:20]}...")
+            print(f"[Agent] Iteration {iteration + 1}, Model: {model_id}")
             
-            # Call OpenRouter API (sync, using requests)
-            resp = requests.post(
+            # Call OpenRouter API with retry-enabled session
+            resp = session.post(
                 "https://openrouter.ai/api/v1/chat/completions",
-                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                headers={
+                    "Authorization": f"Bearer {api_key}", 
+                    "Content-Type": "application/json",
+                    "Connection": "keep-alive"
+                },
                 json=payload,
-                timeout=45
+                timeout=(10, 60)  # (connect timeout, read timeout)
             )
             
             # Log the response
             print(f"[Agent] Response status: {resp.status_code}")
             
             if resp.status_code != 200:
-                error_msg = f"OpenRouter API error: {resp.status_code} - {resp.text[:500]}"
+                error_msg = f"OpenRouter API error: {resp.status_code} - {resp.text[:300]}"
                 print(f"[Agent] Error: {error_msg}")
                 break
             
