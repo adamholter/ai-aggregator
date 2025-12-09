@@ -96,7 +96,23 @@ ALWAYS use tools to gather current information before answering questions about:
 - Latest AI news and trends
 - Model availability on platforms like OpenRouter, Fal.ai, Replicate
 
-Format responses with clear headers, bullet points, and tables when comparing items. Be specific with data from tools."""
+FORMAT GUIDELINES:
+- Use clear headers, bullet points, and tables when comparing items
+- Be specific with data from tools
+
+CHART GENERATION:
+When comparing numeric data (prices, speeds, scores), you can generate interactive charts by including a JSON code block with Chart.js config. Example:
+
+```json
+{
+  "type": "bar",
+  "labels": ["Model A", "Model B", "Model C"],
+  "datasets": [{"label": "Price ($/1M tokens)", "data": [1.5, 2.0, 0.5]}]
+}
+```
+
+Chart types: "bar", "line", "pie", "doughnut"
+Use charts for: pricing comparisons, benchmark scores, speed metrics, popularity rankings."""
 
 @app.route('/experimental-agent')
 def inline_exp_agent_page():

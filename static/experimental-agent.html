@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="/static/styles.css">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <style>
         /* Agent-specific overrides to match the shell look */
         body {
@@ -525,6 +526,69 @@
             return content;
         }
 
+        // Chart rendering function
+        function renderCharts(container) {
+            // Look for chart code blocks: ```chart { type, labels, datasets }
+            const chartBlocks = container.querySelectorAll('pre code');
+            chartBlocks.forEach(block => {
+                const text = block.textContent.trim();
+                if (text.startsWith('{') && text.includes('"type"') && text.includes('"labels"')) {
+                    try {
+                        const config = JSON.parse(text);
+                        if (config.type && config.labels && config.datasets) {
+                            // Create chart container
+                            const chartContainer = document.createElement('div');
+                            chartContainer.className = 'chart-container';
+                            chartContainer.style.cssText = 'width: 100%; max-width: 500px; margin: 16px 0; padding: 16px; background: var(--card-bg); border-radius: 12px; border: 1px solid var(--border-color);';
+
+                            const canvas = document.createElement('canvas');
+                            canvas.id = 'chart-' + Date.now() + Math.random().toString(36).slice(2);
+                            chartContainer.appendChild(canvas);
+
+                            // Replace the code block with the chart
+                            block.closest('pre').replaceWith(chartContainer);
+
+                            // Render chart
+                            new Chart(canvas.getContext('2d'), {
+                                type: config.type,
+                                data: {
+                                    labels: config.labels,
+                                    datasets: config.datasets.map((ds, i) => ({
+                                        label: ds.label || `Dataset ${i + 1}`,
+                                        data: ds.data,
+                                        backgroundColor: ds.backgroundColor || [
+                                            'rgba(59, 130, 246, 0.7)',
+                                            'rgba(16, 185, 129, 0.7)',
+                                            'rgba(245, 158, 11, 0.7)',
+                                            'rgba(239, 68, 68, 0.7)',
+                                            'rgba(139, 92, 246, 0.7)',
+                                            'rgba(236, 72, 153, 0.7)',
+                                            'rgba(20, 184, 166, 0.7)',
+                                            'rgba(249, 115, 22, 0.7)'
+                                        ],
+                                        borderColor: ds.borderColor || 'rgba(0,0,0,0.1)',
+                                        borderWidth: 1
+                                    }))
+                                },
+                                options: {
+                                    responsive: true,
+                                    maintainAspectRatio: true,
+                                    plugins: {
+                                        legend: { display: config.datasets.length > 1 }
+                                    },
+                                    scales: config.type === 'bar' || config.type === 'line' ? {
+                                        y: { beginAtZero: true }
+                                    } : {}
+                                }
+                            });
+                        }
+                    } catch (e) {
+                        console.log('Not a chart config:', e);
+                    }
+                }
+            });
+        }
+
         function addMessage(role, content) {
             const msg = document.createElement('div');
             msg.className = `message ${role}`;
@@ -538,6 +602,11 @@
 
             messagesEl.appendChild(msg);
             messagesEl.scrollTop = messagesEl.scrollHeight;
+
+            // Try to render any charts in the message
+            if (role === 'assistant') {
+                setTimeout(() => renderCharts(bubble), 100);
+            }
         }
 
         function addToolStep(title, status = 'running', args = null, result = null) {
