@@ -474,25 +474,87 @@ function escapeHtml(str = '') {
   return str.replace(/[&<>'"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[c]));
 }
 
+function buildItemKey(categoryId, item) {
+  const identifier =
+    item?.id ||
+    item?.uuid ||
+    item?.model_id ||
+    item?.modelId ||
+    item?.slug ||
+    item?.url ||
+    item?.link ||
+    item?.name ||
+    item?.title;
+  return identifier ? `${categoryId}:${identifier}` : `${categoryId}:${Date.now()}`;
+}
+
+function inferCategoryForPreview(iconType, item) {
+  if (iconType === 'openrouter') return 'openrouter';
+  const source = (item?.source || item?.platform || '').toString().toLowerCase();
+  if (source.includes('replicate')) return 'replicate';
+  if (source === 'fal' || source.includes('fal')) return 'fal';
+  if (source.includes('openrouter')) return 'openrouter';
+  if (source.includes('hype')) return 'hype';
+  if (source.includes('monitor')) return 'monitor';
+  if (source.includes('blog')) return 'blog';
+  if (source.includes('testing')) return 'testing-catalog';
+  if (source.includes('latest')) return 'latest';
+  return null;
+}
+
+function postActionToParent(action, categoryId, item) {
+  if (!categoryId) return;
+  const itemKey = buildItemKey(categoryId, item);
+  try {
+    window.parent?.postMessage({ type: 'dashboard-action', action, categoryId, itemKey }, '*');
+  } catch (_) {}
+}
+
 function buildTracePreview(label, items = [], iconType = 'letter') {
-  const first = items[0];
-  if (!first) return '';
-  const title = first.title || first.name || 'Untitled';
-  const author = first.provider || first.source || first.org || '';
-  const link = first.link || first.url || '';
+  if (!items.length) return '';
   const icon =
     iconType === 'openrouter'
       ? `<img src="https://uxwing.com/wp-content/themes/uxwing/download/brands-and-social-media/openrouter-icon.png" class="preview-icon-sm" alt="OpenRouter"/>`
       : `<svg viewBox="0 0 24 24" class="preview-icon-sm text-ink"><path fill="currentColor" d="M4 5h13a1 1 0 0 1 1 1v11a2 2 0 0 0 2 2H7a3 3 0 0 1-3-3V5zm2 2v9a1 1 0 0 0 1 1h9V7H6zm10 0h2v10a1 1 0 0 1-1 1h-1V7zm-8 2h7v2H8V9zm0 4h5v2H8v-2z"></path></svg>`;
-  return `
-    <div class="flex items-center gap-2 pill">
-      ${icon}
-      <span class="text-xs font-semibold text-ink">${escapeHtml(label)}</span>
-      <span class="text-xs text-neutral-500 truncate max-w-[180px]">${escapeHtml(title)}</span>
-      <span class="text-[10px] text-neutral-400">${escapeHtml(author)}</span>
-      ${link ? `<a href="${escapeHtml(link)}" target="_blank" rel="noopener" class="text-[10px] underline text-neutral-500 truncate max-w-[120px]">${escapeHtml(link)}</a>` : ''}
-    </div>
-  `;
+
+  const rows = items.slice(0, 3).map((it) => {
+    const title = it.title || it.name || it.id || 'Untitled';
+    const author = it.provider || it.source || it.org || '';
+    const link = it.link || it.url || '';
+    const categoryId = inferCategoryForPreview(iconType, it);
+    const actions = categoryId
+      ? `
+        <button class="text-[10px] underline text-neutral-500" data-action="open">Open</button>
+        <button class="text-[10px] underline text-neutral-500" data-action="pin">Pin</button>
+        <button class="text-[10px] underline text-neutral-500" data-action="compare">Compare</button>
+      `
+      : '';
+    return `
+      <div class="flex items-center gap-2 pill preview-row" data-category="${escapeHtml(categoryId || '')}">
+        ${icon}
+        <span class="text-xs font-semibold text-ink">${escapeHtml(label)}</span>
+        <span class="text-xs text-neutral-500 truncate max-w-[180px]">${escapeHtml(title)}</span>
+        <span class="text-[10px] text-neutral-400">${escapeHtml(author)}</span>
+        ${link ? `<a href="${escapeHtml(link)}" target="_blank" rel="noopener" class="text-[10px] underline text-neutral-500 truncate max-w-[120px]">${escapeHtml(link)}</a>` : ''}
+        <span class="ml-auto flex gap-2 preview-actions">${actions}</span>
+      </div>
+    `;
+  }).join('');
+
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = rows;
+  wrapper.querySelectorAll('.preview-row').forEach((row, idx) => {
+    const it = items[idx];
+    const categoryId = inferCategoryForPreview(iconType, it);
+    row.querySelectorAll('[data-action]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        postActionToParent(btn.dataset.action, categoryId, it);
+      });
+    });
+  });
+  return wrapper.innerHTML;
 }
 
 // Tool planner: ask model what to search

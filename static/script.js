@@ -100,15 +100,99 @@ const displayedSnapshots = {};
 const FILTER_MODEL_STORAGE_KEY = 'dashboard-filter-model-id';
 const FILTER_PROMPT_NOTE_STORAGE_KEY = 'dashboard-filter-prompt-note';
 
+// Product upgrade state
+let compareSelections = [];
+const COMPARE_STORAGE_KEY = 'dashboard-compare-items';
+const LAST_VISIT_PREFIX = 'dashboard-last-visit:';
+const NEW_ONLY_PREFIX = 'dashboard-new-only:';
+const SAVED_VIEWS_PREFIX = 'dashboard-saved-views:';
+const AUTO_REFRESH_ENABLED_KEY = 'dashboard-auto-refresh-enabled';
+const AUTO_REFRESH_MINUTES_KEY = 'dashboard-auto-refresh-minutes';
+const PIN_METADATA_KEY = 'dashboard-pin-metadata';
+
+let pendingDeepLink = null;
+let globalSearchIndex = null;
+let renderCompareTrayFn = null;
+
 function recordDisplayedItems(category, items) {
     if (typeof category !== 'string') {
         return;
     }
     displayedSnapshots[category] = Array.isArray(items) ? items.slice() : [];
+    globalSearchIndex = null;
 }
 
 function getDisplayedItems(category) {
     return displayedSnapshots[category] ? displayedSnapshots[category].slice() : [];
+}
+
+function safeLocalStorageGet(key, fallback = null) {
+    try {
+        const value = localStorage.getItem(key);
+        return value === null ? fallback : value;
+    } catch (_) {
+        return fallback;
+    }
+}
+
+function safeLocalStorageSet(key, value) {
+    try {
+        localStorage.setItem(key, value);
+    } catch (_) {}
+}
+
+function sectionToCategory(sectionId) {
+    const mapping = {
+        'fal-models': 'fal',
+        'replicate-models': 'replicate',
+        'openrouter-models': 'openrouter'
+    };
+    return mapping[sectionId] || sectionId;
+}
+
+function categoryToSection(categoryId) {
+    const mapping = {
+        fal: 'fal-models',
+        replicate: 'replicate-models',
+        openrouter: 'openrouter-models'
+    };
+    return mapping[categoryId] || categoryId;
+}
+
+function getItemStableKey(categoryId, item) {
+    return buildPinKey(categoryId, item);
+}
+
+function getItemTimestampMs(item) {
+    if (!item || typeof item !== 'object') return null;
+    const candidates = [
+        item.created_at, item.created, item.updated_at, item.inserted_at,
+        item.timestamp, item.published_at, item.released_at, item.date,
+        item.published_date && item.published_time ? `${item.published_date}T${item.published_time}` : null
+    ].filter(Boolean);
+    for (const cand of candidates) {
+        const ms = Date.parse(cand);
+        if (!Number.isNaN(ms)) return ms;
+        if (typeof cand === 'number') return cand * 1000;
+        if (typeof cand === 'string' && /^[0-9]+$/.test(cand.trim())) {
+            const n = Number(cand.trim());
+            if (!Number.isNaN(n)) return n * 1000;
+        }
+    }
+    return null;
+}
+
+function isItemNewForCategory(categoryId, item) {
+    const ts = getItemTimestampMs(item);
+    if (!ts) return false;
+    const lastVisitRaw = safeLocalStorageGet(`${LAST_VISIT_PREFIX}${categoryId}`, null);
+    const lastVisitMs = lastVisitRaw ? Date.parse(lastVisitRaw) : null;
+    return lastVisitMs ? ts > lastVisitMs : false;
+}
+
+function recordTabVisit(sectionId) {
+    const categoryId = sectionToCategory(sectionId);
+    safeLocalStorageSet(`${LAST_VISIT_PREFIX}${categoryId}`, new Date().toISOString());
 }
 
 function getFilteredItems(category, fallback = []) {
@@ -905,8 +989,15 @@ document.addEventListener('DOMContentLoaded', async function() {
     await preloadModelConfig();
    ensureExperimentalSections();
   ensureExperimentalNavButtons();
-  setupNavigation();
-   initializeTheme();
+	  setupNavigation();
+	  setupGlobalSearch();
+	  setupCompareTray();
+	  setupNewOnlyControls();
+	  setupSavedViewsControls();
+	  setupDeepLinking();
+	  setupAutoRefreshScheduler();
+	  setupAgentMessageBridge();
+  	   initializeTheme();
    initializeAuthControls();
     setupFilterControls();
     setupFilterSettings();
@@ -914,7 +1005,8 @@ document.addEventListener('DOMContentLoaded', async function() {
    setupOpenRouterControls();
    populateAgentDropdown();
    initializeAgentExp();
-   loadLLMData(); // Load LLM data by default
+	   loadLLMData(); // Load LLM data by default
+	   recordTabVisit('llms');
    setupImageUpload();
     const pinnedRefreshButton = document.getElementById('pinned-refresh');
     if (pinnedRefreshButton) {
@@ -928,12 +1020,13 @@ document.addEventListener('DOMContentLoaded', async function() {
     const hypeSortSelect = document.getElementById('hype-sort');
     if (hypeSortSelect) {
         hypeSortMode = hypeSortSelect.value || 'newest';
-        hypeSortSelect.addEventListener('change', () => {
-            hypeSortMode = hypeSortSelect.value || 'newest';
-            if (cachedData.hype) {
-                displayHypeItems(cachedData.hype);
-            }
-        });
+	        hypeSortSelect.addEventListener('change', () => {
+	            hypeSortMode = hypeSortSelect.value || 'newest';
+	            if (cachedData.hype) {
+	                displayHypeItems(cachedData.hype);
+	            }
+	            updateDeepLink();
+	        });
     }
 });
 
@@ -1158,12 +1251,62 @@ function buildPinKey(categoryId, item) {
     return `${categoryId}:${Math.abs(hash)}`;
 }
 
+function decorateCardWithUpgrades(card, categoryId, item) {
+    if (!card || !categoryId) return;
+    const key = getItemStableKey(categoryId, item);
+    card.dataset.itemKey = key;
+    card.dataset.categoryId = categoryId;
+
+    if (isItemNewForCategory(categoryId, item)) {
+        const titleEl = card.querySelector('h3, h2, .card-title');
+        if (titleEl && !titleEl.querySelector('.new-badge')) {
+            const badge = document.createElement('span');
+            badge.className = 'new-badge';
+            badge.textContent = 'New';
+            titleEl.appendChild(badge);
+        }
+    }
+
+    if (!card.querySelector('.card-actions-row')) {
+        const actions = document.createElement('div');
+        actions.className = 'card-actions-row';
+        const compareBtn = document.createElement('button');
+        compareBtn.type = 'button';
+        compareBtn.className = 'mini-btn';
+        compareBtn.dataset.compareKey = key;
+        compareBtn.textContent = 'Compare';
+        compareBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isActive = compareSelections.some(sel => sel.key === key);
+            if (isActive) {
+                removeFromCompare(key);
+            } else {
+                addToCompare(categoryId, item);
+            }
+        });
+        actions.appendChild(compareBtn);
+        card.appendChild(actions);
+        refreshCompareButtons();
+    }
+}
+
 function loadLocalPins() {
+    const metadata = loadPinMetadata();
     try {
         const raw = localStorage.getItem(LOCAL_PIN_STORAGE_KEY);
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {
-            return parsed;
+            return parsed.map((entry) => {
+                if (!entry || typeof entry !== 'object') return entry;
+                const key = entry.key || entry.id;
+                const meta = (key && metadata[key]) || {};
+                return {
+                    ...entry,
+                    key,
+                    collection: entry.collection || meta.collection || 'Unsorted',
+                    note: entry.note || meta.note || ''
+                };
+            });
         }
     } catch (error) {
         console.error('Failed to parse local pins:', error);
@@ -1177,6 +1320,20 @@ function saveLocalPins(items) {
     } catch (error) {
         console.error('Failed to save local pins:', error);
     }
+}
+
+function loadPinMetadata() {
+    try {
+        const raw = safeLocalStorageGet(PIN_METADATA_KEY, '{}');
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (_) {
+        return {};
+    }
+}
+
+function savePinMetadata(map) {
+    safeLocalStorageSet(PIN_METADATA_KEY, JSON.stringify(map || {}));
 }
 
 function isItemPinned(categoryId, item) {
@@ -1277,11 +1434,18 @@ async function removeRemotePin(pin) {
 
 function addLocalPin(categoryId, item, key) {
     const entries = loadLocalPins();
+    const collection = prompt('Collection name for this pin?', 'Unsorted') || 'Unsorted';
+    const note = prompt('Add a note for this pin? (optional)', '') || '';
+    const metadata = loadPinMetadata();
+    metadata[key] = { collection, note };
+    savePinMetadata(metadata);
     entries.unshift({
         id: key,
         key,
         category: categoryId,
         item,
+        collection,
+        note,
         created_at: new Date().toISOString()
     });
     saveLocalPins(entries.slice(0, 200));
@@ -1290,6 +1454,11 @@ function addLocalPin(categoryId, item, key) {
 function removeLocalPin(key) {
     const entries = loadLocalPins().filter(entry => entry.key !== key);
     saveLocalPins(entries);
+    const metadata = loadPinMetadata();
+    if (metadata[key]) {
+        delete metadata[key];
+        savePinMetadata(metadata);
+    }
 }
 
 async function refreshPinnedItems() {
@@ -1327,11 +1496,21 @@ function renderPinnedItemsSection() {
         return;
     }
     emptyState.style.display = 'none';
-    pinnedItems.forEach((pin, index) => {
-        const card = createCardForPinnedItem(pin, index);
-        if (card) {
-            container.appendChild(card);
-        }
+    const groups = {};
+    pinnedItems.forEach((pin) => {
+        const collection = pin.collection || 'Unsorted';
+        groups[collection] = groups[collection] || [];
+        groups[collection].push(pin);
+    });
+    Object.entries(groups).forEach(([collection, pins]) => {
+        const wrap = document.createElement('div');
+        wrap.className = 'pinned-collection';
+        wrap.innerHTML = `<div class="pinned-collection-title">${escapeHtml(collection)}</div>`;
+        pins.forEach((pin, index) => {
+            const card = createCardForPinnedItem(pin, index);
+            if (card) wrap.appendChild(card);
+        });
+        container.appendChild(wrap);
     });
 }
 const PIN_CARD_CREATORS = {
@@ -1373,6 +1552,33 @@ function createCardForPinnedItem(pin, index = 0) {
             newButton.dataset.pinKey = pin.key;
             updatePinButton(newButton);
         }
+    }
+    const meta = loadPinMetadata()[pin.key] || {};
+    const noteText = pin.note || meta.note || '';
+    if (noteText) {
+        const note = document.createElement('div');
+        note.className = 'pin-note';
+        note.textContent = noteText;
+        card.appendChild(note);
+    }
+    const actions = card.querySelector('.card-actions-row');
+    if (actions && !actions.querySelector('.pin-edit-btn')) {
+        const editBtn = document.createElement('button');
+        editBtn.type = 'button';
+        editBtn.className = 'mini-btn pin-edit-btn';
+        editBtn.textContent = 'Edit pin';
+        editBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const collection = prompt('Collection name?', pin.collection || meta.collection || 'Unsorted') || 'Unsorted';
+            const note = prompt('Note (optional)?', noteText) || '';
+            const metadata = loadPinMetadata();
+            metadata[pin.key] = { collection, note };
+            savePinMetadata(metadata);
+            const localPins = loadLocalPins().map(p => p.key === pin.key ? { ...p, collection, note } : p);
+            saveLocalPins(localPins);
+            refreshPinnedItems();
+        });
+        actions.appendChild(editBtn);
     }
     return card;
 }
@@ -1840,7 +2046,425 @@ function setupNavigation() {
             
             // Load data for the selected section
             loadSectionData(targetSection);
+            recordTabVisit(targetSection);
+            updateDeepLink();
         });
+    });
+}
+
+function setupGlobalSearch() {
+    const input = document.getElementById('global-search-input');
+    const resultsEl = document.getElementById('global-search-results');
+    if (!input || !resultsEl) return;
+
+    const closeResults = () => {
+        resultsEl.style.display = 'none';
+        resultsEl.innerHTML = '';
+    };
+
+    input.addEventListener('input', () => {
+        const q = input.value.trim().toLowerCase();
+        if (!q) return closeResults();
+        const results = runGlobalSearch(q);
+        renderGlobalSearchResults(resultsEl, results);
+        resultsEl.style.display = results.length ? 'block' : 'none';
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!resultsEl.contains(e.target) && e.target !== input) {
+            closeResults();
+        }
+    });
+}
+
+function rebuildGlobalSearchIndex() {
+    const index = [];
+    Object.entries(FILTERABLE_SECTIONS).forEach(([categoryId, cfg]) => {
+        const items = Array.isArray(cfg.getItems()) ? cfg.getItems() : [];
+        items.forEach((item) => {
+            const key = getItemStableKey(categoryId, item);
+            const label = item.name || item.title || item.id || key;
+            const meta = item.vendor || item.owner || item.provider || item.source_label || item.source || '';
+            const haystack = `${label} ${meta} ${item.description || item.excerpt || ''} ${item.tags || ''}`.toLowerCase();
+            index.push({ categoryId, sectionId: categoryToSection(categoryId), key, label, meta, item, haystack });
+        });
+    });
+    globalSearchIndex = index;
+}
+
+function runGlobalSearch(queryLower) {
+    if (!globalSearchIndex) rebuildGlobalSearchIndex();
+    const results = (globalSearchIndex || []).filter(r => r.haystack.includes(queryLower));
+    return results.slice(0, 120);
+}
+
+function renderGlobalSearchResults(container, results) {
+    const grouped = {};
+    results.forEach(r => {
+        grouped[r.categoryId] = grouped[r.categoryId] || [];
+        grouped[r.categoryId].push(r);
+    });
+    container.innerHTML = '';
+    Object.entries(grouped).forEach(([categoryId, items]) => {
+        const group = document.createElement('div');
+        group.className = 'global-search-group';
+        group.innerHTML = `<div class="global-search-group-title">${escapeHtml(categoryId)}</div>`;
+        items.slice(0, 10).forEach((r) => {
+            const row = document.createElement('div');
+            row.className = 'global-search-item';
+            row.innerHTML = `<div class="title">${escapeHtml(r.label)}</div><div class="meta">${escapeHtml(r.meta)}</div>`;
+            row.addEventListener('click', () => {
+                container.style.display = 'none';
+                const navBtn = document.querySelector(`.nav-btn[data-section="${r.sectionId}"]`);
+                navBtn && navBtn.click();
+                setTimeout(() => scrollToCard(r.sectionId, r.key), 400);
+                updateDeepLink({ itemCategory: r.categoryId, itemKey: r.key });
+            });
+            group.appendChild(row);
+        });
+        container.appendChild(group);
+    });
+}
+
+function scrollToCard(sectionId, itemKey) {
+    const section = document.getElementById(sectionId);
+    if (!section) return;
+    const el = section.querySelector(`[data-item-key="${CSS.escape(itemKey)}"]`);
+    if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('highlight-pulse');
+        setTimeout(() => el.classList.remove('highlight-pulse'), 1600);
+    }
+}
+
+function setupCompareTray() {
+    compareSelections = loadCompareSelections();
+    const tray = document.getElementById('compare-tray');
+    const itemsEl = document.getElementById('compare-tray-items');
+    const openBtn = document.getElementById('compare-open');
+    const clearBtn = document.getElementById('compare-clear');
+    const modal = document.getElementById('compare-modal');
+    const closeBtn = document.getElementById('compare-close');
+
+    const renderTray = () => {
+        if (!tray || !itemsEl) return;
+        itemsEl.innerHTML = '';
+        compareSelections.forEach(sel => {
+            const chip = document.createElement('div');
+            chip.className = 'compare-chip';
+            chip.innerHTML = `<span>${escapeHtml(sel.label)}</span><button aria-label="Remove">×</button>`;
+            chip.querySelector('button').addEventListener('click', () => removeFromCompare(sel.key));
+            itemsEl.appendChild(chip);
+        });
+        tray.style.display = compareSelections.length ? 'block' : 'none';
+        safeLocalStorageSet(COMPARE_STORAGE_KEY, JSON.stringify(compareSelections));
+    };
+    renderCompareTrayFn = renderTray;
+
+    openBtn && openBtn.addEventListener('click', () => {
+        if (!modal) return;
+        renderCompareTable();
+        modal.style.display = 'flex';
+    });
+    closeBtn && closeBtn.addEventListener('click', () => modal && (modal.style.display = 'none'));
+    clearBtn && clearBtn.addEventListener('click', () => { compareSelections = []; renderTray(); refreshCompareButtons(); });
+    modal && modal.addEventListener('click', (e) => { if (e.target === modal) modal.style.display = 'none'; });
+
+    renderTray();
+}
+
+function loadCompareSelections() {
+    try {
+        const raw = safeLocalStorageGet(COMPARE_STORAGE_KEY, '[]');
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch (_) {
+        return [];
+    }
+}
+
+function addToCompare(categoryId, item) {
+    const key = getItemStableKey(categoryId, item);
+    if (compareSelections.some(e => e.key === key)) return;
+    const label = item.name || item.title || item.id || key;
+    compareSelections.push({ key, categoryId, label });
+    renderCompareTrayFn && renderCompareTrayFn();
+    refreshCompareButtons();
+}
+
+function removeFromCompare(key) {
+    compareSelections = compareSelections.filter(e => e.key !== key);
+    renderCompareTrayFn && renderCompareTrayFn();
+    refreshCompareButtons();
+}
+
+function refreshCompareButtons() {
+    document.querySelectorAll('[data-compare-key]').forEach(btn => {
+        const key = btn.dataset.compareKey;
+        btn.classList.toggle('active', compareSelections.some(e => e.key === key));
+        btn.textContent = compareSelections.some(e => e.key === key) ? 'Compared' : 'Compare';
+    });
+}
+
+function renderCompareTable() {
+    const container = document.getElementById('compare-table-container');
+    if (!container) return;
+    const rows = compareSelections.map(sel => findItemByKey(sel.categoryId, sel.key)).filter(Boolean);
+    if (!rows.length) {
+        container.innerHTML = '<div class="empty-state">No items selected.</div>';
+        return;
+    }
+    const fields = [
+        { key: 'name', label: 'Name' },
+        { key: 'source', label: 'Source' },
+        { key: 'provider', label: 'Provider/Owner' },
+        { key: 'context_length', label: 'Context' },
+        { key: 'price', label: 'Price' },
+        { key: 'speed', label: 'Speed' },
+        { key: 'elo', label: 'ELO/Rank' },
+        { key: 'latency', label: 'Latency' },
+        { key: 'tags', label: 'Tags' }
+    ];
+    const header = `<tr>${fields.map(f => `<th>${escapeHtml(f.label)}</th>`).join('')}</tr>`;
+    const body = rows.map(({ categoryId, item }) => {
+        const data = extractCompareFields(categoryId, item);
+        return `<tr>${fields.map(f => `<td>${escapeHtml(String(data[f.key] ?? ''))}</td>`).join('')}</tr>`;
+    }).join('');
+    container.innerHTML = `<div class="table-scroll"><table class="comparison-table">${header}${body}</table></div>`;
+}
+
+function extractCompareFields(categoryId, item) {
+    const name = item.name || item.title || item.id || '';
+    const provider = item.vendor || item.owner || item.provider || item.model_creator?.name || item.source_label || '';
+    const source = categoryId;
+    const context = item.context_length || item.contextLength || '';
+    const price = item.price_1m_input_tokens || item.price_1m_output_tokens || item.pricing?.prompt || item.pricing?.completion || item.pricingInfoOverride || '';
+    const speed = item.median_output_tokens_per_second || item.speed || item.tokens_per_second || '';
+    const elo = item.elo || item.rank || item.intelligence_index || item.quality_index || '';
+    const latency = item.latency_seconds || item.median_time_to_first_token_seconds || '';
+    const tags = (item.tags || item.categories || []).join ? (item.tags || item.categories || []).join(', ') : (item.tags || '');
+    return { name, provider, source, context_length: context, price, speed, elo, latency, tags };
+}
+
+function findItemByKey(categoryId, key) {
+    const cfg = FILTERABLE_SECTIONS[categoryId];
+    const items = cfg && Array.isArray(cfg.getItems()) ? cfg.getItems() : [];
+    const item = items.find(it => getItemStableKey(categoryId, it) === key);
+    return item ? { categoryId, item } : null;
+}
+
+function setupNewOnlyControls() {
+    Object.entries(FILTERABLE_SECTIONS).forEach(([categoryId, cfg]) => {
+        const section = document.getElementById(cfg.sectionId);
+        if (!section) return;
+        const headerControls = section.querySelector('.controls');
+        if (!headerControls || headerControls.querySelector(`[data-new-only="${categoryId}"]`)) return;
+        const wrapper = document.createElement('label');
+        wrapper.className = 'new-only-toggle';
+        wrapper.dataset.newOnly = categoryId;
+        wrapper.innerHTML = `<input type="checkbox"> <span>New only</span>`;
+        const checkbox = wrapper.querySelector('input');
+        checkbox.checked = safeLocalStorageGet(`${NEW_ONLY_PREFIX}${categoryId}`, 'false') === 'true';
+        checkbox.addEventListener('change', () => {
+            safeLocalStorageSet(`${NEW_ONLY_PREFIX}${categoryId}`, checkbox.checked ? 'true' : 'false');
+            refreshCategoryView(categoryId);
+            updateDeepLink();
+        });
+        headerControls.appendChild(wrapper);
+    });
+}
+
+function applyNewOnlyFilter(categoryId, items) {
+    const enabled = safeLocalStorageGet(`${NEW_ONLY_PREFIX}${categoryId}`, 'false') === 'true';
+    if (!enabled) return items;
+    return (items || []).filter(it => isItemNewForCategory(categoryId, it));
+}
+
+function setupSavedViewsControls() {
+    Object.entries(FILTERABLE_SECTIONS).forEach(([categoryId, cfg]) => {
+        const section = document.getElementById(cfg.sectionId);
+        if (!section) return;
+        const headerControls = section.querySelector('.controls');
+        if (!headerControls || headerControls.querySelector(`[data-views="${categoryId}"]`)) return;
+        const controls = document.createElement('div');
+        controls.className = 'views-controls';
+        controls.dataset.views = categoryId;
+        controls.innerHTML = `
+            <select class="views-select"></select>
+            <button class="mini-btn" type="button">Save view</button>
+        `;
+        const select = controls.querySelector('select');
+        const saveBtn = controls.querySelector('button');
+        const refreshSelect = () => {
+            const views = loadSavedViews(categoryId);
+            select.innerHTML = `<option value="">Views…</option>`;
+            views.forEach((v, i) => {
+                const opt = document.createElement('option');
+                opt.value = String(i);
+                opt.textContent = v.name;
+                select.appendChild(opt);
+            });
+        };
+        refreshSelect();
+        select.addEventListener('change', () => {
+            const views = loadSavedViews(categoryId);
+            const idx = Number(select.value);
+            if (Number.isInteger(idx) && views[idx]) {
+                applyViewState(categoryId, views[idx].state);
+            }
+        });
+        saveBtn.addEventListener('click', () => {
+            const name = prompt('Name this view:');
+            if (!name) return;
+            const state = captureViewState(categoryId);
+            const views = loadSavedViews(categoryId);
+            views.push({ name, state });
+            safeLocalStorageSet(`${SAVED_VIEWS_PREFIX}${categoryId}`, JSON.stringify(views));
+            refreshSelect();
+        });
+        headerControls.appendChild(controls);
+    });
+}
+
+function loadSavedViews(categoryId) {
+    try {
+        const raw = safeLocalStorageGet(`${SAVED_VIEWS_PREFIX}${categoryId}`, '[]');
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch (_) {
+        return [];
+    }
+}
+
+function captureViewState(categoryId) {
+    const sectionId = categoryToSection(categoryId);
+    const section = document.getElementById(sectionId);
+    const inputs = section ? section.querySelectorAll('input,select') : [];
+    const state = {};
+    inputs.forEach((el) => {
+        if (el.id) {
+            state[el.id] = el.type === 'checkbox' ? el.checked : el.value;
+        }
+    });
+    state.__newOnly = safeLocalStorageGet(`${NEW_ONLY_PREFIX}${categoryId}`, 'false') === 'true';
+    return state;
+}
+
+function applyViewState(categoryId, state) {
+    if (!state) return;
+    const sectionId = categoryToSection(categoryId);
+    const section = document.getElementById(sectionId);
+    if (!section) return;
+    Object.entries(state).forEach(([id, value]) => {
+        if (id === '__newOnly') return;
+        const el = section.querySelector(`#${CSS.escape(id)}`);
+        if (!el) return;
+        if (el.type === 'checkbox') {
+            el.checked = Boolean(value);
+        } else {
+            el.value = value;
+        }
+    });
+    safeLocalStorageSet(`${NEW_ONLY_PREFIX}${categoryId}`, state.__newOnly ? 'true' : 'false');
+    refreshCategoryView(categoryId);
+}
+
+function setupDeepLinking() {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get('tab');
+    const itemCategory = params.get('itemCategory');
+    const itemKey = params.get('itemKey');
+    const presetState = {};
+    params.forEach((value, key) => {
+        if (['tab', 'itemCategory', 'itemKey'].includes(key)) return;
+        presetState[key] = value;
+    });
+    if (tab) {
+        const btn = document.querySelector(`.nav-btn[data-section="${tab}"]`);
+        btn && btn.click();
+    }
+    if (tab && Object.keys(presetState).length) {
+        const categoryId = sectionToCategory(tab);
+        setTimeout(() => applyViewState(categoryId, presetState), 200);
+    }
+    if (itemCategory && itemKey) {
+        pendingDeepLink = { itemCategory, itemKey };
+    }
+    if (pendingDeepLink) {
+        tryOpenPendingDeepLink();
+    }
+}
+
+function updateDeepLink(extra = {}) {
+    const activeBtn = document.querySelector('.nav-btn.active');
+    const tab = activeBtn ? activeBtn.dataset.section : 'llms';
+    const categoryId = sectionToCategory(tab);
+    const state = captureViewState(categoryId);
+    const params = new URLSearchParams();
+    params.set('tab', tab);
+    Object.entries(state).forEach(([k, v]) => {
+        if (k.startsWith('__')) return;
+        params.set(k, String(v));
+    });
+    if (extra.itemCategory && extra.itemKey) {
+        params.set('itemCategory', extra.itemCategory);
+        params.set('itemKey', extra.itemKey);
+    } else if (pendingDeepLink) {
+        params.set('itemCategory', pendingDeepLink.itemCategory);
+        params.set('itemKey', pendingDeepLink.itemKey);
+    }
+    const url = `${window.location.pathname}?${params.toString()}`;
+    window.history.replaceState({}, '', url);
+}
+
+function tryOpenPendingDeepLink() {
+    if (!pendingDeepLink) return;
+    const found = findItemByKey(pendingDeepLink.itemCategory, pendingDeepLink.itemKey);
+    if (!found) return;
+    const sectionId = categoryToSection(found.categoryId);
+    const btn = document.querySelector(`.nav-btn[data-section="${sectionId}"]`);
+    btn && btn.click();
+    setTimeout(() => {
+        const openType = found.categoryId === 'llms' ? 'llm' : found.categoryId;
+        openModelModal(found.item, openType === 'openrouter' ? 'openrouter' : openType);
+        scrollToCard(sectionId, pendingDeepLink.itemKey);
+        pendingDeepLink = null;
+        updateDeepLink();
+    }, 500);
+}
+
+function setupAutoRefreshScheduler() {
+    const enabled = safeLocalStorageGet(AUTO_REFRESH_ENABLED_KEY, 'false') === 'true';
+    const minutes = Number(safeLocalStorageGet(AUTO_REFRESH_MINUTES_KEY, '10')) || 10;
+    if (!enabled) return;
+    setInterval(() => {
+        loadLatestFeed(true);
+        loadHypeData(true);
+        loadOpenRouterModelsData(true);
+        loadFalModelsData(true);
+        loadReplicateModelsData(true);
+        loadMonitorFeed(true);
+    }, minutes * 60 * 1000);
+}
+
+function setupAgentMessageBridge() {
+    window.addEventListener('message', (event) => {
+        const data = event.data;
+        if (!data || data.type !== 'dashboard-action') return;
+        const { action, categoryId, itemKey } = data;
+        if (!action || !categoryId || !itemKey) return;
+        const found = findItemByKey(categoryId, itemKey);
+        if (!found) return;
+        if (action === 'pin') {
+            togglePin(categoryId, found.item);
+        } else if (action === 'open') {
+            const sectionId = categoryToSection(categoryId);
+            const btn = document.querySelector(`.nav-btn[data-section="${sectionId}"]`);
+            btn && btn.click();
+            setTimeout(() => openModelModal(found.item, categoryId === 'llms' ? 'llm' : categoryId), 300);
+        } else if (action === 'compare') {
+            addToCompare(categoryId, found.item);
+        }
     });
 }
 
@@ -2082,6 +2706,7 @@ function createLLMCard(model) {
         <div class="click-hint">💡 Click to explore full model details</div>
     `;
     attachPinButton(card, 'llms', model);
+    decorateCardWithUpgrades(card, 'llms', model);
     return card;
 }
 
@@ -2386,13 +3011,15 @@ function filterOpenRouterModelsData() {
     });
 
     filtered = sortOpenRouterModelsData(filtered, sortBy);
-    const displayModels = getFilteredItems('openrouter', filtered);
+    const filteredModels = getFilteredItems('openrouter', filtered);
+    const displayModels = applyNewOnlyFilter('openrouter', filteredModels);
     displayOpenRouterModelsData(displayModels);
 
     const resultsInfo = document.getElementById('openrouter-models-results-info');
     if (resultsInfo) {
         resultsInfo.textContent = `Showing ${displayModels.length} of ${rawData.openRouterModels.length} models`;
     }
+    updateDeepLink();
 }
 
 function sortOpenRouterModelsData(models, sortBy) {
@@ -2425,7 +3052,8 @@ function displayOpenRouterModelsData(models) {
     if (!container) return;
 
     container.innerHTML = '';
-    const displayModels = getFilteredItems('openrouter', models);
+    const filteredModels = getFilteredItems('openrouter', models);
+    const displayModels = applyNewOnlyFilter('openrouter', filteredModels);
     recordDisplayedItems('openrouter', displayModels);
     displayModels.forEach(model => {
         container.appendChild(createOpenRouterCard(model));
@@ -2492,7 +3120,8 @@ function displayHypeItems(payload) {
     }
 
     const sortedItems = sortHypeItems(items, hypeSortMode);
-    const displayItems = getFilteredItems('hype', sortedItems);
+    const filteredItems = getFilteredItems('hype', sortedItems);
+    const displayItems = applyNewOnlyFilter('hype', filteredItems);
 
     displayItems.forEach((item, index) => {
         container.appendChild(createHypeCard(item, index, fetchedAt));
@@ -2603,6 +3232,7 @@ function createHypeCard(item, index, fetchedAt) {
     `;
 
     attachPinButton(card, 'hype', item);
+    decorateCardWithUpgrades(card, 'hype', item);
     return card;
 }
 
@@ -2786,7 +3416,8 @@ function displayTestingCatalogItems(items) {
 
     container.innerHTML = '';
 
-    const displayItems = getFilteredItems('testing-catalog', items);
+    const filteredItems = getFilteredItems('testing-catalog', items);
+    const displayItems = applyNewOnlyFilter('testing-catalog', filteredItems);
     if (!displayItems || !displayItems.length) {
         container.innerHTML = '<div class="empty-state">No TestingCatalog stories are available yet.</div>';
         return;
@@ -2828,6 +3459,7 @@ function createTestingCatalogCard(item) {
     `;
 
     attachPinButton(card, 'testing-catalog', item);
+    decorateCardWithUpgrades(card, 'testing-catalog', item);
     return card;
 }
 
@@ -3027,7 +3659,8 @@ function displayBlogPosts(payload) {
     }
 
     const sortedPosts = sortBlogPosts(posts, blogSortMode);
-    const displayPosts = getFilteredItems('blog', sortedPosts);
+    const filteredPosts = getFilteredItems('blog', sortedPosts);
+    const displayPosts = applyNewOnlyFilter('blog', filteredPosts);
     displayPosts.forEach(post => {
         container.appendChild(createBlogCard(post));
     });
@@ -3161,6 +3794,7 @@ function createBlogCard(post) {
         </div>
     `;
     attachPinButton(card, 'blog', post);
+    decorateCardWithUpgrades(card, 'blog', post);
     return card;
 }
 
@@ -3295,7 +3929,8 @@ function displayLatestFeed(items) {
         return;
     }
 
-    const displayItems = getFilteredItems('latest', items);
+    const filteredItems = getFilteredItems('latest', items);
+    const displayItems = applyNewOnlyFilter('latest', filteredItems);
     displayItems.forEach(item => {
         container.appendChild(createLatestCard(item));
     });
@@ -3406,6 +4041,7 @@ function createLatestCard(item) {
     `;
 
     attachPinButton(card, 'latest', item);
+    decorateCardWithUpgrades(card, 'latest', item);
     return card;
 }
 
@@ -3467,7 +4103,8 @@ function displayMonitorItems(items) {
     }
 
     container.innerHTML = '';
-    const displayItems = getFilteredItems('monitor', items);
+    const filteredItems = getFilteredItems('monitor', items);
+    const displayItems = applyNewOnlyFilter('monitor', filteredItems);
     if (!displayItems || !displayItems.length) {
         container.innerHTML = '<div class="empty-state">No monitor updates available yet. Check back soon.</div>';
         return;
@@ -3512,6 +4149,7 @@ function createMonitorCard(item) {
     `;
 
     attachPinButton(card, 'monitor', item);
+    decorateCardWithUpgrades(card, 'monitor', item);
     return card;
 }
 
@@ -3656,6 +4294,7 @@ function createOpenRouterCard(model) {
         </div>
     `;
     attachPinButton(card, 'openrouter', model);
+    decorateCardWithUpgrades(card, 'openrouter', model);
     return card;
 }
 
@@ -3697,7 +4336,8 @@ function displayMediaData(models, type) {
     const container = document.getElementById(`${type}-data`);
     container.innerHTML = '';
 
-    const displayModels = getFilteredItems(type, Array.isArray(models) ? models : []);
+    const filteredModels = getFilteredItems(type, Array.isArray(models) ? models : []);
+    const displayModels = applyNewOnlyFilter(type, filteredModels);
     displayModels.forEach(model => {
         const modelCard = createMediaCard(model, type);
         container.appendChild(modelCard);
@@ -3791,7 +4431,9 @@ function createMediaCard(model, mediaCategory = '') {
         
         <div class="click-hint">💡 Click to explore full model details</div>
     `;
-    attachPinButton(card, mediaCategory || 'media', model);
+    const categoryId = mediaCategory || 'media';
+    attachPinButton(card, categoryId, model);
+    decorateCardWithUpgrades(card, categoryId, model);
     return card;
 }
 
@@ -4721,12 +5363,14 @@ function filterLLMData() {
     filteredData = sortLLMData(filteredData, sortBy);
     
     // Display results
-    const displayModels = getFilteredItems('llms', filteredData);
+    const filteredModels = getFilteredItems('llms', filteredData);
+    const displayModels = applyNewOnlyFilter('llms', filteredModels);
     displayLLMData(displayModels);
     
     // Update results info
     const resultsInfo = document.getElementById('llms-results-info');
     resultsInfo.textContent = `Showing ${displayModels.length} of ${rawData.llms.length} models`;
+    updateDeepLink();
 }
 
 function sortLLMData(data, sortBy) {
@@ -4818,12 +5462,14 @@ function filterFalModelsData() {
     // Sort data
     filteredData = sortFalModelsData(filteredData, sortBy);
     
-    const displayModels = getFilteredItems('fal', filteredData);
+    const filteredModels = getFilteredItems('fal', filteredData);
+    const displayModels = applyNewOnlyFilter('fal', filteredModels);
     displayFalModelsData(displayModels);
     
     // Update results info
     const resultsInfo = document.getElementById('fal-models-results-info');
     resultsInfo.textContent = `Showing ${displayModels.length} of ${rawData.falModels.length} models`;
+    updateDeepLink();
 }
 
 function sortFalModelsData(data, sortBy) {
@@ -4846,7 +5492,8 @@ function displayFalModelsData(models) {
     const container = document.getElementById('fal-models-data');
     container.innerHTML = '';
 
-    const displayModels = getFilteredItems('fal', models);
+    const filteredModels = getFilteredItems('fal', models);
+    const displayModels = applyNewOnlyFilter('fal', filteredModels);
     recordDisplayedItems('fal', displayModels);
     displayModels.forEach(model => {
         const modelCard = createFalModelCard(model);
@@ -4921,6 +5568,7 @@ function createFalModelCard(model) {
         <div class="click-hint">💡 Click to explore full model details</div>
     `;
     attachPinButton(card, 'fal', model);
+    decorateCardWithUpgrades(card, 'fal', model);
     return card;
 }
 
@@ -4981,6 +5629,7 @@ function createReplicateModelCard(model) {
         <div class="click-hint">💡 Click to explore full model details</div>
     `;
     attachPinButton(card, 'replicate', model);
+    decorateCardWithUpgrades(card, 'replicate', model);
     return card;
 }
 
@@ -4989,7 +5638,8 @@ function displayReplicateModelsData(models) {
     const container = document.getElementById('replicate-models-data');
     container.innerHTML = '';
 
-    const displayModels = getFilteredItems('replicate', models);
+    const filteredModels = getFilteredItems('replicate', models);
+    const displayModels = applyNewOnlyFilter('replicate', filteredModels);
     recordDisplayedItems('replicate', displayModels);
     displayModels.forEach(model => {
         const modelCard = createReplicateModelCard(model);
@@ -5018,12 +5668,14 @@ function filterReplicateModelsData() {
     // Sort data
     filteredData = sortReplicateModelsData(filteredData, sortBy);
     
-    const displayModels = getFilteredItems('replicate', filteredData);
+    const filteredModels = getFilteredItems('replicate', filteredData);
+    const displayModels = applyNewOnlyFilter('replicate', filteredModels);
     displayReplicateModelsData(displayModels);
 
     // Update results info
     const resultsInfo = document.getElementById('replicate-models-results-info');
     resultsInfo.textContent = `Showing ${displayModels.length} of ${rawData.replicateModels.length} models`;
+    updateDeepLink();
 }
 
 function sortReplicateModelsData(data, sortBy) {
@@ -6605,8 +7257,34 @@ document.addEventListener('DOMContentLoaded', function() {
     // Setup dropdowns
     setupModelDropdown('setting-speed-model', 'speed-model-dropdown');
     setupModelDropdown('setting-analysis-model', 'analysis-model-dropdown');
-    setupModelDropdown('setting-fallback-models', 'fallback-models-dropdown');
-    setupModelDropdown('setting-available-models', 'available-models-dropdown');
+	    setupModelDropdown('setting-fallback-models', 'fallback-models-dropdown');
+	    setupModelDropdown('setting-available-models', 'available-models-dropdown');
+
+	    if (settingsModal && !document.getElementById('setting-auto-refresh-enabled')) {
+	        const content = settingsModal.querySelector('.settings-content') || settingsModal.querySelector('.modal-content') || settingsModal;
+	        const section = document.createElement('div');
+	        section.className = 'settings-section';
+	        section.innerHTML = `
+	            <h3>Background Refresh</h3>
+	            <div class="form-row toggle-row">
+	                <label for="setting-auto-refresh-enabled">Enable auto refresh</label>
+	                <label class="toggle-switch">
+	                    <input type="checkbox" id="setting-auto-refresh-enabled">
+	                    <span class="toggle-slider"></span>
+	                </label>
+	                <p class="help-text">Refresh Latest, Hype, OpenRouter, Replicate, fal, Monitor in the background.</p>
+	            </div>
+	            <div class="form-row">
+	                <label for="setting-auto-refresh-minutes">Interval (minutes)</label>
+	                <input id="setting-auto-refresh-minutes" type="number" min="1" max="120" value="10">
+	            </div>
+	        `;
+	        content.insertBefore(section, content.querySelector('.settings-section:last-of-type')?.nextSibling || content.lastChild);
+	        const enabledInput = section.querySelector('#setting-auto-refresh-enabled');
+	        const minutesInput = section.querySelector('#setting-auto-refresh-minutes');
+	        enabledInput.checked = safeLocalStorageGet(AUTO_REFRESH_ENABLED_KEY, 'false') === 'true';
+	        minutesInput.value = safeLocalStorageGet(AUTO_REFRESH_MINUTES_KEY, '10');
+	    }
 
     const storedExperimentalMode = getStoredExperimentalMode();
     applyExperimentalMode(storedExperimentalMode === null ? true : storedExperimentalMode);
@@ -6758,14 +7436,23 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (fallbackModelsString) localStorage.setItem('dashboard-fallback-models', fallbackModelsString);
                 if (availableModelsString) localStorage.setItem('dashboard-available-models', availableModelsString);
 
-                if (experimentalToggle) {
-                    const enabled = experimentalToggle.checked;
-                    persistExperimentalMode(enabled);
-                    applyExperimentalMode(enabled);
-                }
+	                if (experimentalToggle) {
+	                    const enabled = experimentalToggle.checked;
+	                    persistExperimentalMode(enabled);
+	                    applyExperimentalMode(enabled);
+	                }
 
-                // Update agent dropdown with new available models
-                populateAgentDropdown();
+	                const autoRefreshToggle = document.getElementById('setting-auto-refresh-enabled');
+	                const autoRefreshMinutes = document.getElementById('setting-auto-refresh-minutes');
+	                if (autoRefreshToggle) {
+	                    safeLocalStorageSet(AUTO_REFRESH_ENABLED_KEY, autoRefreshToggle.checked ? 'true' : 'false');
+	                }
+	                if (autoRefreshMinutes && autoRefreshMinutes.value) {
+	                    safeLocalStorageSet(AUTO_REFRESH_MINUTES_KEY, String(autoRefreshMinutes.value));
+	                }
+
+	                // Update agent dropdown with new available models
+	                populateAgentDropdown();
 
                 settingsModal.style.display = 'none';
                 refreshOpenRouterKeyField();

@@ -33,6 +33,10 @@
                 </div>
             </div>
             <div class="header-actions">
+                <div class="global-search">
+                    <input id="global-search-input" type="text" autocomplete="off" placeholder="Search across all tabs…">
+                    <div id="global-search-results" class="global-search-results" style="display:none;"></div>
+                </div>
                 <button class="theme-toggle" onclick="toggleTheme()">🌙 Dark Mode</button>
                 <button class="auth-button" id="auth-button">Log In</button>
             </div>
@@ -640,6 +644,30 @@
                     <button class="chart-btn" id="settings-save">Save Settings</button>
                     <button class="chart-btn secondary" id="settings-cancel">Cancel</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Compare Tray -->
+    <div id="compare-tray" class="compare-tray" style="display:none;">
+        <div class="compare-tray-content">
+            <div id="compare-tray-items" class="compare-tray-items"></div>
+            <div class="compare-tray-actions">
+                <button id="compare-open" class="chart-btn">Compare</button>
+                <button id="compare-clear" class="chart-btn secondary">Clear</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Compare Modal -->
+    <div id="compare-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-content" style="max-width:1100px;">
+            <div class="modal-header">
+                <h2>Compare Models</h2>
+                <button class="modal-close" id="compare-close">×</button>
+            </div>
+            <div class="modal-body">
+                <div id="compare-table-container"></div>
             </div>
         </div>
     </div>

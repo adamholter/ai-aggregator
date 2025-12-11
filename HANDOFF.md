@@ -21,3 +21,12 @@ Rules:
 
 ## UI sync reminder
 If frontend assets change, ensure the built files under `static/` are updated and the browser cache is refreshed. A stale bundle can mask fixes.
+
+## Completed tasks
+- Global search across tabs with jump-to-card.
+- Compare tray + modal for side-by-side evaluation.
+- "New since last visit" badges + new-only filter.
+- Per-tab saved views and sharable deep links.
+- Optional background refresh scheduler.
+- Pinned collections with notes (local metadata).
+- Agent preview actions: Pin/Open/Compare.
