@@ -37,6 +37,10 @@
             <div class="header-main">
                 <h1>AI Model Analysis Dashboard</h1>
                 <p>Powered by Artificial Analysis, OpenRouter, Fal, and Replicate APIs</p>
+                <div class="global-search global-search-centered">
+                    <input id="global-search-input" type="text" autocomplete="off" placeholder="Search across all tabs…">
+                    <div id="global-search-results" class="global-search-results" style="display:none;"></div>
+                </div>
                 <div class="source-legend" id="source-legend">
                     <span class="legend-title">Source colors</span>
                     <span class="legend-item" data-source="aa-llm"><span class="legend-dot"></span>Artificial Analysis
@@ -54,10 +58,6 @@
                 </div>
             </div>
             <div class="header-actions">
-                <div class="global-search">
-                    <input id="global-search-input" type="text" autocomplete="off" placeholder="Search across all tabs…">
-                    <div id="global-search-results" class="global-search-results" style="display:none;"></div>
-                </div>
                 <button class="theme-toggle" onclick="toggleTheme()">🌙 Dark Mode</button>
                 <button class="auth-button" id="auth-button">Log In</button>
             </div>
