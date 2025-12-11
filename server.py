@@ -33,6 +33,8 @@ from werkzeug.security import check_password_hash
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 
+ 
+
 app = Flask(__name__, static_folder='.', static_url_path='')
 CORS(app)
 app.secret_key = os.environ.get('APP_SECRET_KEY') or 'change-me-in-production'
@@ -297,6 +299,85 @@ print("Inline experimental agent routes registered successfully")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, 'data')
+
+# Persistent "first-seen" timestamps for sources that may omit dates.
+FIRST_SEEN_PATH = os.path.join(DATA_DIR, 'first_seen.json')
+_FIRST_SEEN_LOCK = Lock()
+_FIRST_SEEN_STATE = {'providers': {}, 'last_checked_at': {}}
+
+
+def _load_first_seen_state():
+    try:
+        with open(FIRST_SEEN_PATH, 'r', encoding='utf-8') as handle:
+            data = json.load(handle)
+        if isinstance(data, dict):
+            providers = data.get('providers')
+            last_checked = data.get('last_checked_at')
+            if isinstance(providers, dict):
+                _FIRST_SEEN_STATE['providers'] = providers
+            if isinstance(last_checked, dict):
+                _FIRST_SEEN_STATE['last_checked_at'] = last_checked
+    except FileNotFoundError:
+        return
+    except Exception:
+        return
+
+
+def _save_first_seen_state():
+    try:
+        os.makedirs(os.path.dirname(FIRST_SEEN_PATH), exist_ok=True)
+        tmp_path = FIRST_SEEN_PATH + '.tmp'
+        with open(tmp_path, 'w', encoding='utf-8') as handle:
+            json.dump(_FIRST_SEEN_STATE, handle, ensure_ascii=False, indent=2)
+        os.replace(tmp_path, FIRST_SEEN_PATH)
+    except Exception:
+        return
+
+
+_load_first_seen_state()
+
+
+def _assign_first_seen(provider, item_id, upstream_dt=None):
+    """Return a stable timestamp for items without upstream dates."""
+    if not provider or not item_id:
+        return upstream_dt
+    now_dt = datetime.utcnow().replace(tzinfo=timezone.utc)
+    with _FIRST_SEEN_LOCK:
+        providers = _FIRST_SEEN_STATE.setdefault('providers', {})
+        last_checked_map = _FIRST_SEEN_STATE.setdefault('last_checked_at', {})
+        provider_map = providers.setdefault(provider, {})
+
+        stored = provider_map.get(item_id)
+        if stored:
+            dt = coerce_to_datetime(stored)
+            if dt:
+                return dt.replace(tzinfo=timezone.utc)
+
+        if upstream_dt:
+            provider_map[item_id] = upstream_dt.replace(tzinfo=timezone.utc).isoformat().replace('+00:00', 'Z')
+            _save_first_seen_state()
+            return upstream_dt
+
+        last_checked_raw = last_checked_map.get(provider)
+        last_checked_dt = coerce_to_datetime(last_checked_raw) if last_checked_raw else None
+        if last_checked_dt:
+            last_checked_dt = last_checked_dt.replace(tzinfo=timezone.utc)
+            midpoint = last_checked_dt + (now_dt - last_checked_dt) / 2
+        else:
+            midpoint = now_dt
+
+        provider_map[item_id] = midpoint.isoformat().replace('+00:00', 'Z')
+        _save_first_seen_state()
+        return midpoint
+
+
+def _record_provider_check(provider):
+    if not provider:
+        return
+    with _FIRST_SEEN_LOCK:
+        last_checked_map = _FIRST_SEEN_STATE.setdefault('last_checked_at', {})
+        last_checked_map[provider] = datetime.utcnow().replace(tzinfo=timezone.utc).isoformat().replace('+00:00', 'Z')
+        _save_first_seen_state()
 
 USERS_DB_PATH = os.path.join(DATA_DIR, 'users.json')
 PINS_DB_PATH = os.path.join(DATA_DIR, 'pins.json')
@@ -1220,14 +1301,13 @@ def load_openrouter_models(force_refresh=False):
     if not force_refresh and cache_key in cache and is_cache_valid(cache[cache_key]['timestamp']):
         return cache[cache_key]['data']
 
-    if not OPENROUTER_API_KEY:
-        raise MissingOpenRouterKeyError('OPENROUTER_API_KEY is required to fetch OpenRouter catalog data.')
-
-    headers = build_openrouter_headers(OPENROUTER_API_KEY)
+    headers = None
+    if OPENROUTER_API_KEY:
+        headers = build_openrouter_headers(OPENROUTER_API_KEY)
 
     response = requests.get(
         f'{OPENROUTER_BASE_URL}/models',
-        headers=headers,
+        headers=headers or {},
         timeout=30
     )
     response.raise_for_status()
@@ -1247,13 +1327,21 @@ def load_openrouter_models(force_refresh=False):
             vendor = derive_openrouter_vendor(model) or None
             base_name = base_name.strip()
 
+        model_id = model.get('id')
+        created_raw = model.get('created')
+        created_dt = _coerce_timestamp_utc(created_raw)
+        if not created_dt:
+            created_dt = _assign_first_seen('openrouter', model_id)
+            created_raw = int(created_dt.timestamp()) if created_dt else None
+
         processed_model = {
-            'id': model.get('id'),
+            'id': model_id,
             'slug': model.get('canonical_slug'),
             'name': name,
             'vendor': vendor,
             'base_name': base_name,
-            'created': model.get('created'),
+            'created': created_raw,
+            'created_at': created_dt.isoformat().replace('+00:00', 'Z') if created_dt else None,
             'description': model.get('description'),
             'context_length': model.get('context_length'),
             'hugging_face_id': model.get('hugging_face_id'),
@@ -1274,6 +1362,7 @@ def load_openrouter_models(force_refresh=False):
     )
 
     cache[cache_key] = build_cache_entry(processed_models)
+    _record_provider_check('openrouter')
     return processed_models
 
 def load_artificial_analysis_llms(force_refresh=False):
@@ -5804,6 +5893,7 @@ def get_fal_models():
             'data': processed_models,
             'timestamp': datetime.now()
         }
+        _record_provider_check('fal')
         
         return jsonify(processed_models), 200, {
             'Access-Control-Allow-Origin': '*',
@@ -5879,6 +5969,15 @@ def get_replicate_models():
         owner = model_data.get('owner', '')
         slug = model_data.get('slug') or model_data.get('name') or ''
         model_id = f"{owner}/{slug}".strip('/')
+        latest_version = model_data.get('latest_version')
+        latest_version_created = None
+        if isinstance(latest_version, dict):
+            latest_version_created = latest_version.get('created_at')
+
+        upstream_created = model_data.get('created_at') or model_data.get('published_at') or latest_version_created
+        created_dt = _coerce_timestamp_utc(upstream_created)
+        if not created_dt:
+            created_dt = _assign_first_seen('replicate', model_id)
 
         processed_model = {
             'id': model_id,
@@ -5891,13 +5990,12 @@ def get_replicate_models():
             'github_url': model_data.get('github_url'),
             'paper_url': model_data.get('paper_url'),
             'license_url': model_data.get('license_url'),
-            'created_at': model_data.get('created_at') or model_data.get('published_at'),
+            'created_at': created_dt.isoformat().replace('+00:00', 'Z') if created_dt else upstream_created,
             'run_count': model_data.get('run_count', 0),
             'visibility': model_data.get('visibility', ''),
             'platform': 'replicate'
         }
 
-        latest_version = model_data.get('latest_version')
         default_example = model_data.get('default_example')
         if isinstance(latest_version, dict):
             processed_model['latest_version'] = latest_version
@@ -6021,6 +6119,7 @@ def get_replicate_models():
             'data': aggregated_models,
             'timestamp': datetime.now()
         }
+        _record_provider_check('replicate')
 
         return jsonify(aggregated_models), 200, {
             'Access-Control-Allow-Origin': '*',
@@ -7348,7 +7447,8 @@ def generate_latest_feed_payload(timeframe='day', days=None, force_refresh=False
 
     def fetch_openrouter_source():
         try:
-            models = load_openrouter_models(force_refresh=force_refresh)
+            local_refresh = force_refresh or window_days <= 1
+            models = load_openrouter_models(force_refresh=local_refresh)
             local_entries = []
             for model in models or []:
                 created_value = model.get('created') or model.get('created_at') or model.get('updated_at')
@@ -7377,10 +7477,15 @@ def generate_latest_feed_payload(timeframe='day', days=None, force_refresh=False
 
     def fetch_replicate_source():
         try:
-            replicate_items = load_category_items_simple('replicate', force_refresh=force_refresh)
+            local_refresh = force_refresh or window_days <= 1
+            replicate_items = load_category_items_simple('replicate', force_refresh=local_refresh)
             local_entries = []
             for model in replicate_items:
-                dt = _coerce_timestamp_utc(model.get('created_at') or model.get('published_at'))
+                dt = _coerce_timestamp_utc(
+                    model.get('created_at')
+                    or model.get('published_at')
+                    or model.get('latest_version_created_at')
+                )
                 if not dt or dt < cutoff:
                     continue
                 local_entries.append({
@@ -7401,7 +7506,8 @@ def generate_latest_feed_payload(timeframe='day', days=None, force_refresh=False
 
     def fetch_fal_source():
         try:
-            fal_items = load_category_items_simple('fal', force_refresh=force_refresh)
+            local_refresh = force_refresh or window_days <= 1
+            fal_items = load_category_items_simple('fal', force_refresh=local_refresh)
             local_entries = []
             for model in fal_items:
                 dt = _coerce_timestamp_utc(model.get('date') or model.get('updated_at'))
