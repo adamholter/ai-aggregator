@@ -440,6 +440,7 @@ def _get_latest_preview_payload(timeframe, days, include_hype, limit, force_refr
             timeframe=timeframe,
             days=days,
             include_hype=include_hype,
+            force_refresh=force_refresh,
             cache_result=True
         )
     else:
@@ -2108,12 +2109,16 @@ def fetch_category_payload(category_id, config):
         print(f"WARNING: Failed to hydrate category '{category_id}' via internal client {endpoint}: {exc}")
         return None
 
-def load_category_payload(category):
+def load_category_payload(category, force_refresh=False):
     category_id, config = resolve_category_config(category)
     if not config:
         return category_id, None, None
 
-    payload = get_cached_category_payload(category_id, config)
+    if force_refresh:
+        for key in _iter_cache_keys(config):
+            cache.pop(key, None)
+
+    payload = None if force_refresh else get_cached_category_payload(category_id, config)
     if payload is not None:
         return category_id, config, payload
 
@@ -2947,12 +2952,12 @@ def fetch_blog_posts(force_refresh=False, per_page_override=None, max_pages_over
     return payload
 
 
-def load_category_items_simple(category_id):
+def load_category_items_simple(category_id, force_refresh=False):
     category_id, config = resolve_category_config(category_id)
     if not config:
         return []
     try:
-        _, _, payload = load_category_payload(category_id)
+        _, _, payload = load_category_payload(category_id, force_refresh=force_refresh)
         items = extract_category_items(category_id, config, payload)
         if items:
             return items
@@ -7372,7 +7377,7 @@ def generate_latest_feed_payload(timeframe='day', days=None, force_refresh=False
 
     def fetch_replicate_source():
         try:
-            replicate_items = load_category_items_simple('replicate')
+            replicate_items = load_category_items_simple('replicate', force_refresh=force_refresh)
             local_entries = []
             for model in replicate_items:
                 dt = _coerce_timestamp_utc(model.get('created_at') or model.get('published_at'))
@@ -7396,7 +7401,7 @@ def generate_latest_feed_payload(timeframe='day', days=None, force_refresh=False
 
     def fetch_fal_source():
         try:
-            fal_items = load_category_items_simple('fal')
+            fal_items = load_category_items_simple('fal', force_refresh=force_refresh)
             local_entries = []
             for model in fal_items:
                 dt = _coerce_timestamp_utc(model.get('date') or model.get('updated_at'))

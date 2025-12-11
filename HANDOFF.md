@@ -17,7 +17,7 @@ Rules:
 ```
 
 ## Current open concerns
-- Our agent system, powered by OpenRouter and accessible in the agent tab in the UI, is currently unreliable. It frequently fails to fetch the correct data sources or have proper control.
+- The latest tab doesn't reliably get all the information that is new on platforms like Replicate and OpenRouter as soon as it's out, even though it does show up in those tabs.
 
 ## UI sync reminder
 If frontend assets change, ensure the built files under `static/` are updated and the browser cache is refreshed. A stale bundle can mask fixes.
