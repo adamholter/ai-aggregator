@@ -7,6 +7,7 @@
     <title>AI Model Analysis Dashboard</title>
     <link rel="stylesheet" href="static/styles.css">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 </head>
 
@@ -17,7 +18,8 @@
                 <h1>AI Model Analysis Dashboard</h1>
                 <p>Powered by Artificial Analysis, OpenRouter, Fal, and Replicate APIs</p>
                 <div class="global-search global-search-centered">
-                    <input id="global-search-input" type="text" autocomplete="off" placeholder="Search across all tabs…">
+                    <input id="global-search-input" type="text" autocomplete="off"
+                        placeholder="Search across all tabs…">
                     <div id="global-search-results" class="global-search-results" style="display:none;"></div>
                 </div>
                 <div class="source-legend" id="source-legend">
@@ -37,6 +39,9 @@
                 </div>
             </div>
             <div class="header-actions">
+                <a href="instructions.html" class="nav-link"
+                    style="margin-right: 15px; color: var(--text-secondary); text-decoration: none;">Help &
+                    Instructions</a>
                 <button class="theme-toggle" onclick="toggleTheme()">🌙 Dark Mode</button>
                 <button class="auth-button" id="auth-button">Log In</button>
             </div>
