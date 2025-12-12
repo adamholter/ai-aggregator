@@ -2324,45 +2324,36 @@ function runCompareAnalysis(data) {
     const resultDiv = document.getElementById('compare-analysis-result');
     if (!resultDiv) return;
     resultDiv.style.display = 'block';
-    resultDiv.innerHTML = '<div class="message streaming">Thinking...</div>';
+    resultDiv.innerHTML = '<div class="message streaming"><i class="fa-solid fa-circle-notch fa-spin"></i> Analyzing...</div>';
 
     const prompt = `Compare these AI models based on the following data: ${JSON.stringify(data)}. Highlight the strengths and weaknesses of each relative to the others. Recommend which one to use for speed vs quality.`;
 
-    // Reuse agent logic if possible, or simple fetch
-    // Implementing a simple direct call to the agent API context
+    // Get user's OpenRouter key from settings (if available)
+    const apiKey = safeLocalStorageGet('openrouter_api_key', '');
+
+    const headers = { 'Content-Type': 'application/json' };
+    if (apiKey) {
+        headers['Authorization'] = `Bearer ${apiKey}`;
+    }
+
     fetch('/api/experimental-agent', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: headers,
         body: JSON.stringify({
-            messages: [{ role: 'user', content: prompt }],
+            question: prompt,  // Correct parameter name
             deeper_mode: false
         })
     }).then(async res => {
-        if (!res.ok) throw new Error('Analysis failed');
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        resultDiv.innerHTML = ''; // limited markdown support by default, or reuse renderAgentExpMarkdown if available
-        let text = '';
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            const chunk = decoder.decode(value);
-            // Quick and dirty stream parsing (assuming standard agent output format)
-            // The agent API returns "data: {content}" lines. 
-            // We just want to display the content.
-            const lines = chunk.split('\n');
-            for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                    try {
-                        const json = JSON.parse(line.slice(6));
-                        if (json.content) {
-                            text += json.content;
-                            resultDiv.innerHTML = marked.parse(text); // Assuming marked is available
-                        }
-                    } catch (e) { }
-                }
-            }
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || 'Analysis failed');
+
+        if (json.error) {
+            throw new Error(json.error);
         }
+
+        // The agent returns a JSON response with 'response' field
+        const responseText = json.response || 'No analysis available.';
+        resultDiv.innerHTML = marked.parse(responseText);
     }).catch(e => {
         resultDiv.innerHTML = `<div class="error">Failed to analyze: ${e.message}</div>`;
     });

@@ -4803,15 +4803,6 @@ body {
 .views-widget:hover {
     border-color: var(--info-text);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-    background: var(--card-bg);
-}
-
-.views-widget:hover .views-popover {
-    max-width: 300px;
-    opacity: 1;
-    padding: 0 8px 0 4px;
-    /* Adjust padding for expanded state */
-    margin-left: 4px;
 }
 
 .views-btn {
@@ -4829,6 +4820,12 @@ body {
     transition: background 0.2s;
 }
 
+/* Ensure FontAwesome icons are visible */
+.views-btn i {
+    color: inherit;
+    font-size: 0.9rem;
+}
+
 .views-btn:hover {
     background: var(--info-bg);
     color: var(--button-bg);
@@ -4841,42 +4838,41 @@ body {
     margin: 0 2px;
 }
 
+/* Absolute dropdown to avoid layout jitter */
 .views-popover {
-    /* Inline expansion style */
-    display: inline-flex;
-    align-items: center;
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: 220px;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 12px;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15);
+    display: flex;
+    flex-direction: column;
     gap: 8px;
-    max-width: 0;
     opacity: 0;
-    overflow: hidden;
-    white-space: nowrap;
-    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-
-    /* Remove absolute positioning */
-    position: static;
-    background: transparent;
-    border: none;
-    box-shadow: none;
-    padding: 0;
-    border-radius: 0;
-    transform: none;
+    visibility: hidden;
+    transform: translateY(-5px);
+    transition: all 0.2s ease;
+    z-index: 200;
 }
 
-.views-widget:hover .views-popover,
-.views-popover:hover {
-    /* Handled by parent hover now */
+.views-widget:hover .views-popover {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
 }
 
 .views-select {
     width: 100%;
-    padding: 6px 8px;
+    padding: 8px 10px;
     border-radius: 6px;
     border: 1px solid var(--border-color);
+    background: var(--input-bg);
     font-size: 0.9rem;
     color: var(--text-color);
-    min-width: 120px;
-    height: 28px;
-    /* Match button height */
 }
 
 .views-row {
@@ -4885,34 +4881,25 @@ body {
 }
 
 .views-delete-btn {
-    width: 28px;
-    /* Square button */
-    height: 28px;
-    padding: 0;
-    border-radius: 50%;
-    background: transparent;
-    color: var(--text-color);
-    border: 1px solid transparent;
-    font-size: 0.9rem;
+    width: 100%;
+    padding: 8px;
+    border-radius: 6px;
+    background: var(--error-bg);
+    color: var(--error-text);
+    border: 1px solid var(--error-text);
+    font-size: 0.85rem;
     font-weight: 500;
     cursor: pointer;
-    display: none;
-    /* Hidden by default via JS, but good to ensure */
+    display: flex;
     align-items: center;
     justify-content: center;
-    /* gap: 6px; remove gap */
+    gap: 6px;
     transition: all 0.2s;
 }
 
-.views-delete-btn span {
-    display: none;
-    /* Hide text label for compact view */
-}
-
 .views-delete-btn:hover {
-    background: var(--error-bg);
-    color: var(--error-text);
-    border-color: var(--error-text);
+    background: var(--error-text);
+    color: white;
 }
 
 /* Smart Search Widget */

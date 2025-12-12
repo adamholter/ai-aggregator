@@ -13,6 +13,9 @@ You are working in the AI Model Analysis Dashboard repo.
 Rules:
 - Every change: git add -> git commit -> git push origin main.
 - After pushing, trigger deploy: curl -X POST "https://api.render.com/deploy/srv-d3p4d4fdiees73cdjqk0?key=KkLyUbGA60s".
+- After deploying, check status: render deploys list srv-d3p4d4fdiees73cdjqk0 --output json --confirm | jq '.[0]'
+- View logs: render logs -r srv-d3p4d4fdiees73cdjqk0 --limit 50 --output text --confirm
+- Service ID: srv-d3p4d4fdiees73cdjqk0
 - Never revert user changes. Keep edits ASCII unless the file already uses Unicode.
 ```
 
