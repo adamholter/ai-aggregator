@@ -2303,8 +2303,8 @@ function renderCompareTable() {
 
     // Add Analysis Button
     const analysisAction = `
-        <div style="margin-top: 12px; display: flex; justify-content: flex-end;">
-            <button class="action-btn" id="compare-analyze-btn" style="background: var(--button-bg); color: #fff; border: none;">
+        <div style="margin-top: 16px; display: flex; justify-content: flex-end;">
+            <button class="action-btn primary-btn" id="compare-analyze-btn">
                 <i class="fa-solid fa-wand-magic-sparkles"></i> Analyze with AI
             </button>
         </div>
@@ -2328,13 +2328,18 @@ function runCompareAnalysis(data) {
 
     const prompt = `Compare these AI models based on the following data: ${JSON.stringify(data)}. Highlight the strengths and weaknesses of each relative to the others. Recommend which one to use for speed vs quality.`;
 
-    // Get user's OpenRouter key from settings (if available)
-    const apiKey = safeLocalStorageGet('openrouter_api_key', '');
+    // Get user's OpenRouter key from settings (use the proper function)
+    const apiKey = getUserOpenRouterKey();
 
-    const headers = { 'Content-Type': 'application/json' };
-    if (apiKey) {
-        headers['Authorization'] = `Bearer ${apiKey}`;
+    if (!apiKey) {
+        resultDiv.innerHTML = `<div class="error">Please set your OpenRouter API key in Settings to use this feature.</div>`;
+        return;
     }
+
+    const headers = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+    };
 
     fetch('/api/experimental-agent', {
         method: 'POST',
