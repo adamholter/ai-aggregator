@@ -7409,31 +7409,6 @@ function setupModelDropdown(inputId, dropdownId) {
     });
 }
 
-// Setup dropdown functionality
-function setupModelDropdown(inputId, dropdownId) {
-    const input = document.getElementById(inputId);
-    const dropdown = document.getElementById(dropdownId);
-
-    if (!input || !dropdown) return;
-
-    // Show dropdown on focus
-    input.addEventListener('focus', () => {
-        showModelDropdown(inputId, dropdownId, input.value);
-    });
-
-    // Filter on input
-    input.addEventListener('input', (e) => {
-        showModelDropdown(inputId, dropdownId, e.target.value);
-    });
-
-    // Hide dropdown when clicking outside
-    document.addEventListener('click', (e) => {
-        if (!input.contains(e.target) && !dropdown.contains(e.target)) {
-            hideModelDropdown(dropdownId);
-        }
-    });
-}
-
 // Main settings functionality
 document.addEventListener('DOMContentLoaded', function () {
     const settingsBtn = document.getElementById('settings-btn');
