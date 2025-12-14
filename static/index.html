@@ -38,7 +38,8 @@
                 <h1>AI Model Analysis Dashboard</h1>
                 <p>Powered by Artificial Analysis, OpenRouter, Fal, and Replicate APIs</p>
                 <div class="global-search global-search-centered">
-                    <input id="global-search-input" type="text" autocomplete="off" placeholder="Search across all tabs…">
+                    <input id="global-search-input" type="text" autocomplete="off"
+                        placeholder="Search across all tabs…">
                     <div id="global-search-results" class="global-search-results" style="display:none;"></div>
                 </div>
                 <div class="source-legend" id="source-legend">
@@ -80,6 +81,10 @@
             <button class="nav-btn" data-section="testing-catalog">Testing Catalog</button>
             <button class="nav-btn" data-section="agent-exp">Agent</button>
             <button class="nav-btn" data-section="about">About</button>
+            <button class="nav-btn" data-section="monitor">Monitor</button>
+            <span id="custom-dashboard-tabs"></span>
+            <button class="nav-btn nav-btn-create" id="create-dashboard-btn" title="Create Custom Dashboard">+
+                Dashboard</button>
         </nav>
 
         <main class="main-content">
@@ -691,6 +696,72 @@
             </div>
             <div class="modal-body">
                 <div id="compare-table-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dashboard Builder Modal -->
+    <div id="dashboard-builder-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-content" style="max-width:600px;">
+            <div class="modal-header">
+                <h2 id="dashboard-modal-title">Create Custom Dashboard</h2>
+                <button class="modal-close" id="dashboard-builder-close">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="dashboard-builder-section">
+                    <label>Dashboard Name</label>
+                    <input type="text" id="dashboard-name" placeholder="My Custom View" autocomplete="off">
+                </div>
+
+                <div class="dashboard-builder-section">
+                    <label>Data Sources</label>
+                    <div class="source-checkboxes">
+                        <label><input type="checkbox" value="llms" checked> LLMs (AA)</label>
+                        <label><input type="checkbox" value="openrouter"> OpenRouter</label>
+                        <label><input type="checkbox" value="text-to-image"> Text-to-Image</label>
+                        <label><input type="checkbox" value="image-editing"> Image Editing</label>
+                        <label><input type="checkbox" value="text-to-speech"> Text-to-Speech</label>
+                        <label><input type="checkbox" value="text-to-video"> Text-to-Video</label>
+                        <label><input type="checkbox" value="image-to-video"> Image-to-Video</label>
+                        <label><input type="checkbox" value="fal-models"> Fal.ai</label>
+                        <label><input type="checkbox" value="replicate-models"> Replicate</label>
+                        <label><input type="checkbox" value="testing-catalog"> Testing Catalog</label>
+                        <label><input type="checkbox" value="blog"> Blog</label>
+                        <label><input type="checkbox" value="hype"> Hype Signals</label>
+                    </div>
+                </div>
+
+                <div class="dashboard-builder-section">
+                    <label>Filters</label>
+                    <div class="filter-row">
+                        <input type="text" id="dashboard-search" placeholder="Search term (optional)"
+                            autocomplete="off">
+                        <select id="dashboard-recency">
+                            <option value="">Any time</option>
+                            <option value="24h">Last 24 hours</option>
+                            <option value="7d">Last 7 days</option>
+                            <option value="30d">Last 30 days</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="dashboard-builder-section">
+                    <label>Sort By</label>
+                    <select id="dashboard-sort">
+                        <option value="newest">Newest First</option>
+                        <option value="name">Name (A-Z)</option>
+                        <option value="popular">Popularity</option>
+                    </select>
+                </div>
+
+                <div class="dashboard-builder-actions">
+                    <button id="dashboard-save-btn" class="action-btn primary-btn">Save Dashboard</button>
+                    <button id="dashboard-share-btn" class="action-btn">Copy Share Link</button>
+                    <label class="default-toggle">
+                        <input type="checkbox" id="dashboard-default">
+                        Set as default tab
+                    </label>
+                </div>
             </div>
         </div>
     </div>

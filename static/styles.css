@@ -4576,3 +4576,172 @@ body {
         grid-template-columns: 1fr;
     }
 }
+
+/* ==========================================
+   COMPOSABLE DASHBOARDS
+   ========================================== */
+
+/* Create Dashboard Button */
+.nav-btn-create {
+    background: linear-gradient(135deg, #10b981, #059669) !important;
+    color: white !important;
+    border: none !important;
+    font-weight: 600;
+}
+
+.nav-btn-create:hover {
+    background: linear-gradient(135deg, #059669, #047857) !important;
+    transform: translateY(-1px);
+}
+
+/* Custom Dashboard Tabs */
+.custom-dashboard-tab {
+    position: relative;
+}
+
+.custom-dashboard-tab .tab-delete {
+    display: none;
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--error-text);
+    color: white;
+    border: none;
+    font-size: 10px;
+    cursor: pointer;
+    line-height: 1;
+}
+
+.custom-dashboard-tab:hover .tab-delete {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Dashboard Builder Modal */
+.dashboard-builder-section {
+    margin-bottom: 20px;
+}
+
+.dashboard-builder-section>label {
+    display: block;
+    font-weight: 600;
+    font-size: 0.9rem;
+    margin-bottom: 8px;
+    color: var(--text-color);
+}
+
+.dashboard-builder-section input[type="text"],
+.dashboard-builder-section select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 0.9rem;
+    background: var(--input-bg);
+    color: var(--text-color);
+}
+
+.source-checkboxes {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+}
+
+.source-checkboxes label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
+    background: var(--info-bg);
+    border-radius: 8px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.source-checkboxes label:hover {
+    background: var(--border-color);
+}
+
+.source-checkboxes input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--button-bg);
+}
+
+.filter-row {
+    display: flex;
+    gap: 12px;
+}
+
+.filter-row input,
+.filter-row select {
+    flex: 1;
+}
+
+.dashboard-builder-actions {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-color);
+}
+
+.dashboard-builder-actions .default-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85rem;
+    color: var(--info-text);
+    margin-left: auto;
+}
+
+.dashboard-builder-actions .default-toggle input {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--button-bg);
+}
+
+/* Custom Dashboard Section */
+#custom-dashboard-section {
+    display: none;
+}
+
+#custom-dashboard-section.active {
+    display: block;
+}
+
+.dashboard-info-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--info-bg);
+    border-radius: 12px;
+    margin-bottom: 16px;
+}
+
+.dashboard-info-bar .sources {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.dashboard-info-bar .source-tag {
+    padding: 4px 10px;
+    background: var(--card-bg);
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.dashboard-info-bar .edit-btn {
+    margin-left: auto;
+    padding: 6px 12px;
+    font-size: 0.8rem;
+}

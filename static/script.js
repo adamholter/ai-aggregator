@@ -7240,3 +7240,508 @@ window.removeFromComparison = removeFromComparison;
 window.clearComparison = clearComparison;
 window.openChartModal = openChartModal;
 window.closeChartModal = closeChartModal;
+
+// ============================================
+// COMPOSABLE DASHBOARDS
+// ============================================
+
+const DASHBOARDS_STORAGE_KEY = 'custom-dashboards';
+const DEFAULT_DASHBOARD_KEY = 'default-dashboard-id';
+let savedDashboards = [];
+let activeDashboardId = null;
+let editingDashboardId = null;
+
+// Load saved dashboards from localStorage
+function loadSavedDashboards() {
+    try {
+        const stored = localStorage.getItem(DASHBOARDS_STORAGE_KEY);
+        savedDashboards = stored ? JSON.parse(stored) : [];
+    } catch (e) {
+        savedDashboards = [];
+    }
+    renderDashboardTabs();
+}
+
+// Save dashboards to localStorage
+function saveDashboardsToStorage() {
+    localStorage.setItem(DASHBOARDS_STORAGE_KEY, JSON.stringify(savedDashboards));
+}
+
+// Generate a simple UUID
+function generateDashboardId() {
+    return 'db-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
+}
+
+// Open Dashboard Builder modal
+function openDashboardBuilder(dashboardToEdit = null) {
+    const modal = document.getElementById('dashboard-builder-modal');
+    const title = document.getElementById('dashboard-modal-title');
+
+    if (!modal) return;
+
+    // Reset form
+    document.getElementById('dashboard-name').value = '';
+    document.getElementById('dashboard-search').value = '';
+    document.getElementById('dashboard-recency').value = '';
+    document.getElementById('dashboard-sort').value = 'newest';
+    document.getElementById('dashboard-default').checked = false;
+
+    // Reset source checkboxes
+    document.querySelectorAll('.source-checkboxes input').forEach(cb => {
+        cb.checked = cb.value === 'llms'; // Default only LLMs checked
+    });
+
+    editingDashboardId = null;
+
+    if (dashboardToEdit) {
+        // Editing existing dashboard
+        editingDashboardId = dashboardToEdit.id;
+        title.textContent = 'Edit Dashboard';
+        document.getElementById('dashboard-name').value = dashboardToEdit.name;
+        document.getElementById('dashboard-search').value = dashboardToEdit.filters?.search || '';
+        document.getElementById('dashboard-recency').value = dashboardToEdit.filters?.recency || '';
+        document.getElementById('dashboard-sort').value = dashboardToEdit.sort || 'newest';
+        document.getElementById('dashboard-default').checked = dashboardToEdit.isDefault || false;
+
+        // Set source checkboxes
+        document.querySelectorAll('.source-checkboxes input').forEach(cb => {
+            cb.checked = dashboardToEdit.sources?.includes(cb.value) || false;
+        });
+    } else {
+        title.textContent = 'Create Custom Dashboard';
+    }
+
+    modal.style.display = 'flex';
+}
+
+function closeDashboardBuilder() {
+    const modal = document.getElementById('dashboard-builder-modal');
+    if (modal) modal.style.display = 'none';
+    editingDashboardId = null;
+}
+
+// Get current form values as dashboard config
+function getDashboardConfigFromForm() {
+    const sources = [];
+    document.querySelectorAll('.source-checkboxes input:checked').forEach(cb => {
+        sources.push(cb.value);
+    });
+
+    return {
+        id: editingDashboardId || generateDashboardId(),
+        name: document.getElementById('dashboard-name').value.trim() || 'Untitled Dashboard',
+        sources: sources,
+        filters: {
+            search: document.getElementById('dashboard-search').value.trim(),
+            recency: document.getElementById('dashboard-recency').value
+        },
+        sort: document.getElementById('dashboard-sort').value,
+        isDefault: document.getElementById('dashboard-default').checked,
+        createdAt: editingDashboardId
+            ? savedDashboards.find(d => d.id === editingDashboardId)?.createdAt
+            : new Date().toISOString()
+    };
+}
+
+// Save dashboard
+function saveDashboard() {
+    const config = getDashboardConfigFromForm();
+
+    if (config.sources.length === 0) {
+        showToast('Please select at least one data source', 'warning');
+        return;
+    }
+
+    // If setting as default, unset previous default
+    if (config.isDefault) {
+        savedDashboards.forEach(d => d.isDefault = false);
+        localStorage.setItem(DEFAULT_DASHBOARD_KEY, config.id);
+    }
+
+    // Update or add
+    const existingIndex = savedDashboards.findIndex(d => d.id === config.id);
+    if (existingIndex >= 0) {
+        savedDashboards[existingIndex] = config;
+    } else {
+        savedDashboards.push(config);
+    }
+
+    saveDashboardsToStorage();
+    renderDashboardTabs();
+    closeDashboardBuilder();
+    showToast(`Dashboard "${config.name}" saved!`, 'success');
+
+    // Activate the dashboard
+    activateDashboard(config.id);
+}
+
+// Generate share URL
+function generateShareUrl(config) {
+    const encoded = btoa(JSON.stringify(config));
+    return `${window.location.origin}${window.location.pathname}?dashboard=${encoded}`;
+}
+
+// Copy share link
+function copyShareLink() {
+    const config = getDashboardConfigFromForm();
+
+    if (config.sources.length === 0) {
+        showToast('Please select at least one data source', 'warning');
+        return;
+    }
+
+    const url = generateShareUrl(config);
+    navigator.clipboard.writeText(url).then(() => {
+        showToast('Share link copied to clipboard!', 'success');
+    }).catch(() => {
+        showToast('Failed to copy link', 'error');
+    });
+}
+
+// Render dashboard tabs in nav
+function renderDashboardTabs() {
+    const container = document.getElementById('custom-dashboard-tabs');
+    if (!container) return;
+
+    container.innerHTML = savedDashboards.map(dashboard => `
+        <button class="nav-btn custom-dashboard-tab ${activeDashboardId === dashboard.id ? 'active' : ''}" 
+                data-dashboard-id="${dashboard.id}"
+                title="${dashboard.sources.join(', ')}">
+            ${dashboard.isDefault ? '⭐ ' : ''}${escapeHtml(dashboard.name)}
+            <button class="tab-delete" onclick="event.stopPropagation(); deleteDashboard('${dashboard.id}')">×</button>
+        </button>
+    `).join('');
+
+    // Add click handlers
+    container.querySelectorAll('.custom-dashboard-tab').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            if (e.target.classList.contains('tab-delete')) return;
+            const id = btn.dataset.dashboardId;
+            activateDashboard(id);
+        });
+    });
+}
+
+// Delete dashboard
+function deleteDashboard(id) {
+    const dashboard = savedDashboards.find(d => d.id === id);
+    if (!dashboard) return;
+
+    showConfirmModal(`Delete dashboard "${dashboard.name}"?`, () => {
+        savedDashboards = savedDashboards.filter(d => d.id !== id);
+        saveDashboardsToStorage();
+        renderDashboardTabs();
+
+        if (activeDashboardId === id) {
+            activeDashboardId = null;
+            // Go back to LLMs
+            const llmsBtn = document.querySelector('[data-section="llms"]');
+            if (llmsBtn) llmsBtn.click();
+        }
+
+        showToast('Dashboard deleted', 'info');
+    });
+}
+
+// Activate a dashboard (load its data)
+async function activateDashboard(id) {
+    const dashboard = savedDashboards.find(d => d.id === id);
+    if (!dashboard) return;
+
+    activeDashboardId = id;
+
+    // Update tab active states
+    document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
+    const tabBtn = document.querySelector(`[data-dashboard-id="${id}"]`);
+    if (tabBtn) tabBtn.classList.add('active');
+
+    // Hide all sections, show custom dashboard section
+    document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
+
+    let section = document.getElementById('custom-dashboard-section');
+    if (!section) {
+        // Create the section if it doesn't exist
+        section = document.createElement('section');
+        section.id = 'custom-dashboard-section';
+        section.className = 'content-section active';
+        section.innerHTML = `
+            <div class="section-header">
+                <h2 id="custom-dashboard-title">Custom Dashboard</h2>
+                <div class="controls">
+                    <input type="text" id="custom-dashboard-search" placeholder="Search..." autocomplete="off">
+                    <button class="refresh-btn" onclick="refreshCurrentDashboard()">Refresh</button>
+                    <button class="action-btn" onclick="editCurrentDashboard()">Edit</button>
+                </div>
+            </div>
+            <div class="dashboard-info-bar" id="dashboard-info-bar"></div>
+            <div id="custom-dashboard-loading" class="loading-indicator" style="display:none;">Loading data from multiple sources...</div>
+            <div id="custom-dashboard-data" class="data-grid"></div>
+        `;
+        document.querySelector('.main-content').appendChild(section);
+    }
+
+    section.classList.add('active');
+
+    // Update title and info bar
+    document.getElementById('custom-dashboard-title').textContent = dashboard.name;
+    document.getElementById('dashboard-info-bar').innerHTML = `
+        <div class="sources">
+            ${dashboard.sources.map(s => `<span class="source-tag">${s}</span>`).join('')}
+        </div>
+        ${dashboard.filters?.search ? `<span class="source-tag">🔍 ${escapeHtml(dashboard.filters.search)}</span>` : ''}
+        ${dashboard.filters?.recency ? `<span class="source-tag">📅 ${dashboard.filters.recency}</span>` : ''}
+    `;
+
+    // Set search filter
+    const searchInput = document.getElementById('custom-dashboard-search');
+    if (searchInput) {
+        searchInput.value = dashboard.filters?.search || '';
+        searchInput.oninput = () => filterDashboardData(dashboard);
+    }
+
+    // Load data from all sources
+    await loadDashboardData(dashboard);
+}
+
+// Load data from multiple sources for a dashboard
+async function loadDashboardData(dashboard) {
+    const loadingEl = document.getElementById('custom-dashboard-loading');
+    const dataEl = document.getElementById('custom-dashboard-data');
+
+    if (loadingEl) loadingEl.style.display = 'block';
+    if (dataEl) dataEl.innerHTML = '';
+
+    const allItems = [];
+
+    try {
+        // Fetch data from each source
+        for (const source of dashboard.sources) {
+            const items = await fetchSourceData(source, dashboard.filters);
+            allItems.push(...items.map(item => ({ ...item, _source: source })));
+        }
+
+        // Apply search filter
+        let filtered = allItems;
+        const searchTerm = dashboard.filters?.search?.toLowerCase();
+        if (searchTerm) {
+            filtered = allItems.filter(item => {
+                const name = (item.name || item.title || '').toLowerCase();
+                const desc = (item.description || '').toLowerCase();
+                return name.includes(searchTerm) || desc.includes(searchTerm);
+            });
+        }
+
+        // Apply recency filter
+        if (dashboard.filters?.recency) {
+            const now = Date.now();
+            const msAgo = {
+                '24h': 24 * 60 * 60 * 1000,
+                '7d': 7 * 24 * 60 * 60 * 1000,
+                '30d': 30 * 24 * 60 * 60 * 1000
+            }[dashboard.filters.recency] || 0;
+
+            if (msAgo) {
+                filtered = filtered.filter(item => {
+                    const dateStr = item.created_at || item.date || item.timestamp || item.created;
+                    if (!dateStr) return true;
+                    const itemDate = new Date(typeof dateStr === 'number' ? dateStr * 1000 : dateStr);
+                    return (now - itemDate.getTime()) <= msAgo;
+                });
+            }
+        }
+
+        // Sort
+        if (dashboard.sort === 'newest') {
+            filtered.sort((a, b) => {
+                const dateA = new Date(a.created_at || a.date || a.timestamp || a.created || 0);
+                const dateB = new Date(b.created_at || b.date || b.timestamp || b.created || 0);
+                return dateB - dateA;
+            });
+        } else if (dashboard.sort === 'name') {
+            filtered.sort((a, b) => (a.name || a.title || '').localeCompare(b.name || b.title || ''));
+        }
+
+        // Render cards
+        if (dataEl) {
+            if (filtered.length === 0) {
+                dataEl.innerHTML = '<p style="text-align:center; color: var(--info-text); padding: 40px;">No items match your criteria.</p>';
+            } else {
+                filtered.forEach(item => {
+                    const card = createCardForDashboard(item, item._source);
+                    if (card) dataEl.appendChild(card);
+                });
+            }
+        }
+
+    } catch (error) {
+        console.error('Dashboard loading error:', error);
+        if (dataEl) {
+            dataEl.innerHTML = `<p style="color: var(--error-text); padding: 20px;">Error loading data: ${error.message}</p>`;
+        }
+    } finally {
+        if (loadingEl) loadingEl.style.display = 'none';
+    }
+}
+
+// Fetch data for a source (uses cached data if available)
+async function fetchSourceData(source, filters) {
+    // Map source IDs to cached data
+    const sourceMap = {
+        'llms': () => cachedData.llms || [],
+        'openrouter': () => cachedData.openrouter || [],
+        'text-to-image': () => cachedData['text-to-image'] || [],
+        'image-editing': () => cachedData['image-editing'] || [],
+        'text-to-speech': () => cachedData['text-to-speech'] || [],
+        'text-to-video': () => cachedData['text-to-video'] || [],
+        'image-to-video': () => cachedData['image-to-video'] || [],
+        'fal-models': () => cachedData.fal || [],
+        'replicate-models': () => cachedData.replicate || [],
+        'testing-catalog': () => cachedData['testing-catalog'] || [],
+        'blog': () => cachedData.blog || [],
+        'hype': () => cachedData.hype || []
+    };
+
+    const getter = sourceMap[source];
+    if (getter) {
+        const data = getter();
+        if (data.length > 0) return data;
+    }
+
+    // If not cached, try to fetch
+    try {
+        const res = await fetch(`/api/fetch?tabs=${source}&limit=50`);
+        if (res.ok) {
+            const json = await res.json();
+            const datasets = json.datasets || {};
+            const items = Object.values(datasets).flat();
+            return Array.isArray(items) ? items : [];
+        }
+    } catch (e) {
+        console.warn(`Failed to fetch ${source}:`, e);
+    }
+
+    return [];
+}
+
+// Create a card for dashboard display
+function createCardForDashboard(item, source) {
+    // Use existing card creators based on source
+    const creators = {
+        'llms': () => createLLMCard(item),
+        'openrouter': () => createOpenRouterCard(item),
+        'text-to-image': () => createMediaCard(item, 'text-to-image'),
+        'image-editing': () => createMediaCard(item, 'image-editing'),
+        'text-to-speech': () => createMediaCard(item, 'text-to-speech'),
+        'text-to-video': () => createMediaCard(item, 'text-to-video'),
+        'image-to-video': () => createMediaCard(item, 'image-to-video'),
+        'fal-models': () => createFalModelCard(item),
+        'replicate-models': () => createReplicateModelCard(item),
+        'testing-catalog': () => createTestingCatalogCard(item),
+        'blog': () => createBlogCard(item),
+        'hype': () => createHypeCard(item)
+    };
+
+    const creator = creators[source];
+    return creator ? creator() : null;
+}
+
+// Edit current dashboard
+function editCurrentDashboard() {
+    const dashboard = savedDashboards.find(d => d.id === activeDashboardId);
+    if (dashboard) {
+        openDashboardBuilder(dashboard);
+    }
+}
+
+// Refresh current dashboard
+function refreshCurrentDashboard() {
+    if (activeDashboardId) {
+        activateDashboard(activeDashboardId);
+    }
+}
+
+// Filter dashboard data (live search)
+function filterDashboardData(dashboard) {
+    const searchValue = document.getElementById('custom-dashboard-search')?.value || '';
+    const updatedDashboard = { ...dashboard, filters: { ...dashboard.filters, search: searchValue } };
+    loadDashboardData(updatedDashboard);
+}
+
+// Parse dashboard from URL
+function parseDashboardFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const dashboardParam = params.get('dashboard');
+
+    if (dashboardParam) {
+        try {
+            const config = JSON.parse(atob(dashboardParam));
+            if (config && config.sources && config.sources.length > 0) {
+                // Create temporary dashboard
+                config.id = 'temp-' + Date.now();
+                config.name = config.name || 'Shared Dashboard';
+                savedDashboards.push(config);
+                renderDashboardTabs();
+
+                // Activate it
+                setTimeout(() => activateDashboard(config.id), 500);
+                return true;
+            }
+        } catch (e) {
+            console.warn('Failed to parse dashboard URL:', e);
+        }
+    }
+    return false;
+}
+
+// Wire up Dashboard Builder
+document.addEventListener('DOMContentLoaded', () => {
+    // Load saved dashboards
+    loadSavedDashboards();
+
+    // Check for dashboard in URL
+    parseDashboardFromUrl();
+
+    // Create Dashboard button
+    const createBtn = document.getElementById('create-dashboard-btn');
+    if (createBtn) {
+        createBtn.addEventListener('click', () => openDashboardBuilder());
+    }
+
+    // Modal close button
+    const closeBtn = document.getElementById('dashboard-builder-close');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', closeDashboardBuilder);
+    }
+
+    // Modal overlay click to close
+    const modal = document.getElementById('dashboard-builder-modal');
+    if (modal) {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeDashboardBuilder();
+        });
+    }
+
+    // Save button
+    const saveBtn = document.getElementById('dashboard-save-btn');
+    if (saveBtn) {
+        saveBtn.addEventListener('click', saveDashboard);
+    }
+
+    // Share button
+    const shareBtn = document.getElementById('dashboard-share-btn');
+    if (shareBtn) {
+        shareBtn.addEventListener('click', copyShareLink);
+    }
+
+    // Check for default dashboard
+    const defaultId = localStorage.getItem(DEFAULT_DASHBOARD_KEY);
+    if (defaultId && savedDashboards.some(d => d.id === defaultId)) {
+        setTimeout(() => activateDashboard(defaultId), 100);
+    }
+});
+
+// Export functions
+window.openDashboardBuilder = openDashboardBuilder;
+window.deleteDashboard = deleteDashboard;
+window.editCurrentDashboard = editCurrentDashboard;
+window.refreshCurrentDashboard = refreshCurrentDashboard;
