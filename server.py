@@ -149,6 +149,13 @@ When the user attaches an image, you CAN see and analyze it. You have vision cap
 - You can analyze screenshots, diagrams, charts, UI mockups, etc.
 - If asked to analyze an image but none is attached, politely ask for one
 
+## EFFICIENCY AND ITERATIONS
+You have a LIMITED number of tool call iterations (max 15). Be efficient:
+- Call multiple relevant tools in PARALLEL in your first turn
+- Don't repeat the same tool call with identical parameters
+- If you've called a tool 3+ times without progress, provide what you have
+- Synthesize existing results rather than making more calls
+
 ## RESPONSE STYLE
 - Use headers and bullet points
 - Be specific with numbers from tool data
@@ -182,7 +189,7 @@ def inline_exp_agent_api():
     deeper_mode = data.get('deeper_mode', False)  # More thorough research mode
     
     # Set iteration count based on mode (deeper = more iterations for thorough research)
-    max_iterations = 5 if deeper_mode else 3
+    max_iterations = 20 if deeper_mode else 15
     
     # Build messages with conversation history
     messages = [{"role": "system", "content": AGENT_SYSTEM_PROMPT}]
@@ -223,7 +230,7 @@ def inline_exp_agent_api():
             }
             
             # Log the request for debugging
-            print(f"[Agent] Iteration {iteration + 1}, Model: {model_id}")
+            print(f"[Agent] Iteration {iteration + 1}/{max_iterations}, Model: {model_id}")
             
             # Call OpenRouter API
             resp = requests.post(
@@ -233,7 +240,7 @@ def inline_exp_agent_api():
                     "Content-Type": "application/json"
                 },
                 json=payload,
-                timeout=60
+                timeout=600  # 10 minute timeout for slower models
             )
             
             # Log the response
