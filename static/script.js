@@ -7210,6 +7210,10 @@ function updateCompareButtonStates() {
  */
 function updateFloatingCompareButton() {
     let floatBtn = document.getElementById('floating-compare-btn');
+    const tray = document.getElementById('compare-tray');
+
+    // Calculate bottom offset based on tray height
+    const trayHeight = tray && tray.style.display !== 'none' ? tray.offsetHeight + 10 : 0;
 
     if (chartComparisonModels.length >= 2) {
         if (!floatBtn) {
@@ -7226,7 +7230,6 @@ function updateFloatingCompareButton() {
                 style.textContent = `
                     .floating-compare-btn {
                         position: fixed;
-                        bottom: 24px;
                         right: 24px;
                         background: #111827;
                         color: white;
@@ -7237,7 +7240,7 @@ function updateFloatingCompareButton() {
                         cursor: pointer;
                         box-shadow: 0 4px 20px rgba(0,0,0,0.2);
                         z-index: 1000;
-                        transition: transform 0.2s, box-shadow 0.2s;
+                        transition: all 0.2s ease;
                     }
                     .floating-compare-btn:hover {
                         transform: translateY(-2px);
@@ -7249,6 +7252,7 @@ function updateFloatingCompareButton() {
         }
         floatBtn.textContent = `Compare ${chartComparisonModels.length} Models`;
         floatBtn.style.display = 'block';
+        floatBtn.style.bottom = `${24 + trayHeight}px`;
     } else if (floatBtn) {
         floatBtn.style.display = 'none';
     }
