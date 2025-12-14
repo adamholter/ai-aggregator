@@ -4821,9 +4821,14 @@ body {
 }
 
 /* Ensure FontAwesome icons are visible */
-.views-btn i {
-    color: inherit;
-    font-size: 0.9rem;
+.views-btn i,
+.views-btn i.fa-solid {
+    display: inline-block !important;
+    color: var(--text-color) !important;
+    font-size: 0.9rem !important;
+    width: 1em;
+    height: 1em;
+    line-height: 1;
 }
 
 .views-btn:hover {
