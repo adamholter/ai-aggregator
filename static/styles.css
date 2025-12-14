@@ -4820,15 +4820,12 @@ body {
     transition: background 0.2s;
 }
 
-/* Ensure FontAwesome icons are visible */
-.views-btn i,
-.views-btn i.fa-solid {
-    display: inline-block !important;
-    color: var(--text-color) !important;
-    font-size: 0.9rem !important;
-    width: 1em;
-    height: 1em;
-    line-height: 1;
+/* Ensure SVG icons are visible */
+.views-btn svg {
+    width: 14px;
+    height: 14px;
+    stroke: currentColor;
+    flex-shrink: 0;
 }
 
 .views-btn:hover {
