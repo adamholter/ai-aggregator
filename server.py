@@ -47,11 +47,15 @@ app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0  # Disable static file caching
 @app.after_request
 def add_cache_control_headers(response):
     """Add cache control headers to prevent browser/CDN caching of static files."""
-    if request.path.startswith('/static/') or request.path.endswith(('.js', '.css', '.html')):
+    # Apply to root, static files, and HTML/JS/CSS paths
+    if (request.path == '/' or 
+        request.path.startswith('/static/') or 
+        request.path.endswith(('.js', '.css', '.html'))):
         response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
         response.headers['Pragma'] = 'no-cache'
         response.headers['Expires'] = '0'
     return response
+
 
 # Register modular blueprints
 try:
