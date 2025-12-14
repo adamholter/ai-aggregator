@@ -5539,13 +5539,21 @@ Return a concise markdown report that cites sources inline when available."""
     return "", get_model_display_name(web_search_model)
 @app.route('/')
 def index():
-    """Serve the main dashboard page."""
-    return app.send_static_file('index.html')
+    """Serve the main dashboard page with cache-busting headers."""
+    from flask import make_response
+    response = make_response(app.send_static_file('index.html'))
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    response.headers['Surrogate-Control'] = 'no-store'  # CDN hint
+    response.headers['ETag'] = str(int(time.time()))  # Force unique ETag
+    return response
 
 @app.route('/about')
 def about_page():
     """Serve the about page."""
     return app.send_static_file('about.html')
+
 
 
 @app.route('/docs')
