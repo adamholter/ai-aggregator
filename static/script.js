@@ -100,246 +100,15 @@ const displayedSnapshots = {};
 const FILTER_MODEL_STORAGE_KEY = 'dashboard-filter-model-id';
 const FILTER_PROMPT_NOTE_STORAGE_KEY = 'dashboard-filter-prompt-note';
 
-// Product upgrade state
-let compareSelections = [];
-const COMPARE_STORAGE_KEY = 'dashboard-compare-items';
-const LAST_VISIT_PREFIX = 'dashboard-last-visit:';
-const NEW_ONLY_PREFIX = 'dashboard-new-only:';
-const SAVED_VIEWS_PREFIX = 'dashboard-saved-views:';
-const AUTO_REFRESH_ENABLED_KEY = 'dashboard-auto-refresh-enabled';
-const AUTO_REFRESH_MINUTES_KEY = 'dashboard-auto-refresh-minutes';
-const PIN_METADATA_KEY = 'dashboard-pin-metadata';
-
-let pendingDeepLink = null;
-let globalSearchIndex = null;
-let renderCompareTrayFn = null;
-
 function recordDisplayedItems(category, items) {
     if (typeof category !== 'string') {
         return;
     }
     displayedSnapshots[category] = Array.isArray(items) ? items.slice() : [];
-    globalSearchIndex = null;
 }
 
 function getDisplayedItems(category) {
     return displayedSnapshots[category] ? displayedSnapshots[category].slice() : [];
-}
-
-function safeLocalStorageGet(key, fallback = null) {
-    try {
-        const value = localStorage.getItem(key);
-        return value === null ? fallback : value;
-    } catch (_) {
-        return fallback;
-    }
-}
-
-function safeLocalStorageSet(key, value) {
-    try {
-        localStorage.setItem(key, value);
-    } catch (_) { }
-}
-
-// Custom modal to replace browser prompt()
-function showInputModal(title, defaultValue = '', placeholder = '') {
-    return new Promise((resolve) => {
-        const overlay = document.createElement('div');
-        overlay.className = 'modal-overlay';
-        overlay.style.zIndex = '2000';
-
-        const modal = document.createElement('div');
-        modal.className = 'modal-content';
-        modal.style.maxWidth = '400px';
-        modal.innerHTML = `
-            <div class="modal-header">
-                <h3 style="margin: 0; font-size: 1.1rem;">${title}</h3>
-            </div>
-            <div class="modal-body" style="padding: 16px;">
-                <input type="text" class="input-modal-field" value="${defaultValue}" placeholder="${placeholder}" 
-                       style="width: 100%; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 1rem; background: var(--input-bg); color: var(--text-color);">
-            </div>
-            <div class="modal-footer" style="display: flex; gap: 8px; justify-content: flex-end; padding: 12px 16px; border-top: 1px solid var(--border-color);">
-                <button class="action-btn modal-cancel" style="padding: 8px 16px; border-radius: 6px; background: transparent; color: var(--text-color); border: 1px solid var(--border-color); cursor: pointer;">Cancel</button>
-                <button class="action-btn primary-btn modal-confirm" style="padding: 8px 16px; border-radius: 6px;">OK</button>
-            </div>
-        `;
-
-        overlay.appendChild(modal);
-        document.body.appendChild(overlay);
-
-        const input = modal.querySelector('.input-modal-field');
-        const confirmBtn = modal.querySelector('.modal-confirm');
-        const cancelBtn = modal.querySelector('.modal-cancel');
-
-        input.focus();
-        input.select();
-
-        const closeModal = (value) => {
-            overlay.remove();
-            resolve(value);
-        };
-
-        confirmBtn.addEventListener('click', () => closeModal(input.value));
-        cancelBtn.addEventListener('click', () => closeModal(null));
-
-        input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') closeModal(input.value);
-            if (e.key === 'Escape') closeModal(null);
-        });
-
-        overlay.addEventListener('click', (e) => {
-            if (e.target === overlay) closeModal(null);
-        });
-    });
-}
-
-// Custom modal to replace browser confirm()
-function showConfirmModal(message) {
-    return new Promise((resolve) => {
-        const overlay = document.createElement('div');
-        overlay.className = 'modal-overlay';
-        overlay.style.zIndex = '2000';
-
-        const modal = document.createElement('div');
-        modal.className = 'modal-content';
-        modal.style.maxWidth = '400px';
-        modal.innerHTML = `
-            <div class="modal-body" style="padding: 24px 20px; text-align: center;">
-                <p style="margin: 0; font-size: 1rem; color: var(--text-color);">${message}</p>
-            </div>
-            <div class="modal-footer" style="display: flex; gap: 8px; justify-content: center; padding: 12px 16px; border-top: 1px solid var(--border-color);">
-                <button class="action-btn modal-cancel" style="padding: 8px 20px; border-radius: 6px; background: transparent; color: var(--text-color); border: 1px solid var(--border-color); cursor: pointer;">Cancel</button>
-                <button class="action-btn modal-confirm" style="padding: 8px 20px; border-radius: 6px; background: var(--error-text); color: white; border: none; cursor: pointer;">Delete</button>
-            </div>
-        `;
-
-        overlay.appendChild(modal);
-        document.body.appendChild(overlay);
-
-        const confirmBtn = modal.querySelector('.modal-confirm');
-        const cancelBtn = modal.querySelector('.modal-cancel');
-
-        confirmBtn.focus();
-
-        const closeModal = (result) => {
-            overlay.remove();
-            resolve(result);
-        };
-
-        confirmBtn.addEventListener('click', () => closeModal(true));
-        cancelBtn.addEventListener('click', () => closeModal(false));
-
-        document.addEventListener('keydown', function handler(e) {
-            if (e.key === 'Escape') {
-                closeModal(false);
-                document.removeEventListener('keydown', handler);
-            }
-        });
-
-        overlay.addEventListener('click', (e) => {
-            if (e.target === overlay) closeModal(false);
-        });
-    });
-}
-
-// Custom modal to replace browser alert()
-function showAlertModal(message) {
-    return new Promise((resolve) => {
-        const overlay = document.createElement('div');
-        overlay.className = 'modal-overlay';
-        overlay.style.zIndex = '2000';
-
-        const modal = document.createElement('div');
-        modal.className = 'modal-content';
-        modal.style.maxWidth = '400px';
-        modal.innerHTML = `
-            <div class="modal-body" style="padding: 24px 20px; text-align: center;">
-                <p style="margin: 0; font-size: 1rem; color: var(--text-color);">${message}</p>
-            </div>
-            <div class="modal-footer" style="display: flex; justify-content: center; padding: 12px 16px; border-top: 1px solid var(--border-color);">
-                <button class="action-btn primary-btn modal-confirm" style="padding: 8px 24px; border-radius: 6px;">OK</button>
-            </div>
-        `;
-
-        overlay.appendChild(modal);
-        document.body.appendChild(overlay);
-
-        const confirmBtn = modal.querySelector('.modal-confirm');
-        confirmBtn.focus();
-
-        const closeModal = () => {
-            overlay.remove();
-            resolve();
-        };
-
-        confirmBtn.addEventListener('click', closeModal);
-
-        document.addEventListener('keydown', function handler(e) {
-            if (e.key === 'Escape' || e.key === 'Enter') {
-                closeModal();
-                document.removeEventListener('keydown', handler);
-            }
-        });
-
-        overlay.addEventListener('click', (e) => {
-            if (e.target === overlay) closeModal();
-        });
-    });
-}
-
-function sectionToCategory(sectionId) {
-    const mapping = {
-        'fal-models': 'fal',
-        'replicate-models': 'replicate',
-        'openrouter-models': 'openrouter'
-    };
-    return mapping[sectionId] || sectionId;
-}
-
-function categoryToSection(categoryId) {
-    const mapping = {
-        fal: 'fal-models',
-        replicate: 'replicate-models',
-        openrouter: 'openrouter-models'
-    };
-    return mapping[categoryId] || categoryId;
-}
-
-function getItemStableKey(categoryId, item) {
-    return buildPinKey(categoryId, item);
-}
-
-function getItemTimestampMs(item) {
-    if (!item || typeof item !== 'object') return null;
-    const candidates = [
-        item.created_at, item.created, item.updated_at, item.inserted_at,
-        item.timestamp, item.published_at, item.released_at, item.date,
-        item.published_date && item.published_time ? `${item.published_date}T${item.published_time}` : null
-    ].filter(Boolean);
-    for (const cand of candidates) {
-        const ms = Date.parse(cand);
-        if (!Number.isNaN(ms)) return ms;
-        if (typeof cand === 'number') return cand * 1000;
-        if (typeof cand === 'string' && /^[0-9]+$/.test(cand.trim())) {
-            const n = Number(cand.trim());
-            if (!Number.isNaN(n)) return n * 1000;
-        }
-    }
-    return null;
-}
-
-function isItemNewForCategory(categoryId, item) {
-    const ts = getItemTimestampMs(item);
-    if (!ts) return false;
-    const lastVisitRaw = safeLocalStorageGet(`${LAST_VISIT_PREFIX}${categoryId}`, null);
-    const lastVisitMs = lastVisitRaw ? Date.parse(lastVisitRaw) : null;
-    return lastVisitMs ? ts > lastVisitMs : false;
-}
-
-function recordTabVisit(sectionId) {
-    const categoryId = sectionToCategory(sectionId);
-    safeLocalStorageSet(`${LAST_VISIT_PREFIX}${categoryId}`, new Date().toISOString());
 }
 
 function getFilteredItems(category, fallback = []) {
@@ -1137,13 +906,6 @@ document.addEventListener('DOMContentLoaded', async function () {
     ensureExperimentalSections();
     ensureExperimentalNavButtons();
     setupNavigation();
-    setupGlobalSearch();
-    setupCompareTray();
-    setupNewOnlyControls();
-    setupSavedViewsControls();
-    setupDeepLinking();
-    setupAutoRefreshScheduler();
-    setupAgentMessageBridge();
     initializeTheme();
     initializeAuthControls();
     setupFilterControls();
@@ -1153,7 +915,6 @@ document.addEventListener('DOMContentLoaded', async function () {
     populateAgentDropdown();
     initializeAgentExp();
     loadLLMData(); // Load LLM data by default
-    recordTabVisit('llms');
     setupImageUpload();
     const pinnedRefreshButton = document.getElementById('pinned-refresh');
     if (pinnedRefreshButton) {
@@ -1172,7 +933,6 @@ document.addEventListener('DOMContentLoaded', async function () {
             if (cachedData.hype) {
                 displayHypeItems(cachedData.hype);
             }
-            updateDeepLink();
         });
     }
 });
@@ -1398,62 +1158,12 @@ function buildPinKey(categoryId, item) {
     return `${categoryId}:${Math.abs(hash)}`;
 }
 
-function decorateCardWithUpgrades(card, categoryId, item) {
-    if (!card || !categoryId) return;
-    const key = getItemStableKey(categoryId, item);
-    card.dataset.itemKey = key;
-    card.dataset.categoryId = categoryId;
-
-    if (isItemNewForCategory(categoryId, item)) {
-        const titleEl = card.querySelector('h3, h2, .card-title');
-        if (titleEl && !titleEl.querySelector('.new-badge')) {
-            const badge = document.createElement('span');
-            badge.className = 'new-badge';
-            badge.textContent = 'New';
-            titleEl.appendChild(badge);
-        }
-    }
-
-    if (!card.querySelector('.card-actions-row')) {
-        const actions = document.createElement('div');
-        actions.className = 'card-actions-row';
-        const compareBtn = document.createElement('button');
-        compareBtn.type = 'button';
-        compareBtn.className = 'mini-btn';
-        compareBtn.dataset.compareKey = key;
-        compareBtn.textContent = 'Compare';
-        compareBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const isActive = compareSelections.some(sel => sel.key === key);
-            if (isActive) {
-                removeFromCompare(key);
-            } else {
-                addToCompare(categoryId, item);
-            }
-        });
-        actions.appendChild(compareBtn);
-        card.appendChild(actions);
-        refreshCompareButtons();
-    }
-}
-
 function loadLocalPins() {
-    const metadata = loadPinMetadata();
     try {
         const raw = localStorage.getItem(LOCAL_PIN_STORAGE_KEY);
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {
-            return parsed.map((entry) => {
-                if (!entry || typeof entry !== 'object') return entry;
-                const key = entry.key || entry.id;
-                const meta = (key && metadata[key]) || {};
-                return {
-                    ...entry,
-                    key,
-                    collection: entry.collection || meta.collection || 'Unsorted',
-                    note: entry.note || meta.note || ''
-                };
-            });
+            return parsed;
         }
     } catch (error) {
         console.error('Failed to parse local pins:', error);
@@ -1467,20 +1177,6 @@ function saveLocalPins(items) {
     } catch (error) {
         console.error('Failed to save local pins:', error);
     }
-}
-
-function loadPinMetadata() {
-    try {
-        const raw = safeLocalStorageGet(PIN_METADATA_KEY, '{}');
-        const parsed = JSON.parse(raw);
-        return parsed && typeof parsed === 'object' ? parsed : {};
-    } catch (_) {
-        return {};
-    }
-}
-
-function savePinMetadata(map) {
-    safeLocalStorageSet(PIN_METADATA_KEY, JSON.stringify(map || {}));
 }
 
 function isItemPinned(categoryId, item) {
@@ -1579,20 +1275,13 @@ async function removeRemotePin(pin) {
     }
 }
 
-async function addLocalPin(categoryId, item, key) {
+function addLocalPin(categoryId, item, key) {
     const entries = loadLocalPins();
-    const collection = await showInputModal('Collection name for this pin?', 'Unsorted', 'e.g., Top LLMs') || 'Unsorted';
-    const note = await showInputModal('Add a note for this pin (optional)', '', 'e.g., Best for coding') || '';
-    const metadata = loadPinMetadata();
-    metadata[key] = { collection, note };
-    savePinMetadata(metadata);
     entries.unshift({
         id: key,
         key,
         category: categoryId,
         item,
-        collection,
-        note,
         created_at: new Date().toISOString()
     });
     saveLocalPins(entries.slice(0, 200));
@@ -1601,11 +1290,6 @@ async function addLocalPin(categoryId, item, key) {
 function removeLocalPin(key) {
     const entries = loadLocalPins().filter(entry => entry.key !== key);
     saveLocalPins(entries);
-    const metadata = loadPinMetadata();
-    if (metadata[key]) {
-        delete metadata[key];
-        savePinMetadata(metadata);
-    }
 }
 
 async function refreshPinnedItems() {
@@ -1643,21 +1327,11 @@ function renderPinnedItemsSection() {
         return;
     }
     emptyState.style.display = 'none';
-    const groups = {};
-    pinnedItems.forEach((pin) => {
-        const collection = pin.collection || 'Unsorted';
-        groups[collection] = groups[collection] || [];
-        groups[collection].push(pin);
-    });
-    Object.entries(groups).forEach(([collection, pins]) => {
-        const wrap = document.createElement('div');
-        wrap.className = 'pinned-collection';
-        wrap.innerHTML = `<div class="pinned-collection-title">${escapeHtml(collection)}</div>`;
-        pins.forEach((pin, index) => {
-            const card = createCardForPinnedItem(pin, index);
-            if (card) wrap.appendChild(card);
-        });
-        container.appendChild(wrap);
+    pinnedItems.forEach((pin, index) => {
+        const card = createCardForPinnedItem(pin, index);
+        if (card) {
+            container.appendChild(card);
+        }
     });
 }
 const PIN_CARD_CREATORS = {
@@ -1700,103 +1374,47 @@ function createCardForPinnedItem(pin, index = 0) {
             updatePinButton(newButton);
         }
     }
-    const meta = loadPinMetadata()[pin.key] || {};
-    const noteText = pin.note || meta.note || '';
-    if (noteText) {
-        const note = document.createElement('div');
-        note.className = 'pin-note';
-        note.textContent = noteText;
-        card.appendChild(note);
-    }
-    const actions = card.querySelector('.card-actions-row');
-    if (actions && !actions.querySelector('.pin-edit-btn')) {
-        const editBtn = document.createElement('button');
-        editBtn.type = 'button';
-        editBtn.className = 'mini-btn pin-edit-btn';
-        editBtn.textContent = 'Edit pin';
-        editBtn.addEventListener('click', async (e) => {
-            e.stopPropagation();
-            const collection = await showInputModal('Collection name?', pin.collection || meta.collection || 'Unsorted', 'e.g., Top LLMs') || 'Unsorted';
-            const note = await showInputModal('Note (optional)?', noteText, 'e.g., Best for coding') || '';
-            const metadata = loadPinMetadata();
-            metadata[pin.key] = { collection, note };
-            savePinMetadata(metadata);
-            const localPins = loadLocalPins().map(p => p.key === pin.key ? { ...p, collection, note } : p);
-            saveLocalPins(localPins);
-            refreshPinnedItems();
-        });
-        actions.appendChild(editBtn);
-    }
     return card;
 }
 
-// --- REFACTOR: Smart Search & AI Filter Consolidation ---
 function setupFilterControls() {
     Object.entries(FILTERABLE_SECTIONS).forEach(([category, config]) => {
         const section = document.getElementById(config.sectionId);
-        if (!section) return;
-
-        // Find existing search input or create if missing (standardize API)
-        let searchInput = section.querySelector('input[type="text"][placeholder*="Search"]');
-        if (!searchInput) return; // Must rely on existing section search input
-
-        // Avoid double wrapping
-        if (searchInput.parentNode.classList.contains('search-widget')) return;
-
-        // Create Widget Wrapper
-        const widget = document.createElement('div');
-        widget.className = 'search-widget';
-
-        // Icon
-        const icon = document.createElement('div');
-        icon.className = 'search-icon';
-        icon.innerHTML = `<i class="fa-solid fa-magnifying-glass"></i>`;
-
-        // Sparkle Button
-        const sparkle = document.createElement('button');
-        sparkle.className = 'smart-sparkle-btn';
-        sparkle.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i>';
-        sparkle.title = 'AI filtering (runs a smart search with your search term).';
-        sparkle.type = 'button';
-
-        // Swap into DOM
-        searchInput.parentNode.insertBefore(widget, searchInput);
-        widget.appendChild(icon);
-        widget.appendChild(searchInput);
-        widget.appendChild(sparkle);
-
-        // Events
-        searchInput.placeholder = 'Search...'; // Shorten placeholder for collapsed state
-
-        // Regular search handler is already attached via 'oninput' in HTML usually.
-        // We just attach the Sparkle handler here.
-        sparkle.addEventListener('click', (e) => {
-            e.preventDefault();
-            const query = searchInput.value.trim();
-            if (!query) return;
-            handleFilterToggle(category, true); // Enable filter state
-
-            // Mocking the input logic for handleFilterRun
-            // We need to inject the query into the hidden filter data structure or passed arguments
-            // Since we removed the old dedicated input, we reuse search input text as the "instructions"
-
-            // Overriding handleFilterRun to read from search input if instructions param is passed specifically?
-            // Actually, easier to just reuse the handleFilterRun logic but point it to this query.
-            runSmartSearch(category, query, sparkle);
-        });
-
-        // Hide old filter controls if present
-        const oldCtrl = section.querySelector('.filter-controls');
-        if (oldCtrl) oldCtrl.style.display = 'none';
-        const oldFilterStatus = section.querySelector('.filter-status'); // Keep status for feedback
-        if (oldFilterStatus) {
-            // Move status or leave it? Leave it in header.
-            header = section.querySelector('.section-header');
-            if (header && !header.contains(oldFilterStatus)) header.appendChild(oldFilterStatus);
+        if (!section) {
+            return;
+        }
+        const header = section.querySelector('.section-header');
+        if (header && !header.querySelector(`[data-filter-control="${category}"]`)) {
+            const control = document.createElement('div');
+            control.className = 'filter-controls';
+            control.dataset.filterControl = category;
+            control.innerHTML = `
+                <label class="filter-toggle">
+                    <input type="checkbox" data-filter-toggle="${category}">
+                    <span>AI Filter</span>
+                </label>
+                <input type="text" data-filter-input="${category}" placeholder="Importance & recency (optional)" disabled>
+                <button type="button" class="filter-run" data-filter-run="${category}" disabled>Run</button>
+                <button type="button" class="link-btn" data-filter-clear="${category}">Clear</button>
+                <span class="filter-status" data-filter-status="${category}"></span>
+            `;
+            header.appendChild(control);
+            const toggle = control.querySelector(`[data-filter-toggle="${category}"]`);
+            const runButton = control.querySelector(`[data-filter-run="${category}"]`);
+            const clearButton = control.querySelector(`[data-filter-clear="${category}"]`);
+            toggle.addEventListener('change', () => handleFilterToggle(category, toggle.checked));
+            runButton.addEventListener('click', () => handleFilterRun(category));
+            if (clearButton) {
+                clearButton.addEventListener('click', () => {
+                    toggle.checked = false;
+                    handleFilterToggle(category, false);
+                });
+            }
+            control.style.display = 'flex';
         }
     });
+    refreshFilterControlsVisibility();
 }
-
 
 function setupFilterSettings() {
     const modelInput = document.getElementById('filter-model-id');
@@ -1836,18 +1454,25 @@ function markFilterStatus(category, message) {
     }
 }
 
-// Adapted for Smart Search
-async function runSmartSearch(category, query, buttonEl) {
+async function handleFilterRun(category) {
     const config = FILTERABLE_SECTIONS[category];
-    if (!config) return;
-
-    markFilterStatus(category, '<i class="fa-solid fa-circle-notch fa-spin"></i> AI Filtering...');
-    buttonEl.classList.add('highlight-pulse');
-
+    if (!config) {
+        return;
+    }
     const datasetItems = Array.isArray(config.getItems()) ? config.getItems() : [];
-    // Always search against ALL items for smart filter, not just current filtered view
-    const items = datasetItems;
-
+    const displayed = getDisplayedItems(category);
+    const items = displayed.length ? displayed : datasetItems;
+    if (!items || !items.length) {
+        markFilterStatus(category, 'No data available to filter.');
+        return;
+    }
+    const instructionsInput = document.querySelector(`[data-filter-input="${category}"]`);
+    const instructions = instructionsInput ? instructionsInput.value.trim() : '';
+    markFilterStatus(category, 'Filtering...');
+    const runButton = document.querySelector(`[data-filter-run="${category}"]`);
+    if (runButton) {
+        runButton.disabled = true;
+    }
     try {
         const response = await fetch('/api/experimental-filter', {
             method: 'POST',
@@ -1855,51 +1480,35 @@ async function runSmartSearch(category, query, buttonEl) {
             credentials: 'same-origin',
             body: JSON.stringify({
                 category: config.category,
-                instructions: query,
+                instructions,
                 items: prepareFilterItems(items, config.limit || 60),
                 model_id: getConfiguredFilterModelId(),
                 system_prompt_note: getFilterPromptNoteSetting()
             })
         });
         const payload = await response.json();
-        if (!response.ok) throw new Error(payload.error || 'Filtering failed.');
-
+        if (!response.ok) {
+            throw new Error(payload.error || 'Filtering failed.');
+        }
         const filterEntries = Array.isArray(payload.items) ? payload.items : [];
-        const matchSource = items;
-
-        // Apply filter directly
-        const filtered = matchSource.filter(item => {
-            const key = getItemStableKey(category, item);
-            return filterEntries.some(fe => fe.key === key); // Assuming simple key match
-        });
-
-        // We need to bypass standard filters slightly or just update display
-        // Since standard filters usually chain, let's just stick this into a special state
-        filterState[category].items = filtered; // Populate special filter state
-        filterState[category].enabled = true;
-
+        const matchSource = datasetItems.length ? datasetItems : items;
+        const matchedItems = mapFilterEntriesToItems(matchSource, filterEntries);
+        filterState[category] = {
+            enabled: true,
+            items: matchedItems
+        };
         refreshCategoryView(category);
-        markFilterStatus(category, `Found ${filtered.length} matches`);
-    } catch (e) {
-        console.error(e);
-        markFilterStatus(category, 'Error: ' + e.message);
+        const matchedCount = matchedItems.length;
+        markFilterStatus(category, `Filtered ${matchedCount} item${matchedCount === 1 ? '' : 's'}`);
+    } catch (error) {
+        console.error('Filter request failed:', error);
+        markFilterStatus(category, error.message || 'Filtering failed.');
     } finally {
-        buttonEl.classList.remove('highlight-pulse');
+        if (runButton) {
+            runButton.disabled = false;
+        }
     }
 }
-
-async function handleFilterRun(category) {
-    // Legacy support or fallback if needed
-    const config = FILTERABLE_SECTIONS[category];
-    // ... existing logic ...
-    // NOTE: This might be dead code now if we fully removed old controls, 
-    // but useful to keep for API compatibility reference or if we revert.
-    if (!config) return;
-    try {
-        // ... (truncated legacy implementation if needed, but simplest is to just rely on runSmartSearch)
-    } catch (e) { }
-}
-
 
 function prepareFilterItems(items, limit = 60) {
     return items.slice(0, limit).map(item => ({
@@ -2231,580 +1840,7 @@ function setupNavigation() {
 
             // Load data for the selected section
             loadSectionData(targetSection);
-            recordTabVisit(targetSection);
-            updateDeepLink();
         });
-    });
-}
-
-function setupGlobalSearch() {
-    const input = document.getElementById('global-search-input');
-    const resultsEl = document.getElementById('global-search-results');
-    if (!input || !resultsEl) return;
-
-    const closeResults = () => {
-        resultsEl.style.display = 'none';
-        resultsEl.innerHTML = '';
-    };
-
-    input.addEventListener('input', () => {
-        const q = input.value.trim().toLowerCase();
-        if (!q) return closeResults();
-        const results = runGlobalSearch(q);
-        renderGlobalSearchResults(resultsEl, results);
-        resultsEl.style.display = results.length ? 'block' : 'none';
-    });
-
-    // Prefetch data on focus to ensure search works across all tabs
-    input.addEventListener('focus', () => {
-        prefetchAllData();
-    });
-
-    // Also auto-prefetch shortly after load to ensure data is ready even without interaction
-    setTimeout(() => {
-        prefetchAllData();
-    }, 3000);
-
-    document.addEventListener('click', (e) => {
-        if (!resultsEl.contains(e.target) && e.target !== input) {
-            closeResults();
-        }
-    });
-}
-
-function prefetchAllData() {
-    if (!cachedData.falModels) loadFalModelsData();
-    if (!cachedData.replicateModels) loadReplicateModelsData();
-    if (!cachedData.testingCatalog) loadTestingCatalogData();
-    if (!cachedData.hype) loadHypeData();
-    if (!cachedData.monitor) loadMonitorFeed();
-    if (!cachedData.blog) loadBlogPosts();
-    // OpenRouter is large, maybe skip or load if needed
-    if (!cachedData.openRouterModels) ensureOpenRouterDataLoaded();
-}
-
-function rebuildGlobalSearchIndex() {
-    const index = [];
-    Object.entries(FILTERABLE_SECTIONS).forEach(([categoryId, cfg]) => {
-        const items = Array.isArray(cfg.getItems()) ? cfg.getItems() : [];
-        items.forEach((item) => {
-            const key = getItemStableKey(categoryId, item);
-            const label = item.name || item.title || item.id || key;
-            const meta = item.vendor || item.owner || item.provider || item.source_label || item.source || '';
-            const haystack = `${label} ${meta} ${item.description || item.excerpt || ''} ${item.tags || ''}`.toLowerCase();
-            index.push({ categoryId, sectionId: categoryToSection(categoryId), key, label, meta, item, haystack });
-        });
-    });
-    globalSearchIndex = index;
-}
-
-function runGlobalSearch(queryLower) {
-    if (!globalSearchIndex) rebuildGlobalSearchIndex();
-    const results = (globalSearchIndex || []).filter(r => r.haystack.includes(queryLower));
-    return results.slice(0, 120);
-}
-
-function renderGlobalSearchResults(container, results) {
-    const grouped = {};
-    results.forEach(r => {
-        grouped[r.categoryId] = grouped[r.categoryId] || [];
-        grouped[r.categoryId].push(r);
-    });
-    container.innerHTML = '';
-    Object.entries(grouped).forEach(([categoryId, items]) => {
-        const group = document.createElement('div');
-        group.className = 'global-search-group';
-        group.innerHTML = `<div class="global-search-group-title">${escapeHtml(categoryId)}</div>`;
-        items.slice(0, 10).forEach((r) => {
-            const row = document.createElement('div');
-            row.className = 'global-search-item';
-            row.innerHTML = `<div class="title">${escapeHtml(r.label)}</div><div class="meta">${escapeHtml(r.meta)}</div>`;
-            row.addEventListener('click', () => {
-                container.style.display = 'none';
-                const navBtn = document.querySelector(`.nav-btn[data-section="${r.sectionId}"]`);
-                navBtn && navBtn.click();
-                setTimeout(() => scrollToCard(r.sectionId, r.key), 400);
-                updateDeepLink({ itemCategory: r.categoryId, itemKey: r.key });
-            });
-            group.appendChild(row);
-        });
-        container.appendChild(group);
-    });
-}
-
-function scrollToCard(sectionId, itemKey) {
-    const section = document.getElementById(sectionId);
-    if (!section) return;
-    const el = section.querySelector(`[data-item-key="${CSS.escape(itemKey)}"]`);
-    if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        el.classList.add('highlight-pulse');
-        setTimeout(() => el.classList.remove('highlight-pulse'), 1600);
-    }
-}
-
-function setupCompareTray() {
-    compareSelections = loadCompareSelections();
-    const tray = document.getElementById('compare-tray');
-    const itemsEl = document.getElementById('compare-tray-items');
-    const openBtn = document.getElementById('compare-open');
-    const clearBtn = document.getElementById('compare-clear');
-    const modal = document.getElementById('compare-modal');
-    const closeBtn = document.getElementById('compare-close');
-
-    const renderTray = () => {
-        if (!tray || !itemsEl) return;
-        itemsEl.innerHTML = '';
-        compareSelections.forEach(sel => {
-            const chip = document.createElement('div');
-            chip.className = 'compare-chip';
-            chip.innerHTML = `<span>${escapeHtml(sel.label)}</span><button aria-label="Remove">×</button>`;
-            chip.querySelector('button').addEventListener('click', () => removeFromCompare(sel.key));
-            itemsEl.appendChild(chip);
-        });
-        tray.style.display = compareSelections.length ? 'block' : 'none';
-        safeLocalStorageSet(COMPARE_STORAGE_KEY, JSON.stringify(compareSelections));
-    };
-    renderCompareTrayFn = renderTray;
-
-    openBtn && openBtn.addEventListener('click', () => {
-        if (!modal) return;
-        renderCompareTable();
-        modal.style.display = 'flex';
-    });
-    closeBtn && closeBtn.addEventListener('click', () => modal && (modal.style.display = 'none'));
-    clearBtn && clearBtn.addEventListener('click', () => { compareSelections = []; renderTray(); refreshCompareButtons(); });
-    modal && modal.addEventListener('click', (e) => { if (e.target === modal) modal.style.display = 'none'; });
-
-    renderTray();
-}
-
-function loadCompareSelections() {
-    try {
-        const raw = safeLocalStorageGet(COMPARE_STORAGE_KEY, '[]');
-        const parsed = JSON.parse(raw);
-        return Array.isArray(parsed) ? parsed : [];
-    } catch (_) {
-        return [];
-    }
-}
-
-function addToCompare(categoryId, item) {
-    const key = getItemStableKey(categoryId, item);
-    if (compareSelections.some(e => e.key === key)) return;
-    const label = item.name || item.title || item.id || key;
-    compareSelections.push({ key, categoryId, label });
-    renderCompareTrayFn && renderCompareTrayFn();
-    refreshCompareButtons();
-}
-
-function removeFromCompare(key) {
-    compareSelections = compareSelections.filter(e => e.key !== key);
-    renderCompareTrayFn && renderCompareTrayFn();
-    refreshCompareButtons();
-}
-
-function refreshCompareButtons() {
-    document.querySelectorAll('[data-compare-key]').forEach(btn => {
-        const key = btn.dataset.compareKey;
-        btn.classList.toggle('active', compareSelections.some(e => e.key === key));
-        btn.textContent = compareSelections.some(e => e.key === key) ? 'Compared' : 'Compare';
-    });
-}
-
-function renderCompareTable() {
-    const container = document.getElementById('compare-table-container');
-    if (!container) return;
-    const rows = compareSelections.map(sel => findItemByKey(sel.categoryId, sel.key)).filter(Boolean);
-    if (!rows.length) {
-        container.innerHTML = '<div class="empty-state">No items selected.</div>';
-        return;
-    }
-    const allFields = [
-        { key: 'name', label: 'Name' },
-        { key: 'source', label: 'Source' },
-        { key: 'provider', label: 'Provider/Owner' },
-        { key: 'context_length', label: 'Context' },
-        { key: 'price', label: 'Price' },
-        { key: 'speed', label: 'Speed' },
-        { key: 'elo', label: 'ELO/Rank' },
-        { key: 'latency', label: 'Latency' },
-        { key: 'tags', label: 'Tags' }
-    ];
-
-    // Pre-calculate data to filter empty columns
-    const rowData = rows.map(({ categoryId, item }) => extractCompareFields(categoryId, item));
-
-    // Filter out fields that are empty for ALL items
-    const fields = allFields.filter(f => {
-        return rowData.some(d => {
-            const val = d[f.key];
-            return val !== undefined && val !== null && val !== '' && val !== 'N/A';
-        });
-    });
-
-    const header = `<tr>${fields.map(f => `<th>${escapeHtml(f.label)}</th>`).join('')}</tr>`;
-    const body = rowData.map(data => {
-        return `<tr>${fields.map(f => `<td>${escapeHtml(String(data[f.key] ?? ''))}</td>`).join('')}</tr>`;
-    }).join('');
-
-    // Add Analysis Button
-    const analysisAction = `
-        <div style="margin-top: 16px; display: flex; justify-content: flex-end;">
-            <button class="action-btn primary-btn" id="compare-analyze-btn">
-                <i class="fa-solid fa-wand-magic-sparkles"></i> Analyze with AI
-            </button>
-        </div>
-        <div id="compare-analysis-result" style="margin-top: 16px; display:none;"></div>
-    `;
-
-    container.innerHTML = `<div class="table-scroll"><table class="comparison-table">${header}${body}</table></div>${analysisAction}`;
-
-    // Attach analysis listener
-    setTimeout(() => {
-        const btn = document.getElementById('compare-analyze-btn');
-        if (btn) btn.addEventListener('click', () => runCompareAnalysis(rowData));
-    }, 0);
-}
-
-function runCompareAnalysis(data) {
-    const resultDiv = document.getElementById('compare-analysis-result');
-    if (!resultDiv) return;
-    resultDiv.style.display = 'block';
-    resultDiv.innerHTML = '<div class="message streaming"><i class="fa-solid fa-circle-notch fa-spin"></i> Analyzing...</div>';
-
-    const prompt = `Compare these AI models based on the following data: ${JSON.stringify(data)}. Highlight the strengths and weaknesses of each relative to the others. Recommend which one to use for speed vs quality.`;
-
-    // Get user's OpenRouter key from settings (use the proper function)
-    const apiKey = getUserOpenRouterKey();
-
-    if (!apiKey) {
-        resultDiv.innerHTML = `<div class="error">Please set your OpenRouter API key in Settings to use this feature.</div>`;
-        return;
-    }
-
-    const headers = {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-    };
-
-    fetch('/api/experimental-agent', {
-        method: 'POST',
-        headers: headers,
-        body: JSON.stringify({
-            question: prompt,  // Correct parameter name
-            deeper_mode: false
-        })
-    }).then(async res => {
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.error || 'Analysis failed');
-
-        if (json.error) {
-            throw new Error(json.error);
-        }
-
-        // The agent returns a JSON response with 'response' field
-        const responseText = json.response || 'No analysis available.';
-        resultDiv.innerHTML = marked.parse(responseText);
-    }).catch(e => {
-        resultDiv.innerHTML = `<div class="error">Failed to analyze: ${e.message}</div>`;
-    });
-}
-
-function extractCompareFields(categoryId, item) {
-    // Generic safely extraction helpers
-    const getVal = (keys) => {
-        for (const k of keys) {
-            const v = k.split('.').reduce((o, i) => o ? o[i] : undefined, item);
-            if (v !== undefined && v !== null && v !== '') return v;
-        }
-        return '';
-    };
-
-    const name = getVal(['name', 'title', 'id', 'modelId']);
-    const provider = getVal(['vendor', 'owner', 'provider', 'model_creator.name', 'source_label']);
-    const source = categoryId;
-    const context = getVal(['context_length', 'contextLength', 'limits.max_total_tokens']);
-
-    // Price normalization
-    let price = getVal(['price_1m_input_tokens', 'pricing.prompt', 'pricingInfoOverride']);
-    if (!price && item.pricing && typeof item.pricing === 'string') price = item.pricing;
-
-    const speed = getVal(['median_output_tokens_per_second', 'speed', 'tokens_per_second', 'inference_time']);
-    const elo = getVal(['elo', 'rank', 'intelligence_index', 'quality_index']);
-    const latency = getVal(['latency_seconds', 'median_time_to_first_token_seconds']);
-
-    // Tags normalization
-    let tags = getVal(['tags', 'categories']);
-    if (Array.isArray(tags)) tags = tags.join(', ');
-
-    return { name, provider, source, context_length: context, price, speed, elo, latency, tags };
-}
-
-function findItemByKey(categoryId, key) {
-    const cfg = FILTERABLE_SECTIONS[categoryId];
-    const items = cfg && Array.isArray(cfg.getItems()) ? cfg.getItems() : [];
-    const item = items.find(it => getItemStableKey(categoryId, it) === key);
-    return item ? { categoryId, item } : null;
-}
-
-function setupNewOnlyControls() {
-    Object.entries(FILTERABLE_SECTIONS).forEach(([categoryId, cfg]) => {
-        const section = document.getElementById(cfg.sectionId);
-        if (!section) return;
-        const headerControls = section.querySelector('.controls');
-        if (!headerControls || headerControls.querySelector(`[data-new-only="${categoryId}"]`)) return;
-        const wrapper = document.createElement('label');
-        wrapper.className = 'new-only-toggle';
-        wrapper.dataset.newOnly = categoryId;
-        wrapper.innerHTML = `<input type="checkbox"> <span>New only</span>`;
-        const checkbox = wrapper.querySelector('input');
-        checkbox.checked = safeLocalStorageGet(`${NEW_ONLY_PREFIX}${categoryId}`, 'false') === 'true';
-        checkbox.addEventListener('change', () => {
-            safeLocalStorageSet(`${NEW_ONLY_PREFIX}${categoryId}`, checkbox.checked ? 'true' : 'false');
-            refreshCategoryView(categoryId);
-            updateDeepLink();
-        });
-        headerControls.appendChild(wrapper);
-    });
-}
-
-function applyNewOnlyFilter(categoryId, items) {
-    const enabled = safeLocalStorageGet(`${NEW_ONLY_PREFIX}${categoryId}`, 'false') === 'true';
-    if (!enabled) return items;
-    return (items || []).filter(it => isItemNewForCategory(categoryId, it));
-}
-
-// --- REFACTOR: Views Widget ---
-function setupSavedViewsControls() {
-    Object.entries(FILTERABLE_SECTIONS).forEach(([categoryId, cfg]) => {
-        const section = document.getElementById(cfg.sectionId);
-        if (!section) return;
-        const headerControls = section.querySelector('.controls');
-        if (!headerControls || headerControls.querySelector(`[data-views="${categoryId}"]`)) return;
-
-        const widget = document.createElement('div');
-        widget.className = 'views-widget';
-        widget.dataset.views = categoryId;
-        widget.innerHTML = `
-            <button class="views-btn" title="Saved Views">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-            </button>
-            <div class="views-separator"></div>
-            <button class="views-btn save-btn" title="Save View">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
-            </button>
-            <div class="views-popover">
-                <select class="views-select" title="Select a saved view"></select>
-                <button class="views-delete-btn" type="button">
-                     <span>Delete View</span>
-                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                </button>
-            </div>
-        `;
-
-        const select = widget.querySelector('select');
-        const saveBtn = widget.querySelector('.save-btn');
-        const deleteBtn = widget.querySelector('.views-delete-btn');
-
-        const refreshSelect = () => {
-            const views = loadSavedViews(categoryId);
-            select.innerHTML = `<option value="">Select View…</option>`;
-            views.forEach((v, i) => {
-                const opt = document.createElement('option');
-                opt.value = String(i);
-                opt.textContent = v.name;
-                select.appendChild(opt);
-            });
-            deleteBtn.style.display = views.length ? 'flex' : 'none';
-        };
-
-        refreshSelect();
-
-        // Hover expand handles the expand logic via CSS.
-        // We just need JS for logic.
-
-        select.addEventListener('change', () => {
-            const views = loadSavedViews(categoryId);
-            const idx = Number(select.value);
-            if (Number.isInteger(idx) && views[idx]) {
-                applyViewState(categoryId, views[idx].state);
-            }
-        });
-
-        saveBtn.addEventListener('click', async () => {
-            const name = await showInputModal('Name this view:', '', 'e.g., My favorites');
-            if (!name) return;
-            const state = captureViewState(categoryId);
-            const views = loadSavedViews(categoryId);
-            views.push({ name, state });
-            safeLocalStorageSet(`${SAVED_VIEWS_PREFIX}${categoryId}`, JSON.stringify(views));
-            refreshSelect();
-            if (typeof showToast === 'function') {
-                showToast(`View "${name}" saved`, 'success');
-            }
-        });
-
-        deleteBtn.addEventListener('click', async () => {
-            const idx = Number(select.value);
-            if (!Number.isInteger(idx)) {
-                await showAlertModal('Please select a view to delete.');
-                return;
-            }
-            const confirmed = await showConfirmModal('Delete this view?');
-            if (!confirmed) return;
-            const views = loadSavedViews(categoryId);
-            if (views[idx]) {
-                views.splice(idx, 1);
-                safeLocalStorageSet(`${SAVED_VIEWS_PREFIX}${categoryId}`, JSON.stringify(views));
-                refreshSelect();
-                if (typeof showToast === 'function') showToast('View deleted', 'success');
-            }
-        });
-
-        headerControls.appendChild(widget);
-    });
-}
-
-function loadSavedViews(categoryId) {
-    try {
-        const raw = safeLocalStorageGet(`${SAVED_VIEWS_PREFIX}${categoryId}`, '[]');
-        const parsed = JSON.parse(raw);
-        return Array.isArray(parsed) ? parsed : [];
-    } catch (_) {
-        return [];
-    }
-}
-
-function captureViewState(categoryId) {
-    const sectionId = categoryToSection(categoryId);
-    const section = document.getElementById(sectionId);
-    const inputs = section ? section.querySelectorAll('input,select') : [];
-    const state = {};
-    inputs.forEach((el) => {
-        if (el.id) {
-            state[el.id] = el.type === 'checkbox' ? el.checked : el.value;
-        }
-    });
-    state.__newOnly = safeLocalStorageGet(`${NEW_ONLY_PREFIX}${categoryId}`, 'false') === 'true';
-    return state;
-}
-
-function applyViewState(categoryId, state) {
-    if (!state) return;
-    const sectionId = categoryToSection(categoryId);
-    const section = document.getElementById(sectionId);
-    if (!section) return;
-    Object.entries(state).forEach(([id, value]) => {
-        if (id === '__newOnly') return;
-        const el = section.querySelector(`#${CSS.escape(id)}`);
-        if (!el) return;
-        if (el.type === 'checkbox') {
-            el.checked = Boolean(value);
-        } else {
-            el.value = value;
-        }
-    });
-    safeLocalStorageSet(`${NEW_ONLY_PREFIX}${categoryId}`, state.__newOnly ? 'true' : 'false');
-    refreshCategoryView(categoryId);
-}
-
-function setupDeepLinking() {
-    const params = new URLSearchParams(window.location.search);
-    const tab = params.get('tab');
-    const itemCategory = params.get('itemCategory');
-    const itemKey = params.get('itemKey');
-    const presetState = {};
-    params.forEach((value, key) => {
-        if (['tab', 'itemCategory', 'itemKey'].includes(key)) return;
-        presetState[key] = value;
-    });
-    if (tab) {
-        const btn = document.querySelector(`.nav-btn[data-section="${tab}"]`);
-        btn && btn.click();
-    }
-    if (tab && Object.keys(presetState).length) {
-        const categoryId = sectionToCategory(tab);
-        setTimeout(() => applyViewState(categoryId, presetState), 200);
-    }
-    if (itemCategory && itemKey) {
-        pendingDeepLink = { itemCategory, itemKey };
-    }
-    if (pendingDeepLink) {
-        tryOpenPendingDeepLink();
-    }
-}
-
-function updateDeepLink(extra = {}) {
-    const activeBtn = document.querySelector('.nav-btn.active');
-    const tab = activeBtn ? activeBtn.dataset.section : 'llms';
-    const categoryId = sectionToCategory(tab);
-    const state = captureViewState(categoryId);
-    const params = new URLSearchParams();
-    params.set('tab', tab);
-    Object.entries(state).forEach(([k, v]) => {
-        if (k.startsWith('__')) return;
-        params.set(k, String(v));
-    });
-    if (extra.itemCategory && extra.itemKey) {
-        params.set('itemCategory', extra.itemCategory);
-        params.set('itemKey', extra.itemKey);
-    } else if (pendingDeepLink) {
-        params.set('itemCategory', pendingDeepLink.itemCategory);
-        params.set('itemKey', pendingDeepLink.itemKey);
-    }
-    const url = `${window.location.pathname}?${params.toString()}`;
-    window.history.replaceState({}, '', url);
-}
-
-function tryOpenPendingDeepLink() {
-    if (!pendingDeepLink) return;
-    const found = findItemByKey(pendingDeepLink.itemCategory, pendingDeepLink.itemKey);
-    if (!found) return;
-    const sectionId = categoryToSection(found.categoryId);
-    const btn = document.querySelector(`.nav-btn[data-section="${sectionId}"]`);
-    btn && btn.click();
-    setTimeout(() => {
-        const openType = found.categoryId === 'llms' ? 'llm' : found.categoryId;
-        openModelModal(found.item, openType === 'openrouter' ? 'openrouter' : openType);
-        scrollToCard(sectionId, pendingDeepLink.itemKey);
-        pendingDeepLink = null;
-        updateDeepLink();
-    }, 500);
-}
-
-function setupAutoRefreshScheduler() {
-    const enabled = safeLocalStorageGet(AUTO_REFRESH_ENABLED_KEY, 'false') === 'true';
-    const minutes = Number(safeLocalStorageGet(AUTO_REFRESH_MINUTES_KEY, '10')) || 10;
-    if (!enabled) return;
-    setInterval(() => {
-        loadLatestFeed(true);
-        loadHypeData(true);
-        loadOpenRouterModelsData(true);
-        loadFalModelsData(true);
-        loadReplicateModelsData(true);
-        loadMonitorFeed(true);
-    }, minutes * 60 * 1000);
-}
-
-function setupAgentMessageBridge() {
-    window.addEventListener('message', (event) => {
-        const data = event.data;
-        if (!data || data.type !== 'dashboard-action') return;
-        const { action, categoryId, itemKey } = data;
-        if (!action || !categoryId || !itemKey) return;
-        const found = findItemByKey(categoryId, itemKey);
-        if (!found) return;
-        if (action === 'pin') {
-            togglePin(categoryId, found.item);
-        } else if (action === 'open') {
-            const sectionId = categoryToSection(categoryId);
-            const btn = document.querySelector(`.nav-btn[data-section="${sectionId}"]`);
-            btn && btn.click();
-            setTimeout(() => openModelModal(found.item, categoryId === 'llms' ? 'llm' : categoryId), 300);
-        } else if (action === 'compare') {
-            addToCompare(categoryId, found.item);
-        }
     });
 }
 
@@ -3046,7 +2082,6 @@ function createLLMCard(model) {
         <div class="click-hint">💡 Click to explore full model details</div>
     `;
     attachPinButton(card, 'llms', model);
-    decorateCardWithUpgrades(card, 'llms', model);
     return card;
 }
 
@@ -3170,18 +2205,24 @@ async function loadImageToVideoData() {
     }
 }
 
-async function fetchFalModelsData(forceRefresh = false) {
-    if (cachedData.falModels && !forceRefresh) {
+async function fetchFalModelsData(forceRefresh = false, limit = null) {
+    if (cachedData.falModels && !forceRefresh && !limit) {
         return cachedData.falModels;
     }
-    const url = forceRefresh ? '/api/fal-models?cache_bust=true' : '/api/fal-models';
+    let url = forceRefresh ? '/api/fal-models?cache_bust=true' : '/api/fal-models';
+    if (limit) {
+        url += (url.includes('?') ? '&' : '?') + `limit=${limit}`;
+    }
     const data = await makeAPICall(url, null);
-    cachedData.falModels = data;
-    rawData.falModels = data;
+
+    if (!limit) {
+        cachedData.falModels = data;
+        rawData.falModels = data;
+    }
     return data;
 }
 
-// Load Fal.ai Models data
+// Load Fal.ai Models data with progressive loading
 async function loadFalModelsData(forceRefresh = false) {
     const loadingElement = document.getElementById('fal-models-loading');
     const errorElement = document.getElementById('fal-models-error');
@@ -3192,10 +2233,23 @@ async function loadFalModelsData(forceRefresh = false) {
         errorElement.style.display = 'none';
         dataElement.innerHTML = '';
 
-        await fetchFalModelsData(forceRefresh);
-
+        // Step 1: Load initial batch for fast UI
+        const initialData = await fetchFalModelsData(forceRefresh, 20);
+        rawData.falModels = initialData; // Temporary set for rendering
         filterFalModelsData();
         loadingElement.style.display = 'none';
+
+        // Step 2: Load the rest in background
+        setTimeout(async () => {
+            try {
+                const fullData = await fetchFalModelsData(forceRefresh);
+                rawData.falModels = fullData;
+                filterFalModelsData();
+            } catch (bgError) {
+                console.warn('Background fetch for Fal.ai failed:', bgError);
+            }
+        }, 100);
+
     } catch (error) {
         loadingElement.style.display = 'none';
         errorElement.textContent = `Failed to load Fal.ai models data: ${error.message}`;
@@ -3351,15 +2405,13 @@ function filterOpenRouterModelsData() {
     });
 
     filtered = sortOpenRouterModelsData(filtered, sortBy);
-    const filteredModels = getFilteredItems('openrouter', filtered);
-    const displayModels = applyNewOnlyFilter('openrouter', filteredModels);
+    const displayModels = getFilteredItems('openrouter', filtered);
     displayOpenRouterModelsData(displayModels);
 
     const resultsInfo = document.getElementById('openrouter-models-results-info');
     if (resultsInfo) {
         resultsInfo.textContent = `Showing ${displayModels.length} of ${rawData.openRouterModels.length} models`;
     }
-    updateDeepLink();
 }
 
 function sortOpenRouterModelsData(models, sortBy) {
@@ -3392,8 +2444,7 @@ function displayOpenRouterModelsData(models) {
     if (!container) return;
 
     container.innerHTML = '';
-    const filteredModels = getFilteredItems('openrouter', models);
-    const displayModels = applyNewOnlyFilter('openrouter', filteredModels);
+    const displayModels = getFilteredItems('openrouter', models);
     recordDisplayedItems('openrouter', displayModels);
     displayModels.forEach(model => {
         container.appendChild(createOpenRouterCard(model));
@@ -3460,8 +2511,7 @@ function displayHypeItems(payload) {
     }
 
     const sortedItems = sortHypeItems(items, hypeSortMode);
-    const filteredItems = getFilteredItems('hype', sortedItems);
-    const displayItems = applyNewOnlyFilter('hype', filteredItems);
+    const displayItems = getFilteredItems('hype', sortedItems);
 
     displayItems.forEach((item, index) => {
         container.appendChild(createHypeCard(item, index, fetchedAt));
@@ -3572,7 +2622,6 @@ function createHypeCard(item, index, fetchedAt) {
     `;
 
     attachPinButton(card, 'hype', item);
-    decorateCardWithUpgrades(card, 'hype', item);
     return card;
 }
 
@@ -3756,8 +2805,7 @@ function displayTestingCatalogItems(items) {
 
     container.innerHTML = '';
 
-    const filteredItems = getFilteredItems('testing-catalog', items);
-    const displayItems = applyNewOnlyFilter('testing-catalog', filteredItems);
+    const displayItems = getFilteredItems('testing-catalog', items);
     if (!displayItems || !displayItems.length) {
         container.innerHTML = '<div class="empty-state">No TestingCatalog stories are available yet.</div>';
         return;
@@ -3799,7 +2847,6 @@ function createTestingCatalogCard(item) {
     `;
 
     attachPinButton(card, 'testing-catalog', item);
-    decorateCardWithUpgrades(card, 'testing-catalog', item);
     return card;
 }
 
@@ -3999,8 +3046,7 @@ function displayBlogPosts(payload) {
     }
 
     const sortedPosts = sortBlogPosts(posts, blogSortMode);
-    const filteredPosts = getFilteredItems('blog', sortedPosts);
-    const displayPosts = applyNewOnlyFilter('blog', filteredPosts);
+    const displayPosts = getFilteredItems('blog', sortedPosts);
     displayPosts.forEach(post => {
         container.appendChild(createBlogCard(post));
     });
@@ -4134,7 +3180,6 @@ function createBlogCard(post) {
         </div>
     `;
     attachPinButton(card, 'blog', post);
-    decorateCardWithUpgrades(card, 'blog', post);
     return card;
 }
 
@@ -4269,8 +3314,7 @@ function displayLatestFeed(items) {
         return;
     }
 
-    const filteredItems = getFilteredItems('latest', items);
-    const displayItems = applyNewOnlyFilter('latest', filteredItems);
+    const displayItems = getFilteredItems('latest', items);
     displayItems.forEach(item => {
         container.appendChild(createLatestCard(item));
     });
@@ -4381,7 +3425,6 @@ function createLatestCard(item) {
     `;
 
     attachPinButton(card, 'latest', item);
-    decorateCardWithUpgrades(card, 'latest', item);
     return card;
 }
 
@@ -4443,8 +3486,7 @@ function displayMonitorItems(items) {
     }
 
     container.innerHTML = '';
-    const filteredItems = getFilteredItems('monitor', items);
-    const displayItems = applyNewOnlyFilter('monitor', filteredItems);
+    const displayItems = getFilteredItems('monitor', items);
     if (!displayItems || !displayItems.length) {
         container.innerHTML = '<div class="empty-state">No monitor updates available yet. Check back soon.</div>';
         return;
@@ -4489,7 +3531,6 @@ function createMonitorCard(item) {
     `;
 
     attachPinButton(card, 'monitor', item);
-    decorateCardWithUpgrades(card, 'monitor', item);
     return card;
 }
 
@@ -4634,7 +3675,6 @@ function createOpenRouterCard(model) {
         </div>
     `;
     attachPinButton(card, 'openrouter', model);
-    decorateCardWithUpgrades(card, 'openrouter', model);
     return card;
 }
 
@@ -4676,8 +3716,7 @@ function displayMediaData(models, type) {
     const container = document.getElementById(`${type}-data`);
     container.innerHTML = '';
 
-    const filteredModels = getFilteredItems(type, Array.isArray(models) ? models : []);
-    const displayModels = applyNewOnlyFilter(type, filteredModels);
+    const displayModels = getFilteredItems(type, Array.isArray(models) ? models : []);
     displayModels.forEach(model => {
         const modelCard = createMediaCard(model, type);
         container.appendChild(modelCard);
@@ -4771,9 +3810,7 @@ function createMediaCard(model, mediaCategory = '') {
         
         <div class="click-hint">💡 Click to explore full model details</div>
     `;
-    const categoryId = mediaCategory || 'media';
-    attachPinButton(card, categoryId, model);
-    decorateCardWithUpgrades(card, categoryId, model);
+    attachPinButton(card, mediaCategory || 'media', model);
     return card;
 }
 
@@ -5158,6 +4195,9 @@ async function sendAgentExpMessage(event) {
     }
 }
 
+// Safety timeout to prevent infinite hanging
+const AGENT_STREAM_TIMEOUT_MS = 60000; // 60 seconds
+
 async function streamAgentExpResponse(message) {
     const form = document.getElementById('agent-exp-form');
     const submitButton = form ? form.querySelector('button[type="submit"]') : null;
@@ -5174,6 +4214,25 @@ async function streamAgentExpResponse(message) {
     agentExpState.activeMessage = assistantMessage;
     setAgentExpStatus(`Calling ${agentExpState.model}...`);
 
+    // Setup safety timeout
+    const timeoutId = setTimeout(() => {
+        if (agentExpState.streaming) {
+            console.warn('Agent stream timed out');
+            setAgentExpStatus('Request timed out.', true);
+            if (assistantMessage) {
+                assistantMessage.classList.remove('streaming');
+            }
+            if (responseContent && !responseContent.textContent.trim()) {
+                responseContent.innerHTML = '<div class="error-content">❌ Request timed out. Please try again.</div>';
+            }
+            agentExpState.activeMessage = null;
+            agentExpState.streaming = false;
+            if (submitButton) {
+                submitButton.disabled = false;
+            }
+        }
+    }, AGENT_STREAM_TIMEOUT_MS);
+
     try {
         const response = await fetch('/api/agent-exp', {
             method: 'POST',
@@ -5188,6 +4247,8 @@ async function streamAgentExpResponse(message) {
                 stream: true
             })
         });
+
+        clearTimeout(timeoutId); // Clear timeout on response start
 
         if (!response.ok) {
             let errorMessage = `HTTP error ${response.status}`;
@@ -5235,6 +4296,7 @@ async function streamAgentExpResponse(message) {
             processAgentExpLine(remaining, assistantMessage, responseContent);
         }
     } catch (error) {
+        clearTimeout(timeoutId);
         const errorMessage = error && error.message ? error.message : 'Agent streaming failed.';
         setAgentExpStatus(errorMessage, true);
         if (assistantMessage && responseContent) {
@@ -5703,14 +4765,12 @@ function filterLLMData() {
     filteredData = sortLLMData(filteredData, sortBy);
 
     // Display results
-    const filteredModels = getFilteredItems('llms', filteredData);
-    const displayModels = applyNewOnlyFilter('llms', filteredModels);
+    const displayModels = getFilteredItems('llms', filteredData);
     displayLLMData(displayModels);
 
     // Update results info
     const resultsInfo = document.getElementById('llms-results-info');
     resultsInfo.textContent = `Showing ${displayModels.length} of ${rawData.llms.length} models`;
-    updateDeepLink();
 }
 
 function sortLLMData(data, sortBy) {
@@ -5802,14 +4862,12 @@ function filterFalModelsData() {
     // Sort data
     filteredData = sortFalModelsData(filteredData, sortBy);
 
-    const filteredModels = getFilteredItems('fal', filteredData);
-    const displayModels = applyNewOnlyFilter('fal', filteredModels);
+    const displayModels = getFilteredItems('fal', filteredData);
     displayFalModelsData(displayModels);
 
     // Update results info
     const resultsInfo = document.getElementById('fal-models-results-info');
     resultsInfo.textContent = `Showing ${displayModels.length} of ${rawData.falModels.length} models`;
-    updateDeepLink();
 }
 
 function sortFalModelsData(data, sortBy) {
@@ -5832,8 +4890,7 @@ function displayFalModelsData(models) {
     const container = document.getElementById('fal-models-data');
     container.innerHTML = '';
 
-    const filteredModels = getFilteredItems('fal', models);
-    const displayModels = applyNewOnlyFilter('fal', filteredModels);
+    const displayModels = getFilteredItems('fal', models);
     recordDisplayedItems('fal', displayModels);
     displayModels.forEach(model => {
         const modelCard = createFalModelCard(model);
@@ -5908,7 +4965,6 @@ function createFalModelCard(model) {
         <div class="click-hint">💡 Click to explore full model details</div>
     `;
     attachPinButton(card, 'fal', model);
-    decorateCardWithUpgrades(card, 'fal', model);
     return card;
 }
 
@@ -5969,7 +5025,6 @@ function createReplicateModelCard(model) {
         <div class="click-hint">💡 Click to explore full model details</div>
     `;
     attachPinButton(card, 'replicate', model);
-    decorateCardWithUpgrades(card, 'replicate', model);
     return card;
 }
 
@@ -5978,8 +5033,7 @@ function displayReplicateModelsData(models) {
     const container = document.getElementById('replicate-models-data');
     container.innerHTML = '';
 
-    const filteredModels = getFilteredItems('replicate', models);
-    const displayModels = applyNewOnlyFilter('replicate', filteredModels);
+    const displayModels = getFilteredItems('replicate', models);
     recordDisplayedItems('replicate', displayModels);
     displayModels.forEach(model => {
         const modelCard = createReplicateModelCard(model);
@@ -6008,14 +5062,12 @@ function filterReplicateModelsData() {
     // Sort data
     filteredData = sortReplicateModelsData(filteredData, sortBy);
 
-    const filteredModels = getFilteredItems('replicate', filteredData);
-    const displayModels = applyNewOnlyFilter('replicate', filteredModels);
+    const displayModels = getFilteredItems('replicate', filteredData);
     displayReplicateModelsData(displayModels);
 
     // Update results info
     const resultsInfo = document.getElementById('replicate-models-results-info');
     resultsInfo.textContent = `Showing ${displayModels.length} of ${rawData.replicateModels.length} models`;
-    updateDeepLink();
 }
 
 function sortReplicateModelsData(data, sortBy) {
@@ -7575,32 +6627,6 @@ document.addEventListener('DOMContentLoaded', function () {
     setupModelDropdown('setting-fallback-models', 'fallback-models-dropdown');
     setupModelDropdown('setting-available-models', 'available-models-dropdown');
 
-    if (settingsModal && !document.getElementById('setting-auto-refresh-enabled')) {
-        const content = settingsModal.querySelector('.settings-content') || settingsModal.querySelector('.modal-content') || settingsModal;
-        const section = document.createElement('div');
-        section.className = 'settings-section';
-        section.innerHTML = `
-	            <h3>Background Refresh</h3>
-	            <div class="form-row toggle-row">
-	                <label for="setting-auto-refresh-enabled">Enable auto refresh</label>
-	                <label class="toggle-switch">
-	                    <input type="checkbox" id="setting-auto-refresh-enabled">
-	                    <span class="toggle-slider"></span>
-	                </label>
-	                <p class="help-text">Refresh Latest, Hype, OpenRouter, Replicate, fal, Monitor in the background.</p>
-	            </div>
-	            <div class="form-row">
-	                <label for="setting-auto-refresh-minutes">Interval (minutes)</label>
-	                <input id="setting-auto-refresh-minutes" type="number" min="1" max="120" value="10">
-	            </div>
-	        `;
-        content.insertBefore(section, content.querySelector('.settings-section:last-of-type')?.nextSibling || content.lastChild);
-        const enabledInput = section.querySelector('#setting-auto-refresh-enabled');
-        const minutesInput = section.querySelector('#setting-auto-refresh-minutes');
-        enabledInput.checked = safeLocalStorageGet(AUTO_REFRESH_ENABLED_KEY, 'false') === 'true';
-        minutesInput.value = safeLocalStorageGet(AUTO_REFRESH_MINUTES_KEY, '10');
-    }
-
     const storedExperimentalMode = getStoredExperimentalMode();
     applyExperimentalMode(storedExperimentalMode === null ? true : storedExperimentalMode);
 
@@ -7757,15 +6783,6 @@ document.addEventListener('DOMContentLoaded', function () {
                     applyExperimentalMode(enabled);
                 }
 
-                const autoRefreshToggle = document.getElementById('setting-auto-refresh-enabled');
-                const autoRefreshMinutes = document.getElementById('setting-auto-refresh-minutes');
-                if (autoRefreshToggle) {
-                    safeLocalStorageSet(AUTO_REFRESH_ENABLED_KEY, autoRefreshToggle.checked ? 'true' : 'false');
-                }
-                if (autoRefreshMinutes && autoRefreshMinutes.value) {
-                    safeLocalStorageSet(AUTO_REFRESH_MINUTES_KEY, String(autoRefreshMinutes.value));
-                }
-
                 // Update agent dropdown with new available models
                 populateAgentDropdown();
 
@@ -7861,3 +6878,622 @@ window.removeAvailableModel = removeAvailableModel;
 window.clearChatHistory = clearChatHistory;
 window.updateAgentModel = updateAgentModel;
 window.loadMonitorFeed = loadMonitorFeed;
+
+// ============================================
+// Chart Comparison Functions
+// ============================================
+
+// Store models selected for comparison
+let chartComparisonModels = [];
+
+const CHART_AVAILABLE_METRICS = [
+    { id: 'quality', label: 'Quality Score' },
+    { id: 'speed', label: 'Speed' },
+    { id: 'price', label: 'Price' },
+    { id: 'latency', label: 'Latency' },
+    { id: 'context_length', label: 'Context Length' }
+];
+
+/**
+ * Add a model to the comparison list
+ * @param {Object} model - Model data object
+ */
+function addToComparison(model) {
+    if (!model) return;
+
+    const modelId = model.id || model.name || model.model;
+    if (!modelId) return;
+
+    // Check if already in list
+    if (chartComparisonModels.some(m => (m.id || m.name) === modelId)) {
+        showToast('Model already in comparison', 'warning');
+        return;
+    }
+
+    // Limit to 8 models
+    if (chartComparisonModels.length >= 8) {
+        showToast('Maximum 8 models for comparison', 'warning');
+        return;
+    }
+
+    chartComparisonModels.push(model);
+    showToast(`Added ${model.name || modelId} to comparison (${chartComparisonModels.length}/8)`, 'info');
+    updateCompareButtonStates();
+}
+
+/**
+ * Remove a model from comparison
+ * @param {string} modelId - Model identifier
+ */
+function removeFromComparison(modelId) {
+    chartComparisonModels = chartComparisonModels.filter(m => (m.id || m.name) !== modelId);
+    updateCompareButtonStates();
+}
+
+/**
+ * Clear all models from comparison
+ */
+function clearComparison() {
+    chartComparisonModels = [];
+    updateCompareButtonStates();
+}
+
+/**
+ * Update compare button states across the UI
+ */
+function updateCompareButtonStates() {
+    // Update any compare buttons in cards
+    document.querySelectorAll('[data-compare-id]').forEach(btn => {
+        const modelId = btn.dataset.compareId;
+        const isInComparison = chartComparisonModels.some(m => (m.id || m.name) === modelId);
+        btn.classList.toggle('active', isInComparison);
+        btn.textContent = isInComparison ? '✓ Compare' : 'Compare';
+    });
+
+    // Update floating compare button if exists
+    updateFloatingCompareButton();
+}
+
+/**
+ * Create or update the floating compare button
+ */
+function updateFloatingCompareButton() {
+    let floatBtn = document.getElementById('floating-compare-btn');
+
+    if (chartComparisonModels.length >= 2) {
+        if (!floatBtn) {
+            floatBtn = document.createElement('button');
+            floatBtn.id = 'floating-compare-btn';
+            floatBtn.className = 'floating-compare-btn';
+            floatBtn.onclick = () => openChartModal();
+            document.body.appendChild(floatBtn);
+
+            // Add styles if not present
+            if (!document.getElementById('chart-float-styles')) {
+                const style = document.createElement('style');
+                style.id = 'chart-float-styles';
+                style.textContent = `
+                    .floating-compare-btn {
+                        position: fixed;
+                        bottom: 24px;
+                        right: 24px;
+                        background: #111827;
+                        color: white;
+                        border: none;
+                        border-radius: 50px;
+                        padding: 14px 24px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+                        z-index: 1000;
+                        transition: transform 0.2s, box-shadow 0.2s;
+                    }
+                    .floating-compare-btn:hover {
+                        transform: translateY(-2px);
+                        box-shadow: 0 6px 24px rgba(0,0,0,0.3);
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+        }
+        floatBtn.textContent = `Compare ${chartComparisonModels.length} Models`;
+        floatBtn.style.display = 'block';
+    } else if (floatBtn) {
+        floatBtn.style.display = 'none';
+    }
+}
+
+/**
+ * Open the chart comparison modal
+ */
+function openChartModal() {
+    if (chartComparisonModels.length < 2) {
+        showToast('Select at least 2 models to compare', 'warning');
+        return;
+    }
+
+    const modal = document.getElementById('chart-modal');
+    if (!modal) return;
+
+    modal.style.display = 'flex';
+
+    // Initialize metrics toggles
+    const metricsContainer = document.getElementById('chart-metrics-container');
+    if (metricsContainer) {
+        metricsContainer.innerHTML = CHART_AVAILABLE_METRICS.map(m => `
+            <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;padding:6px 10px;background:#f3f4f6;border-radius:6px;">
+                <input type="checkbox" class="chart-metric-toggle" value="${m.id}" ${['quality', 'speed', 'price'].includes(m.id) ? 'checked' : ''}>
+                ${m.label}
+            </label>
+        `).join('');
+
+        // Add event listeners
+        metricsContainer.querySelectorAll('.chart-metric-toggle').forEach(cb => {
+            cb.addEventListener('change', () => renderChart());
+        });
+    }
+
+    // Add chart type listener
+    const typeSelect = document.getElementById('chart-type-select');
+    if (typeSelect && !typeSelect.dataset.listenerAttached) {
+        typeSelect.addEventListener('change', () => renderChart());
+        typeSelect.dataset.listenerAttached = 'true';
+    }
+
+    // Render initial chart
+    renderChart();
+
+    // Update models list
+    const modelsList = document.getElementById('chart-models-list');
+    if (modelsList) {
+        modelsList.innerHTML = `Comparing: ${chartComparisonModels.map(m => m.name || m.id).join(', ')}`;
+    }
+}
+
+/**
+ * Close the chart modal
+ */
+function closeChartModal() {
+    const modal = document.getElementById('chart-modal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+/**
+ * Get selected metrics from UI
+ */
+function getSelectedMetrics() {
+    const checked = document.querySelectorAll('.chart-metric-toggle:checked');
+    return Array.from(checked).map(cb => cb.value);
+}
+
+/**
+ * Render the chart using the API
+ */
+async function renderChart() {
+    const container = document.getElementById('chart-container');
+    if (!container) return;
+
+    container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:400px;color:#6b7280;">Loading chart...</div>';
+
+    const chartType = document.getElementById('chart-type-select')?.value || 'bar';
+    const metrics = getSelectedMetrics();
+
+    if (metrics.length === 0) {
+        container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:400px;color:#6b7280;">Select at least one metric</div>';
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/charts/model-comparison', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                models: chartComparisonModels,
+                chart_type: chartType,
+                metrics: metrics,
+                title: `Model Comparison (${chartComparisonModels.length} models)`
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        const result = await response.json();
+
+        if (result.error) {
+            throw new Error(result.error);
+        }
+
+        // Render with Plotly
+        if (typeof Plotly !== 'undefined' && result.plotly_data && result.plotly_layout) {
+            container.innerHTML = '';
+            Plotly.newPlot(container, result.plotly_data, result.plotly_layout, {
+                responsive: true,
+                displayModeBar: true,
+                displaylogo: false
+            });
+        } else {
+            container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:400px;color:#ef4444;">Plotly not loaded or invalid data</div>';
+        }
+    } catch (error) {
+        console.error('Chart render error:', error);
+        container.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:400px;color:#ef4444;">Error: ${error.message}</div>`;
+    }
+}
+
+// Setup chart modal close handlers
+document.addEventListener('DOMContentLoaded', () => {
+    const chartClose = document.getElementById('chart-close');
+    if (chartClose) {
+        chartClose.addEventListener('click', closeChartModal);
+    }
+
+    const chartModal = document.getElementById('chart-modal');
+    if (chartModal) {
+        chartModal.addEventListener('click', (e) => {
+            if (e.target === chartModal) {
+                closeChartModal();
+            }
+        });
+    }
+});
+
+// Export chart functions globally
+window.addToComparison = addToComparison;
+window.removeFromComparison = removeFromComparison;
+window.clearComparison = clearComparison;
+window.openChartModal = openChartModal;
+window.closeChartModal = closeChartModal;
+
+// ============================================
+// UNIFIED COMPARE MODAL WITH CHARTS + AI
+// ============================================
+
+/**
+ * Open the unified compare modal with table, charts, and AI analysis
+ */
+function openCompareModal() {
+    if (chartComparisonModels.length < 2) {
+        showToast('Select at least 2 models to compare', 'warning');
+        return;
+    }
+
+    const modal = document.getElementById('compare-modal');
+    const container = document.getElementById('compare-table-container');
+    if (!modal || !container) return;
+
+    modal.style.display = 'flex';
+
+    // Build the comparison UI
+    container.innerHTML = buildCompareContent();
+
+    // Render automatic charts
+    setTimeout(() => renderCompareCharts(), 100);
+}
+
+function closeCompareModal() {
+    const modal = document.getElementById('compare-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+/**
+ * Build the comparison table + charts + AI section HTML
+ */
+function buildCompareContent() {
+    const models = chartComparisonModels;
+
+    // Extract common fields for comparison
+    const fields = extractCompareFields(models);
+
+    // Build table
+    let tableHtml = '<div class="table-scroll"><table class="comparison-table">';
+    tableHtml += '<thead><tr><th>Attribute</th>';
+    models.forEach(m => {
+        tableHtml += `<th>${escapeHtmlAttr(m.name || m.id || 'Model')}</th>`;
+    });
+    tableHtml += '</tr></thead><tbody>';
+
+    fields.forEach(field => {
+        tableHtml += `<tr><td><strong>${field.label}</strong></td>`;
+        models.forEach(m => {
+            const val = getModelFieldValue(m, field.key);
+            const isHighlighted = field.highlight && isBestValue(val, models, field);
+            tableHtml += `<td${isHighlighted ? ' class="highlight-best"' : ''}>${val}</td>`;
+        });
+        tableHtml += '</tr>';
+    });
+
+    tableHtml += '</tbody></table></div>';
+
+    // Chart containers
+    const chartsHtml = `
+        <div style="margin-top: 24px;">
+            <h3 style="margin-bottom: 12px; font-size: 1rem; font-weight: 600;">Visual Comparison</h3>
+            <div id="compare-charts" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div id="compare-chart-speed" style="background: var(--info-bg); border-radius: 12px; padding: 16px; min-height: 280px;"></div>
+                <div id="compare-chart-price" style="background: var(--info-bg); border-radius: 12px; padding: 16px; min-height: 280px;"></div>
+            </div>
+        </div>
+    `;
+
+    // AI Analysis section
+    const aiHtml = `
+        <div style="margin-top: 24px; border-top: 1px solid var(--border-color); padding-top: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <h3 style="margin: 0; font-size: 1rem; font-weight: 600;">AI Analysis</h3>
+                <button id="compare-ai-btn" class="action-btn primary-btn" style="padding: 8px 16px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 6px;"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>
+                    Analyze with AI
+                </button>
+            </div>
+            <div id="compare-ai-result" style="min-height: 60px; color: var(--info-text); font-size: 0.9rem;">
+                Click "Analyze with AI" to get insights and recommendations based on your selected models.
+            </div>
+        </div>
+    `;
+
+    return tableHtml + chartsHtml + aiHtml;
+}
+
+/**
+ * Extract comparable fields from models
+ */
+function extractCompareFields(models) {
+    const fields = [
+        { key: 'name', label: 'Name', highlight: false },
+        { key: 'provider', label: 'Provider', highlight: false },
+        { key: 'context_length', label: 'Context Length', highlight: true },
+        { key: 'output_speed', label: 'Output Speed', highlight: true },
+        { key: 'latency', label: 'Latency (TTFT)', highlight: true },
+        { key: 'input_price', label: 'Input Price', highlight: true },
+        { key: 'output_price', label: 'Output Price', highlight: true },
+        { key: 'modalities', label: 'Modalities', highlight: false }
+    ];
+
+    // Filter to fields that have data
+    return fields.filter(f => {
+        return models.some(m => {
+            const val = getModelFieldValue(m, f.key);
+            return val && val !== 'N/A' && val !== '-';
+        });
+    });
+}
+
+/**
+ * Get a field value from model with various key mappings
+ */
+function getModelFieldValue(model, key) {
+    const mappings = {
+        name: () => model.name || model.id || model.model || 'Unknown',
+        provider: () => model.vendor || model.provider || model.org || '-',
+        context_length: () => {
+            const ctx = model.context_length || model.top_provider?.context_length;
+            return ctx ? `${(ctx / 1000).toFixed(0)}K` : '-';
+        },
+        output_speed: () => {
+            const speed = model.output_speed || model.tokens_per_second;
+            return speed ? `${speed.toFixed(1)} tok/s` : '-';
+        },
+        latency: () => {
+            const ttft = model.ttft || model.latency || model.time_to_first_token;
+            return ttft ? `${(ttft * 1000).toFixed(0)}ms` : '-';
+        },
+        input_price: () => {
+            const price = model.pricing?.prompt || model.input_cost_per_token;
+            return price ? `$${(parseFloat(price) * 1000000).toFixed(2)}/1M` : '-';
+        },
+        output_price: () => {
+            const price = model.pricing?.completion || model.output_cost_per_token;
+            return price ? `$${(parseFloat(price) * 1000000).toFixed(2)}/1M` : '-';
+        },
+        modalities: () => {
+            const arch = model.architecture || {};
+            const inputs = arch.input_modalities || [];
+            const outputs = arch.output_modalities || [];
+            if (!inputs.length && !outputs.length) return '-';
+            return [...new Set([...inputs, ...outputs])].join(', ');
+        }
+    };
+
+    const getter = mappings[key];
+    return getter ? getter() : (model[key] || '-');
+}
+
+function isBestValue(val, models, field) {
+    // Simple check - could be enhanced
+    return false;
+}
+
+function escapeHtmlAttr(str) {
+    return String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": "&#39;" }[c]));
+}
+
+/**
+ * Render comparison charts using Plotly
+ */
+async function renderCompareCharts() {
+    const models = chartComparisonModels;
+    const speedContainer = document.getElementById('compare-chart-speed');
+    const priceContainer = document.getElementById('compare-chart-price');
+
+    if (typeof Plotly === 'undefined') {
+        if (speedContainer) speedContainer.innerHTML = '<p style="color: var(--error-text);">Plotly not loaded</p>';
+        return;
+    }
+
+    const names = models.map(m => m.name || m.id || 'Model');
+
+    // Speed chart
+    const speeds = models.map(m => m.output_speed || m.tokens_per_second || 0);
+    if (speedContainer && speeds.some(s => s > 0)) {
+        Plotly.newPlot(speedContainer, [{
+            x: names,
+            y: speeds,
+            type: 'bar',
+            marker: { color: '#10b981' }
+        }], {
+            title: { text: 'Output Speed (tokens/sec)', font: { size: 14 } },
+            margin: { t: 40, b: 60, l: 50, r: 20 },
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            font: { size: 11 },
+            yaxis: { title: 'tok/s' }
+        }, { responsive: true, displayModeBar: false });
+    } else if (speedContainer) {
+        speedContainer.innerHTML = '<p style="text-align:center; color: var(--info-text); padding: 40px;">No speed data available</p>';
+    }
+
+    // Price chart
+    const inputPrices = models.map(m => {
+        const p = m.pricing?.prompt || m.input_cost_per_token;
+        return p ? parseFloat(p) * 1000000 : 0;
+    });
+    const outputPrices = models.map(m => {
+        const p = m.pricing?.completion || m.output_cost_per_token;
+        return p ? parseFloat(p) * 1000000 : 0;
+    });
+
+    if (priceContainer && (inputPrices.some(p => p > 0) || outputPrices.some(p => p > 0))) {
+        Plotly.newPlot(priceContainer, [
+            { x: names, y: inputPrices, name: 'Input', type: 'bar', marker: { color: '#3b82f6' } },
+            { x: names, y: outputPrices, name: 'Output', type: 'bar', marker: { color: '#8b5cf6' } }
+        ], {
+            title: { text: 'Price ($ per 1M tokens)', font: { size: 14 } },
+            barmode: 'group',
+            margin: { t: 40, b: 60, l: 50, r: 20 },
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            font: { size: 11 },
+            yaxis: { title: '$/1M tokens' },
+            legend: { x: 0.7, y: 1 }
+        }, { responsive: true, displayModeBar: false });
+    } else if (priceContainer) {
+        priceContainer.innerHTML = '<p style="text-align:center; color: var(--info-text); padding: 40px;">No pricing data available</p>';
+    }
+}
+
+/**
+ * Run AI analysis on compared models
+ */
+async function runCompareAIAnalysis() {
+    const resultDiv = document.getElementById('compare-ai-result');
+    const btn = document.getElementById('compare-ai-btn');
+    if (!resultDiv) return;
+
+    const apiKey = getUserOpenRouterKey();
+    if (!apiKey) {
+        resultDiv.innerHTML = '<p style="color: var(--error-text);">⚠️ Please add your OpenRouter API key in Settings to use AI analysis.</p>';
+        return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Analyzing...';
+    resultDiv.innerHTML = '<div style="display: flex; align-items: center; gap: 8px;"><div class="loading-spinner"></div> Analyzing models...</div>';
+
+    // Build comparison context
+    const modelsContext = chartComparisonModels.map(m => {
+        return `- ${m.name || m.id}: Speed=${m.output_speed || 'N/A'} tok/s, Input=$${((m.pricing?.prompt || 0) * 1000000).toFixed(2)}/1M, Output=$${((m.pricing?.completion || 0) * 1000000).toFixed(2)}/1M, Context=${m.context_length || 'N/A'}`;
+    }).join('\n');
+
+    const question = `Compare these AI models and provide insights:
+${modelsContext}
+
+Please provide:
+1. A brief summary of key differences
+2. Which model is best for different use cases (cost-sensitive, speed-critical, quality-focused)
+3. Any notable trade-offs
+
+Keep response concise (under 300 words).`;
+
+    try {
+        const response = await fetch('/api/experimental-agent', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`
+            },
+            body: JSON.stringify({
+                question: question,
+                deeper_mode: false
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        const result = await response.json();
+
+        if (result.error) {
+            throw new Error(result.error);
+        }
+
+        // Render the analysis with markdown
+        let analysisHtml = '';
+        if (typeof marked !== 'undefined') {
+            analysisHtml = marked.parse(result.response || 'No analysis generated.');
+        } else {
+            analysisHtml = `<p>${(result.response || 'No analysis generated.').replace(/\n/g, '<br>')}</p>`;
+        }
+
+        resultDiv.innerHTML = `
+            <div class="ai-analysis-content" style="line-height: 1.6;">
+                ${analysisHtml}
+            </div>
+        `;
+
+    } catch (error) {
+        resultDiv.innerHTML = `<p style="color: var(--error-text);">⚠️ Analysis failed: ${error.message}</p>`;
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 6px;"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>
+            Analyze with AI
+        `;
+    }
+}
+
+// Wire up compare modal handlers
+document.addEventListener('DOMContentLoaded', () => {
+    // Compare tray buttons
+    const compareOpenBtn = document.getElementById('compare-open');
+    if (compareOpenBtn) {
+        compareOpenBtn.addEventListener('click', openCompareModal);
+    }
+
+    const compareClearBtn = document.getElementById('compare-clear');
+    if (compareClearBtn) {
+        compareClearBtn.addEventListener('click', () => {
+            clearComparison();
+            const tray = document.getElementById('compare-tray');
+            if (tray) tray.style.display = 'none';
+        });
+    }
+
+    // Compare modal close
+    const compareCloseBtn = document.getElementById('compare-close');
+    if (compareCloseBtn) {
+        compareCloseBtn.addEventListener('click', closeCompareModal);
+    }
+
+    const compareModal = document.getElementById('compare-modal');
+    if (compareModal) {
+        compareModal.addEventListener('click', (e) => {
+            if (e.target === compareModal) closeCompareModal();
+        });
+    }
+
+    // AI analysis button (delegated since it's dynamically created)
+    document.addEventListener('click', (e) => {
+        if (e.target.id === 'compare-ai-btn' || e.target.closest('#compare-ai-btn')) {
+            runCompareAIAnalysis();
+        }
+    });
+});
+
+// Export compare functions
+window.openCompareModal = openCompareModal;
+window.closeCompareModal = closeCompareModal;

@@ -7,8 +7,28 @@
     <title>AI Model Analysis Dashboard</title>
     <link rel="stylesheet" href="static/styles.css">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <style>
+        /* iFrame wrapper for agent to contain styles and avoid bleed-through */
+        .agent-iframe-container {
+            width: 100%;
+            min-height: 70vh;
+            border: 1px solid #e5e5e5;
+            border-radius: 12px;
+            overflow: hidden;
+            background: #f7f7f7;
+        }
+
+        .agent-iframe-container iframe {
+            width: 100%;
+            min-height: 70vh;
+            height: 100%;
+            border: none;
+            background: #f7f7f7;
+        }
+    </style>
 </head>
 
 <body>
@@ -18,8 +38,7 @@
                 <h1>AI Model Analysis Dashboard</h1>
                 <p>Powered by Artificial Analysis, OpenRouter, Fal, and Replicate APIs</p>
                 <div class="global-search global-search-centered">
-                    <input id="global-search-input" type="text" autocomplete="off"
-                        placeholder="Search across all tabs…">
+                    <input id="global-search-input" type="text" autocomplete="off" placeholder="Search across all tabs…">
                     <div id="global-search-results" class="global-search-results" style="display:none;"></div>
                 </div>
                 <div class="source-legend" id="source-legend">
@@ -39,9 +58,6 @@
                 </div>
             </div>
             <div class="header-actions">
-                <a href="instructions.html" class="nav-link"
-                    style="margin-right: 15px; color: var(--text-secondary); text-decoration: none;">Help &
-                    Instructions</a>
                 <button class="theme-toggle" onclick="toggleTheme()">🌙 Dark Mode</button>
                 <button class="auth-button" id="auth-button">Log In</button>
             </div>
@@ -370,29 +386,9 @@
 
             <!-- Agent Section -->
             <section id="agent-exp" class="content-section">
-                <div class="section-header">
-                    <h2>Agent</h2>
-                    <div class="controls">
-                        <select id="agent-exp-model" aria-label="Agent model selector">
-                            <option value="" disabled>Loading models...</option>
-                        </select>
-                        <button id="agent-exp-clear" type="button" class="chart-btn secondary"
-                            style="margin-left: 8px;">Clear Chat</button>
-                    </div>
-                    <div class="agent-warning experimental-warning">⚡ Lightweight Gemini 2.5 Flash Preview (09-2025)
-                        assistant with dashboard data + Perplexity tools.</div>
+                <div class="agent-iframe-container">
+                    <iframe src="/static/agent.html" title="Agent"></iframe>
                 </div>
-                <div class="ai-agent-container agent-exp-container">
-                    <div class="chat-container">
-                        <div class="chat-messages" id="agent-exp-messages"></div>
-                        <form id="agent-exp-form" class="chat-input">
-                            <textarea id="agent-exp-input"
-                                placeholder="Ask about models, launches, pricing, or benchmarks..."></textarea>
-                            <button type="submit">Send</button>
-                        </form>
-                    </div>
-                </div>
-                <div class="agent-exp-status" id="agent-exp-status" aria-live="polite"></div>
             </section>
 
             <!-- About Section -->
@@ -649,6 +645,28 @@
                     <button class="chart-btn" id="settings-save">Save Settings</button>
                     <button class="chart-btn secondary" id="settings-cancel">Cancel</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chart Comparison Modal -->
+    <div id="chart-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-content" style="max-width:900px;">
+            <div class="modal-header">
+                <h2>Model Comparison Chart</h2>
+                <button class="modal-close" id="chart-close">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="chart-controls" style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
+                    <select id="chart-type-select" style="padding:8px 12px;border-radius:8px;border:1px solid #e5e5e5;">
+                        <option value="bar">Bar Chart</option>
+                        <option value="radar">Radar Chart</option>
+                        <option value="scatter">Scatter Plot</option>
+                    </select>
+                    <div id="chart-metrics-container" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
+                </div>
+                <div id="chart-container" style="min-height:450px;background:#fafafa;border-radius:8px;"></div>
+                <div id="chart-models-list" style="margin-top:12px;font-size:13px;color:#6b7280;"></div>
             </div>
         </div>
     </div>
