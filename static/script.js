@@ -1907,19 +1907,34 @@ function ensureExperimentalSections() {
     }
 }
 function setupNavigation() {
-    const navButtons = document.querySelectorAll('.nav-btn');
+    const navButtons = document.querySelectorAll('.nav-btn[data-section]');
     const sections = document.querySelectorAll('.content-section');
 
     navButtons.forEach(button => {
         button.addEventListener('click', () => {
             const targetSection = button.getAttribute('data-section');
+            if (!targetSection) return; // Skip custom dashboard tabs
+
+            // Clear custom dashboard active state
+            if (typeof activeDashboardId !== 'undefined') {
+                activeDashboardId = null;
+            }
+            // Re-render dashboard tabs to remove active state
+            if (typeof renderDashboardTabs === 'function') {
+                renderDashboardTabs();
+            }
 
             // Update active states
-            navButtons.forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
             sections.forEach(section => section.classList.remove('active'));
 
             button.classList.add('active');
-            document.getElementById(targetSection).classList.add('active');
+            const targetEl = document.getElementById(targetSection);
+            if (targetEl) targetEl.classList.add('active');
+
+            // Hide custom dashboard section if it exists
+            const customSection = document.getElementById('custom-dashboard-section');
+            if (customSection) customSection.classList.remove('active');
 
             // Load data for the selected section
             loadSectionData(targetSection);
@@ -7608,20 +7623,27 @@ function renderDashboardTabs() {
         <button class="nav-btn custom-dashboard-tab ${activeDashboardId === dashboard.id ? 'active' : ''}" 
                 data-dashboard-id="${dashboard.id}"
                 title="${dashboard.sources.join(', ')}">
-            ${dashboard.isDefault ? '⭐ ' : ''}${escapeHtml(dashboard.name)}
-            <button class="tab-delete" onclick="event.stopPropagation(); deleteDashboard('${dashboard.id}')">×</button>
+            <span class="tab-name">${dashboard.isDefault ? '⭐ ' : ''}${escapeHtml(dashboard.name)}</span>
+            <span class="tab-delete" data-delete-id="${dashboard.id}" title="Delete dashboard">×</span>
         </button>
     `).join('');
 
-    // Add click handlers
+    // Add click handlers for tabs
     container.querySelectorAll('.custom-dashboard-tab').forEach(btn => {
         btn.addEventListener('click', (e) => {
-            if (e.target.classList.contains('tab-delete')) return;
+            // Check if clicking the delete button
+            if (e.target.classList.contains('tab-delete')) {
+                e.stopPropagation();
+                const deleteId = e.target.dataset.deleteId;
+                if (deleteId) deleteDashboard(deleteId);
+                return;
+            }
             const id = btn.dataset.dashboardId;
             activateDashboard(id);
         });
     });
 }
+
 
 // Delete dashboard
 function deleteDashboard(id) {
@@ -7795,7 +7817,7 @@ async function fetchSourceData(source, filters) {
         'text-to-speech': () => cachedData['text-to-speech'] || [],
         'text-to-video': () => cachedData['text-to-video'] || [],
         'image-to-video': () => cachedData['image-to-video'] || [],
-        'fal-models': () => cachedData.fal || [],
+        'fal-models': () => cachedData.falModels || [],
         'replicate-models': () => cachedData.replicate || [],
         'testing-catalog': () => cachedData['testing-catalog'] || [],
         'blog': () => cachedData.blog || [],
