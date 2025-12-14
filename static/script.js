@@ -7341,11 +7341,43 @@ async function renderChart() {
     }
 
     try {
+        // First try standard chart generation
+        let modelsToChart = chartComparisonModels;
+
+        // Try AI extraction if user has API key (for models with missing data)
+        const apiKey = typeof getUserOpenRouterKey === 'function' ? getUserOpenRouterKey() : null;
+        if (apiKey) {
+            try {
+                container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:400px;color:#6b7280;">Enriching data with AI...</div>';
+
+                const extractResponse = await fetch('/api/charts/extract-metrics', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        models: chartComparisonModels,
+                        api_key: apiKey
+                    })
+                });
+
+                if (extractResponse.ok) {
+                    const extractResult = await extractResponse.json();
+                    if (extractResult.models && extractResult.models.length > 0) {
+                        modelsToChart = extractResult.models;
+                        console.log(`Chart data: ${extractResult.programmatic_count} programmatic, ${extractResult.ai_extracted_count} AI-extracted`);
+                    }
+                }
+            } catch (e) {
+                console.warn('AI extraction failed, using original data:', e);
+            }
+        }
+
+        container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:400px;color:#6b7280;">Rendering chart...</div>';
+
         const response = await fetch('/api/charts/model-comparison', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                models: chartComparisonModels,
+                models: modelsToChart,
                 chart_type: chartType,
                 metrics: metrics,
                 title: `Model Comparison (${chartComparisonModels.length} models)`
@@ -7378,6 +7410,7 @@ async function renderChart() {
         container.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:400px;color:#ef4444;">Error: ${error.message}</div>`;
     }
 }
+
 
 // Setup chart modal close handlers
 document.addEventListener('DOMContentLoaded', () => {
