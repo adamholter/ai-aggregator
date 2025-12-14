@@ -4202,15 +4202,173 @@ function renderAgentExpMarkdown(markdown) {
         return '';
     }
     let sanitized = typeof fixEncodingArtifacts === 'function' ? fixEncodingArtifacts(markdown) : markdown;
+
+    // First, extract model references before markdown processing
+    const modelRefs = [];
+    sanitized = sanitized.replace(/\[\[models?:([^\]]+)\]\]/gi, (match, content) => {
+        const refs = content.split(',').map(ref => {
+            const parts = ref.trim().split(':');
+            if (parts.length >= 2) {
+                return { source: parts[0].trim(), id: parts.slice(1).join(':').trim() };
+            }
+            return null;
+        }).filter(Boolean);
+
+        if (refs.length > 0) {
+            const placeholder = `__MODEL_CAROUSEL_${modelRefs.length}__`;
+            modelRefs.push(refs);
+            return placeholder;
+        }
+        return match;
+    });
+
+    // Render markdown
+    let html = '';
     if (typeof marked !== 'undefined' && marked.parse) {
         try {
-            return marked.parse(sanitized);
+            html = marked.parse(sanitized);
         } catch (error) {
             console.warn('Marked.js failed, using fallback markdown renderer.', error);
+            html = simpleMarkdownToHtml(sanitized);
         }
+    } else {
+        html = simpleMarkdownToHtml(sanitized);
     }
-    return simpleMarkdownToHtml(sanitized);
+
+    // Replace model placeholders with carousels
+    modelRefs.forEach((refs, index) => {
+        const placeholder = `__MODEL_CAROUSEL_${index}__`;
+        const carouselHtml = buildModelCarousel(refs);
+        html = html.replace(placeholder, carouselHtml);
+    });
+
+    return html;
 }
+
+/**
+ * Build a carousel of model cards from references
+ * @param {Array} refs - Array of {source, id} objects
+ * @returns {string} HTML for the carousel
+ */
+function buildModelCarousel(refs) {
+    if (!refs || refs.length === 0) return '';
+
+    const carouselId = 'carousel-' + Date.now() + Math.random().toString(36).substr(2, 5);
+
+    // Build mini cards
+    const cards = refs.map(ref => {
+        const model = findModelByRef(ref.source, ref.id);
+        if (!model) {
+            return `<div class="mini-model-card not-found">
+                <span class="mini-card-name">Model not found: ${escapeHtml(ref.id)}</span>
+            </div>`;
+        }
+
+        const name = model.name || model.title || model.id || 'Unknown Model';
+        const provider = model.provider || model.vendor || model.org || ref.source;
+
+        return `<div class="mini-model-card" data-source="${escapeHtml(ref.source)}" data-model-id="${escapeHtml(ref.id)}" onclick="openModelFromCarousel('${escapeHtml(ref.source)}', '${escapeHtml(ref.id)}')">
+            <div class="mini-card-header">
+                <span class="mini-card-source">${escapeHtml(ref.source)}</span>
+            </div>
+            <div class="mini-card-name">${escapeHtml(name)}</div>
+            <div class="mini-card-provider">${escapeHtml(provider)}</div>
+            <div class="mini-card-actions">
+                <button class="mini-action" onclick="event.stopPropagation(); pinModelFromCarousel('${escapeHtml(ref.source)}', '${escapeHtml(ref.id)}')" title="Pin">📌</button>
+                <button class="mini-action" onclick="event.stopPropagation(); compareModelFromCarousel('${escapeHtml(ref.source)}', '${escapeHtml(ref.id)}')" title="Compare">⚖️</button>
+            </div>
+        </div>`;
+    }).join('');
+
+    return `<div class="agent-model-carousel" id="${carouselId}">
+        <button class="carousel-nav carousel-prev" onclick="scrollCarousel('${carouselId}', -1)">‹</button>
+        <div class="carousel-track">${cards}</div>
+        <button class="carousel-nav carousel-next" onclick="scrollCarousel('${carouselId}', 1)">›</button>
+    </div>`;
+}
+
+/**
+ * Find a model by source and ID
+ */
+function findModelByRef(source, id) {
+    const sourceMap = {
+        'llms': () => cachedData.llms || [],
+        'openrouter': () => cachedData.openrouter || [],
+        'fal': () => cachedData.fal || [],
+        'replicate': () => cachedData.replicate || [],
+        'text-to-image': () => cachedData['text-to-image'] || [],
+        'image-editing': () => cachedData['image-editing'] || [],
+        'text-to-speech': () => cachedData['text-to-speech'] || [],
+        'text-to-video': () => cachedData['text-to-video'] || [],
+        'image-to-video': () => cachedData['image-to-video'] || [],
+        'testing-catalog': () => cachedData['testing-catalog'] || [],
+        'blog': () => cachedData.blog || [],
+        'hype': () => cachedData.hype || []
+    };
+
+    const getter = sourceMap[source];
+    if (!getter) return null;
+
+    const items = getter();
+    return items.find(item => {
+        const itemId = item.id || item.name || item.title || '';
+        return itemId.toLowerCase() === id.toLowerCase() ||
+            itemId.toLowerCase().includes(id.toLowerCase()) ||
+            id.toLowerCase().includes(itemId.toLowerCase());
+    });
+}
+
+/**
+ * Open model modal from carousel click
+ */
+function openModelFromCarousel(source, id) {
+    const model = findModelByRef(source, id);
+    if (model) {
+        openModelModal(model, source);
+    }
+}
+
+/**
+ * Pin model from carousel
+ */
+function pinModelFromCarousel(source, id) {
+    const model = findModelByRef(source, id);
+    if (model) {
+        togglePin(source, model);
+        showToast('Pin toggled!', 'info');
+    }
+}
+
+/**
+ * Add model to compare from carousel
+ */
+function compareModelFromCarousel(source, id) {
+    const model = findModelByRef(source, id);
+    if (model) {
+        addToComparison(model);
+        showCompareTray();
+    }
+}
+
+/**
+ * Scroll carousel left or right
+ */
+function scrollCarousel(carouselId, direction) {
+    const carousel = document.getElementById(carouselId);
+    if (!carousel) return;
+
+    const track = carousel.querySelector('.carousel-track');
+    if (!track) return;
+
+    const scrollAmount = 280 * direction;
+    track.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+}
+
+// Export carousel functions
+window.scrollCarousel = scrollCarousel;
+window.openModelFromCarousel = openModelFromCarousel;
+window.pinModelFromCarousel = pinModelFromCarousel;
+window.compareModelFromCarousel = compareModelFromCarousel;
 
 function setAgentExpStatus(message, isError = false) {
     const status = document.getElementById('agent-exp-status');
