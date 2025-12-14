@@ -2164,7 +2164,9 @@ function createLLMCard(model) {
         
         <div class="click-hint">💡 Click to explore full model details</div>
     `;
+    card._compareItem = model;
     attachPinButton(card, 'llms', model);
+    attachCompareButton(card, model);
     return card;
 }
 
@@ -3895,7 +3897,9 @@ function createMediaCard(model, mediaCategory = '') {
         
         <div class="click-hint">💡 Click to explore full model details</div>
     `;
+    card._compareItem = model;
     attachPinButton(card, mediaCategory || 'media', model);
+    attachCompareButton(card, model);
     return card;
 }
 
@@ -5049,7 +5053,9 @@ function createFalModelCard(model) {
         
         <div class="click-hint">💡 Click to explore full model details</div>
     `;
+    card._compareItem = model;
     attachPinButton(card, 'fal', model);
+    attachCompareButton(card, model);
     return card;
 }
 
@@ -5109,7 +5115,9 @@ function createReplicateModelCard(model) {
         
         <div class="click-hint">💡 Click to explore full model details</div>
     `;
+    card._compareItem = model;
     attachPinButton(card, 'replicate', model);
+    attachCompareButton(card, model);
     return card;
 }
 

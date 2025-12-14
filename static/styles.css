@@ -1066,7 +1066,7 @@ body {
 }
 
 .source-badge {
-    display: none;
+    display: none !important;
     /* Hidden - cards already have colored borders */
 }
 
