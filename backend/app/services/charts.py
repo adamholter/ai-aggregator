@@ -65,8 +65,11 @@ def extract_model_metrics(model_data: dict) -> dict:
     quality = None
     evaluations = model_data.get('evaluations')
     if isinstance(evaluations, dict):
-        # AA models store quality in evaluations.overall or evaluations.quality_index
+        # AA models use artificial_analysis_intelligence_index, artificial_analysis_coding_index, etc.
         quality = (
+            evaluations.get('artificial_analysis_intelligence_index') or
+            evaluations.get('artificial_analysis_coding_index') or
+            evaluations.get('artificial_analysis_math_index') or
             evaluations.get('overall') or 
             evaluations.get('quality_index') or
             evaluations.get('coding') or
@@ -85,6 +88,7 @@ def extract_model_metrics(model_data: dict) -> dict:
             metrics['quality'] = float(quality)
         except (TypeError, ValueError):
             pass
+
     
     # Speed metrics - AA uses median_output_tokens_per_second
     speed = (
