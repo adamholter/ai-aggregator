@@ -141,6 +141,61 @@ function safeLocalStorageSet(key, value) {
     } catch (_) { }
 }
 
+// Custom modal to replace browser prompt()
+function showInputModal(title, defaultValue = '', placeholder = '') {
+    return new Promise((resolve) => {
+        // Create modal overlay
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.style.zIndex = '2000';
+
+        const modal = document.createElement('div');
+        modal.className = 'modal-content';
+        modal.style.maxWidth = '400px';
+        modal.innerHTML = `
+            <div class="modal-header">
+                <h3 style="margin: 0; font-size: 1.1rem;">${title}</h3>
+            </div>
+            <div class="modal-body" style="padding: 16px;">
+                <input type="text" class="input-modal-field" value="${defaultValue}" placeholder="${placeholder}" 
+                       style="width: 100%; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 1rem; background: var(--input-bg); color: var(--text-color);">
+            </div>
+            <div class="modal-footer" style="display: flex; gap: 8px; justify-content: flex-end; padding: 12px 16px; border-top: 1px solid var(--border-color);">
+                <button class="action-btn modal-cancel" style="background: var(--info-bg); color: var(--text-color); border: 1px solid var(--border-color);">Cancel</button>
+                <button class="action-btn primary-btn modal-confirm">OK</button>
+            </div>
+        `;
+
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+
+        const input = modal.querySelector('.input-modal-field');
+        const confirmBtn = modal.querySelector('.modal-confirm');
+        const cancelBtn = modal.querySelector('.modal-cancel');
+
+        // Focus input and select text
+        input.focus();
+        input.select();
+
+        const closeModal = (value) => {
+            overlay.remove();
+            resolve(value);
+        };
+
+        confirmBtn.addEventListener('click', () => closeModal(input.value));
+        cancelBtn.addEventListener('click', () => closeModal(null));
+
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') closeModal(input.value);
+            if (e.key === 'Escape') closeModal(null);
+        });
+
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) closeModal(null);
+        });
+    });
+}
+
 function sectionToCategory(sectionId) {
     const mapping = {
         'fal-models': 'fal',
@@ -1432,10 +1487,10 @@ async function removeRemotePin(pin) {
     }
 }
 
-function addLocalPin(categoryId, item, key) {
+async function addLocalPin(categoryId, item, key) {
     const entries = loadLocalPins();
-    const collection = prompt('Collection name for this pin?', 'Unsorted') || 'Unsorted';
-    const note = prompt('Add a note for this pin? (optional)', '') || '';
+    const collection = await showInputModal('Collection name for this pin?', 'Unsorted', 'e.g., Top LLMs') || 'Unsorted';
+    const note = await showInputModal('Add a note for this pin (optional)', '', 'e.g., Best for coding') || '';
     const metadata = loadPinMetadata();
     metadata[key] = { collection, note };
     savePinMetadata(metadata);
@@ -1567,10 +1622,10 @@ function createCardForPinnedItem(pin, index = 0) {
         editBtn.type = 'button';
         editBtn.className = 'mini-btn pin-edit-btn';
         editBtn.textContent = 'Edit pin';
-        editBtn.addEventListener('click', (e) => {
+        editBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
-            const collection = prompt('Collection name?', pin.collection || meta.collection || 'Unsorted') || 'Unsorted';
-            const note = prompt('Note (optional)?', noteText) || '';
+            const collection = await showInputModal('Collection name?', pin.collection || meta.collection || 'Unsorted', 'e.g., Top LLMs') || 'Unsorted';
+            const note = await showInputModal('Note (optional)?', noteText, 'e.g., Best for coding') || '';
             const metadata = loadPinMetadata();
             metadata[pin.key] = { collection, note };
             savePinMetadata(metadata);
@@ -2485,8 +2540,8 @@ function setupSavedViewsControls() {
             }
         });
 
-        saveBtn.addEventListener('click', () => {
-            const name = prompt('Name this view:');
+        saveBtn.addEventListener('click', async () => {
+            const name = await showInputModal('Name this view:', '', 'e.g., My favorites');
             if (!name) return;
             const state = captureViewState(categoryId);
             const views = loadSavedViews(categoryId);
