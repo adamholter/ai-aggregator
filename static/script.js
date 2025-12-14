@@ -7341,15 +7341,13 @@ async function renderChart() {
     }
 
     try {
-        // First try standard chart generation
+        // Use original models - AI extraction is optional enhancement
         let modelsToChart = chartComparisonModels;
 
-        // Try AI extraction if user has API key (for models with missing data)
+        // Only try AI extraction if user has API key AND we want to fill missing data
         const apiKey = typeof getUserOpenRouterKey === 'function' ? getUserOpenRouterKey() : null;
-        if (apiKey) {
+        if (apiKey && chartComparisonModels.length > 0) {
             try {
-                container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:400px;color:#6b7280;">Enriching data with AI...</div>';
-
                 const extractResponse = await fetch('/api/charts/extract-metrics', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -7361,15 +7359,23 @@ async function renderChart() {
 
                 if (extractResponse.ok) {
                     const extractResult = await extractResponse.json();
-                    if (extractResult.models && extractResult.models.length > 0) {
-                        modelsToChart = extractResult.models;
-                        console.log(`Chart data: ${extractResult.programmatic_count} programmatic, ${extractResult.ai_extracted_count} AI-extracted`);
+                    // Only use AI results if we got valid data back with at least one programmatic or AI-extracted model
+                    if (extractResult.models && extractResult.models.length === chartComparisonModels.length) {
+                        const hasValidData = extractResult.models.some(m =>
+                            m.quality !== undefined || m.speed !== undefined || m.price !== undefined
+                        );
+                        if (hasValidData) {
+                            modelsToChart = extractResult.models;
+                            console.log(`Chart data enrichment: ${extractResult.programmatic_count} programmatic, ${extractResult.ai_extracted_count} AI-extracted`);
+                        }
                     }
                 }
             } catch (e) {
-                console.warn('AI extraction failed, using original data:', e);
+                // Silently fall back to original data
+                console.warn('AI extraction skipped:', e.message);
             }
         }
+
 
         container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:400px;color:#6b7280;">Rendering chart...</div>';
 
