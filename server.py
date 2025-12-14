@@ -42,6 +42,16 @@ app.secret_key = os.environ.get('APP_SECRET_KEY') or 'change-me-in-production'
 # Set proper encoding for Flask responses
 app.config['JSON_AS_ASCII'] = False
 app.config['JSONIFY_MIMETYPE'] = 'application/json; charset=utf-8'
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0  # Disable static file caching
+
+@app.after_request
+def add_cache_control_headers(response):
+    """Add cache control headers to prevent browser/CDN caching of static files."""
+    if request.path.startswith('/static/') or request.path.endswith(('.js', '.css', '.html')):
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+    return response
 
 # Register modular blueprints
 try:
