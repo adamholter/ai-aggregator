@@ -61,22 +61,34 @@ def extract_model_metrics(model_data: dict) -> dict:
     """
     metrics = {}
     
-    # Quality metrics (various names)
-    quality = (
-        model_data.get('quality_index') or
-        model_data.get('quality') or
-        model_data.get('overall_quality') or
-        model_data.get('score') or
-        model_data.get('elo_score')
-    )
+    # Quality metrics - check evaluations object for AA models
+    quality = None
+    evaluations = model_data.get('evaluations')
+    if isinstance(evaluations, dict):
+        # AA models store quality in evaluations.overall or evaluations.quality_index
+        quality = (
+            evaluations.get('overall') or 
+            evaluations.get('quality_index') or
+            evaluations.get('coding') or
+            evaluations.get('math')
+        )
+    if quality is None:
+        quality = (
+            model_data.get('quality_index') or
+            model_data.get('quality') or
+            model_data.get('overall_quality') or
+            model_data.get('score') or
+            model_data.get('elo_score')
+        )
     if quality is not None:
         try:
             metrics['quality'] = float(quality)
         except (TypeError, ValueError):
             pass
     
-    # Speed metrics
+    # Speed metrics - AA uses median_output_tokens_per_second
     speed = (
+        model_data.get('median_output_tokens_per_second') or
         model_data.get('tokens_per_second') or
         model_data.get('speed') or
         model_data.get('output_speed') or
@@ -92,12 +104,25 @@ def extract_model_metrics(model_data: dict) -> dict:
     price = None
     if 'pricing' in model_data and isinstance(model_data['pricing'], dict):
         pricing = model_data['pricing']
-        prompt_price = pricing.get('prompt') or pricing.get('input')
-        completion_price = pricing.get('completion') or pricing.get('output')
+        # Try AA format first (price_1m_input_tokens, price_1m_output_tokens)
+        prompt_price = (
+            pricing.get('price_1m_input_tokens') or 
+            pricing.get('prompt') or 
+            pricing.get('input')
+        )
+        completion_price = (
+            pricing.get('price_1m_output_tokens') or
+            pricing.get('completion') or 
+            pricing.get('output')
+        )
         if prompt_price is not None and completion_price is not None:
             try:
-                # Average of input and output price, scale to per-million
-                price = (float(prompt_price) + float(completion_price)) / 2 * 1000000
+                # For AA format (already per-million), just average
+                if pricing.get('price_1m_input_tokens'):
+                    price = (float(prompt_price) + float(completion_price)) / 2
+                else:
+                    # For OpenRouter format, scale to per-million
+                    price = (float(prompt_price) + float(completion_price)) / 2 * 1000000
             except (TypeError, ValueError):
                 pass
     elif 'blended_price_per_1m' in model_data:
@@ -114,17 +139,29 @@ def extract_model_metrics(model_data: dict) -> dict:
     if price is not None:
         metrics['price'] = price
     
-    # Latency
-    latency = (
-        model_data.get('latency_ms') or
-        model_data.get('latency') or
-        model_data.get('time_to_first_token')
-    )
-    if latency is not None:
+    # Latency - AA uses median_time_to_first_token_seconds (convert to ms)
+    latency = None
+    ttft_seconds = model_data.get('median_time_to_first_token_seconds')
+    if ttft_seconds is not None:
         try:
-            metrics['latency'] = float(latency)
+            latency = float(ttft_seconds) * 1000  # Convert to ms
         except (TypeError, ValueError):
             pass
+    if latency is None:
+        latency = (
+            model_data.get('latency_ms') or
+            model_data.get('latency') or
+            model_data.get('time_to_first_token') or
+            model_data.get('median_time_to_first_answer_token')
+        )
+        if latency is not None:
+            try:
+                latency = float(latency)
+            except (TypeError, ValueError):
+                latency = None
+    
+    if latency is not None:
+        metrics['latency'] = latency
     
     # Context length
     context = (

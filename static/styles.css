@@ -4586,12 +4586,21 @@ body {
     background: linear-gradient(135deg, #10b981, #059669) !important;
     color: white !important;
     border: none !important;
-    font-weight: 600;
+    font-weight: 700;
+    font-size: 1.25rem;
+    min-width: 36px;
+    width: 36px;
+    height: 36px;
+    padding: 0 !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50% !important;
 }
 
 .nav-btn-create:hover {
     background: linear-gradient(135deg, #059669, #047857) !important;
-    transform: translateY(-1px);
+    transform: scale(1.1);
 }
 
 /* Custom Dashboard Tabs */
