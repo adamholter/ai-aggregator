@@ -1224,6 +1224,89 @@ function updatePinButtonStates() {
     buttons.forEach(updatePinButton);
 }
 
+// Attach compare button to card
+function attachCompareButton(card, item) {
+    if (!card || !item) return;
+
+    let btn = card.querySelector('.compare-control');
+    if (!btn) {
+        btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'compare-control';
+        btn.title = 'Add to compare';
+        btn.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="7" height="7"></rect>
+                <rect x="14" y="3" width="7" height="7"></rect>
+                <rect x="14" y="14" width="7" height="7"></rect>
+                <rect x="3" y="14" width="7" height="7"></rect>
+            </svg>
+        `;
+        btn.addEventListener('click', event => {
+            event.preventDefault();
+            event.stopPropagation();
+            handleCompareClick(item, btn);
+        });
+        card.appendChild(btn);
+    }
+    updateCompareButton(btn, item);
+}
+
+function handleCompareClick(item, btn) {
+    const modelId = item.id || item.name || item.model;
+    const isInComparison = chartComparisonModels.some(m => (m.id || m.name) === modelId);
+
+    if (isInComparison) {
+        removeFromComparison(modelId);
+        showToast(`Removed from comparison`, 'info');
+    } else {
+        addToComparison(item);
+    }
+
+    updateCompareButton(btn, item);
+    updateAllCompareButtons();
+    showCompareTray();
+}
+
+function updateCompareButton(btn, item) {
+    if (!btn) return;
+    const modelId = item.id || item.name || item.model;
+    const isInComparison = chartComparisonModels.some(m => (m.id || m.name) === modelId);
+    btn.classList.toggle('active', isInComparison);
+    btn.title = isInComparison ? 'Remove from compare' : 'Add to compare';
+}
+
+function updateAllCompareButtons() {
+    document.querySelectorAll('.compare-control').forEach(btn => {
+        // Find the parent card and its data
+        const card = btn.closest('.model-card');
+        if (card && card._compareItem) {
+            updateCompareButton(btn, card._compareItem);
+        }
+    });
+}
+
+function showCompareTray() {
+    const tray = document.getElementById('compare-tray');
+    const trayItems = document.getElementById('compare-tray-items');
+
+    if (!tray || !trayItems) return;
+
+    if (chartComparisonModels.length === 0) {
+        tray.style.display = 'none';
+        return;
+    }
+
+    tray.style.display = 'block';
+    trayItems.innerHTML = chartComparisonModels.map(m => {
+        const name = m.name || m.id || 'Model';
+        return `<div class="compare-chip">
+            <span>${escapeHtml(name)}</span>
+            <button onclick="removeFromComparison('${escapeHtml(m.id || m.name)}'); showCompareTray();">×</button>
+        </div>`;
+    }).join('');
+}
+
 async function togglePin(categoryId, item) {
     const key = buildPinKey(categoryId, item);
     const existing = pinnedItems.find(entry => entry.key === key);
@@ -3674,7 +3757,9 @@ function createOpenRouterCard(model) {
             ${model.hugging_face_id ? `<a class="external-link" href="https://huggingface.co/${model.hugging_face_id}" target="_blank" rel="noopener">Hugging Face ↗</a>` : ''}
         </div>
     `;
+    card._compareItem = model; // Store for compare button updates
     attachPinButton(card, 'openrouter', model);
+    attachCompareButton(card, model);
     return card;
 }
 
@@ -7147,353 +7232,3 @@ window.removeFromComparison = removeFromComparison;
 window.clearComparison = clearComparison;
 window.openChartModal = openChartModal;
 window.closeChartModal = closeChartModal;
-
-// ============================================
-// UNIFIED COMPARE MODAL WITH CHARTS + AI
-// ============================================
-
-/**
- * Open the unified compare modal with table, charts, and AI analysis
- */
-function openCompareModal() {
-    if (chartComparisonModels.length < 2) {
-        showToast('Select at least 2 models to compare', 'warning');
-        return;
-    }
-
-    const modal = document.getElementById('compare-modal');
-    const container = document.getElementById('compare-table-container');
-    if (!modal || !container) return;
-
-    modal.style.display = 'flex';
-
-    // Build the comparison UI
-    container.innerHTML = buildCompareContent();
-
-    // Render automatic charts
-    setTimeout(() => renderCompareCharts(), 100);
-}
-
-function closeCompareModal() {
-    const modal = document.getElementById('compare-modal');
-    if (modal) modal.style.display = 'none';
-}
-
-/**
- * Build the comparison table + charts + AI section HTML
- */
-function buildCompareContent() {
-    const models = chartComparisonModels;
-
-    // Extract common fields for comparison
-    const fields = extractCompareFields(models);
-
-    // Build table
-    let tableHtml = '<div class="table-scroll"><table class="comparison-table">';
-    tableHtml += '<thead><tr><th>Attribute</th>';
-    models.forEach(m => {
-        tableHtml += `<th>${escapeHtmlAttr(m.name || m.id || 'Model')}</th>`;
-    });
-    tableHtml += '</tr></thead><tbody>';
-
-    fields.forEach(field => {
-        tableHtml += `<tr><td><strong>${field.label}</strong></td>`;
-        models.forEach(m => {
-            const val = getModelFieldValue(m, field.key);
-            const isHighlighted = field.highlight && isBestValue(val, models, field);
-            tableHtml += `<td${isHighlighted ? ' class="highlight-best"' : ''}>${val}</td>`;
-        });
-        tableHtml += '</tr>';
-    });
-
-    tableHtml += '</tbody></table></div>';
-
-    // Chart containers
-    const chartsHtml = `
-        <div style="margin-top: 24px;">
-            <h3 style="margin-bottom: 12px; font-size: 1rem; font-weight: 600;">Visual Comparison</h3>
-            <div id="compare-charts" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-                <div id="compare-chart-speed" style="background: var(--info-bg); border-radius: 12px; padding: 16px; min-height: 280px;"></div>
-                <div id="compare-chart-price" style="background: var(--info-bg); border-radius: 12px; padding: 16px; min-height: 280px;"></div>
-            </div>
-        </div>
-    `;
-
-    // AI Analysis section
-    const aiHtml = `
-        <div style="margin-top: 24px; border-top: 1px solid var(--border-color); padding-top: 20px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                <h3 style="margin: 0; font-size: 1rem; font-weight: 600;">AI Analysis</h3>
-                <button id="compare-ai-btn" class="action-btn primary-btn" style="padding: 8px 16px;">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 6px;"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>
-                    Analyze with AI
-                </button>
-            </div>
-            <div id="compare-ai-result" style="min-height: 60px; color: var(--info-text); font-size: 0.9rem;">
-                Click "Analyze with AI" to get insights and recommendations based on your selected models.
-            </div>
-        </div>
-    `;
-
-    return tableHtml + chartsHtml + aiHtml;
-}
-
-/**
- * Extract comparable fields from models
- */
-function extractCompareFields(models) {
-    const fields = [
-        { key: 'name', label: 'Name', highlight: false },
-        { key: 'provider', label: 'Provider', highlight: false },
-        { key: 'context_length', label: 'Context Length', highlight: true },
-        { key: 'output_speed', label: 'Output Speed', highlight: true },
-        { key: 'latency', label: 'Latency (TTFT)', highlight: true },
-        { key: 'input_price', label: 'Input Price', highlight: true },
-        { key: 'output_price', label: 'Output Price', highlight: true },
-        { key: 'modalities', label: 'Modalities', highlight: false }
-    ];
-
-    // Filter to fields that have data
-    return fields.filter(f => {
-        return models.some(m => {
-            const val = getModelFieldValue(m, f.key);
-            return val && val !== 'N/A' && val !== '-';
-        });
-    });
-}
-
-/**
- * Get a field value from model with various key mappings
- */
-function getModelFieldValue(model, key) {
-    const mappings = {
-        name: () => model.name || model.id || model.model || 'Unknown',
-        provider: () => model.vendor || model.provider || model.org || '-',
-        context_length: () => {
-            const ctx = model.context_length || model.top_provider?.context_length;
-            return ctx ? `${(ctx / 1000).toFixed(0)}K` : '-';
-        },
-        output_speed: () => {
-            const speed = model.output_speed || model.tokens_per_second;
-            return speed ? `${speed.toFixed(1)} tok/s` : '-';
-        },
-        latency: () => {
-            const ttft = model.ttft || model.latency || model.time_to_first_token;
-            return ttft ? `${(ttft * 1000).toFixed(0)}ms` : '-';
-        },
-        input_price: () => {
-            const price = model.pricing?.prompt || model.input_cost_per_token;
-            return price ? `$${(parseFloat(price) * 1000000).toFixed(2)}/1M` : '-';
-        },
-        output_price: () => {
-            const price = model.pricing?.completion || model.output_cost_per_token;
-            return price ? `$${(parseFloat(price) * 1000000).toFixed(2)}/1M` : '-';
-        },
-        modalities: () => {
-            const arch = model.architecture || {};
-            const inputs = arch.input_modalities || [];
-            const outputs = arch.output_modalities || [];
-            if (!inputs.length && !outputs.length) return '-';
-            return [...new Set([...inputs, ...outputs])].join(', ');
-        }
-    };
-
-    const getter = mappings[key];
-    return getter ? getter() : (model[key] || '-');
-}
-
-function isBestValue(val, models, field) {
-    // Simple check - could be enhanced
-    return false;
-}
-
-function escapeHtmlAttr(str) {
-    return String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": "&#39;" }[c]));
-}
-
-/**
- * Render comparison charts using Plotly
- */
-async function renderCompareCharts() {
-    const models = chartComparisonModels;
-    const speedContainer = document.getElementById('compare-chart-speed');
-    const priceContainer = document.getElementById('compare-chart-price');
-
-    if (typeof Plotly === 'undefined') {
-        if (speedContainer) speedContainer.innerHTML = '<p style="color: var(--error-text);">Plotly not loaded</p>';
-        return;
-    }
-
-    const names = models.map(m => m.name || m.id || 'Model');
-
-    // Speed chart
-    const speeds = models.map(m => m.output_speed || m.tokens_per_second || 0);
-    if (speedContainer && speeds.some(s => s > 0)) {
-        Plotly.newPlot(speedContainer, [{
-            x: names,
-            y: speeds,
-            type: 'bar',
-            marker: { color: '#10b981' }
-        }], {
-            title: { text: 'Output Speed (tokens/sec)', font: { size: 14 } },
-            margin: { t: 40, b: 60, l: 50, r: 20 },
-            paper_bgcolor: 'rgba(0,0,0,0)',
-            plot_bgcolor: 'rgba(0,0,0,0)',
-            font: { size: 11 },
-            yaxis: { title: 'tok/s' }
-        }, { responsive: true, displayModeBar: false });
-    } else if (speedContainer) {
-        speedContainer.innerHTML = '<p style="text-align:center; color: var(--info-text); padding: 40px;">No speed data available</p>';
-    }
-
-    // Price chart
-    const inputPrices = models.map(m => {
-        const p = m.pricing?.prompt || m.input_cost_per_token;
-        return p ? parseFloat(p) * 1000000 : 0;
-    });
-    const outputPrices = models.map(m => {
-        const p = m.pricing?.completion || m.output_cost_per_token;
-        return p ? parseFloat(p) * 1000000 : 0;
-    });
-
-    if (priceContainer && (inputPrices.some(p => p > 0) || outputPrices.some(p => p > 0))) {
-        Plotly.newPlot(priceContainer, [
-            { x: names, y: inputPrices, name: 'Input', type: 'bar', marker: { color: '#3b82f6' } },
-            { x: names, y: outputPrices, name: 'Output', type: 'bar', marker: { color: '#8b5cf6' } }
-        ], {
-            title: { text: 'Price ($ per 1M tokens)', font: { size: 14 } },
-            barmode: 'group',
-            margin: { t: 40, b: 60, l: 50, r: 20 },
-            paper_bgcolor: 'rgba(0,0,0,0)',
-            plot_bgcolor: 'rgba(0,0,0,0)',
-            font: { size: 11 },
-            yaxis: { title: '$/1M tokens' },
-            legend: { x: 0.7, y: 1 }
-        }, { responsive: true, displayModeBar: false });
-    } else if (priceContainer) {
-        priceContainer.innerHTML = '<p style="text-align:center; color: var(--info-text); padding: 40px;">No pricing data available</p>';
-    }
-}
-
-/**
- * Run AI analysis on compared models
- */
-async function runCompareAIAnalysis() {
-    const resultDiv = document.getElementById('compare-ai-result');
-    const btn = document.getElementById('compare-ai-btn');
-    if (!resultDiv) return;
-
-    const apiKey = getUserOpenRouterKey();
-    if (!apiKey) {
-        resultDiv.innerHTML = '<p style="color: var(--error-text);">⚠️ Please add your OpenRouter API key in Settings to use AI analysis.</p>';
-        return;
-    }
-
-    btn.disabled = true;
-    btn.textContent = 'Analyzing...';
-    resultDiv.innerHTML = '<div style="display: flex; align-items: center; gap: 8px;"><div class="loading-spinner"></div> Analyzing models...</div>';
-
-    // Build comparison context
-    const modelsContext = chartComparisonModels.map(m => {
-        return `- ${m.name || m.id}: Speed=${m.output_speed || 'N/A'} tok/s, Input=$${((m.pricing?.prompt || 0) * 1000000).toFixed(2)}/1M, Output=$${((m.pricing?.completion || 0) * 1000000).toFixed(2)}/1M, Context=${m.context_length || 'N/A'}`;
-    }).join('\n');
-
-    const question = `Compare these AI models and provide insights:
-${modelsContext}
-
-Please provide:
-1. A brief summary of key differences
-2. Which model is best for different use cases (cost-sensitive, speed-critical, quality-focused)
-3. Any notable trade-offs
-
-Keep response concise (under 300 words).`;
-
-    try {
-        const response = await fetch('/api/experimental-agent', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`
-            },
-            body: JSON.stringify({
-                question: question,
-                deeper_mode: false
-            })
-        });
-
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
-
-        const result = await response.json();
-
-        if (result.error) {
-            throw new Error(result.error);
-        }
-
-        // Render the analysis with markdown
-        let analysisHtml = '';
-        if (typeof marked !== 'undefined') {
-            analysisHtml = marked.parse(result.response || 'No analysis generated.');
-        } else {
-            analysisHtml = `<p>${(result.response || 'No analysis generated.').replace(/\n/g, '<br>')}</p>`;
-        }
-
-        resultDiv.innerHTML = `
-            <div class="ai-analysis-content" style="line-height: 1.6;">
-                ${analysisHtml}
-            </div>
-        `;
-
-    } catch (error) {
-        resultDiv.innerHTML = `<p style="color: var(--error-text);">⚠️ Analysis failed: ${error.message}</p>`;
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = `
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 6px;"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>
-            Analyze with AI
-        `;
-    }
-}
-
-// Wire up compare modal handlers
-document.addEventListener('DOMContentLoaded', () => {
-    // Compare tray buttons
-    const compareOpenBtn = document.getElementById('compare-open');
-    if (compareOpenBtn) {
-        compareOpenBtn.addEventListener('click', openCompareModal);
-    }
-
-    const compareClearBtn = document.getElementById('compare-clear');
-    if (compareClearBtn) {
-        compareClearBtn.addEventListener('click', () => {
-            clearComparison();
-            const tray = document.getElementById('compare-tray');
-            if (tray) tray.style.display = 'none';
-        });
-    }
-
-    // Compare modal close
-    const compareCloseBtn = document.getElementById('compare-close');
-    if (compareCloseBtn) {
-        compareCloseBtn.addEventListener('click', closeCompareModal);
-    }
-
-    const compareModal = document.getElementById('compare-modal');
-    if (compareModal) {
-        compareModal.addEventListener('click', (e) => {
-            if (e.target === compareModal) closeCompareModal();
-        });
-    }
-
-    // AI analysis button (delegated since it's dynamically created)
-    document.addEventListener('click', (e) => {
-        if (e.target.id === 'compare-ai-btn' || e.target.closest('#compare-ai-btn')) {
-            runCompareAIAnalysis();
-        }
-    });
-});
-
-// Export compare functions
-window.openCompareModal = openCompareModal;
-window.closeCompareModal = closeCompareModal;
