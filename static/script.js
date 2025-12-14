@@ -144,7 +144,6 @@ function safeLocalStorageSet(key, value) {
 // Custom modal to replace browser prompt()
 function showInputModal(title, defaultValue = '', placeholder = '') {
     return new Promise((resolve) => {
-        // Create modal overlay
         const overlay = document.createElement('div');
         overlay.className = 'modal-overlay';
         overlay.style.zIndex = '2000';
@@ -161,8 +160,8 @@ function showInputModal(title, defaultValue = '', placeholder = '') {
                        style="width: 100%; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 1rem; background: var(--input-bg); color: var(--text-color);">
             </div>
             <div class="modal-footer" style="display: flex; gap: 8px; justify-content: flex-end; padding: 12px 16px; border-top: 1px solid var(--border-color);">
-                <button class="action-btn modal-cancel" style="background: var(--info-bg); color: var(--text-color); border: 1px solid var(--border-color);">Cancel</button>
-                <button class="action-btn primary-btn modal-confirm">OK</button>
+                <button class="action-btn modal-cancel" style="padding: 8px 16px; border-radius: 6px; background: transparent; color: var(--text-color); border: 1px solid var(--border-color); cursor: pointer;">Cancel</button>
+                <button class="action-btn primary-btn modal-confirm" style="padding: 8px 16px; border-radius: 6px;">OK</button>
             </div>
         `;
 
@@ -173,7 +172,6 @@ function showInputModal(title, defaultValue = '', placeholder = '') {
         const confirmBtn = modal.querySelector('.modal-confirm');
         const cancelBtn = modal.querySelector('.modal-cancel');
 
-        // Focus input and select text
         input.focus();
         input.select();
 
@@ -192,6 +190,100 @@ function showInputModal(title, defaultValue = '', placeholder = '') {
 
         overlay.addEventListener('click', (e) => {
             if (e.target === overlay) closeModal(null);
+        });
+    });
+}
+
+// Custom modal to replace browser confirm()
+function showConfirmModal(message) {
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.style.zIndex = '2000';
+
+        const modal = document.createElement('div');
+        modal.className = 'modal-content';
+        modal.style.maxWidth = '400px';
+        modal.innerHTML = `
+            <div class="modal-body" style="padding: 24px 20px; text-align: center;">
+                <p style="margin: 0; font-size: 1rem; color: var(--text-color);">${message}</p>
+            </div>
+            <div class="modal-footer" style="display: flex; gap: 8px; justify-content: center; padding: 12px 16px; border-top: 1px solid var(--border-color);">
+                <button class="action-btn modal-cancel" style="padding: 8px 20px; border-radius: 6px; background: transparent; color: var(--text-color); border: 1px solid var(--border-color); cursor: pointer;">Cancel</button>
+                <button class="action-btn modal-confirm" style="padding: 8px 20px; border-radius: 6px; background: var(--error-text); color: white; border: none; cursor: pointer;">Delete</button>
+            </div>
+        `;
+
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+
+        const confirmBtn = modal.querySelector('.modal-confirm');
+        const cancelBtn = modal.querySelector('.modal-cancel');
+
+        confirmBtn.focus();
+
+        const closeModal = (result) => {
+            overlay.remove();
+            resolve(result);
+        };
+
+        confirmBtn.addEventListener('click', () => closeModal(true));
+        cancelBtn.addEventListener('click', () => closeModal(false));
+
+        document.addEventListener('keydown', function handler(e) {
+            if (e.key === 'Escape') {
+                closeModal(false);
+                document.removeEventListener('keydown', handler);
+            }
+        });
+
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) closeModal(false);
+        });
+    });
+}
+
+// Custom modal to replace browser alert()
+function showAlertModal(message) {
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.style.zIndex = '2000';
+
+        const modal = document.createElement('div');
+        modal.className = 'modal-content';
+        modal.style.maxWidth = '400px';
+        modal.innerHTML = `
+            <div class="modal-body" style="padding: 24px 20px; text-align: center;">
+                <p style="margin: 0; font-size: 1rem; color: var(--text-color);">${message}</p>
+            </div>
+            <div class="modal-footer" style="display: flex; justify-content: center; padding: 12px 16px; border-top: 1px solid var(--border-color);">
+                <button class="action-btn primary-btn modal-confirm" style="padding: 8px 24px; border-radius: 6px;">OK</button>
+            </div>
+        `;
+
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+
+        const confirmBtn = modal.querySelector('.modal-confirm');
+        confirmBtn.focus();
+
+        const closeModal = () => {
+            overlay.remove();
+            resolve();
+        };
+
+        confirmBtn.addEventListener('click', closeModal);
+
+        document.addEventListener('keydown', function handler(e) {
+            if (e.key === 'Escape' || e.key === 'Enter') {
+                closeModal();
+                document.removeEventListener('keydown', handler);
+            }
+        });
+
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) closeModal();
         });
     });
 }
@@ -2553,10 +2645,14 @@ function setupSavedViewsControls() {
             }
         });
 
-        deleteBtn.addEventListener('click', () => {
+        deleteBtn.addEventListener('click', async () => {
             const idx = Number(select.value);
-            if (!Number.isInteger(idx)) return alert('Please select a view to delete.');
-            if (!confirm('Delete this view?')) return;
+            if (!Number.isInteger(idx)) {
+                await showAlertModal('Please select a view to delete.');
+                return;
+            }
+            const confirmed = await showConfirmModal('Delete this view?');
+            if (!confirmed) return;
             const views = loadSavedViews(categoryId);
             if (views[idx]) {
                 views.splice(idx, 1);

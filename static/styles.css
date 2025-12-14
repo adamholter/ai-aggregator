@@ -4900,8 +4900,9 @@ body {
 }
 
 .views-delete-btn:hover {
-    background: var(--error-text);
-    color: white;
+    background: rgba(220, 38, 38, 0.15);
+    color: var(--error-text);
+    border-color: var(--error-text);
 }
 
 /* Smart Search Widget */
