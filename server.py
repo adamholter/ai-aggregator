@@ -5537,17 +5537,22 @@ Return a concise markdown report that cites sources inline when available."""
         print(f"WARNING: Web search request failed: {exc}")
 
     return "", get_model_display_name(web_search_model)
+
 @app.route('/')
 def index():
-    """Serve the main dashboard page with cache-busting headers."""
-    from flask import make_response
-    response = make_response(app.send_static_file('index.html'))
+    """Serve the main dashboard page - read file directly to bypass cache."""
+    from flask import Response
+    # Read file directly instead of using send_static_file to bypass Render CDN cache
+    index_path = os.path.join(os.path.dirname(__file__), 'static', 'index.html')
+    with open(index_path, 'r', encoding='utf-8') as f:
+        html_content = f.read()
+    response = Response(html_content, mimetype='text/html')
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
     response.headers['Pragma'] = 'no-cache'
     response.headers['Expires'] = '0'
-    response.headers['Surrogate-Control'] = 'no-store'  # CDN hint
-    response.headers['ETag'] = str(int(time.time()))  # Force unique ETag
+    response.headers['Surrogate-Control'] = 'no-store'
     return response
+
 
 @app.route('/about')
 def about_page():
