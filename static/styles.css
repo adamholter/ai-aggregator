@@ -570,11 +570,11 @@ body {
 .compare-control {
     position: absolute;
     top: 10px;
-    right: 46px;
+    right: 44px;
     /* Position left of pin button */
     border: 1px solid var(--border-color);
     border-radius: 999px;
-    padding: 6px 8px;
+    padding: 5px 8px;
     background: var(--card-bg);
     color: var(--info-text);
     cursor: pointer;
@@ -598,8 +598,8 @@ body {
 
 .compare-control svg {
     display: block;
-    width: 14px;
-    height: 14px;
+    width: 12px;
+    height: 12px;
 }
 
 .filter-controls {
