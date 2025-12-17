@@ -99,7 +99,51 @@ const filterState = {};
 const displayedSnapshots = {};
 const FILTER_MODEL_STORAGE_KEY = 'dashboard-filter-model-id';
 const FILTER_PROMPT_NOTE_STORAGE_KEY = 'dashboard-filter-prompt-note';
+const MODEL_NOTES_STORAGE_KEY = 'dashboard-model-notes';
 let globalSearchIndex = null;
+
+// ============================================
+// Local Notes Storage
+// ============================================
+
+function getModelNoteKey(model, type) {
+    const id = model.id || model.name || model.model_id || model.title;
+    return `${type}::${id}`.toLowerCase();
+}
+
+function getModelNote(model, type) {
+    try {
+        const notes = JSON.parse(localStorage.getItem(MODEL_NOTES_STORAGE_KEY) || '{}');
+        const key = getModelNoteKey(model, type);
+        return notes[key] || '';
+    } catch (e) {
+        return '';
+    }
+}
+
+function saveModelNote(model, type, note) {
+    try {
+        const notes = JSON.parse(localStorage.getItem(MODEL_NOTES_STORAGE_KEY) || '{}');
+        const key = getModelNoteKey(model, type);
+        if (note && note.trim()) {
+            notes[key] = note.trim();
+        } else {
+            delete notes[key];
+        }
+        localStorage.setItem(MODEL_NOTES_STORAGE_KEY, JSON.stringify(notes));
+        showToast('Note saved', 'info');
+    } catch (e) {
+        console.error('Failed to save note:', e);
+    }
+}
+
+function getAllModelNotes() {
+    try {
+        return JSON.parse(localStorage.getItem(MODEL_NOTES_STORAGE_KEY) || '{}');
+    } catch (e) {
+        return {};
+    }
+}
 
 function recordDisplayedItems(category, items) {
     if (typeof category !== 'string') {
@@ -5437,12 +5481,23 @@ async function openModelModal(model, type) {
             <div class="modal-tabs">
                 <button class="modal-tab active" data-tab="overview">Data Overview</button>
                 <button class="modal-tab" data-tab="openrouter" hidden>OpenRouter Data</button>
+                <button class="modal-tab" data-tab="notes">📝 Notes</button>
                 <button class="modal-tab" data-tab="analysis">AI Analysis</button>
             </div>
             <div class="modal-tab-content active" data-tab="overview">
                 <div class="modal-overview"></div>
             </div>
             <div class="modal-tab-content" data-tab="openrouter" hidden></div>
+            <div class="modal-tab-content" data-tab="notes">
+                <div class="notes-container">
+                    <p class="notes-intro">Add personal notes, tags, or annotations for this model. Notes are stored locally in your browser.</p>
+                    <textarea class="notes-textarea" placeholder="Type your notes here..." rows="6"></textarea>
+                    <div class="notes-actions">
+                        <button class="primary-btn notes-save-btn">Save Note</button>
+                        <span class="notes-status"></span>
+                    </div>
+                </div>
+            </div>
             <div class="modal-tab-content" data-tab="analysis">
                 <div class="analysis-container">
                     <div class="analysis-intro">
@@ -5486,6 +5541,28 @@ async function openModelModal(model, type) {
             });
         });
     });
+
+    // Notes functionality
+    const notesTextarea = modalContent.querySelector('.notes-textarea');
+    const notesSaveBtn = modalContent.querySelector('.notes-save-btn');
+    const notesStatus = modalContent.querySelector('.notes-status');
+
+    if (notesTextarea && notesSaveBtn) {
+        // Load existing note
+        const existingNote = getModelNote(model, type);
+        if (existingNote) {
+            notesTextarea.value = existingNote;
+        }
+
+        // Save handler
+        notesSaveBtn.addEventListener('click', () => {
+            saveModelNote(model, type, notesTextarea.value);
+            if (notesStatus) {
+                notesStatus.textContent = 'Saved!';
+                setTimeout(() => { notesStatus.textContent = ''; }, 2000);
+            }
+        });
+    }
 
     const analysisContainer = modalContent.querySelector('.analysis-container');
     const analysisButton = modalContent.querySelector('[data-action="start-analysis"]');
