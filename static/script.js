@@ -99,12 +99,14 @@ const filterState = {};
 const displayedSnapshots = {};
 const FILTER_MODEL_STORAGE_KEY = 'dashboard-filter-model-id';
 const FILTER_PROMPT_NOTE_STORAGE_KEY = 'dashboard-filter-prompt-note';
+let globalSearchIndex = null;
 
 function recordDisplayedItems(category, items) {
     if (typeof category !== 'string') {
         return;
     }
     displayedSnapshots[category] = Array.isArray(items) ? items.slice() : [];
+    globalSearchIndex = null;
 }
 
 function getDisplayedItems(category) {
@@ -906,6 +908,7 @@ document.addEventListener('DOMContentLoaded', async function () {
     ensureExperimentalSections();
     ensureExperimentalNavButtons();
     setupNavigation();
+    setupGlobalSearch();
     initializeTheme();
     initializeAuthControls();
     setupFilterControls();
@@ -1853,6 +1856,123 @@ function setupNavigation() {
             loadSectionData(targetSection);
         });
     });
+}
+
+function categoryToSection(categoryId) {
+    const mapping = {
+        fal: 'fal-models',
+        replicate: 'replicate-models',
+        openrouter: 'openrouter-models'
+    };
+    return mapping[categoryId] || categoryId;
+}
+
+function getItemStableKey(categoryId, item) {
+    return buildPinKey(categoryId, item);
+}
+
+function setupGlobalSearch() {
+    const input = document.getElementById('global-search-input');
+    const resultsEl = document.getElementById('global-search-results');
+    if (!input || !resultsEl) return;
+
+    const closeResults = () => {
+        resultsEl.style.display = 'none';
+        resultsEl.innerHTML = '';
+    };
+
+    input.addEventListener('input', () => {
+        const q = input.value.trim().toLowerCase();
+        if (!q) return closeResults();
+        const results = runGlobalSearch(q);
+        renderGlobalSearchResults(resultsEl, results);
+        resultsEl.style.display = results.length ? 'block' : 'none';
+    });
+
+    // Prefetch data on focus to ensure search works across all tabs
+    input.addEventListener('focus', () => {
+        prefetchAllData();
+    });
+
+    // Also auto-prefetch shortly after load to ensure data is ready even without interaction
+    setTimeout(() => {
+        prefetchAllData();
+    }, 3000);
+
+    document.addEventListener('click', (e) => {
+        if (!resultsEl.contains(e.target) && e.target !== input) {
+            closeResults();
+        }
+    });
+}
+
+function prefetchAllData() {
+    if (!cachedData.falModels) loadFalModelsData();
+    if (!cachedData.replicateModels) loadReplicateModelsData();
+    if (!cachedData.testingCatalog) loadTestingCatalogData();
+    if (!cachedData.hype) loadHypeData();
+    if (!cachedData.monitor) loadMonitorFeed();
+    if (!cachedData.blog) loadBlogPosts();
+    if (!cachedData.openRouterModels) ensureOpenRouterDataLoaded();
+}
+
+function rebuildGlobalSearchIndex() {
+    const index = [];
+    Object.entries(FILTERABLE_SECTIONS).forEach(([categoryId, cfg]) => {
+        const items = Array.isArray(cfg.getItems()) ? cfg.getItems() : [];
+        items.forEach((item) => {
+            const key = getItemStableKey(categoryId, item);
+            const label = item.name || item.title || item.id || key;
+            const meta = item.vendor || item.owner || item.provider || item.source_label || item.source || '';
+            const haystack = `${label} ${meta} ${item.description || item.excerpt || ''} ${item.tags || ''}`.toLowerCase();
+            index.push({ categoryId, sectionId: categoryToSection(categoryId), key, label, meta, item, haystack });
+        });
+    });
+    globalSearchIndex = index;
+}
+
+function runGlobalSearch(queryLower) {
+    if (!globalSearchIndex) rebuildGlobalSearchIndex();
+    const results = (globalSearchIndex || []).filter(r => r.haystack.includes(queryLower));
+    return results.slice(0, 120);
+}
+
+function renderGlobalSearchResults(container, results) {
+    const grouped = {};
+    results.forEach(r => {
+        grouped[r.categoryId] = grouped[r.categoryId] || [];
+        grouped[r.categoryId].push(r);
+    });
+    container.innerHTML = '';
+    Object.entries(grouped).forEach(([categoryId, items]) => {
+        const group = document.createElement('div');
+        group.className = 'global-search-group';
+        group.innerHTML = `<div class="global-search-group-title">${escapeHtml(categoryId)}</div>`;
+        items.slice(0, 10).forEach((r) => {
+            const row = document.createElement('div');
+            row.className = 'global-search-item';
+            row.innerHTML = `<div class="title">${escapeHtml(r.label)}</div><div class="meta">${escapeHtml(r.meta)}</div>`;
+            row.addEventListener('click', () => {
+                container.style.display = 'none';
+                const navBtn = document.querySelector(`.nav-btn[data-section="${r.sectionId}"]`);
+                navBtn && navBtn.click();
+                setTimeout(() => scrollToCard(r.sectionId, r.key), 400);
+            });
+            group.appendChild(row);
+        });
+        container.appendChild(group);
+    });
+}
+
+function scrollToCard(sectionId, itemKey) {
+    const section = document.getElementById(sectionId);
+    if (!section) return;
+    const el = section.querySelector(`[data-item-key="${CSS.escape(itemKey)}"]`);
+    if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('highlight-pulse');
+        setTimeout(() => el.classList.remove('highlight-pulse'), 1600);
+    }
 }
 
 // Load data based on selected section
