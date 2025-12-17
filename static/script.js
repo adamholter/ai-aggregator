@@ -145,6 +145,120 @@ function getAllModelNotes() {
     }
 }
 
+// ============================================
+// Export Utilities
+// ============================================
+
+function exportToJSON(data, filename) {
+    const exportData = {
+        generated_at: new Date().toISOString(),
+        source: 'AI Model Analysis Dashboard',
+        count: Array.isArray(data) ? data.length : Object.keys(data).length,
+        data: data
+    };
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    downloadBlob(blob, `${filename}.json`);
+    showToast(`Exported ${exportData.count} items to JSON`, 'info');
+}
+
+function exportToCSV(data, filename) {
+    if (!Array.isArray(data) || data.length === 0) {
+        showToast('No data to export', 'warning');
+        return;
+    }
+
+    // Get all unique keys from all objects
+    const allKeys = new Set();
+    data.forEach(item => {
+        Object.keys(item).forEach(key => {
+            // Skip complex nested objects
+            if (typeof item[key] !== 'object' || item[key] === null) {
+                allKeys.add(key);
+            }
+        });
+    });
+    const headers = Array.from(allKeys);
+
+    // Build CSV content
+    const csvRows = [];
+    csvRows.push(headers.map(h => `"${h}"`).join(','));
+
+    data.forEach(item => {
+        const row = headers.map(header => {
+            let value = item[header];
+            if (value === undefined || value === null) value = '';
+            if (typeof value === 'object') value = JSON.stringify(value);
+            // Escape quotes and wrap in quotes
+            value = String(value).replace(/"/g, '""');
+            return `"${value}"`;
+        });
+        csvRows.push(row.join(','));
+    });
+
+    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
+    downloadBlob(blob, `${filename}.csv`);
+    showToast(`Exported ${data.length} items to CSV`, 'info');
+}
+
+function downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+function getCurrentTabData() {
+    const activeBtn = document.querySelector('.nav-btn.active');
+    if (!activeBtn) return { category: null, data: [] };
+
+    const section = activeBtn.dataset.section;
+    const category = section;
+
+    // Get displayed data for this category
+    const data = getDisplayedItems(category) || [];
+    return { category, data };
+}
+
+function exportCurrentTab(format = 'json') {
+    const { category, data } = getCurrentTabData();
+    if (!category) {
+        showToast('No active tab', 'warning');
+        return;
+    }
+    if (!data.length) {
+        showToast('No data to export', 'warning');
+        return;
+    }
+
+    const timestamp = new Date().toISOString().slice(0, 10);
+    const filename = `dashboard-${category}-${timestamp}`;
+
+    if (format === 'csv') {
+        exportToCSV(data, filename);
+    } else {
+        exportToJSON(data, filename);
+    }
+}
+
+function exportPinnedItems() {
+    const timestamp = new Date().toISOString().slice(0, 10);
+    const filename = `dashboard-pinned-${timestamp}`;
+
+    const pinnedData = pinnedItems.map(pin => ({
+        key: pin.key,
+        category: pin.category || pin.categoryId,
+        name: pin.item?.name || pin.item?.title || pin.key,
+        pinned_at: pin.pinned_at || new Date().toISOString()
+    }));
+
+    exportToJSON(pinnedData, filename);
+}
+
+
 function recordDisplayedItems(category, items) {
     if (typeof category !== 'string') {
         return;
@@ -7258,6 +7372,11 @@ const COMMAND_PALETTE_ACTIONS = [
     { id: 'toggle-theme', label: 'Toggle Theme', icon: '🌓', category: 'UI', shortcut: ['T'], action: () => toggleTheme() },
     { id: 'open-settings', label: 'Open Settings', icon: '⚙️', category: 'UI', shortcut: ['S'], action: () => openSettingsModal() },
     { id: 'show-hotkeys', label: 'Show Keyboard Shortcuts', icon: '⌨️', category: 'UI', shortcut: ['?'], action: () => showHotkeysOverlay() },
+
+    // Export commands
+    { id: 'export-json', label: 'Export Current Tab as JSON', icon: '📄', category: 'Export', action: () => exportCurrentTab('json') },
+    { id: 'export-csv', label: 'Export Current Tab as CSV', icon: '📊', category: 'Export', action: () => exportCurrentTab('csv') },
+    { id: 'export-pinned', label: 'Export Pinned Items', icon: '📌', category: 'Export', action: () => exportPinnedItems() },
 ];
 
 let commandPaletteOpen = false;
