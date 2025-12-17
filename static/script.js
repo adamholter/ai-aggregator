@@ -7154,3 +7154,358 @@ window.removeAvailableModel = removeAvailableModel;
 window.clearChatHistory = clearChatHistory;
 window.updateAgentModel = updateAgentModel;
 window.loadMonitorFeed = loadMonitorFeed;
+
+// ============================================
+// Command Palette + Hotkeys
+// ============================================
+
+const COMMAND_PALETTE_ACTIONS = [
+    // Navigation commands
+    { id: 'go-llms', label: 'Go to LLMs', icon: '🤖', category: 'Navigation', shortcut: ['G', 'L'], action: () => navigateToTab('llms') },
+    { id: 'go-openrouter', label: 'Go to OpenRouter', icon: '🌐', category: 'Navigation', shortcut: ['G', 'O'], action: () => navigateToTab('openrouter-models') },
+    { id: 'go-fal', label: 'Go to Fal.ai', icon: '⚡', category: 'Navigation', shortcut: ['G', 'F'], action: () => navigateToTab('fal-models') },
+    { id: 'go-replicate', label: 'Go to Replicate', icon: '🔁', category: 'Navigation', shortcut: ['G', 'R'], action: () => navigateToTab('replicate-models') },
+    { id: 'go-latest', label: 'Go to Latest', icon: '🆕', category: 'Navigation', action: () => navigateToTab('latest') },
+    { id: 'go-agent', label: 'Go to Agent', icon: '💬', category: 'Navigation', shortcut: ['G', 'A'], action: () => navigateToTab('agent') },
+    { id: 'go-pinned', label: 'Go to Pinned', icon: '📌', category: 'Navigation', action: () => navigateToTab('pinned') },
+    { id: 'go-monitor', label: 'Go to Monitor', icon: '📊', category: 'Navigation', action: () => navigateToTab('monitor') },
+
+    // Search commands
+    { id: 'focus-search', label: 'Focus Global Search', icon: '🔍', category: 'Search', shortcut: ['/'], action: () => focusGlobalSearch() },
+
+    // Refresh commands
+    { id: 'refresh-tab', label: 'Refresh Current Tab', icon: '🔄', category: 'Data', shortcut: ['R'], action: () => refreshCurrentTab() },
+    { id: 'refresh-all', label: 'Refresh All Data', icon: '♻️', category: 'Data', action: () => refreshAllData() },
+
+    // UI commands
+    { id: 'toggle-theme', label: 'Toggle Theme', icon: '🌓', category: 'UI', shortcut: ['T'], action: () => toggleTheme() },
+    { id: 'open-settings', label: 'Open Settings', icon: '⚙️', category: 'UI', shortcut: ['S'], action: () => openSettingsModal() },
+    { id: 'show-hotkeys', label: 'Show Keyboard Shortcuts', icon: '⌨️', category: 'UI', shortcut: ['?'], action: () => showHotkeysOverlay() },
+];
+
+let commandPaletteOpen = false;
+let hotkeysOverlayOpen = false;
+let selectedCommandIndex = 0;
+let filteredCommands = [...COMMAND_PALETTE_ACTIONS];
+let pendingGKey = false;
+let gKeyTimeout = null;
+
+function setupCommandPalette() {
+    const overlay = document.getElementById('command-palette');
+    const input = document.getElementById('command-palette-input');
+    const resultsContainer = document.getElementById('command-palette-results');
+
+    if (!overlay || !input || !resultsContainer) return;
+
+    // Input filtering
+    input.addEventListener('input', () => {
+        const query = input.value.toLowerCase().trim();
+        filterCommands(query);
+        renderCommandResults();
+    });
+
+    // Keyboard navigation
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            selectedCommandIndex = Math.min(selectedCommandIndex + 1, filteredCommands.length - 1);
+            renderCommandResults();
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            selectedCommandIndex = Math.max(selectedCommandIndex - 1, 0);
+            renderCommandResults();
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            executeSelectedCommand();
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            closeCommandPalette();
+        }
+    });
+
+    // Click outside to close
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+            closeCommandPalette();
+        }
+    });
+}
+
+function filterCommands(query) {
+    if (!query) {
+        filteredCommands = [...COMMAND_PALETTE_ACTIONS];
+    } else {
+        filteredCommands = COMMAND_PALETTE_ACTIONS.filter(cmd =>
+            cmd.label.toLowerCase().includes(query) ||
+            cmd.category.toLowerCase().includes(query)
+        );
+    }
+    selectedCommandIndex = 0;
+}
+
+function renderCommandResults() {
+    const container = document.getElementById('command-palette-results');
+    if (!container) return;
+
+    // Group by category
+    const grouped = {};
+    filteredCommands.forEach(cmd => {
+        if (!grouped[cmd.category]) grouped[cmd.category] = [];
+        grouped[cmd.category].push(cmd);
+    });
+
+    container.innerHTML = Object.entries(grouped).map(([category, commands]) => `
+        <div class="command-group">
+            <div class="command-group-title">${escapeHtml(category)}</div>
+            ${commands.map((cmd, idx) => {
+        const globalIdx = filteredCommands.indexOf(cmd);
+        return `
+                    <div class="command-item ${globalIdx === selectedCommandIndex ? 'selected' : ''}" 
+                         data-command-id="${cmd.id}">
+                        <span class="command-item-icon">${cmd.icon}</span>
+                        <span class="command-item-label">${escapeHtml(cmd.label)}</span>
+                        ${cmd.shortcut ? `
+                            <span class="command-item-shortcut">
+                                ${cmd.shortcut.map(k => `<kbd>${k}</kbd>`).join('')}
+                            </span>
+                        ` : ''}
+                    </div>
+                `;
+    }).join('')}
+        </div>
+    `).join('');
+
+    // Click handlers
+    container.querySelectorAll('.command-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const cmdId = item.dataset.commandId;
+            const cmd = COMMAND_PALETTE_ACTIONS.find(c => c.id === cmdId);
+            if (cmd) {
+                closeCommandPalette();
+                cmd.action();
+            }
+        });
+    });
+
+    // Scroll selected into view
+    const selected = container.querySelector('.command-item.selected');
+    if (selected) {
+        selected.scrollIntoView({ block: 'nearest' });
+    }
+}
+
+function executeSelectedCommand() {
+    const cmd = filteredCommands[selectedCommandIndex];
+    if (cmd) {
+        closeCommandPalette();
+        cmd.action();
+    }
+}
+
+function openCommandPalette() {
+    const overlay = document.getElementById('command-palette');
+    const input = document.getElementById('command-palette-input');
+    if (!overlay) return;
+
+    commandPaletteOpen = true;
+    overlay.style.display = 'flex';
+    filteredCommands = [...COMMAND_PALETTE_ACTIONS];
+    selectedCommandIndex = 0;
+    renderCommandResults();
+
+    if (input) {
+        input.value = '';
+        input.focus();
+    }
+}
+
+function closeCommandPalette() {
+    const overlay = document.getElementById('command-palette');
+    if (overlay) {
+        overlay.style.display = 'none';
+    }
+    commandPaletteOpen = false;
+}
+
+function showHotkeysOverlay() {
+    const overlay = document.getElementById('hotkeys-overlay');
+    if (overlay) {
+        overlay.style.display = 'flex';
+        hotkeysOverlayOpen = true;
+    }
+}
+
+function closeHotkeysOverlay() {
+    const overlay = document.getElementById('hotkeys-overlay');
+    if (overlay) {
+        overlay.style.display = 'none';
+        hotkeysOverlayOpen = false;
+    }
+}
+
+function setupHotkeysOverlay() {
+    const closeBtn = document.getElementById('hotkeys-close');
+    const overlay = document.getElementById('hotkeys-overlay');
+
+    if (closeBtn) {
+        closeBtn.addEventListener('click', closeHotkeysOverlay);
+    }
+
+    if (overlay) {
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                closeHotkeysOverlay();
+            }
+        });
+    }
+}
+
+function setupGlobalHotkeys() {
+    document.addEventListener('keydown', (e) => {
+        // Ignore if typing in an input
+        const target = e.target;
+        const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+
+        // Cmd/Ctrl+K opens command palette (works even in inputs)
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+            e.preventDefault();
+            if (commandPaletteOpen) {
+                closeCommandPalette();
+            } else {
+                openCommandPalette();
+            }
+            return;
+        }
+
+        // Escape closes modals
+        if (e.key === 'Escape') {
+            if (commandPaletteOpen) {
+                closeCommandPalette();
+                return;
+            }
+            if (hotkeysOverlayOpen) {
+                closeHotkeysOverlay();
+                return;
+            }
+        }
+
+        // Don't process other hotkeys while typing
+        if (isInput) return;
+
+        const key = e.key.toUpperCase();
+
+        // Handle G+key sequences
+        if (pendingGKey) {
+            clearTimeout(gKeyTimeout);
+            pendingGKey = false;
+
+            const gCommands = {
+                'L': 'go-llms',
+                'O': 'go-openrouter',
+                'F': 'go-fal',
+                'R': 'go-replicate',
+                'A': 'go-agent'
+            };
+
+            if (gCommands[key]) {
+                e.preventDefault();
+                const cmd = COMMAND_PALETTE_ACTIONS.find(c => c.id === gCommands[key]);
+                if (cmd) cmd.action();
+                return;
+            }
+        }
+
+        // Start G sequence
+        if (key === 'G') {
+            pendingGKey = true;
+            gKeyTimeout = setTimeout(() => {
+                pendingGKey = false;
+            }, 500);
+            return;
+        }
+
+        // Single-key shortcuts
+        if (e.key === '?') {
+            e.preventDefault();
+            showHotkeysOverlay();
+            return;
+        }
+
+        if (key === '/') {
+            e.preventDefault();
+            focusGlobalSearch();
+            return;
+        }
+
+        if (key === 'T') {
+            e.preventDefault();
+            toggleTheme();
+            return;
+        }
+
+        if (key === 'S') {
+            e.preventDefault();
+            openSettingsModal();
+            return;
+        }
+
+        if (key === 'R' && !e.metaKey && !e.ctrlKey) {
+            e.preventDefault();
+            refreshCurrentTab();
+            return;
+        }
+    });
+}
+
+// Action implementations
+function navigateToTab(sectionId) {
+    const navBtn = document.querySelector(`.nav-btn[data-section="${sectionId}"]`);
+    if (navBtn) {
+        navBtn.click();
+    }
+}
+
+function focusGlobalSearch() {
+    const input = document.getElementById('global-search-input');
+    if (input) {
+        input.focus();
+        input.select();
+    }
+}
+
+function refreshCurrentTab() {
+    const activeBtn = document.querySelector('.nav-btn.active');
+    if (activeBtn) {
+        const section = activeBtn.dataset.section;
+        loadSectionData(section);
+        showToast('Refreshing...', 'info');
+    }
+}
+
+function refreshAllData() {
+    prefetchAllData();
+    showToast('Refreshing all data...', 'info');
+}
+
+function toggleTheme() {
+    const html = document.documentElement;
+    const currentTheme = html.getAttribute('data-theme');
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    html.setAttribute('data-theme', newTheme);
+    localStorage.setItem('dashboard-theme', newTheme);
+    showToast(`Theme: ${newTheme}`, 'info');
+}
+
+function openSettingsModal() {
+    const settingsModal = document.getElementById('settings-modal');
+    if (settingsModal) {
+        settingsModal.style.display = 'flex';
+    }
+}
+
+// Initialize command palette and hotkeys
+document.addEventListener('DOMContentLoaded', () => {
+    setupCommandPalette();
+    setupHotkeysOverlay();
+    setupGlobalHotkeys();
+});
