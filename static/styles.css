@@ -566,42 +566,6 @@ body {
     font-weight: 600;
 }
 
-/* Compare button on cards */
-.compare-control {
-    position: absolute;
-    top: 10px;
-    right: 44px;
-    /* Position left of pin button */
-    border: 1px solid var(--border-color);
-    border-radius: 999px;
-    padding: 5px 8px;
-    background: var(--card-bg);
-    color: var(--info-text);
-    cursor: pointer;
-    transition: all 0.2s ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.compare-control:hover {
-    background: var(--info-bg);
-    border-color: var(--button-bg);
-    color: var(--button-bg);
-}
-
-.compare-control.active {
-    background: var(--button-bg);
-    border-color: var(--button-bg);
-    color: var(--button-text);
-}
-
-.compare-control svg {
-    display: block;
-    width: 12px;
-    height: 12px;
-}
-
 .filter-controls {
     display: none;
     align-items: center;

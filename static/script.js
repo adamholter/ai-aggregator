@@ -4197,7 +4197,6 @@ function buildModelCarousel(refs) {
             <div class="mini-card-provider">${escapeHtml(provider)}</div>
             <div class="mini-card-actions">
                 <button class="mini-action" onclick="event.stopPropagation(); pinModelFromCarousel('${escapeHtml(ref.source)}', '${escapeHtml(ref.id)}')" title="Pin">📌</button>
-                <button class="mini-action" onclick="event.stopPropagation(); compareModelFromCarousel('${escapeHtml(ref.source)}', '${escapeHtml(ref.id)}')" title="Compare">⚖️</button>
             </div>
         </div>`;
     }).join('');
@@ -4279,7 +4278,6 @@ function scrollCarousel(carouselId, direction) {
 window.scrollCarousel = scrollCarousel;
 window.openModelFromCarousel = openModelFromCarousel;
 window.pinModelFromCarousel = pinModelFromCarousel;
-window.compareModelFromCarousel = compareModelFromCarousel;
 
 function setAgentExpStatus(message, isError = false) {
     const status = document.getElementById('agent-exp-status');
