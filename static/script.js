@@ -4387,7 +4387,8 @@ function appendAgentExpMessage(role, content, options = {}) {
     const responseContent = document.createElement('div');
     responseContent.className = 'response-content';
     if (content) {
-        responseContent.innerHTML = renderAgentExpMarkdown(content);
+        const result = renderAgentExpMarkdown(content);
+        responseContent.innerHTML = result.html;
     } else if (options.streaming) {
         responseContent.innerHTML = '<div class="typing-indicator">Thinking...</div>';
     }
@@ -4399,25 +4400,24 @@ function appendAgentExpMessage(role, content, options = {}) {
 
 function renderAgentExpMarkdown(markdown) {
     if (!markdown) {
-        return '';
+        return { html: '', refs: [] };
     }
     let sanitized = typeof fixEncodingArtifacts === 'function' ? fixEncodingArtifacts(markdown) : markdown;
 
-    // First, extract model references before markdown processing
+    // Collect model references for carousel at end
     const modelRefs = [];
-    sanitized = sanitized.replace(/\[\[models?:([^\]]+)\]\]/gi, (match, content) => {
-        const refs = content.split(',').map(ref => {
-            const parts = ref.trim().split(':');
-            if (parts.length >= 2) {
-                return { source: parts[0].trim(), id: parts.slice(1).join(':').trim() };
-            }
-            return null;
-        }).filter(Boolean);
+    let badgeId = 0;
 
-        if (refs.length > 0) {
-            const placeholder = `__MODEL_CAROUSEL_${modelRefs.length}__`;
-            modelRefs.push(refs);
-            return placeholder;
+    // Replace model tags with inline badges
+    sanitized = sanitized.replace(/\[\[models?:([^\]]+)\]\]/gi, (match, content) => {
+        const parts = content.trim().split(':');
+        if (parts.length >= 2) {
+            const source = parts[0].trim();
+            const modelName = parts.slice(1).join(':').trim();
+            modelRefs.push({ source, name: modelName, id: `agent-badge-${badgeId}` });
+            badgeId++;
+            // Create inline badge
+            return `<span class="agent-model-badge" id="agent-badge-${badgeId - 1}" data-source="${escapeHtml(source)}" data-model-name="${escapeHtml(modelName)}">🤖 ${escapeHtml(modelName)}</span>`;
         }
         return match;
     });
@@ -4435,14 +4435,110 @@ function renderAgentExpMarkdown(markdown) {
         html = simpleMarkdownToHtml(sanitized);
     }
 
-    // Replace model placeholders with carousels
-    modelRefs.forEach((refs, index) => {
-        const placeholder = `__MODEL_CAROUSEL_${index}__`;
-        const carouselHtml = buildModelCarousel(refs);
-        html = html.replace(placeholder, carouselHtml);
+    return { html, refs: modelRefs };
+}
+
+/**
+ * Enhance agent response with model carousel and tooltips
+ * @param {HTMLElement} container - The response content container
+ * @param {Array} refs - Model references from renderAgentExpMarkdown
+ */
+function enhanceAgentResponse(container, refs) {
+    if (!container || !refs || refs.length === 0) return;
+
+    // Build carousel HTML at the end
+    const carouselHtml = buildAgentCarousel(refs);
+    if (carouselHtml) {
+        container.insertAdjacentHTML('beforeend', carouselHtml);
+    }
+
+    // Attach tooltips to badges
+    refs.forEach(ref => {
+        const badge = container.querySelector(`#${ref.id}`);
+        if (badge) {
+            const model = findModelByRef(ref.source, ref.name);
+            if (model) {
+                const tooltipHtml = buildAgentTooltip(model);
+                if (tooltipHtml) {
+                    const tooltip = document.createElement('div');
+                    tooltip.className = 'agent-badge-tooltip';
+                    tooltip.innerHTML = tooltipHtml;
+                    badge.appendChild(tooltip);
+                }
+            }
+        }
     });
+}
+
+/**
+ * Build tooltip HTML for model badge
+ */
+function buildAgentTooltip(model) {
+    if (!model) return '';
+    const name = model.name || 'Unknown';
+    const provider = model.model_creator?.name || 'Unknown';
+    const speed = model.median_output_tokens_per_second;
+    const evals = model.evaluations || {};
+    const pricing = model.pricing || {};
+
+    let html = `<div class="agent-tooltip-header"><strong>${escapeHtml(name)}</strong><br><span>${escapeHtml(provider)}</span></div>`;
+    html += `<div class="agent-tooltip-row"><span>OUTPUT SPEED</span><span>${speed ? Math.round(speed).toLocaleString() + ' tokens/s' : 'N/A'}</span></div>`;
+
+    if (pricing.price_1m_input_tokens != null) {
+        html += `<div class="agent-tooltip-row"><span>Cost</span><span>Input $${pricing.price_1m_input_tokens?.toFixed(2)} · Output $${pricing.price_1m_output_tokens?.toFixed(2)}</span></div>`;
+    }
+
+    const evalItems = [];
+    if (evals.artificial_analysis_coding_index) evalItems.push(`Coding: ${evals.artificial_analysis_coding_index.toFixed(1)}`);
+    if (evals.artificial_analysis_intelligence_index) evalItems.push(`Intelligence: ${evals.artificial_analysis_intelligence_index.toFixed(1)}`);
+    if (evals.artificial_analysis_math_index) evalItems.push(`Math: ${evals.artificial_analysis_math_index.toFixed(1)}`);
+
+    if (evalItems.length) {
+        html += `<div class="agent-tooltip-evals">${evalItems.join(' · ')}</div>`;
+    }
 
     return html;
+}
+
+/**
+ * Build model cards carousel at end of response
+ */
+function buildAgentCarousel(refs) {
+    if (!refs || refs.length === 0) return '';
+
+    const cards = refs.map(ref => {
+        const model = findModelByRef(ref.source, ref.name);
+        if (!model) return '';
+        const name = model.name || 'Unknown';
+        const provider = model.model_creator?.name || ref.source || 'Unknown';
+        const speed = model.median_output_tokens_per_second;
+        const pricing = model.pricing || {};
+
+        // Provider colors
+        const colors = { 'Google': '#4285f4', 'OpenAI': '#10a37f', 'Anthropic': '#d97706', 'Meta': '#1877f2', 'xAI': '#1d9bf0' };
+        const accent = colors[provider] || '#6b7280';
+
+        return `<div class="agent-carousel-card" style="border-left: 4px solid ${accent}">
+            <div class="carousel-card-name">🤖 ${escapeHtml(name)}</div>
+            <div class="carousel-card-provider">${escapeHtml(provider)}</div>
+            <div class="carousel-card-stat"><span>OUTPUT SPEED</span><span>${speed ? Math.round(speed).toLocaleString() + ' tok/s' : 'N/A'}</span></div>
+            <div class="carousel-card-pricing">
+                <span>Input <strong>$${pricing.price_1m_input_tokens?.toFixed(0) || 'N/A'}</strong></span>
+                <span>Output <strong>$${pricing.price_1m_output_tokens?.toFixed(0) || 'N/A'}</strong></span>
+            </div>
+        </div>`;
+    }).filter(Boolean).join('');
+
+    if (!cards) return '';
+
+    return `<div class="agent-model-section">
+        <h4>Model Cards</h4>
+        <div class="agent-carousel-wrapper">
+            <button class="agent-carousel-nav" onclick="this.nextElementSibling.scrollBy({left:-220,behavior:'smooth'})">‹</button>
+            <div class="agent-carousel-track">${cards}</div>
+            <button class="agent-carousel-nav" onclick="this.previousElementSibling.scrollBy({left:220,behavior:'smooth'})">›</button>
+        </div>
+    </div>`;
 }
 
 /**
@@ -4944,7 +5040,8 @@ function handleAgentExpEvent(event, assistantMessage, responseContent) {
             const chunk = event.content || '';
             agentExpState.streamBuffer += chunk;
             if (responseContent) {
-                responseContent.innerHTML = renderAgentExpMarkdown(agentExpState.streamBuffer);
+                const result = renderAgentExpMarkdown(agentExpState.streamBuffer);
+                responseContent.innerHTML = result.html;
             }
             scrollAgentExpToBottom();
             break;
@@ -4967,7 +5064,14 @@ function handleAgentExpEvent(event, assistantMessage, responseContent) {
             }
             const finalText = agentExpState.streamBuffer ? fixEncodingArtifacts(agentExpState.streamBuffer.trim()) : '';
             if (responseContent) {
-                responseContent.innerHTML = finalText ? renderAgentExpMarkdown(finalText) : '<div class="response-content">No response generated.</div>';
+                if (finalText) {
+                    const result = renderAgentExpMarkdown(finalText);
+                    responseContent.innerHTML = result.html;
+                    // Add carousel and tooltips
+                    enhanceAgentResponse(responseContent, result.refs);
+                } else {
+                    responseContent.innerHTML = '<div class="response-content">No response generated.</div>';
+                }
                 // Render any charts in the response
                 setTimeout(() => renderAgentCharts(responseContent), 100);
             }

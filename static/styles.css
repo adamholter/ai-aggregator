@@ -4621,6 +4621,214 @@ body {
     cursor: default;
 }
 
+/* Agent Model Badges - inline badges in text */
+.agent-model-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #e8f4fd;
+    border: 1px solid #b3d9f7;
+    color: #1a73e8;
+    padding: 3px 10px;
+    border-radius: 16px;
+    font-size: 0.85em;
+    font-weight: 500;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.agent-model-badge:hover {
+    background: #d0e8fc;
+    border-color: #1a73e8;
+}
+
+/* Agent Badge Tooltip */
+.agent-badge-tooltip {
+    display: none;
+    position: absolute;
+    bottom: calc(100% + 10px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 16px;
+    min-width: 260px;
+    max-width: 320px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+    z-index: 200;
+    text-align: left;
+    color: var(--text-color);
+    pointer-events: none;
+}
+
+.agent-model-badge:hover .agent-badge-tooltip {
+    display: block;
+    animation: agentTooltipFade 0.15s ease-out;
+}
+
+@keyframes agentTooltipFade {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+}
+
+.agent-tooltip-header {
+    margin-bottom: 12px;
+}
+
+.agent-tooltip-header strong {
+    font-size: 1rem;
+    color: var(--text-color);
+}
+
+.agent-tooltip-header span {
+    color: var(--info-text);
+    font-size: 0.85rem;
+}
+
+.agent-tooltip-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-top: 1px solid var(--border-color);
+    font-size: 0.85rem;
+}
+
+.agent-tooltip-row span:first-child {
+    color: var(--info-text);
+    text-transform: uppercase;
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+
+.agent-tooltip-row span:last-child {
+    color: #1a73e8;
+    font-weight: 500;
+}
+
+.agent-tooltip-evals {
+    background: var(--info-bg);
+    padding: 8px 10px;
+    border-radius: 8px;
+    margin-top: 8px;
+    font-size: 0.8rem;
+    color: var(--info-text);
+}
+
+/* Agent Model Section (carousel at bottom) */
+.agent-model-section {
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-color);
+}
+
+.agent-model-section h4 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0 0 12px 0;
+    color: var(--text-color);
+}
+
+.agent-carousel-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.agent-carousel-track {
+    display: flex;
+    gap: 16px;
+    overflow-x: auto;
+    scroll-behavior: smooth;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    padding: 4px 0;
+    flex: 1;
+}
+
+.agent-carousel-track::-webkit-scrollbar {
+    display: none;
+}
+
+.agent-carousel-nav {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 1px solid var(--border-color);
+    background: var(--bg-color);
+    color: var(--text-color);
+    font-size: 1.2rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.agent-carousel-nav:hover {
+    background: var(--info-bg);
+}
+
+.agent-carousel-card {
+    flex: 0 0 200px;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 16px;
+    transition: box-shadow 0.2s ease;
+}
+
+.agent-carousel-card:hover {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+
+.carousel-card-name {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: var(--text-color);
+}
+
+.carousel-card-provider {
+    font-size: 0.8rem;
+    color: var(--info-text);
+    margin-bottom: 12px;
+}
+
+.carousel-card-stat {
+    margin-bottom: 8px;
+}
+
+.carousel-card-stat span:first-child {
+    display: block;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    color: var(--info-text);
+    font-weight: 600;
+}
+
+.carousel-card-stat span:last-child {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #1a73e8;
+}
+
+.carousel-card-pricing {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8rem;
+    color: var(--text-color);
+}
+
 .mini-card-header {
     margin-bottom: 8px;
 }
