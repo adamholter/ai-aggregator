@@ -4023,55 +4023,62 @@ def _execute_agent_tool(tool_name, tool_args):
         
         # Special handling for LLM benchmarks - return structured data for analysis
         if tool_name == "fetch_llm_benchmarks":
-            # Filter to only models with valid quality_index (not None, not 0, numeric)
+            # Extract quality from evaluations.artificial_analysis_intelligence_index
+            def get_quality(item):
+                evals = item.get("evaluations", {})
+                if isinstance(evals, dict):
+                    return evals.get("artificial_analysis_intelligence_index")
+                return None
+            
+            def get_provider(item):
+                creator = item.get("model_creator", {})
+                if isinstance(creator, dict):
+                    return creator.get("name", "")
+                return ""
+            
+            def get_pricing(item):
+                pricing = item.get("pricing", {})
+                if isinstance(pricing, dict):
+                    return pricing.get("price_1m_input_tokens"), pricing.get("price_1m_output_tokens")
+                return None, None
+            
+            # Filter to only models with valid quality score
             valid_items = []
             for item in items:
-                qi = item.get("quality_index")
-                # Must have a real quality index (number > 0)
+                qi = get_quality(item)
                 if qi is not None and isinstance(qi, (int, float)) and qi > 0:
                     valid_items.append(item)
             
-            # If no valid items, fall back to all items
             if not valid_items:
-                valid_items = items
+                valid_items = items  # Fallback
             
-            lines = [f"## LLM Benchmarks (Artificial Analysis Data) - {len(valid_items)} models with quality scores\n"]
-            lines.append("**Sorted by quality_index (higher = better). Data from Artificial Analysis API.**\n")
-            lines.append("| # | Model | Provider | Quality | Speed (tok/s) | Input $/1M | Output $/1M | Context |")
-            lines.append("|---|-------|----------|---------|---------------|------------|-------------|---------|")
+            lines = [f"## LLM Benchmarks (Artificial Analysis) - {len(valid_items)} models\n"]
+            lines.append("**Sorted by Intelligence Index (higher = better)**\n")
+            lines.append("| # | Model | Provider | Quality | Speed (tok/s) | Input $/1M | Output $/1M |")
+            lines.append("|---|-------|----------|---------|---------------|------------|-------------|")
             
-            # Sort by quality_index descending (only valid numeric values now)
-            sorted_items = sorted(valid_items, key=lambda x: float(x.get("quality_index") or 0), reverse=True)
+            # Sort by quality descending
+            sorted_items = sorted(valid_items, key=lambda x: float(get_quality(x) or 0), reverse=True)
             
             for rank, item in enumerate(sorted_items[:30], 1):  # Show top 30
-                name = item.get("name") or item.get("title") or "Unknown"
-                # Extract provider from model_creator if available, else from provider field
-                creator = item.get("model_creator")
-                if isinstance(creator, dict):
-                    provider = creator.get("name") or ""
-                else:
-                    provider = item.get("provider") or item.get("creator") or ""
+                name = item.get("name") or "Unknown"
+                provider = get_provider(item)
                 
-                quality = item.get("quality_index")
-                quality_str = f"{quality:.1f}" if isinstance(quality, float) else str(quality) if quality else "N/A"
+                quality = get_quality(item)
+                quality_str = f"{quality:.1f}" if isinstance(quality, (int, float)) else "N/A"
                 
-                speed = item.get("output_speed") or item.get("speed")
-                speed_str = f"{speed:.0f}" if isinstance(speed, (int, float)) else str(speed) if speed else "N/A"
+                speed = item.get("median_output_tokens_per_second")
+                speed_str = f"{speed:.0f}" if isinstance(speed, (int, float)) else "N/A"
                 
-                input_cost = item.get("input_cost")
-                output_cost = item.get("output_cost")
+                input_cost, output_cost = get_pricing(item)
                 input_cost_str = f"${input_cost:.2f}" if isinstance(input_cost, (int, float)) else "N/A"
                 output_cost_str = f"${output_cost:.2f}" if isinstance(output_cost, (int, float)) else "N/A"
                 
-                context = item.get("context_length") or item.get("context")
-                context_str = f"{context:,}" if isinstance(context, int) else str(context) if context else "N/A"
-                
-                lines.append(f"| {rank} | {name} | {provider} | {quality_str} | {speed_str} | {input_cost_str} | {output_cost_str} | {context_str} |")
+                lines.append(f"| {rank} | {name} | {provider} | {quality_str} | {speed_str} | {input_cost_str} | {output_cost_str} |")
             
             lines.append("\n**Analysis tips:**")
-            lines.append("- To find top model per lab: group by Provider, pick highest Quality for each")
-            lines.append("- Major labs: OpenAI, Anthropic, Google, Meta, Mistral, xAI")
-            lines.append("- For charts, use the Quality scores as data values")
+            lines.append("- Top model per provider: find first occurrence of each provider in the list")
+            lines.append("- Major providers: OpenAI, Anthropic, Google, Meta, Mistral, xAI")
             
             return "\n".join(lines)
         
