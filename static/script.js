@@ -4408,18 +4408,21 @@ function renderAgentExpMarkdown(markdown) {
     const modelRefs = [];
     let badgeId = 0;
 
-    // Replace model tags with inline badges
-    sanitized = sanitized.replace(/\[\[models?:([^\]]+)\]\]/gi, (match, content) => {
-        const parts = content.trim().split(':');
-        if (parts.length >= 2) {
-            const source = parts[0].trim();
-            const modelName = parts.slice(1).join(':').trim();
-            modelRefs.push({ source, name: modelName, id: `agent-badge-${badgeId}` });
-            badgeId++;
-            // Create inline badge
-            return `<span class="agent-model-badge" id="agent-badge-${badgeId - 1}" data-source="${escapeHtml(source)}" data-model-name="${escapeHtml(modelName)}">🤖 ${escapeHtml(modelName)}</span>`;
-        }
-        return match;
+    // Replace model tags with inline badges - use non-greedy match to handle brackets
+    sanitized = sanitized.replace(/\[\[models?:([\s\S]*?)\]\]/gi, (match, inner) => {
+        // Split only on first colon to preserve colons in model name
+        const colonIdx = inner.indexOf(':');
+        if (colonIdx === -1) return match;
+
+        const source = inner.substring(0, colonIdx).trim();
+        const modelName = inner.substring(colonIdx + 1).trim();
+
+        if (!source || !modelName) return match;
+
+        modelRefs.push({ source, name: modelName, id: `agent-badge-${badgeId}` });
+        badgeId++;
+        // Create inline badge
+        return `<span class="agent-model-badge" id="agent-badge-${badgeId - 1}" data-source="${escapeHtml(source)}" data-model-name="${escapeHtml(modelName)}">🤖 ${escapeHtml(modelName)}</span>`;
     });
 
     // Render markdown
@@ -4619,10 +4622,20 @@ function renderAgentCharts(container) {
                     },
                     tooltip: isScatter ? {
                         callbacks: {
+                            title: (ctxArr) => {
+                                const point = ctxArr[0]?.raw;
+                                return point?.name || point?.label || point?.title || '';
+                            },
                             label: (ctx) => {
                                 const point = ctx.raw;
-                                const name = point.name || '';
-                                return name ? `${name}: (${point.x}, ${point.y})` : `(${point.x}, ${point.y})`;
+                                const name = point.name || point.label || point.title || '';
+                                const xLabel = config.options?.scales?.x?.title?.text || 'X';
+                                const yLabel = config.options?.scales?.y?.title?.text || 'Y';
+                                const lines = [];
+                                if (name) lines.push(name);
+                                lines.push(`${xLabel}: ${point.x}`);
+                                lines.push(`${yLabel}: ${point.y}`);
+                                return lines;
                             }
                         }
                     } : {}

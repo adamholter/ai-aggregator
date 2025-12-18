@@ -953,28 +953,62 @@
     let collectedModelRefs = [];
     let llmDataCache = null;
 
-    // Fetch LLM data for tooltips
-    async function fetchLLMData() {
-      if (llmDataCache) return llmDataCache;
+    // Multi-source model data cache
+    let modelDataCache = {
+      llms: null,
+      'text-to-image': null,
+      fal: null
+    };
+
+    // Fetch model data from a specific source
+    async function fetchModelData(source) {
+      if (modelDataCache[source]) return modelDataCache[source];
+
+      const apiMap = {
+        'llms': '/api/llms',
+        'text-to-image': '/api/text-to-image',
+        'fal': '/api/fal-models'
+      };
+
+      const endpoint = apiMap[source];
+      if (!endpoint) return [];
+
       try {
-        const res = await fetch('/api/llms');
+        const res = await fetch(endpoint);
         const data = await res.json();
-        llmDataCache = data.data || [];
-        return llmDataCache;
+        // Handle different response structures
+        const models = data.data || data.models || data || [];
+        modelDataCache[source] = Array.isArray(models) ? models : [];
+        return modelDataCache[source];
       } catch (e) {
-        console.error('Failed to fetch LLM data:', e);
+        console.error(`Failed to fetch ${source} data:`, e);
         return [];
       }
     }
 
-    // Find model in LLM data
-    function findModelData(modelName) {
-      if (!llmDataCache) return null;
+    // Fetch LLM data (backwards compatible)
+    async function fetchLLMData() {
+      return fetchModelData('llms');
+    }
+
+    // Find model in data by name, optionally filtered by source
+    function findModelData(modelName, sourceHint) {
       const nameLower = modelName.toLowerCase();
-      return llmDataCache.find(m => {
-        const n = (m.name || '').toLowerCase();
-        return n === nameLower || n.includes(nameLower) || nameLower.includes(n);
-      });
+
+      // Determine which sources to search
+      const sources = sourceHint ? [sourceHint] : Object.keys(modelDataCache);
+
+      for (const source of sources) {
+        const cache = modelDataCache[source];
+        if (!cache) continue;
+
+        const found = cache.find(m => {
+          const n = (m.name || m.title || m.id || '').toLowerCase();
+          return n === nameLower || n.includes(nameLower) || nameLower.includes(n);
+        });
+        if (found) return found;
+      }
+      return null;
     }
 
     // Build tooltip HTML for a model
@@ -1038,17 +1072,20 @@
       const refs = [];
       let badgeId = 0;
 
-      // Parse [[model:source:name]] tags into styled badges and collect refs
-      let processed = content.replace(/\[\[models?:([^\]]+)\]\]/gi, (match, inner) => {
-        const parts = inner.split(':');
-        if (parts.length >= 2) {
-          const source = parts[0].trim();
-          const modelName = parts.slice(1).join(':').trim();
-          refs.push({ source, name: modelName, id: `model-badge-${badgeId}` });
-          badgeId++;
-          return `<span class="model-badge" id="model-badge-${badgeId - 1}" data-model-name="${escapeHtml(modelName)}">🤖 ${escapeHtml(modelName)}</span>`;
-        }
-        return match;
+      // Parse [[model:source:name]] tags - use non-greedy match to handle brackets in names
+      let processed = content.replace(/\[\[models?:([\s\S]*?)\]\]/gi, (match, inner) => {
+        // Split only on first colon to preserve colons in model name
+        const colonIdx = inner.indexOf(':');
+        if (colonIdx === -1) return match;
+
+        const source = inner.substring(0, colonIdx).trim();
+        const modelName = inner.substring(colonIdx + 1).trim();
+
+        if (!source || !modelName) return match;
+
+        refs.push({ source, name: modelName, id: `model-badge-${badgeId}` });
+        badgeId++;
+        return `<span class="model-badge" id="model-badge-${badgeId - 1}" data-source="${escapeHtml(source)}" data-model-name="${escapeHtml(modelName)}">🤖 ${escapeHtml(modelName)}</span>`;
       });
 
       let html = '';
@@ -1135,10 +1172,21 @@
               },
               tooltip: isScatter ? {
                 callbacks: {
+                  title: (ctxArr) => {
+                    // Show name/label as title for better visibility
+                    const point = ctxArr[0]?.raw;
+                    return point?.name || point?.label || point?.title || '';
+                  },
                   label: (ctx) => {
                     const point = ctx.raw;
-                    const name = point.name || '';
-                    return name ? `${name}: (${point.x}, ${point.y})` : `(${point.x}, ${point.y})`;
+                    const name = point.name || point.label || point.title || '';
+                    const xLabel = config.options?.scales?.x?.title?.text || 'X';
+                    const yLabel = config.options?.scales?.y?.title?.text || 'Y';
+                    const lines = [];
+                    if (name) lines.push(name);
+                    lines.push(`${xLabel}: ${point.x}`);
+                    lines.push(`${yLabel}: ${point.y}`);
+                    return lines;
                   }
                 }
               } : {}
@@ -1195,13 +1243,17 @@
         // Store current toolSteps for this message
         traceHistory.push({ msgIndex, traces: [...toolSteps] });
 
-        // If we have model refs, fetch data and add carousel + tooltips
+        // If we have model refs, fetch data from all unique sources
         if (refs.length > 0) {
-          const llmData = await fetchLLMData();
+          // Get unique sources referenced
+          const uniqueSources = [...new Set(refs.map(r => r.source))];
+
+          // Fetch data for all referenced sources
+          await Promise.all(uniqueSources.map(src => fetchModelData(src)));
 
           // Build all cards first, then filter out empty ones
           const cards = refs.map(ref => {
-            const model = findModelData(ref.name);
+            const model = findModelData(ref.name, ref.source);
             return buildModelCard(model, ref.source);
           }).filter(card => card && card.trim() !== '');
 
@@ -1227,7 +1279,7 @@
           refs.forEach(ref => {
             const badge = bubble.querySelector(`#${ref.id}`);
             if (badge) {
-              const model = findModelData(ref.name);
+              const model = findModelData(ref.name, ref.source);
               if (model) {
                 const tooltip = document.createElement('div');
                 tooltip.className = 'model-tooltip';
