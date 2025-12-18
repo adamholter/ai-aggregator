@@ -4408,22 +4408,69 @@ function renderAgentExpMarkdown(markdown) {
     const modelRefs = [];
     let badgeId = 0;
 
-    // Replace model tags with inline badges - use non-greedy match to handle brackets
-    sanitized = sanitized.replace(/\[\[models?:([\s\S]*?)\]\]/gi, (match, inner) => {
-        // Split only on first colon to preserve colons in model name
-        const colonIdx = inner.indexOf(':');
-        if (colonIdx === -1) return match;
+    // Custom bracket-aware parser for [[model:source:name]] tags
+    // Handles model names with brackets like FLUX.2 [max]
+    function parseModelTags(text) {
+        let result = '';
+        let i = 0;
+        while (i < text.length) {
+            // Check for [[model: or [[models:
+            if ((text.slice(i, i + 8) === '[[model:' || text.slice(i, i + 9) === '[[models:')) {
+                const prefixLen = text.slice(i, i + 9) === '[[models:' ? 9 : 8;
+                const innerStart = i + prefixLen;
+                let j = innerStart;
+                let bracketCount = 0;
+                let found = false;
 
-        const source = inner.substring(0, colonIdx).trim();
-        const modelName = inner.substring(colonIdx + 1).trim();
+                // Scan forward, tracking nested brackets
+                while (j < text.length) {
+                    if (text[j] === '[') {
+                        bracketCount++;
+                    } else if (text[j] === ']') {
+                        if (bracketCount > 0) {
+                            bracketCount--;
+                        } else if (text[j + 1] === ']') {
+                            // Found closing ]] while not inside nested brackets
+                            const inner = text.slice(innerStart, j);
+                            const colonIdx = inner.indexOf(':');
 
-        if (!source || !modelName) return match;
+                            if (colonIdx !== -1) {
+                                const source = inner.substring(0, colonIdx).trim();
+                                const modelName = inner.substring(colonIdx + 1).trim();
 
-        modelRefs.push({ source, name: modelName, id: `agent-badge-${badgeId}` });
-        badgeId++;
-        // Create inline badge
-        return `<span class="agent-model-badge" id="agent-badge-${badgeId - 1}" data-source="${escapeHtml(source)}" data-model-name="${escapeHtml(modelName)}">🤖 ${escapeHtml(modelName)}</span>`;
-    });
+                                if (source && modelName) {
+                                    modelRefs.push({ source, name: modelName, id: `agent-badge-${badgeId}` });
+                                    result += `<span class="agent-model-badge" id="agent-badge-${badgeId}" data-source="${escapeHtml(source)}" data-model-name="${escapeHtml(modelName)}">🤖 ${escapeHtml(modelName)}</span>`;
+                                    badgeId++;
+                                    i = j + 2; // Skip past ]]
+                                    found = true;
+                                    break;
+                                }
+                            }
+                            // Invalid format, output as-is
+                            result += text.slice(i, j + 2);
+                            i = j + 2;
+                            found = true;
+                            break;
+                        }
+                    }
+                    j++;
+                }
+
+                if (!found) {
+                    // No closing ]] found, output character and continue
+                    result += text[i];
+                    i++;
+                }
+            } else {
+                result += text[i];
+                i++;
+            }
+        }
+        return result;
+    }
+
+    sanitized = parseModelTags(sanitized);
 
     // Render markdown
     let html = '';
