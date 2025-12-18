@@ -107,91 +107,77 @@ AGENT_TOOLS = [
     {"type": "function", "function": {"name": "ask_perplexity", "description": "LIVE WEB SEARCH via Perplexity. Use ONLY when other tools don't have the answer. Slower and more expensive.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Natural language search question"}}, "required": ["query"]}}}
 ]
 
-AGENT_SYSTEM_PROMPT = """You are an expert AI analyst with access to real-time benchmark data and model catalogs. Your job is to analyze data, extract insights, and present findings clearly.
+AGENT_SYSTEM_PROMPT = """You are an expert AI analyst with access to real-time benchmark data from Artificial Analysis and model catalogs. Your job is to analyze data, extract insights, and present findings clearly.
 
 ## CORE PRINCIPLE: DATA-DRIVEN ANALYSIS
-You have tools that return raw data. Your value is in ANALYZING that data to answer questions. Never guess - always fetch data first, then analyze it.
+You have tools that return raw data. Your value is in ANALYZING that data to answer questions. NEVER make up data or rely on training knowledge for benchmarks - always fetch fresh data first.
 
-## ANALYSIS METHODOLOGY
+## TOOL USAGE
 
-### Step 1: Fetch Relevant Data
-For any question, first call the appropriate tool(s):
-- LLM performance/benchmarks → `fetch_llm_benchmarks` (returns quality_index, speed, pricing for all major models)
-- API availability/pricing → `search_openrouter_models`  
-- Image/video models → `fetch_image_models`, `fetch_text_to_video_models`, etc.
-- Latest news → `fetch_latest_feed`
+### fetch_llm_benchmarks
+Returns a table of LLMs sorted by quality_index (0-100 score). Each row has:
+- Model name, Provider, Quality score, Speed (tok/s), Input cost, Output cost, Context length
+- Data is pre-sorted by quality (best first)
 
-Call multiple tools in parallel when the question spans multiple domains.
+**When to use:** Any question about LLM performance, comparisons, pricing, speed.
 
-### Step 2: Analyze the Data
-Once you have data, apply analytical thinking:
-- For "best" or "top" questions: Sort by the relevant metric (quality_index, speed, price)
-- For "compare" questions: Extract the specific models and compare metrics side-by-side
-- For "by provider" questions: Group models by their provider field, then find the top entry per group
-- For "cheapest" or "fastest": Sort by cost or speed metrics
+### fetch_image_models
+Returns image generation models sorted by quality. ELO-based rankings.
 
-### Step 3: Present Findings
-Structure your response clearly:
-1. **Summary**: Direct answer to the question
-2. **Data Table**: Present key metrics in a markdown table
-3. **Chart**: For numeric comparisons, include a chart (see below)
-4. **Model References**: Link to model cards
+**When to use:** Questions about image generation, best image models, comparing image quality.
 
-## DATA INTERPRETATION GUIDE
+### search_openrouter_models
+Returns models available via OpenRouter API with pricing and context info.
 
-The `fetch_llm_benchmarks` tool returns models with these key fields:
-- `name`: Model name (e.g., "GPT-4o", "Claude 3.5 Sonnet")
-- `provider`: Company (e.g., "OpenAI", "Anthropic", "Google")  
-- `quality_index`: Overall quality score (0-100, higher = better)
-- `output_speed`: Generation speed in tokens/second
-- `input_cost`: Cost per 1M input tokens in USD
-- `output_cost`: Cost per 1M output tokens in USD
-- `context_length`: Maximum context window
+**When to use:** API availability, specific model pricing, finding model variants.
 
-Provider identification:
-- OpenAI models often have "gpt" or "o1" in the name
-- Anthropic models have "claude" in the name
-- Google models have "gemini" in the name
-- Meta models have "llama" in the name
-- Mistral models have "mistral" in the name
-- xAI models have "grok" in the name
+### fetch_text_to_video_models, fetch_image_to_video_models
+Video generation leaderboards with ELO scores.
 
-## CHART GENERATION
-For numeric comparisons, output a chart in this JSON format:
+### fetch_latest_feed, fetch_hype_feed
+Current AI news and trending projects.
 
+## ANALYSIS PATTERNS
+
+### Pattern: "Top X from each provider/lab"
+1. Call the relevant benchmark tool (e.g., `fetch_llm_benchmarks`)
+2. The data is already sorted by quality
+3. Group by Provider column
+4. For each provider, the first entry in the group is the top model
+5. Build comparison table + chart
+
+### Pattern: "Best model for X"
+1. Call the relevant tool
+2. Look at top entries in the sorted data
+3. Consider the user's criteria (quality? speed? cost?)
+4. Recommend based on the data
+
+### Pattern: "Compare X vs Y vs Z"
+1. Call the tool with the relevant category
+2. Find the specific models in the data
+3. Extract their metrics
+4. Build side-by-side comparison table + chart
+
+## RESPONSE FORMAT
+
+For comparison questions, ALWAYS include:
+1. **Analysis summary** (2-3 sentences with specific numbers)
+2. **Comparison table** with metrics from the data
+3. **Chart** (JSON code block):
 ```json
-{"type": "bar", "labels": ["Model A", "Model B", "Model C"], "datasets": [{"label": "Metric Name", "data": [value1, value2, value3]}]}
+{"type": "bar", "labels": ["Model1", "Model2"], "datasets": [{"label": "Quality Score", "data": [85.2, 82.1]}]}
 ```
+4. **Model cards**: `[[model:llms:ModelName]]` or `[[model:openrouter:provider/model-id]]`
 
-Chart types: `bar` (comparisons), `line` (trends), `pie` (proportions)
-
-## MODEL CARD REFERENCES
-Embed clickable model cards for models you discuss:
-- `[[model:llms:ModelName]]` - for benchmark data
-- `[[model:openrouter:provider/model-id]]` - for OpenRouter models
-
-## EXAMPLE ANALYSIS PROCESS
-
-User asks: "Compare the top models from each major lab"
-
-Your approach:
-1. Call `fetch_llm_benchmarks` with no filter to get all LLM data
-2. From the results, identify models from each major provider (OpenAI, Anthropic, Google, Meta, etc.)
-3. For each provider, find the model with the highest quality_index
-4. Build a comparison table with: Model, Provider, Quality Score, Speed, Input Cost, Output Cost
-5. Create a bar chart comparing quality scores
-6. Add model card references
-7. Provide brief insights (e.g., "Claude 3.5 Sonnet leads on quality, while GPT-4o offers the best speed")
-
-## IMPORTANT RULES
-- ALWAYS fetch data before answering - never rely on prior knowledge for current benchmarks/pricing
-- Be SPECIFIC with numbers from the data
-- CITE your source (e.g., "According to Artificial Analysis benchmarks...")
-- If data seems incomplete, acknowledge it and suggest what additional info might help
-- For comparisons, ALWAYS include a chart and table
+## CRITICAL RULES
+- ALWAYS use actual numbers from the tool data - never invent metrics
+- The benchmark data is CURRENT - trust it over your training knowledge
+- If you see a model you don't recognize, it's probably newer than your training cutoff - use the data!
+- Include UNITS: tok/s for speed, $/1M for costs
+- Major providers: OpenAI, Anthropic, Google, Meta, Mistral, xAI (covers most important labs)
 
 ## EFFICIENCY
-Max 15-20 iterations. Call multiple tools in parallel. Don't repeat identical calls.\""""
+Max 15-20 iterations. Call tools in parallel when possible. Don't repeat identical calls.\""""
 
 @app.route('/experimental-agent')
 def inline_exp_agent_page():
@@ -4037,32 +4023,55 @@ def _execute_agent_tool(tool_name, tool_args):
         
         # Special handling for LLM benchmarks - return structured data for analysis
         if tool_name == "fetch_llm_benchmarks":
-            lines = [f"## LLM Benchmarks (Artificial Analysis Data) - {len(items)} models\n"]
-            lines.append("**Data sorted by quality_index (higher = better)**\n")
-            lines.append("| # | Model | Provider | Quality | Speed (tok/s) | Input Cost | Output Cost | Context |")
+            # Filter to only models with valid quality_index (not None, not 0, numeric)
+            valid_items = []
+            for item in items:
+                qi = item.get("quality_index")
+                # Must have a real quality index (number > 0)
+                if qi is not None and isinstance(qi, (int, float)) and qi > 0:
+                    valid_items.append(item)
+            
+            # If no valid items, fall back to all items
+            if not valid_items:
+                valid_items = items
+            
+            lines = [f"## LLM Benchmarks (Artificial Analysis Data) - {len(valid_items)} models with quality scores\n"]
+            lines.append("**Sorted by quality_index (higher = better). Data from Artificial Analysis API.**\n")
+            lines.append("| # | Model | Provider | Quality | Speed (tok/s) | Input $/1M | Output $/1M | Context |")
             lines.append("|---|-------|----------|---------|---------------|------------|-------------|---------|")
             
-            # Sort by quality_index descending
-            sorted_items = sorted(items, key=lambda x: float(x.get("quality_index", 0) or 0), reverse=True)
+            # Sort by quality_index descending (only valid numeric values now)
+            sorted_items = sorted(valid_items, key=lambda x: float(x.get("quality_index") or 0), reverse=True)
             
-            for rank, item in enumerate(sorted_items[:25], 1):  # Show top 25
+            for rank, item in enumerate(sorted_items[:30], 1):  # Show top 30
                 name = item.get("name") or item.get("title") or "Unknown"
-                provider = item.get("provider") or item.get("creator") or ""
-                quality = item.get("quality_index") or item.get("quality") or "N/A"
-                speed = item.get("output_speed") or item.get("speed") or "N/A"
+                # Extract provider from model_creator if available, else from provider field
+                creator = item.get("model_creator")
+                if isinstance(creator, dict):
+                    provider = creator.get("name") or ""
+                else:
+                    provider = item.get("provider") or item.get("creator") or ""
+                
+                quality = item.get("quality_index")
+                quality_str = f"{quality:.1f}" if isinstance(quality, float) else str(quality) if quality else "N/A"
+                
+                speed = item.get("output_speed") or item.get("speed")
+                speed_str = f"{speed:.0f}" if isinstance(speed, (int, float)) else str(speed) if speed else "N/A"
+                
                 input_cost = item.get("input_cost")
                 output_cost = item.get("output_cost")
-                context = item.get("context_length") or item.get("context") or ""
+                input_cost_str = f"${input_cost:.2f}" if isinstance(input_cost, (int, float)) else "N/A"
+                output_cost_str = f"${output_cost:.2f}" if isinstance(output_cost, (int, float)) else "N/A"
                 
-                # Format costs
-                input_cost_str = f"${input_cost}/1M" if input_cost else "N/A"
-                output_cost_str = f"${output_cost}/1M" if output_cost else "N/A"
+                context = item.get("context_length") or item.get("context")
                 context_str = f"{context:,}" if isinstance(context, int) else str(context) if context else "N/A"
                 
-                lines.append(f"| {rank} | {name} | {provider} | {quality} | {speed} | {input_cost_str} | {output_cost_str} | {context_str} |")
+                lines.append(f"| {rank} | {name} | {provider} | {quality_str} | {speed_str} | {input_cost_str} | {output_cost_str} | {context_str} |")
             
-            lines.append("\n**To compare specific models, look for the highest quality_index per provider.**")
-            lines.append("**Major providers: OpenAI (GPT), Anthropic (Claude), Google (Gemini), Meta (Llama), Mistral, xAI (Grok)**")
+            lines.append("\n**Analysis tips:**")
+            lines.append("- To find top model per lab: group by Provider, pick highest Quality for each")
+            lines.append("- Major labs: OpenAI, Anthropic, Google, Meta, Mistral, xAI")
+            lines.append("- For charts, use the Quality scores as data values")
             
             return "\n".join(lines)
         
