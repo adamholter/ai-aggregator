@@ -754,13 +754,16 @@
 
         let text = block.textContent.trim();
 
-        // Try to extract JSON from the text
-        const jsonMatch = text.match(/\{[\s\S]*"type"[\s\S]*"labels"[\s\S]*"datasets"[\s\S]*\}/);
+        // Try to extract JSON - more flexible regex that works with or without labels
+        const jsonMatch = text.match(/\{[\s\S]*"type"[\s\S]*"datasets"[\s\S]*\}/);
         if (!jsonMatch) return;
 
         try {
           const config = JSON.parse(jsonMatch[0]);
-          if (!config.type || !config.labels || !config.datasets) return;
+          if (!config.type || !config.datasets) return;
+          
+          // For non-scatter charts, labels are required
+          if (config.type !== 'scatter' && !config.labels) return;
 
           // Create chart container with B&W aesthetic
           const chartContainer = document.createElement('div');
@@ -782,48 +785,67 @@
             'rgba(100, 100, 100, 0.8)',
             'rgba(140, 140, 140, 0.8)',
             'rgba(180, 180, 180, 0.8)',
-            'rgba(200, 200, 200, 0.8)',
-            'rgba(220, 220, 220, 0.8)',
-            'rgba(240, 240, 240, 0.8)'
+            'rgba(200, 200, 200, 0.8)'
           ];
 
-          // Render chart with grayscale theme
-          new Chart(canvas.getContext('2d'), {
-            type: config.type,
-            data: {
-              labels: config.labels,
-              datasets: config.datasets.map((ds, i) => ({
-                label: ds.label || `Dataset ${i + 1}`,
-                data: ds.data,
-                backgroundColor: ds.backgroundColor || grayscaleColors,
-                borderColor: ds.borderColor || 'rgba(0, 0, 0, 0.3)',
-                borderWidth: 1
-              }))
-            },
-            options: {
-              responsive: true,
-              maintainAspectRatio: true,
-              plugins: {
-                legend: {
-                  display: config.datasets.length > 1,
-                  labels: { color: 'rgb(100, 100, 100)', font: { family: 'Inter, system-ui, sans-serif' } }
-                }
+          // Build chart options based on type
+          const chartType = config.type;
+          const isScatter = chartType === 'scatter';
+          
+          const chartData = {
+            labels: config.labels || [],
+            datasets: config.datasets.map((ds, i) => ({
+              label: ds.label || `Dataset ${i + 1}`,
+              data: ds.data,
+              backgroundColor: ds.backgroundColor || grayscaleColors[i % grayscaleColors.length],
+              borderColor: ds.borderColor || 'rgba(0, 0, 0, 0.3)',
+              borderWidth: 1,
+              pointRadius: isScatter ? 6 : undefined,
+              pointHoverRadius: isScatter ? 8 : undefined
+            }))
+          };
+
+          const chartOptions = {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+              legend: {
+                display: config.datasets.length > 1,
+                labels: { color: 'rgb(100, 100, 100)', font: { family: 'Inter, system-ui, sans-serif' } }
               },
-              scales: config.type === 'bar' || config.type === 'line' ? {
-                y: {
-                  beginAtZero: true,
-                  ticks: { color: 'rgb(100, 100, 100)' },
-                  grid: { color: 'rgba(0, 0, 0, 0.1)' }
-                },
-                x: {
-                  ticks: { color: 'rgb(100, 100, 100)' },
-                  grid: { color: 'rgba(0, 0, 0, 0.05)' }
+              tooltip: isScatter ? {
+                callbacks: {
+                  label: (ctx) => {
+                    const point = ctx.raw;
+                    const name = point.name || '';
+                    return name ? `${name}: (${point.x}, ${point.y})` : `(${point.x}, ${point.y})`;
+                  }
                 }
               } : {}
-            }
+            },
+            scales: (chartType === 'bar' || chartType === 'line' || isScatter) ? {
+              y: {
+                beginAtZero: !isScatter,
+                ticks: { color: 'rgb(100, 100, 100)' },
+                grid: { color: 'rgba(0, 0, 0, 0.1)' },
+                title: isScatter && config.options?.scales?.y?.title ? config.options.scales.y.title : undefined
+              },
+              x: {
+                ticks: { color: 'rgb(100, 100, 100)' },
+                grid: { color: 'rgba(0, 0, 0, 0.05)' },
+                title: isScatter && config.options?.scales?.x?.title ? config.options.scales.x.title : undefined
+              }
+            } : {}
+          };
+
+          // Render chart
+          new Chart(canvas.getContext('2d'), {
+            type: chartType,
+            data: chartData,
+            options: chartOptions
           });
 
-          console.log('Chart rendered successfully:', config.type);
+          console.log('Chart rendered successfully:', chartType);
         } catch (e) {
           console.log('Chart parse error:', e.message);
         }
