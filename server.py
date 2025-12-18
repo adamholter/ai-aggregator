@@ -181,8 +181,17 @@ Max 15-20 iterations. Call tools in parallel when possible. Don't repeat identic
 
 @app.route('/experimental-agent')
 def inline_exp_agent_page():
-    from flask import send_from_directory
-    return send_from_directory('static', 'experimental-agent.html')
+    # Manually read and serve with no-cache headers
+    import os
+    from flask import Response
+    path = os.path.join(os.path.dirname(__file__), 'static', 'experimental-agent.html')
+    with open(path, 'r', encoding='utf-8') as f:
+        content = f.read()
+    response = Response(content, mimetype='text/html')
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
 
 @app.route('/api/experimental-agent', methods=['POST'])
 def inline_exp_agent_api():
