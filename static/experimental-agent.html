@@ -991,9 +991,23 @@
       return fetchModelData('llms');
     }
 
-    // Find model in data by name, optionally filtered by source
+    // Normalize string for fuzzy matching - remove special chars, lowercase
+    function normalizeForMatch(str) {
+      return (str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    }
+
+    // Extract model name portion (after last /)
+    function extractModelPart(search) {
+      const parts = search.split('/');
+      return parts[parts.length - 1];
+    }
+
+    // Find model in data by name, slug, or ID - with fuzzy matching
     function findModelData(modelName, sourceHint) {
-      const nameLower = modelName.toLowerCase();
+      const searchNorm = normalizeForMatch(modelName);
+      const searchLower = modelName.toLowerCase();
+      const modelPart = extractModelPart(modelName);
+      const modelPartNorm = normalizeForMatch(modelPart);
 
       // Determine which sources to search
       const sources = sourceHint ? [sourceHint] : Object.keys(modelDataCache);
@@ -1003,8 +1017,34 @@
         if (!cache) continue;
 
         const found = cache.find(m => {
-          const n = (m.name || m.title || m.id || '').toLowerCase();
-          return n === nameLower || n.includes(nameLower) || nameLower.includes(n);
+          // Check all possible name fields
+          const name = (m.name || '').toLowerCase();
+          const title = (m.title || '').toLowerCase();
+          const slug = (m.slug || '').toLowerCase();
+          const id = (m.id || '').toLowerCase();
+
+          // Exact or contains match on original values
+          if (name && (name === searchLower || name.includes(searchLower) || searchLower.includes(name))) return true;
+          if (title && (title === searchLower || title.includes(searchLower) || searchLower.includes(title))) return true;
+          if (slug && (slug === searchLower || slug.includes(searchLower) || searchLower.includes(slug))) return true;
+          if (id && (id === searchLower || id.includes(searchLower) || searchLower.includes(id))) return true;
+
+          // Normalized fuzzy match (ignores dashes, slashes, underscores, etc.)
+          const nameNorm = normalizeForMatch(m.name);
+          const titleNorm = normalizeForMatch(m.title);
+          const slugNorm = normalizeForMatch(m.slug);
+
+          // Full search normalized match
+          if (searchNorm && nameNorm && (nameNorm.includes(searchNorm) || searchNorm.includes(nameNorm))) return true;
+          if (searchNorm && titleNorm && (titleNorm.includes(searchNorm) || searchNorm.includes(titleNorm))) return true;
+          if (searchNorm && slugNorm && (slugNorm.includes(searchNorm) || searchNorm.includes(slugNorm))) return true;
+
+          // Model part only match (e.g., "nano-banana-pro" from "google/nano-banana-pro")
+          if (modelPartNorm && nameNorm && (nameNorm.includes(modelPartNorm) || modelPartNorm.includes(nameNorm))) return true;
+          if (modelPartNorm && titleNorm && (titleNorm.includes(modelPartNorm) || modelPartNorm.includes(titleNorm))) return true;
+          if (modelPartNorm && slugNorm && (slugNorm.includes(modelPartNorm) || modelPartNorm.includes(slugNorm))) return true;
+
+          return false;
         });
         if (found) return found;
       }
