@@ -4827,6 +4827,18 @@ body {
     justify-content: space-between;
     font-size: 0.8rem;
     color: var(--text-color);
+    margin-bottom: 8px;
+}
+
+.carousel-card-link {
+    display: block;
+    font-size: 0.8rem;
+    color: #1a73e8;
+    text-decoration: none;
+}
+
+.carousel-card-link:hover {
+    text-decoration: underline;
 }
 
 .mini-card-header {

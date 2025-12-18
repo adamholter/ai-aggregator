@@ -4521,22 +4521,25 @@ function buildAgentCarousel(refs) {
         return `<div class="agent-carousel-card" style="border-left: 4px solid ${accent}">
             <div class="carousel-card-name">🤖 ${escapeHtml(name)}</div>
             <div class="carousel-card-provider">${escapeHtml(provider)}</div>
-            <div class="carousel-card-stat"><span>OUTPUT SPEED</span><span>${speed ? Math.round(speed).toLocaleString() + ' tok/s' : 'N/A'}</span></div>
+            <div class="carousel-card-stat"><span>OUTPUT SPEED</span><span>${speed ? Math.round(speed).toLocaleString() + ' tokens/s' : 'N/A'}</span></div>
             <div class="carousel-card-pricing">
                 <span>Input <strong>$${pricing.price_1m_input_tokens?.toFixed(0) || 'N/A'}</strong></span>
                 <span>Output <strong>$${pricing.price_1m_output_tokens?.toFixed(0) || 'N/A'}</strong></span>
             </div>
+            <a class="carousel-card-link" href="#" onclick="event.preventDefault()">View Full Card</a>
         </div>`;
-    }).filter(Boolean).join('');
+    }).filter(c => c && c.trim());
 
-    if (!cards) return '';
+    if (cards.length === 0) return '';
 
-    return `<div class="agent-model-section">
+    const carouselId = 'agent-carousel-' + Date.now();
+
+    return `<div class="agent-model-section" id="${carouselId}">
         <h4>Model Cards</h4>
         <div class="agent-carousel-wrapper">
-            <button class="agent-carousel-nav" onclick="this.nextElementSibling.scrollBy({left:-220,behavior:'smooth'})">‹</button>
-            <div class="agent-carousel-track">${cards}</div>
-            <button class="agent-carousel-nav" onclick="this.previousElementSibling.scrollBy({left:220,behavior:'smooth'})">›</button>
+            <button class="agent-carousel-nav" onclick="document.querySelector('#${carouselId} .agent-carousel-track').scrollBy({left:-220,behavior:'smooth'})">‹</button>
+            <div class="agent-carousel-track">${cards.join('')}</div>
+            <button class="agent-carousel-nav" onclick="document.querySelector('#${carouselId} .agent-carousel-track').scrollBy({left:220,behavior:'smooth'})">›</button>
         </div>
     </div>`;
 }

@@ -436,12 +436,12 @@
       position: relative;
       transition: all 0.15s ease;
     }
-    
+
     .model-badge:hover {
       background: #d0e8fc;
       border-color: #1a73e8;
     }
-    
+
     /* Rich tooltip on hover */
     .model-tooltip {
       display: none;
@@ -461,21 +461,37 @@
       color: var(--text-color);
       pointer-events: none;
     }
-    
+
     .model-badge:hover .model-tooltip {
       display: block;
       animation: tooltipFade 0.15s ease-out;
     }
-    
+
     @keyframes tooltipFade {
-      from { opacity: 0; transform: translateX(-50%) translateY(4px); }
-      to { opacity: 1; transform: translateX(-50%) translateY(0); }
+      from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(4px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+      }
     }
-    
-    .tooltip-header { margin-bottom: 12px; }
-    .tooltip-header strong { font-size: 1rem; }
-    .tooltip-provider { color: var(--info-text); font-size: 0.85rem; }
-    
+
+    .tooltip-header {
+      margin-bottom: 12px;
+    }
+
+    .tooltip-header strong {
+      font-size: 1rem;
+    }
+
+    .tooltip-provider {
+      color: var(--info-text);
+      font-size: 0.85rem;
+    }
+
     .tooltip-section {
       display: flex;
       justify-content: space-between;
@@ -484,7 +500,7 @@
       padding: 8px 0;
       border-top: 1px solid var(--border-color);
     }
-    
+
     .tooltip-label {
       font-size: 0.7rem;
       text-transform: uppercase;
@@ -492,13 +508,13 @@
       font-weight: 600;
       width: 100%;
     }
-    
+
     .tooltip-value {
       font-size: 0.9rem;
       font-weight: 500;
       color: #1a73e8;
     }
-    
+
     .tooltip-evals {
       background: var(--info-bg);
       padding: 8px 10px;
@@ -507,28 +523,29 @@
       font-size: 0.8rem;
       color: var(--info-text);
     }
-    
+
     /* Model carousel */
     .model-carousel {
       margin-top: 24px;
       padding-top: 16px;
       border-top: 1px solid var(--border-color);
     }
-    
+
     .carousel-title {
       font-size: 1rem;
       font-weight: 600;
       margin: 0 0 12px 0;
       color: var(--text-color);
     }
-    
-    .carousel-wrapper {
+
+    .carousel-container {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 12px;
+      position: relative;
     }
-    
-    .carousel-track {
+
+    .carousel-scroll {
       display: flex;
       gap: 16px;
       overflow-x: auto;
@@ -536,47 +553,52 @@
       scrollbar-width: none;
       -ms-overflow-style: none;
       padding: 4px 0;
+      flex: 1;
     }
-    
-    .carousel-track::-webkit-scrollbar { display: none; }
-    
-    .carousel-nav {
+
+    .carousel-scroll::-webkit-scrollbar {
+      display: none;
+    }
+
+    .carousel-btn {
       flex-shrink: 0;
-      width: 32px;
-      height: 32px;
+      width: 36px;
+      height: 36px;
       border-radius: 50%;
       border: 1px solid var(--border-color);
-      background: var(--bg-color);
+      background: var(--card-bg);
       color: var(--text-color);
-      font-size: 1.2rem;
+      font-size: 1.4rem;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
+      z-index: 10;
     }
-    
-    .carousel-nav:hover {
+
+    .carousel-btn:hover {
       background: var(--info-bg);
+      border-color: var(--text-color);
     }
-    
+
     .carousel-dots {
       display: flex;
       justify-content: center;
       gap: 6px;
       margin-top: 12px;
     }
-    
+
     .carousel-dots .dot {
       width: 8px;
       height: 8px;
       border-radius: 50%;
       background: var(--border-color);
     }
-    
+
     .carousel-dots .dot.active {
       background: #1a73e8;
     }
-    
+
     /* Model cards */
     .model-card {
       flex: 0 0 200px;
@@ -586,28 +608,30 @@
       padding: 16px;
       transition: box-shadow 0.2s ease;
     }
-    
+
     .model-card:hover {
       box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
     }
-    
+
     .card-header {
       font-size: 0.95rem;
       margin-bottom: 4px;
     }
-    
-    .card-icon { font-size: 1rem; }
-    
+
+    .card-icon {
+      font-size: 1rem;
+    }
+
     .card-provider {
       font-size: 0.8rem;
       color: var(--info-text);
       margin-bottom: 12px;
     }
-    
+
     .card-stat {
       margin-bottom: 8px;
     }
-    
+
     .stat-label {
       display: block;
       font-size: 0.65rem;
@@ -615,13 +639,13 @@
       color: var(--info-text);
       font-weight: 600;
     }
-    
+
     .stat-value {
       font-size: 0.9rem;
       font-weight: 600;
       color: #1a73e8;
     }
-    
+
     .card-pricing {
       display: flex;
       justify-content: space-between;
@@ -629,14 +653,14 @@
       color: var(--text-color);
       margin-bottom: 12px;
     }
-    
+
     .card-link {
       display: block;
       font-size: 0.8rem;
       color: #1a73e8;
       text-decoration: none;
     }
-    
+
     .card-link:hover {
       text-decoration: underline;
     }
@@ -1175,25 +1199,29 @@
         if (refs.length > 0) {
           const llmData = await fetchLLMData();
 
-          // Build carousel
-          const carouselHtml = `<div class="model-carousel">
-            <h4 class="carousel-title">Model Cards</h4>
-            <div class="carousel-wrapper">
-              <button class="carousel-nav prev" onclick="scrollModelCarousel(this, -1)">‹</button>
-              <div class="carousel-track">
-                ${refs.map(ref => {
+          // Build all cards first, then filter out empty ones
+          const cards = refs.map(ref => {
             const model = findModelData(ref.name);
             return buildModelCard(model, ref.source);
-          }).join('')}
-              </div>
-              <button class="carousel-nav next" onclick="scrollModelCarousel(this, 1)">›</button>
-            </div>
-            <div class="carousel-dots">
-              ${refs.map((_, i) => `<span class="dot${i === 0 ? ' active' : ''}"></span>`).join('')}
-            </div>
-          </div>`;
+          }).filter(card => card && card.trim() !== '');
 
-          bubble.innerHTML += carouselHtml;
+          if (cards.length > 0) {
+            const carouselId = 'carousel-' + Date.now();
+
+            // Build carousel with unique ID
+            const carouselHtml = `<div class="model-carousel" id="${carouselId}">
+              <h4 class="carousel-title">Model Cards</h4>
+              <div class="carousel-container">
+                <button class="carousel-btn prev" onclick="scrollCarouselById('${carouselId}', -1)">‹</button>
+                <div class="carousel-scroll">
+                  ${cards.join('')}
+                </div>
+                <button class="carousel-btn next" onclick="scrollCarouselById('${carouselId}', 1)">›</button>
+              </div>
+            </div>`;
+
+            bubble.innerHTML += carouselHtml;
+          }
 
           // Attach tooltips to badges
           refs.forEach(ref => {
@@ -1221,11 +1249,13 @@
       }
     }
 
-    // Carousel scroll function
-    window.scrollModelCarousel = function (btn, direction) {
-      const wrapper = btn.closest('.carousel-wrapper');
-      const track = wrapper.querySelector('.carousel-track');
-      const cardWidth = track.querySelector('.model-card')?.offsetWidth || 200;
+    // Carousel scroll function using ID
+    window.scrollCarouselById = function (carouselId, direction) {
+      const carousel = document.getElementById(carouselId);
+      if (!carousel) return;
+      const track = carousel.querySelector('.carousel-scroll');
+      if (!track) return;
+      const cardWidth = track.querySelector('.model-card')?.offsetWidth || 220;
       track.scrollBy({ left: direction * (cardWidth + 16), behavior: 'smooth' });
     };
 
