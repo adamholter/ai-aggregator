@@ -196,6 +196,64 @@ body {
     right: 20px;
 }
 
+.export-dropdown-container {
+    position: relative;
+}
+
+.export-btn,
+.share-btn {
+    background: var(--button-bg);
+    color: var(--button-text);
+    border: none;
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.export-btn:hover,
+.share-btn:hover {
+    background: var(--button-hover-bg);
+    transform: translateY(-1px);
+}
+
+.export-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    min-width: 160px;
+    z-index: 1000;
+    margin-top: 4px;
+}
+
+.export-dropdown button {
+    display: block;
+    width: 100%;
+    padding: 0.6rem 1rem;
+    text-align: left;
+    background: none;
+    border: none;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-color);
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.export-dropdown button:last-child {
+    border-bottom: none;
+}
+
+.export-dropdown button:hover {
+    background: var(--info-bg);
+}
+
 .source-legend {
     display: none;
     justify-content: center;

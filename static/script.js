@@ -258,6 +258,190 @@ function exportPinnedItems() {
     exportToJSON(pinnedData, filename);
 }
 
+function exportCompareItems() {
+    if (!compareItems || compareItems.length === 0) {
+        showToast('No items in compare tray', 'warning');
+        return;
+    }
+    const timestamp = new Date().toISOString().slice(0, 10);
+    const filename = `dashboard-compare-${timestamp}`;
+    const compareData = compareItems.map(item => ({
+        key: item.key || item.id || item.name,
+        name: item.name || item.title,
+        category: item.category || item.type,
+        provider: item.model_creator?.name || item.vendor || item.provider
+    }));
+    exportToJSON(compareData, filename);
+}
+
+// ============================================
+// Export Dropdown UI
+// ============================================
+
+function toggleExportDropdown() {
+    const dropdown = document.getElementById('export-dropdown');
+    if (dropdown) {
+        dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+    }
+}
+
+function closeExportDropdown() {
+    const dropdown = document.getElementById('export-dropdown');
+    if (dropdown) {
+        dropdown.style.display = 'none';
+    }
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.export-dropdown-container')) {
+        closeExportDropdown();
+    }
+});
+
+// ============================================
+// Shareable Deep Links (Stateful URLs)
+// ============================================
+
+function getDashboardState() {
+    const state = {
+        v: 1  // Version for future compatibility
+    };
+
+    // Current tab
+    const activeTab = document.querySelector('.nav-btn.active');
+    if (activeTab && activeTab.dataset.section) {
+        state.tab = activeTab.dataset.section;
+    }
+
+    // Global search
+    const searchInput = document.getElementById('global-search-input');
+    if (searchInput && searchInput.value.trim()) {
+        state.q = searchInput.value.trim();
+    }
+
+    // Compare tray
+    if (compareItems && compareItems.length > 0) {
+        state.cmp = compareItems.map(item => item.key || item.id || item.name).join(',');
+    }
+
+    // Tab-specific filters/sorts
+    if (state.tab) {
+        const tabSearch = document.querySelector(`#${state.tab}-search, [id$="${state.tab}-search"]`);
+        if (tabSearch && tabSearch.value.trim()) {
+            state.ts = tabSearch.value.trim();
+        }
+        const tabSort = document.querySelector(`#${state.tab}-sort, [id$="${state.tab}-sort"]`);
+        if (tabSort && tabSort.value) {
+            state.sort = tabSort.value;
+        }
+    }
+
+    return state;
+}
+
+function encodeStateToUrl(state) {
+    const url = new URL(window.location.href);
+    url.search = '';  // Clear existing params
+
+    Object.entries(state).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+            url.searchParams.set(key, value);
+        }
+    });
+
+    return url.toString();
+}
+
+function copyShareableLink() {
+    const state = getDashboardState();
+    const url = encodeStateToUrl(state);
+
+    navigator.clipboard.writeText(url).then(() => {
+        showToast('📋 Link copied to clipboard!', 'info');
+    }).catch(() => {
+        // Fallback for older browsers
+        const input = document.createElement('input');
+        input.value = url;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand('copy');
+        document.body.removeChild(input);
+        showToast('📋 Link copied!', 'info');
+    });
+}
+
+function parseUrlState() {
+    const params = new URLSearchParams(window.location.search);
+    const state = {};
+
+    for (const [key, value] of params.entries()) {
+        state[key] = value;
+    }
+
+    return state;
+}
+
+function applyUrlState(state) {
+    if (!state || Object.keys(state).length === 0) return;
+
+    // Switch to tab
+    if (state.tab) {
+        const tabBtn = document.querySelector(`.nav-btn[data-section="${state.tab}"]`);
+        if (tabBtn) {
+            tabBtn.click();
+        }
+    }
+
+    // Apply global search
+    if (state.q) {
+        const searchInput = document.getElementById('global-search-input');
+        if (searchInput) {
+            searchInput.value = state.q;
+            // Trigger search after a short delay
+            setTimeout(() => {
+                searchInput.dispatchEvent(new Event('input'));
+            }, 500);
+        }
+    }
+
+    // Apply tab-specific search
+    if (state.tab && state.ts) {
+        setTimeout(() => {
+            const tabSearch = document.querySelector(`#${state.tab}-search, [id$="${state.tab}-search"]`);
+            if (tabSearch) {
+                tabSearch.value = state.ts;
+                tabSearch.dispatchEvent(new Event('input'));
+            }
+        }, 600);
+    }
+
+    // Apply tab-specific sort
+    if (state.tab && state.sort) {
+        setTimeout(() => {
+            const tabSort = document.querySelector(`#${state.tab}-sort, [id$="${state.tab}-sort"]`);
+            if (tabSort) {
+                tabSort.value = state.sort;
+                tabSort.dispatchEvent(new Event('change'));
+            }
+        }, 600);
+    }
+
+    // Note: Compare tray restoration would require items to be loaded first
+    // This could be enhanced in the future
+    if (state.cmp) {
+        console.log('Compare items to restore (requires data load):', state.cmp.split(','));
+    }
+}
+
+// Apply URL state on page load
+document.addEventListener('DOMContentLoaded', () => {
+    const state = parseUrlState();
+    if (Object.keys(state).length > 1 || (Object.keys(state).length === 1 && !state.v)) {
+        // Wait for data to load before applying state
+        setTimeout(() => applyUrlState(state), 1000);
+    }
+});
 
 function recordDisplayedItems(category, items) {
     if (typeof category !== 'string') {

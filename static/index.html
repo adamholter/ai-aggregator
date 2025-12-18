@@ -59,6 +59,17 @@
                 </div>
             </div>
             <div class="header-actions">
+                <div class="export-dropdown-container">
+                    <button class="export-btn" onclick="toggleExportDropdown()" title="Export current view">📥
+                        Export</button>
+                    <div class="export-dropdown" id="export-dropdown" style="display:none;">
+                        <button onclick="exportCurrentTab('json'); closeExportDropdown();">Export as JSON</button>
+                        <button onclick="exportCurrentTab('csv'); closeExportDropdown();">Export as CSV</button>
+                        <button onclick="exportPinnedItems(); closeExportDropdown();">Export Pinned</button>
+                        <button onclick="exportCompareItems(); closeExportDropdown();">Export Compare</button>
+                    </div>
+                </div>
+                <button class="share-btn" onclick="copyShareableLink()" title="Copy shareable link">🔗 Share</button>
                 <button class="theme-toggle" onclick="toggleTheme()">🌙 Dark Mode</button>
                 <button class="auth-button" id="auth-button">Log In</button>
             </div>
