@@ -4455,23 +4455,54 @@ function buildModelCarousel(refs) {
 
     const carouselId = 'carousel-' + Date.now() + Math.random().toString(36).substr(2, 5);
 
-    // Build mini cards
+    // Build mini cards with hover tooltips
     const cards = refs.map(ref => {
         const model = findModelByRef(ref.source, ref.id);
         if (!model) {
             return `<div class="mini-model-card not-found">
-                <span class="mini-card-name">Model not found: ${escapeHtml(ref.id)}</span>
+                <span class="mini-card-name">🤖 ${escapeHtml(ref.id)}</span>
             </div>`;
         }
 
         const name = model.name || model.title || model.id || 'Unknown Model';
-        const provider = model.provider || model.vendor || model.org || ref.source;
+
+        // Get provider from model_creator or other fields
+        let provider = '';
+        if (model.model_creator && model.model_creator.name) {
+            provider = model.model_creator.name;
+        } else {
+            provider = model.provider || model.vendor || model.org || ref.source;
+        }
+
+        // Build tooltip content with model metrics
+        let tooltipParts = [`<strong>${escapeHtml(name)}</strong>`, `<em>${escapeHtml(provider)}</em>`];
+
+        // Add quality/ELO for LLMs
+        if (model.evaluations && model.evaluations.artificial_analysis_intelligence_index) {
+            tooltipParts.push(`Quality: ${model.evaluations.artificial_analysis_intelligence_index.toFixed(1)}`);
+        }
+
+        // Add speed
+        if (model.median_output_tokens_per_second) {
+            tooltipParts.push(`Speed: ${Math.round(model.median_output_tokens_per_second)} tok/s`);
+        }
+
+        // Add pricing
+        if (model.pricing) {
+            const inputCost = model.pricing.price_1m_input_tokens;
+            const outputCost = model.pricing.price_1m_output_tokens;
+            if (inputCost != null) tooltipParts.push(`Input: $${inputCost.toFixed(2)}/1M`);
+            if (outputCost != null) tooltipParts.push(`Output: $${outputCost.toFixed(2)}/1M`);
+        }
+
+        const tooltipHtml = tooltipParts.join('<br>');
 
         return `<div class="mini-model-card" data-source="${escapeHtml(ref.source)}" data-model-id="${escapeHtml(ref.id)}" onclick="openModelFromCarousel('${escapeHtml(ref.source)}', '${escapeHtml(ref.id)}')">
+            <div class="mini-card-tooltip">${tooltipHtml}</div>
             <div class="mini-card-header">
                 <span class="mini-card-source">${escapeHtml(ref.source)}</span>
             </div>
-            <div class="mini-card-name">${escapeHtml(name)}</div>
+            <div class="mini-card-name">🤖 ${escapeHtml(name)}</div>
             <div class="mini-card-provider">${escapeHtml(provider)}</div>
             <div class="mini-card-actions">
                 <button class="mini-action" onclick="event.stopPropagation(); pinModelFromCarousel('${escapeHtml(ref.source)}', '${escapeHtml(ref.id)}')" title="Pin">📌</button>
@@ -4490,30 +4521,43 @@ function buildModelCarousel(refs) {
  * Find a model by source and ID
  */
 function findModelByRef(source, id) {
+    // Helper to get array from various data structures
+    const getArray = (data) => {
+        if (!data) return [];
+        if (Array.isArray(data)) return data;
+        if (data.data && Array.isArray(data.data)) return data.data;
+        return [];
+    };
+
     const sourceMap = {
-        'llms': () => cachedData.llms || [],
-        'openrouter': () => cachedData.openrouter || [],
-        'fal': () => cachedData.fal || [],
-        'replicate': () => cachedData.replicate || [],
-        'text-to-image': () => cachedData['text-to-image'] || [],
-        'image-editing': () => cachedData['image-editing'] || [],
-        'text-to-speech': () => cachedData['text-to-speech'] || [],
-        'text-to-video': () => cachedData['text-to-video'] || [],
-        'image-to-video': () => cachedData['image-to-video'] || [],
-        'testing-catalog': () => cachedData['testing-catalog'] || [],
-        'blog': () => cachedData.blog || [],
-        'hype': () => cachedData.hype || []
+        'llms': () => getArray(rawData.llms) || getArray(cachedData.llms) || [],
+        'openrouter': () => getArray(cachedData.openrouter) || getArray(cachedData.openRouterModels) || [],
+        'fal': () => getArray(rawData.falModels) || getArray(cachedData.fal) || [],
+        'replicate': () => getArray(rawData.replicateModels) || getArray(cachedData.replicate) || [],
+        'text-to-image': () => getArray(rawData.textToImage) || getArray(cachedData['text-to-image']) || [],
+        'image-editing': () => getArray(rawData.imageEditing) || getArray(cachedData['image-editing']) || [],
+        'text-to-speech': () => getArray(rawData.textToSpeech) || getArray(cachedData['text-to-speech']) || [],
+        'text-to-video': () => getArray(rawData.textToVideo) || getArray(cachedData['text-to-video']) || [],
+        'image-to-video': () => getArray(rawData.imageToVideo) || getArray(cachedData['image-to-video']) || [],
+        'testing-catalog': () => getArray(cachedData['testing-catalog']) || [],
+        'blog': () => getArray(cachedData.blog) || [],
+        'hype': () => getArray(rawData.hype) || getArray(cachedData.hype) || []
     };
 
     const getter = sourceMap[source];
     if (!getter) return null;
 
     const items = getter();
+    if (!items.length) return null;
+
+    // Try exact match first, then partial match
+    const idLower = id.toLowerCase();
     return items.find(item => {
-        const itemId = item.id || item.name || item.title || '';
-        return itemId.toLowerCase() === id.toLowerCase() ||
-            itemId.toLowerCase().includes(id.toLowerCase()) ||
-            id.toLowerCase().includes(itemId.toLowerCase());
+        const itemId = (item.id || item.name || item.title || '').toLowerCase();
+        return itemId === idLower;
+    }) || items.find(item => {
+        const itemId = (item.id || item.name || item.title || '').toLowerCase();
+        return itemId.includes(idLower) || idLower.includes(itemId);
     });
 }
 
