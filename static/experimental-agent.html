@@ -420,6 +420,22 @@
       background: rgba(255, 255, 255, 0.2);
     }
 
+    /* Model reference badges */
+    .model-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--info-bg);
+      border: 1px solid var(--border-color);
+      color: var(--text-color);
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.85em;
+      font-weight: 500;
+      margin: 2px 0;
+      white-space: nowrap;
+    }
+
     /* Modal Styles */
     .modal-overlay {
       display: none;
@@ -705,10 +721,24 @@
     });
 
     function renderMarkdown(content) {
+      if (!content) return '';
+
+      // Parse [[model:source:name]] tags into styled badges
+      let processed = content.replace(/\[\[models?:([^\]]+)\]\]/gi, (match, content) => {
+        const parts = content.split(':');
+        if (parts.length >= 2) {
+          const source = parts[0].trim();
+          const modelName = parts.slice(1).join(':').trim();
+          // Create a styled badge with model icon
+          return `<span class="model-badge" title="${source}: ${modelName}">🤖 ${modelName}</span>`;
+        }
+        return match;
+      });
+
       if (typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
-        return DOMPurify.sanitize(marked.parse(content || ''));
+        return DOMPurify.sanitize(marked.parse(processed));
       }
-      return content;
+      return processed;
     }
 
     // Chart rendering function - handles various code block formats
