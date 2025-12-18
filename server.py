@@ -84,123 +84,114 @@ AGENT_TOOLS = [
     {"type": "function", "function": {"name": "fetch_hype_feed", "description": "Get trending AI repos and projects from GitHub, HuggingFace, Reddit. Shows popularity scores and descriptions. Use for: discovering hot projects, viral repos.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Filter by keyword"}, "limit": {"type": "integer", "description": "Max items (default 20)"}}, "required": []}}},
     {"type": "function", "function": {"name": "fetch_blog_posts", "description": "Get AI research blog posts and articles. Use for: in-depth technical content, research papers, tutorials.", "parameters": {"type": "object", "properties": {"limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
     
-    # LLM Data - Two different sources!
-    {"type": "function", "function": {"name": "fetch_llm_benchmarks", "description": "ARTIFICIAL ANALYSIS DATA: Quality scores (0-100), speed (tokens/sec), latency, and pricing for LLMs. Returns structured JSON with quality_index, output_speed, input_cost, output_cost per 1M tokens. Use for: performance comparisons.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Filter by model name"}, "limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
-    {"type": "function", "function": {"name": "search_openrouter_models", "description": "OPENROUTER CATALOG: API access info, per-token pricing, context lengths for 200+ models. Use for: finding models to use via API, checking availability, comparing API pricing.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Model name or provider (e.g., 'anthropic', 'gpt-4', 'llama')"}, "limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
+    # LLM Benchmarks - Primary data source for model comparisons
+    {"type": "function", "function": {"name": "fetch_llm_benchmarks", "description": "ARTIFICIAL ANALYSIS LLM BENCHMARKS: Complete performance data for all major LLMs sorted by quality. Each model includes: name, provider, quality_index (0-100 score), output_speed (tokens/sec), input_cost ($/1M tokens), output_cost ($/1M tokens), context_length. Data covers OpenAI, Anthropic, Google, Meta, Mistral, xAI and more. Use for: finding best models, comparing performance, analyzing pricing.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Filter by model name or provider (e.g., 'gpt', 'claude', 'gemini')"}, "limit": {"type": "integer", "description": "Max items (default 30)"}}, "required": []}}},
+    {"type": "function", "function": {"name": "search_openrouter_models", "description": "OPENROUTER API CATALOG: Models available via OpenRouter API. Shows: model ID, pricing, context length, capabilities. Use for: API availability, exact pricing, finding specific model variants.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Model name or provider (e.g., 'anthropic', 'gpt-4', 'llama')"}, "limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
     
-    # COMPARISON TOOLS - Use these for "compare" or "top models" queries
-    {"type": "function", "function": {"name": "get_top_models_by_provider", "description": "FLAGSHIP MODELS: Get the single best/top-rated model from each major AI lab (OpenAI, Anthropic, Google, Meta, Mistral, xAI). Returns structured comparison data with quality_score, speed, pricing for easy comparison. ALWAYS use this for 'compare top models' or 'best from each lab' queries.", "parameters": {"type": "object", "properties": {"providers": {"type": "array", "items": {"type": "string"}, "description": "List of providers to include (default: openai, anthropic, google, meta, mistral, xai)"}}, "required": []}}},
-    {"type": "function", "function": {"name": "compare_models", "description": "SIDE-BY-SIDE COMPARISON: Compare specific models by name. Returns structured table with quality_score, speed, input_cost, output_cost, context_length. Use when user mentions specific model names to compare.", "parameters": {"type": "object", "properties": {"model_names": {"type": "array", "items": {"type": "string"}, "description": "List of model names to compare (e.g., ['gpt-4o', 'claude-3.5-sonnet', 'gemini-1.5-pro'])"}}, "required": ["model_names"]}}},
-    
-    # Image Generation - IMPORTANT: Multiple sources!
-    {"type": "function", "function": {"name": "fetch_image_models", "description": "ARTIFICIAL ANALYSIS LEADERBOARD: Quality rankings for image generation. Shows ELO scores (higher = better quality). The top-ranked model has the highest ELO. Use for: finding best quality models.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Filter by model name"}, "limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
-    {"type": "function", "function": {"name": "fetch_image_editing_models", "description": "Image editing leaderboard. Shows ELO scores (higher = better). Use for: inpainting, outpainting, editing existing images.", "parameters": {"type": "object", "properties": {"limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
+    # Image Generation
+    {"type": "function", "function": {"name": "fetch_image_models", "description": "ARTIFICIAL ANALYSIS IMAGE LEADERBOARD: Quality rankings for image generation. Shows ELO scores (higher = better quality). Use for: finding best quality models.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Filter by model name"}, "limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
+    {"type": "function", "function": {"name": "fetch_image_editing_models", "description": "Image editing leaderboard. Shows ELO scores. Use for: inpainting, outpainting, editing.", "parameters": {"type": "object", "properties": {"limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
     
     # Video Generation
-    {"type": "function", "function": {"name": "fetch_text_to_video_models", "description": "Text-to-video generation leaderboard. Shows ELO scores (higher = better quality). Use for: generating videos from text prompts.", "parameters": {"type": "object", "properties": {"limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
-    {"type": "function", "function": {"name": "fetch_image_to_video_models", "description": "Image-to-video animation leaderboard. Shows ELO scores (higher = better). Use for: animating static images.", "parameters": {"type": "object", "properties": {"limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
+    {"type": "function", "function": {"name": "fetch_text_to_video_models", "description": "Text-to-video generation leaderboard. Shows ELO scores. Use for: generating videos from text.", "parameters": {"type": "object", "properties": {"limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
+    {"type": "function", "function": {"name": "fetch_image_to_video_models", "description": "Image-to-video animation leaderboard. Shows ELO scores. Use for: animating static images.", "parameters": {"type": "object", "properties": {"limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
     
     # Audio
-    {"type": "function", "function": {"name": "fetch_text_to_speech_models", "description": "Text-to-speech and voice synthesis models. Includes ElevenLabs, OpenAI TTS, etc. Use for: voice generation, audio content.", "parameters": {"type": "object", "properties": {"limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
+    {"type": "function", "function": {"name": "fetch_text_to_speech_models", "description": "Text-to-speech and voice synthesis models. Includes ElevenLabs, OpenAI TTS, etc.", "parameters": {"type": "object", "properties": {"limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
     
-    # Model Platforms - API providers with pricing!
-    {"type": "function", "function": {"name": "fetch_fal_models", "description": "FAL.AI PLATFORM: Fast inference API for image/video models. Shows per-request pricing, model names. Use alongside benchmark tools for complete picture.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Filter by model name"}, "limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
-    {"type": "function", "function": {"name": "fetch_replicate_models", "description": "REPLICATE PLATFORM: Run open-source models via API. Shows run counts (popularity), pricing. Use for: finding popular open-source models.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Filter by model name"}, "limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
+    # Model Platforms
+    {"type": "function", "function": {"name": "fetch_fal_models", "description": "FAL.AI PLATFORM: Fast inference API for image/video models. Shows per-request pricing.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Filter by model name"}, "limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
+    {"type": "function", "function": {"name": "fetch_replicate_models", "description": "REPLICATE PLATFORM: Run open-source models via API. Shows run counts and pricing.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Filter by model name"}, "limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
     
-    # Web Search - Use sparingly, slower and more expensive
-    {"type": "function", "function": {"name": "ask_perplexity", "description": "LIVE WEB SEARCH via Perplexity. Use ONLY when other tools don't have the answer, or for real-time info not in databases. Slower and more expensive - reserve for complex research questions.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Natural language search question"}}, "required": ["query"]}}}
+    # Web Search
+    {"type": "function", "function": {"name": "ask_perplexity", "description": "LIVE WEB SEARCH via Perplexity. Use ONLY when other tools don't have the answer. Slower and more expensive.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Natural language search question"}}, "required": ["query"]}}}
 ]
 
-AGENT_SYSTEM_PROMPT = """You are an AI analyst with access to real-time data about AI models from multiple sources.
+AGENT_SYSTEM_PROMPT = """You are an expert AI analyst with access to real-time benchmark data and model catalogs. Your job is to analyze data, extract insights, and present findings clearly.
 
-## CRITICAL: ALWAYS USE TOOLS FIRST
-NEVER respond with just text or questions without calling tools first. For ANY user question:
-1. First call relevant tools to fetch data
-2. Then analyze the data and provide recommendations
-3. Only ask follow-up questions if absolutely necessary AFTER showing data
+## CORE PRINCIPLE: DATA-DRIVEN ANALYSIS
+You have tools that return raw data. Your value is in ANALYZING that data to answer questions. Never guess - always fetch data first, then analyze it.
 
-## TOP MODELS / COMPARISON QUERIES (VERY IMPORTANT)
-When the user asks to "compare top models", "best from each lab", "flagship models", or similar:
-1. FIRST call `get_top_models_by_provider` - this gives you structured comparison data
-2. ALWAYS include a comparison chart (see CHART GENERATION below)
-3. ALWAYS include model cards for each model mentioned
-4. Format as a clear comparison table with: Quality Score, Speed, Input Cost, Output Cost
+## ANALYSIS METHODOLOGY
 
-Provider → Model mapping (for reference):
-- OpenAI → GPT-4o, GPT-4.5, o1
-- Anthropic → Claude 3.5 Sonnet, Claude Opus
-- Google → Gemini 2.5 Pro, Gemini Flash
-- Meta → Llama 3.3, Llama 4
-- Mistral → Mistral Large
-- xAI → Grok
+### Step 1: Fetch Relevant Data
+For any question, first call the appropriate tool(s):
+- LLM performance/benchmarks → `fetch_llm_benchmarks` (returns quality_index, speed, pricing for all major models)
+- API availability/pricing → `search_openrouter_models`  
+- Image/video models → `fetch_image_models`, `fetch_text_to_video_models`, etc.
+- Latest news → `fetch_latest_feed`
 
-## CRITICAL: CALL MULTIPLE TOOLS
-For comprehensive answers, ALWAYS call multiple tools in parallel:
-- LLM comparisons → call `get_top_models_by_provider` OR `compare_models` first
-- IMAGE GENERATION → call BOTH fetch_image_models AND fetch_fal_models
-- LLM deep dive → call BOTH fetch_llm_benchmarks AND search_openrouter_models
+Call multiple tools in parallel when the question spans multiple domains.
 
-## DATA SOURCE GUIDE
-| Topic | Primary Tool | Secondary Tool(s) |
-|-------|-------------|-------------------|
-| Compare top LLMs | get_top_models_by_provider | search_openrouter_models |
-| Specific model comparison | compare_models | fetch_llm_benchmarks |
-| LLM benchmarks | fetch_llm_benchmarks | search_openrouter_models |
-| Best image models | fetch_image_models | fetch_fal_models |
-| API pricing | search_openrouter_models | fetch_fal_models |
-| Video generation | fetch_text_to_video_models | fetch_fal_models |
-| News/trends | fetch_latest_feed | fetch_hype_feed |
+### Step 2: Analyze the Data
+Once you have data, apply analytical thinking:
+- For "best" or "top" questions: Sort by the relevant metric (quality_index, speed, price)
+- For "compare" questions: Extract the specific models and compare metrics side-by-side
+- For "by provider" questions: Group models by their provider field, then find the top entry per group
+- For "cheapest" or "fastest": Sort by cost or speed metrics
 
-## CHART GENERATION (REQUIRED FOR COMPARISONS)
-For ANY numeric comparison, you MUST output a chart. Use this JSON format:
+### Step 3: Present Findings
+Structure your response clearly:
+1. **Summary**: Direct answer to the question
+2. **Data Table**: Present key metrics in a markdown table
+3. **Chart**: For numeric comparisons, include a chart (see below)
+4. **Model References**: Link to model cards
+
+## DATA INTERPRETATION GUIDE
+
+The `fetch_llm_benchmarks` tool returns models with these key fields:
+- `name`: Model name (e.g., "GPT-4o", "Claude 3.5 Sonnet")
+- `provider`: Company (e.g., "OpenAI", "Anthropic", "Google")  
+- `quality_index`: Overall quality score (0-100, higher = better)
+- `output_speed`: Generation speed in tokens/second
+- `input_cost`: Cost per 1M input tokens in USD
+- `output_cost`: Cost per 1M output tokens in USD
+- `context_length`: Maximum context window
+
+Provider identification:
+- OpenAI models often have "gpt" or "o1" in the name
+- Anthropic models have "claude" in the name
+- Google models have "gemini" in the name
+- Meta models have "llama" in the name
+- Mistral models have "mistral" in the name
+- xAI models have "grok" in the name
+
+## CHART GENERATION
+For numeric comparisons, output a chart in this JSON format:
 
 ```json
-{"type": "bar", "labels": ["GPT-4o", "Claude 3.5", "Gemini Pro"], "datasets": [{"label": "Quality Score", "data": [85, 88, 82]}]}
+{"type": "bar", "labels": ["Model A", "Model B", "Model C"], "datasets": [{"label": "Metric Name", "data": [value1, value2, value3]}]}
 ```
 
-Common chart patterns:
-- Quality comparison: {"type": "bar", "labels": [...models...], "datasets": [{"label": "Quality Score (0-100)", "data": [...scores...]}]}
-- Speed comparison: {"type": "bar", "labels": [...], "datasets": [{"label": "Tokens/sec", "data": [...]}]}
-- Pricing comparison: {"type": "bar", "labels": [...], "datasets": [{"label": "Input $/1M tokens", "data": [...]}, {"label": "Output $/1M tokens", "data": [...]}]}
+Chart types: `bar` (comparisons), `line` (trends), `pie` (proportions)
 
-Types: bar (best for comparison), line (trends), pie (market share)
+## MODEL CARD REFERENCES
+Embed clickable model cards for models you discuss:
+- `[[model:llms:ModelName]]` - for benchmark data
+- `[[model:openrouter:provider/model-id]]` - for OpenRouter models
 
-## MODEL CARD REFERENCES (REQUIRED)
-When recommending models, ALWAYS embed model cards:
+## EXAMPLE ANALYSIS PROCESS
 
-[[model:llms:GPT-4o]] - for LLM from benchmarks
-[[model:openrouter:openai/gpt-4o]] - for OpenRouter model
-[[model:fal:fal-ai/flux-pro]] - for Fal.ai model
+User asks: "Compare the top models from each major lab"
 
-Multiple: [[models:openrouter:openai/gpt-4o,anthropic/claude-3.5-sonnet]]
+Your approach:
+1. Call `fetch_llm_benchmarks` with no filter to get all LLM data
+2. From the results, identify models from each major provider (OpenAI, Anthropic, Google, Meta, etc.)
+3. For each provider, find the model with the highest quality_index
+4. Build a comparison table with: Model, Provider, Quality Score, Speed, Input Cost, Output Cost
+5. Create a bar chart comparing quality scores
+6. Add model card references
+7. Provide brief insights (e.g., "Claude 3.5 Sonnet leads on quality, while GPT-4o offers the best speed")
 
-## RESPONSE FORMAT FOR COMPARISONS
-Use this structure:
-1. Brief intro (1-2 sentences)
-2. Comparison table (markdown table with metrics)
-3. Chart visualization (JSON code block)
-4. Key insights (2-3 bullet points)
-5. Model cards for each model
-
-Example table format:
-| Model | Provider | Quality | Speed | Input Cost | Output Cost |
-|-------|----------|---------|-------|------------|-------------|
-| GPT-4o | OpenAI | 85 | 120 tok/s | $2.50/1M | $10.00/1M |
-
-## IMAGE VISION
-You CAN see and analyze attached images. Describe what you see and answer questions.
+## IMPORTANT RULES
+- ALWAYS fetch data before answering - never rely on prior knowledge for current benchmarks/pricing
+- Be SPECIFIC with numbers from the data
+- CITE your source (e.g., "According to Artificial Analysis benchmarks...")
+- If data seems incomplete, acknowledge it and suggest what additional info might help
+- For comparisons, ALWAYS include a chart and table
 
 ## EFFICIENCY
-Max 15-20 tool iterations. Be efficient:
-- Call multiple tools in PARALLEL on first turn
-- Don't repeat identical calls
-- Synthesize results rather than making more calls
-
-## RESPONSE STYLE
-- Use headers and bullet points
-- Be specific with numbers from tool data
-- Always cite source (e.g., "According to Artificial Analysis benchmarks...")
-- Include units (tokens/sec, $/1M tokens, etc.)\""""
+Max 15-20 iterations. Call multiple tools in parallel. Don't repeat identical calls.\""""
 
 @app.route('/experimental-agent')
 def inline_exp_agent_page():
@@ -4011,14 +4002,6 @@ def _execute_agent_tool(tool_name, tool_args):
             except Exception as e:
                 return f"Web search failed: {str(e)}"
         
-        # Handle get_top_models_by_provider - returns top model from each lab
-        if tool_name == "get_top_models_by_provider":
-            return _get_top_models_by_provider(tool_args)
-        
-        # Handle compare_models - side-by-side comparison
-        if tool_name == "compare_models":
-            return _compare_models_by_name(tool_args)
-        
         if not category:
             return f"Unknown tool: {tool_name}"
         
@@ -4052,7 +4035,38 @@ def _execute_agent_tool(tool_name, tool_args):
                     filtered.append(item)
             items = filtered if filtered else items
         
-        # Format as markdown with more detail
+        # Special handling for LLM benchmarks - return structured data for analysis
+        if tool_name == "fetch_llm_benchmarks":
+            lines = [f"## LLM Benchmarks (Artificial Analysis Data) - {len(items)} models\n"]
+            lines.append("**Data sorted by quality_index (higher = better)**\n")
+            lines.append("| # | Model | Provider | Quality | Speed (tok/s) | Input Cost | Output Cost | Context |")
+            lines.append("|---|-------|----------|---------|---------------|------------|-------------|---------|")
+            
+            # Sort by quality_index descending
+            sorted_items = sorted(items, key=lambda x: float(x.get("quality_index", 0) or 0), reverse=True)
+            
+            for rank, item in enumerate(sorted_items[:25], 1):  # Show top 25
+                name = item.get("name") or item.get("title") or "Unknown"
+                provider = item.get("provider") or item.get("creator") or ""
+                quality = item.get("quality_index") or item.get("quality") or "N/A"
+                speed = item.get("output_speed") or item.get("speed") or "N/A"
+                input_cost = item.get("input_cost")
+                output_cost = item.get("output_cost")
+                context = item.get("context_length") or item.get("context") or ""
+                
+                # Format costs
+                input_cost_str = f"${input_cost}/1M" if input_cost else "N/A"
+                output_cost_str = f"${output_cost}/1M" if output_cost else "N/A"
+                context_str = f"{context:,}" if isinstance(context, int) else str(context) if context else "N/A"
+                
+                lines.append(f"| {rank} | {name} | {provider} | {quality} | {speed} | {input_cost_str} | {output_cost_str} | {context_str} |")
+            
+            lines.append("\n**To compare specific models, look for the highest quality_index per provider.**")
+            lines.append("**Major providers: OpenAI (GPT), Anthropic (Claude), Google (Gemini), Meta (Llama), Mistral, xAI (Grok)**")
+            
+            return "\n".join(lines)
+        
+        # Default formatting for other tools
         lines = [f"## {tool_name.replace('_', ' ').title()} ({len(items)} items found)"]
         
         for item in items[:15]:  # Show up to 15 items
@@ -4066,6 +4080,17 @@ def _execute_agent_tool(tool_name, tool_args):
                 line += f" ({provider})"
             lines.append(line)
             
+            # Add metrics for benchmark data
+            quality = item.get("quality_index") or item.get("quality") or item.get("elo")
+            speed = item.get("output_speed") or item.get("speed")
+            if quality or speed:
+                metrics = []
+                if quality:
+                    metrics.append(f"Quality: {quality}")
+                if speed:
+                    metrics.append(f"Speed: {speed} tok/s")
+                lines.append(f"  📊 {', '.join(metrics)}")
+            
             # Add pricing if available
             price_info = []
             if item.get("price"):
@@ -4073,14 +4098,14 @@ def _execute_agent_tool(tool_name, tool_args):
             if item.get("pricing"):
                 price_info.append(str(item['pricing']))
             if item.get("input_cost") or item.get("output_cost"):
-                price_info.append(f"in: ${item.get('input_cost', 'N/A')}, out: ${item.get('output_cost', 'N/A')}")
+                price_info.append(f"in: ${item.get('input_cost', 'N/A')}/1M, out: ${item.get('output_cost', 'N/A')}/1M")
             if price_info:
                 lines.append(f"  💰 {', '.join(price_info)}")
             
-            # Add summary/description
+            # Add summary/description (shortened)
             summary = item.get("summary") or item.get("description") or ""
             if summary:
-                lines.append(f"  {str(summary)[:150]}...")
+                lines.append(f"  {str(summary)[:100]}...")
             
             # Add link if available
             if url:
@@ -4090,172 +4115,6 @@ def _execute_agent_tool(tool_name, tool_args):
         
     except Exception as ex:
         return f"Error executing {tool_name}: {str(ex)}"
-
-
-def _get_top_models_by_provider(tool_args):
-    """Get the top model from each major AI provider with structured comparison data."""
-    try:
-        providers = tool_args.get("providers") or ["openai", "anthropic", "google", "meta", "mistral", "xai"]
-        
-        # Fetch LLM benchmark data
-        result = fetch_data_for_categories(["llms"], limit_per_category=100)
-        datasets = result.get("datasets", {})
-        items = []
-        for cat_items in datasets.values():
-            if isinstance(cat_items, list):
-                items.extend(cat_items)
-        
-        if not items:
-            return "No LLM benchmark data available"
-        
-        # Provider name normalization
-        provider_aliases = {
-            "openai": ["openai", "gpt"],
-            "anthropic": ["anthropic", "claude"],
-            "google": ["google", "gemini"],
-            "meta": ["meta", "llama"],
-            "mistral": ["mistral"],
-            "xai": ["xai", "grok"],
-            "amazon": ["amazon", "nova"],
-            "cohere": ["cohere", "command"]
-        }
-        
-        # Find top model for each provider (highest quality_index)
-        top_models = {}
-        for item in items:
-            item_provider = str(item.get("provider", "") or item.get("creator", "") or "").lower()
-            item_name = str(item.get("name", "") or item.get("title", "") or "").lower()
-            
-            for provider, aliases in provider_aliases.items():
-                if provider not in providers:
-                    continue
-                if any(alias in item_provider or alias in item_name for alias in aliases):
-                    quality = float(item.get("quality_index", 0) or item.get("quality", 0) or 0)
-                    if provider not in top_models or quality > top_models[provider].get("_quality", 0):
-                        top_models[provider] = {
-                            "name": item.get("name") or item.get("title"),
-                            "provider": provider.title(),
-                            "quality_score": round(quality, 1),
-                            "speed_tokens_per_sec": item.get("output_speed") or item.get("speed") or "N/A",
-                            "input_cost_per_1m": item.get("input_cost") or item.get("blended_cost") or "N/A",
-                            "output_cost_per_1m": item.get("output_cost") or "N/A",
-                            "context_length": item.get("context_length") or item.get("context") or "N/A",
-                            "_quality": quality
-                        }
-                    break
-        
-        if not top_models:
-            return "Could not find top models for the specified providers"
-        
-        # Format as structured markdown + JSON for easy parsing
-        lines = ["## Top Models by Provider (Flagship Comparison)\n"]
-        lines.append("| Provider | Model | Quality Score | Speed | Input Cost | Output Cost |")
-        lines.append("|----------|-------|--------------|-------|------------|-------------|")
-        
-        chart_labels = []
-        chart_quality = []
-        chart_speed = []
-        
-        for provider in providers:
-            if provider in top_models:
-                m = top_models[provider]
-                input_cost = f"${m['input_cost_per_1m']}" if m['input_cost_per_1m'] != "N/A" else "N/A"
-                output_cost = f"${m['output_cost_per_1m']}" if m['output_cost_per_1m'] != "N/A" else "N/A"
-                speed = f"{m['speed_tokens_per_sec']} tok/s" if m['speed_tokens_per_sec'] != "N/A" else "N/A"
-                lines.append(f"| {m['provider']} | {m['name']} | {m['quality_score']} | {speed} | {input_cost}/1M | {output_cost}/1M |")
-                
-                chart_labels.append(m['name'][:20])
-                chart_quality.append(m['quality_score'])
-                if isinstance(m['speed_tokens_per_sec'], (int, float)):
-                    chart_speed.append(m['speed_tokens_per_sec'])
-        
-        lines.append("\n### Suggested Quality Comparison Chart:")
-        chart_json = {
-            "type": "bar", 
-            "labels": chart_labels, 
-            "datasets": [{"label": "Quality Score (0-100)", "data": chart_quality}]
-        }
-        lines.append(f"```json\n{json.dumps(chart_json)}\n```")
-        
-        lines.append("\n### Model Cards:")
-        for provider in providers:
-            if provider in top_models:
-                m = top_models[provider]
-                lines.append(f"[[model:llms:{m['name']}]]")
-        
-        return "\n".join(lines)
-        
-    except Exception as e:
-        return f"Error getting top models: {str(e)}"
-
-
-def _compare_models_by_name(tool_args):
-    """Compare specific models by name with structured data."""
-    try:
-        model_names = tool_args.get("model_names", [])
-        if not model_names:
-            return "Error: model_names parameter required"
-        
-        # Fetch LLM benchmark data
-        result = fetch_data_for_categories(["llms"], limit_per_category=100)
-        datasets = result.get("datasets", {})
-        items = []
-        for cat_items in datasets.values():
-            if isinstance(cat_items, list):
-                items.extend(cat_items)
-        
-        # Find matching models
-        matches = []
-        for search_name in model_names:
-            search_lower = search_name.lower()
-            for item in items:
-                item_name = str(item.get("name", "") or item.get("title", "") or "").lower()
-                item_id = str(item.get("id", "")).lower()
-                if search_lower in item_name or search_lower in item_id or item_name in search_lower:
-                    matches.append({
-                        "name": item.get("name") or item.get("title"),
-                        "provider": item.get("provider") or item.get("creator") or "Unknown",
-                        "quality_score": round(float(item.get("quality_index", 0) or item.get("quality", 0) or 0), 1),
-                        "speed_tokens_per_sec": item.get("output_speed") or item.get("speed") or "N/A",
-                        "input_cost_per_1m": item.get("input_cost") or "N/A",
-                        "output_cost_per_1m": item.get("output_cost") or "N/A",
-                        "context_length": item.get("context_length") or item.get("context") or "N/A"
-                    })
-                    break
-        
-        if not matches:
-            return f"No matches found for: {', '.join(model_names)}"
-        
-        # Format comparison table
-        lines = ["## Model Comparison\n"]
-        lines.append("| Model | Provider | Quality | Speed | Input Cost | Output Cost | Context |")
-        lines.append("|-------|----------|---------|-------|------------|-------------|---------|")
-        
-        chart_labels = []
-        chart_quality = []
-        
-        for m in matches:
-            input_cost = f"${m['input_cost_per_1m']}/1M" if m['input_cost_per_1m'] != "N/A" else "N/A"
-            output_cost = f"${m['output_cost_per_1m']}/1M" if m['output_cost_per_1m'] != "N/A" else "N/A"
-            speed = f"{m['speed_tokens_per_sec']} tok/s" if m['speed_tokens_per_sec'] != "N/A" else "N/A"
-            context = f"{m['context_length']:,}" if isinstance(m['context_length'], int) else str(m['context_length'])
-            lines.append(f"| {m['name']} | {m['provider']} | {m['quality_score']} | {speed} | {input_cost} | {output_cost} | {context} |")
-            
-            chart_labels.append(m['name'][:20])
-            chart_quality.append(m['quality_score'])
-        
-        lines.append("\n### Quality Comparison Chart:")
-        chart_json = {"type": "bar", "labels": chart_labels, "datasets": [{"label": "Quality Score", "data": chart_quality}]}
-        lines.append(f"```json\n{json.dumps(chart_json)}\n```")
-        
-        lines.append("\n### Model Cards:")
-        for m in matches:
-            lines.append(f"[[model:llms:{m['name']}]]")
-        
-        return "\n".join(lines)
-        
-    except Exception as e:
-        return f"Error comparing models: {str(e)}"
 
 
 def initialize_fetch_context():
