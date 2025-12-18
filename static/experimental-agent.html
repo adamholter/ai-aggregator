@@ -425,15 +425,220 @@
       display: inline-flex;
       align-items: center;
       gap: 4px;
-      background: var(--info-bg);
-      border: 1px solid var(--border-color);
-      color: var(--text-color);
-      padding: 2px 8px;
-      border-radius: 12px;
+      background: #e8f4fd;
+      border: 1px solid #b3d9f7;
+      color: #1a73e8;
+      padding: 3px 10px;
+      border-radius: 16px;
       font-size: 0.85em;
       font-weight: 500;
-      margin: 2px 0;
-      white-space: nowrap;
+      cursor: pointer;
+      position: relative;
+      transition: all 0.15s ease;
+    }
+    
+    .model-badge:hover {
+      background: #d0e8fc;
+      border-color: #1a73e8;
+    }
+    
+    /* Rich tooltip on hover */
+    .model-tooltip {
+      display: none;
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: white;
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 16px;
+      min-width: 260px;
+      max-width: 320px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+      z-index: 200;
+      text-align: left;
+      color: var(--text-color);
+      pointer-events: none;
+    }
+    
+    .model-badge:hover .model-tooltip {
+      display: block;
+      animation: tooltipFade 0.15s ease-out;
+    }
+    
+    @keyframes tooltipFade {
+      from { opacity: 0; transform: translateX(-50%) translateY(4px); }
+      to { opacity: 1; transform: translateX(-50%) translateY(0); }
+    }
+    
+    .tooltip-header { margin-bottom: 12px; }
+    .tooltip-header strong { font-size: 1rem; }
+    .tooltip-provider { color: var(--info-text); font-size: 0.85rem; }
+    
+    .tooltip-section {
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 4px;
+      padding: 8px 0;
+      border-top: 1px solid var(--border-color);
+    }
+    
+    .tooltip-label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      color: var(--info-text);
+      font-weight: 600;
+      width: 100%;
+    }
+    
+    .tooltip-value {
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: #1a73e8;
+    }
+    
+    .tooltip-evals {
+      background: var(--info-bg);
+      padding: 8px 10px;
+      border-radius: 8px;
+      margin-top: 8px;
+      font-size: 0.8rem;
+      color: var(--info-text);
+    }
+    
+    /* Model carousel */
+    .model-carousel {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border-color);
+    }
+    
+    .carousel-title {
+      font-size: 1rem;
+      font-weight: 600;
+      margin: 0 0 12px 0;
+      color: var(--text-color);
+    }
+    
+    .carousel-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .carousel-track {
+      display: flex;
+      gap: 16px;
+      overflow-x: auto;
+      scroll-behavior: smooth;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+      padding: 4px 0;
+    }
+    
+    .carousel-track::-webkit-scrollbar { display: none; }
+    
+    .carousel-nav {
+      flex-shrink: 0;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: 1px solid var(--border-color);
+      background: var(--bg-color);
+      color: var(--text-color);
+      font-size: 1.2rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .carousel-nav:hover {
+      background: var(--info-bg);
+    }
+    
+    .carousel-dots {
+      display: flex;
+      justify-content: center;
+      gap: 6px;
+      margin-top: 12px;
+    }
+    
+    .carousel-dots .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--border-color);
+    }
+    
+    .carousel-dots .dot.active {
+      background: #1a73e8;
+    }
+    
+    /* Model cards */
+    .model-card {
+      flex: 0 0 200px;
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 16px;
+      transition: box-shadow 0.2s ease;
+    }
+    
+    .model-card:hover {
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    }
+    
+    .card-header {
+      font-size: 0.95rem;
+      margin-bottom: 4px;
+    }
+    
+    .card-icon { font-size: 1rem; }
+    
+    .card-provider {
+      font-size: 0.8rem;
+      color: var(--info-text);
+      margin-bottom: 12px;
+    }
+    
+    .card-stat {
+      margin-bottom: 8px;
+    }
+    
+    .stat-label {
+      display: block;
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      color: var(--info-text);
+      font-weight: 600;
+    }
+    
+    .stat-value {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #1a73e8;
+    }
+    
+    .card-pricing {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.8rem;
+      color: var(--text-color);
+      margin-bottom: 12px;
+    }
+    
+    .card-link {
+      display: block;
+      font-size: 0.8rem;
+      color: #1a73e8;
+      text-decoration: none;
+    }
+    
+    .card-link:hover {
+      text-decoration: underline;
     }
 
     /* Modal Styles */
@@ -720,25 +925,116 @@
       localStorage.setItem(MODEL_KEY, modelSelect.value);
     });
 
-    function renderMarkdown(content) {
-      if (!content) return '';
+    // Track collected model references for carousel
+    let collectedModelRefs = [];
+    let llmDataCache = null;
 
-      // Parse [[model:source:name]] tags into styled badges
-      let processed = content.replace(/\[\[models?:([^\]]+)\]\]/gi, (match, content) => {
-        const parts = content.split(':');
+    // Fetch LLM data for tooltips
+    async function fetchLLMData() {
+      if (llmDataCache) return llmDataCache;
+      try {
+        const res = await fetch('/api/llms');
+        const data = await res.json();
+        llmDataCache = data.data || [];
+        return llmDataCache;
+      } catch (e) {
+        console.error('Failed to fetch LLM data:', e);
+        return [];
+      }
+    }
+
+    // Find model in LLM data
+    function findModelData(modelName) {
+      if (!llmDataCache) return null;
+      const nameLower = modelName.toLowerCase();
+      return llmDataCache.find(m => {
+        const n = (m.name || '').toLowerCase();
+        return n === nameLower || n.includes(nameLower) || nameLower.includes(n);
+      });
+    }
+
+    // Build tooltip HTML for a model
+    function buildModelTooltip(model) {
+      if (!model) return '';
+      const name = model.name || 'Unknown';
+      const provider = model.model_creator?.name || 'Unknown';
+      const speed = model.median_output_tokens_per_second;
+      const evals = model.evaluations || {};
+      const pricing = model.pricing || {};
+
+      let html = `<div class="tooltip-header"><strong>${escapeHtml(name)}</strong><br><span class="tooltip-provider">${escapeHtml(provider)}</span></div>`;
+      html += `<div class="tooltip-section"><span class="tooltip-label">OUTPUT SPEED</span><span class="tooltip-value">${speed ? Math.round(speed).toLocaleString() + ' tokens/s' : 'N/A'}</span></div>`;
+
+      if (pricing.price_1m_input_tokens != null || pricing.price_1m_output_tokens != null) {
+        html += `<div class="tooltip-section"><span class="tooltip-label">Cost</span>`;
+        html += `<span class="tooltip-value">Input $${pricing.price_1m_input_tokens?.toFixed(2) || 'N/A'}</span>`;
+        html += `<span class="tooltip-value">Output $${pricing.price_1m_output_tokens?.toFixed(2) || 'N/A'}</span></div>`;
+      }
+
+      // Evaluations
+      const evalItems = [];
+      if (evals.artificial_analysis_coding_index) evalItems.push(`Coding Index: ${evals.artificial_analysis_coding_index.toFixed(1)}`);
+      if (evals.artificial_analysis_intelligence_index) evalItems.push(`Intelligence Index: ${evals.artificial_analysis_intelligence_index.toFixed(1)}`);
+      if (evals.artificial_analysis_math_index) evalItems.push(`Math Index: ${evals.artificial_analysis_math_index.toFixed(1)}`);
+
+      if (evalItems.length) {
+        html += `<div class="tooltip-evals">${evalItems.join('<br>')}</div>`;
+      }
+
+      return html;
+    }
+
+    // Build model card HTML for carousel
+    function buildModelCard(model, provider) {
+      if (!model) return '';
+      const name = model.name || 'Unknown';
+      const prov = model.model_creator?.name || provider || 'Unknown';
+      const speed = model.median_output_tokens_per_second;
+      const pricing = model.pricing || {};
+
+      // Provider color
+      const colors = { 'Google': '#4285f4', 'OpenAI': '#10a37f', 'Anthropic': '#d97706', 'Meta': '#1877f2', 'Mistral': '#ff7000', 'xAI': '#1d9bf0' };
+      const accent = colors[prov] || '#6b7280';
+
+      return `<div class="model-card" style="border-left: 4px solid ${accent}">
+        <div class="card-header"><span class="card-icon">🤖</span> <strong>${escapeHtml(name)}</strong></div>
+        <div class="card-provider">${escapeHtml(prov)}</div>
+        <div class="card-stat"><span class="stat-label">OUTPUT SPEED</span><span class="stat-value">${speed ? Math.round(speed).toLocaleString() + ' tokens/s' : 'N/A'}</span></div>
+        <div class="card-pricing">
+          <span>Input <strong>$${pricing.price_1m_input_tokens?.toFixed(0) || 'N/A'}</strong></span>
+          <span>Output <strong>$${pricing.price_1m_output_tokens?.toFixed(0) || 'N/A'}</strong></span>
+        </div>
+        <a class="card-link" href="#" onclick="event.preventDefault()">View Full Card</a>
+      </div>`;
+    }
+
+    function renderMarkdown(content) {
+      if (!content) return { html: '', refs: [] };
+
+      const refs = [];
+      let badgeId = 0;
+
+      // Parse [[model:source:name]] tags into styled badges and collect refs
+      let processed = content.replace(/\[\[models?:([^\]]+)\]\]/gi, (match, inner) => {
+        const parts = inner.split(':');
         if (parts.length >= 2) {
           const source = parts[0].trim();
           const modelName = parts.slice(1).join(':').trim();
-          // Create a styled badge with model icon
-          return `<span class="model-badge" title="${source}: ${modelName}">🤖 ${modelName}</span>`;
+          refs.push({ source, name: modelName, id: `model-badge-${badgeId}` });
+          badgeId++;
+          return `<span class="model-badge" id="model-badge-${badgeId - 1}" data-model-name="${escapeHtml(modelName)}">🤖 ${escapeHtml(modelName)}</span>`;
         }
         return match;
       });
 
+      let html = '';
       if (typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
-        return DOMPurify.sanitize(marked.parse(processed));
+        html = DOMPurify.sanitize(marked.parse(processed));
+      } else {
+        html = processed;
       }
-      return processed;
+
+      return { html, refs };
     }
 
     // Chart rendering function - handles various code block formats
@@ -761,7 +1057,7 @@
         try {
           const config = JSON.parse(jsonMatch[0]);
           if (!config.type || !config.datasets) return;
-          
+
           // For non-scatter charts, labels are required
           if (config.type !== 'scatter' && !config.labels) return;
 
@@ -791,7 +1087,7 @@
           // Build chart options based on type
           const chartType = config.type;
           const isScatter = chartType === 'scatter';
-          
+
           const chartData = {
             labels: config.labels || [],
             datasets: config.datasets.map((ds, i) => ({
@@ -852,14 +1148,20 @@
       });
     }
 
-    function addMessage(role, content) {
+    async function addMessage(role, content) {
       const msgIndex = traceHistory.length;
       const msg = document.createElement('div');
       msg.className = `message ${role}`;
 
       const bubble = document.createElement('div');
       bubble.className = 'bubble prose';
-      bubble.innerHTML = renderMarkdown(content);
+
+      // Use new renderMarkdown that returns {html, refs}
+      const result = renderMarkdown(content);
+      let htmlContent = typeof result === 'string' ? result : result.html;
+      const refs = result.refs || [];
+
+      bubble.innerHTML = htmlContent;
 
       // Make assistant messages clickable to show their trace
       if (role === 'assistant') {
@@ -868,6 +1170,45 @@
         msg.addEventListener('click', () => showTraceForMessage(msgIndex));
         // Store current toolSteps for this message
         traceHistory.push({ msgIndex, traces: [...toolSteps] });
+
+        // If we have model refs, fetch data and add carousel + tooltips
+        if (refs.length > 0) {
+          const llmData = await fetchLLMData();
+
+          // Build carousel
+          const carouselHtml = `<div class="model-carousel">
+            <h4 class="carousel-title">Model Cards</h4>
+            <div class="carousel-wrapper">
+              <button class="carousel-nav prev" onclick="scrollModelCarousel(this, -1)">‹</button>
+              <div class="carousel-track">
+                ${refs.map(ref => {
+            const model = findModelData(ref.name);
+            return buildModelCard(model, ref.source);
+          }).join('')}
+              </div>
+              <button class="carousel-nav next" onclick="scrollModelCarousel(this, 1)">›</button>
+            </div>
+            <div class="carousel-dots">
+              ${refs.map((_, i) => `<span class="dot${i === 0 ? ' active' : ''}"></span>`).join('')}
+            </div>
+          </div>`;
+
+          bubble.innerHTML += carouselHtml;
+
+          // Attach tooltips to badges
+          refs.forEach(ref => {
+            const badge = bubble.querySelector(`#${ref.id}`);
+            if (badge) {
+              const model = findModelData(ref.name);
+              if (model) {
+                const tooltip = document.createElement('div');
+                tooltip.className = 'model-tooltip';
+                tooltip.innerHTML = buildModelTooltip(model);
+                badge.appendChild(tooltip);
+              }
+            }
+          });
+        }
       }
 
       msg.appendChild(bubble);
@@ -879,6 +1220,14 @@
         setTimeout(() => renderCharts(bubble), 100);
       }
     }
+
+    // Carousel scroll function
+    window.scrollModelCarousel = function (btn, direction) {
+      const wrapper = btn.closest('.carousel-wrapper');
+      const track = wrapper.querySelector('.carousel-track');
+      const cardWidth = track.querySelector('.model-card')?.offsetWidth || 200;
+      track.scrollBy({ left: direction * (cardWidth + 16), behavior: 'smooth' });
+    };
 
     function showTraceForMessage(msgIndex) {
       const entry = traceHistory.find(h => h.msgIndex === msgIndex);
