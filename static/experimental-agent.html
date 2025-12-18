@@ -1002,14 +1002,56 @@
       return parts[parts.length - 1];
     }
 
-    // Find model in data by name, slug, or ID - with fuzzy matching
-    function findModelData(modelName, sourceHint) {
+    // Client-side cache for API lookup results
+    const apiLookupCache = {};
+
+    // Find model in data by name, slug, or ID - with fuzzy matching + LLM API fallback
+    async function findModelData(modelName, sourceHint) {
+      // First, try local fuzzy match (fast path)
+      const localMatch = findModelDataLocal(modelName, sourceHint);
+      if (localMatch) return localMatch;
+
+      // If no local match, try LLM-based API lookup
+      const cacheKey = `${sourceHint || 'all'}::${modelName.toLowerCase()}`;
+      if (apiLookupCache[cacheKey]) {
+        return apiLookupCache[cacheKey];
+      }
+
+      // Call the model-card-lookup API
+      if (sourceHint) {
+        try {
+          const response = await fetch('/api/model-card-lookup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ source: sourceHint, name: modelName })
+          });
+          if (response.ok) {
+            const result = await response.json();
+            if (result.match && result.match.metadata) {
+              apiLookupCache[cacheKey] = result.match.metadata;
+              // Also add to local cache for future lookups
+              if (modelDataCache[sourceHint]) {
+                modelDataCache[sourceHint].push(result.match.metadata);
+              }
+              return result.match.metadata;
+            }
+          }
+        } catch (e) {
+          console.warn('Model card lookup API failed:', e);
+        }
+      }
+
+      apiLookupCache[cacheKey] = null;
+      return null;
+    }
+
+    // Local-only fuzzy match (synchronous)
+    function findModelDataLocal(modelName, sourceHint) {
       const searchNorm = normalizeForMatch(modelName);
       const searchLower = modelName.toLowerCase();
       const modelPart = extractModelPart(modelName);
       const modelPartNorm = normalizeForMatch(modelPart);
 
-      // Determine which sources to search
       const sources = sourceHint ? [sourceHint] : Object.keys(modelDataCache);
 
       for (const source of sources) {
@@ -1017,29 +1059,24 @@
         if (!cache) continue;
 
         const found = cache.find(m => {
-          // Check all possible name fields
           const name = (m.name || '').toLowerCase();
           const title = (m.title || '').toLowerCase();
           const slug = (m.slug || '').toLowerCase();
           const id = (m.id || '').toLowerCase();
 
-          // Exact or contains match on original values
           if (name && (name === searchLower || name.includes(searchLower) || searchLower.includes(name))) return true;
           if (title && (title === searchLower || title.includes(searchLower) || searchLower.includes(title))) return true;
           if (slug && (slug === searchLower || slug.includes(searchLower) || searchLower.includes(slug))) return true;
           if (id && (id === searchLower || id.includes(searchLower) || searchLower.includes(id))) return true;
 
-          // Normalized fuzzy match (ignores dashes, slashes, underscores, etc.)
           const nameNorm = normalizeForMatch(m.name);
           const titleNorm = normalizeForMatch(m.title);
           const slugNorm = normalizeForMatch(m.slug);
 
-          // Full search normalized match
           if (searchNorm && nameNorm && (nameNorm.includes(searchNorm) || searchNorm.includes(nameNorm))) return true;
           if (searchNorm && titleNorm && (titleNorm.includes(searchNorm) || searchNorm.includes(titleNorm))) return true;
           if (searchNorm && slugNorm && (slugNorm.includes(searchNorm) || searchNorm.includes(slugNorm))) return true;
 
-          // Model part only match (e.g., "nano-banana-pro" from "google/nano-banana-pro")
           if (modelPartNorm && nameNorm && (nameNorm.includes(modelPartNorm) || modelPartNorm.includes(nameNorm))) return true;
           if (modelPartNorm && titleNorm && (titleNorm.includes(modelPartNorm) || modelPartNorm.includes(titleNorm))) return true;
           if (modelPartNorm && slugNorm && (slugNorm.includes(modelPartNorm) || modelPartNorm.includes(slugNorm))) return true;
@@ -1400,11 +1437,12 @@
           // Fetch data for all referenced sources
           await Promise.all(uniqueSources.map(src => fetchModelData(src)));
 
-          // Build all cards first, then filter out empty ones
-          const cards = refs.map(ref => {
-            const model = findModelData(ref.name, ref.source);
+          // Build all cards first, then filter out empty ones (async)
+          const cardPromises = refs.map(async ref => {
+            const model = await findModelData(ref.name, ref.source);
             return buildModelCard(model, ref.source);
-          }).filter(card => card && card.trim() !== '');
+          });
+          const cards = (await Promise.all(cardPromises)).filter(card => card && card.trim() !== '');
 
           if (cards.length > 0) {
             const carouselId = 'carousel-' + Date.now();
@@ -1424,11 +1462,11 @@
             bubble.innerHTML += carouselHtml;
           }
 
-          // Attach tooltips to badges
-          refs.forEach(ref => {
+          // Attach tooltips to badges (async)
+          await Promise.all(refs.map(async ref => {
             const badge = bubble.querySelector(`#${ref.id}`);
             if (badge) {
-              const model = findModelData(ref.name, ref.source);
+              const model = await findModelData(ref.name, ref.source);
               if (model) {
                 const tooltip = document.createElement('div');
                 tooltip.className = 'model-tooltip';
@@ -1436,7 +1474,7 @@
                 badge.appendChild(tooltip);
               }
             }
-          });
+          }));
         }
       }
 

@@ -7280,6 +7280,171 @@ def model_match_get_api_legacy():
     return _handle_model_match_get()
 
 
+# Model Card Lookup cache (separate from model-match cache)
+MODEL_CARD_LOOKUP_CACHE = {}
+
+
+def _load_models_for_source(source):
+    """Load model data from the appropriate source."""
+    if source == 'llms':
+        data = load_artificial_analysis_llms()
+        return data.get('data', [])
+    elif source == 'text-to-image':
+        cache_key = get_cache_key('text-to-image', {'include_categories': False})
+        if cache_key in cache and is_cache_valid(cache[cache_key]['timestamp']):
+            return cache[cache_key]['data'].get('data', [])
+        try:
+            headers = {
+                'x-api-key': ARTIFICIAL_ANALYSIS_API_KEY,
+                'Content-Type': 'application/json'
+            }
+            response = requests.get(
+                f'{ARTIFICIAL_ANALYSIS_BASE_URL}/data/media/text-to-image',
+                headers=headers,
+                timeout=30
+            )
+            response.raise_for_status()
+            data = response.json()
+            cache[cache_key] = {'data': data, 'timestamp': datetime.now()}
+            return data.get('data', [])
+        except Exception as exc:
+            print(f"ERROR: Failed to load text-to-image data: {exc}")
+            return []
+    elif source == 'fal':
+        cache_key = get_cache_key('fal_models')
+        if cache_key in cache and is_cache_valid(cache[cache_key]['timestamp']):
+            return cache[cache_key]['data']
+        try:
+            response = requests.get('https://fal.ai/api/models', timeout=30)
+            response.raise_for_status()
+            models = response.json()
+            cache[cache_key] = {'data': models, 'timestamp': datetime.now()}
+            return models
+        except Exception as exc:
+            print(f"ERROR: Failed to load fal models: {exc}")
+            return []
+    return []
+
+
+def _build_model_catalog_listing(models, source):
+    """Build a compact catalog listing for LLM matching."""
+    lines = []
+    for entry in models[:100]:
+        if not isinstance(entry, dict):
+            continue
+        model_id = entry.get('id') or entry.get('slug') or ''
+        name = entry.get('name') or entry.get('title') or ''
+        if not model_id and not name:
+            continue
+        provider = ''
+        if source in ['llms', 'text-to-image']:
+            provider = (entry.get('model_creator') or {}).get('name', '')
+        label = f"{provider}: {name}" if provider else name
+        lines.append(f"{model_id} | {label}")
+    return '\n'.join(lines)
+
+
+def _request_model_card_match_via_gemini(search_name, catalog_listing, auth_token):
+    """Use Gemini to find the best matching model in the catalog."""
+    prompt = f"""Match a fuzzy model name to a catalogue.
+
+Search: "{search_name}"
+
+Catalogue (id | name):
+{catalog_listing}
+
+Output JSON only: {{"match": "<id or empty>", "confidence": 0.0-1.0, "reason": "brief"}}
+- "match" must be an exact id from above
+- Match slug-style names like "google/nano-banana-pro" to display names like "Nano Banana Pro"
+- Ignore dashes, slashes, case differences"""
+
+    payload = {
+        'model': 'google/gemini-2.5-flash-lite-preview-09-2025',
+        'messages': [{'role': 'user', 'content': prompt}],
+        'temperature': 0.1,
+        'timeout': 30
+    }
+    response = requests.post(
+        f'{OPENROUTER_BASE_URL}/chat/completions',
+        headers=build_openrouter_headers(auth_token),
+        json=payload,
+        timeout=30
+    )
+    response.raise_for_status()
+    result = response.json()
+    content = result['choices'][0]['message']['content']
+    try:
+        parsed = parse_model_json_response(content)
+        return parsed if isinstance(parsed, dict) else {'match': '', 'confidence': 0.0}
+    except Exception as exc:
+        print(f"WARNING: Failed to parse card match response: {exc}")
+        return {'match': '', 'confidence': 0.0, 'reason': 'Parse error'}
+
+
+def _perform_model_card_lookup(source, name, auth_token):
+    """Perform LLM-based model card lookup."""
+    cache_key = f"{source}::{name.lower()}"
+    if cache_key in MODEL_CARD_LOOKUP_CACHE:
+        cached = MODEL_CARD_LOOKUP_CACHE[cache_key]
+        if cached.get('timestamp') and (datetime.now() - cached['timestamp']).seconds < 3600:
+            return cached.get('result')
+    
+    models = _load_models_for_source(source)
+    if not models:
+        return {'match': None, 'reason': f'No models for source: {source}'}
+    
+    catalog_listing = _build_model_catalog_listing(models, source)
+    if not catalog_listing:
+        return {'match': None, 'reason': 'Empty catalog'}
+    
+    gemini_result = _request_model_card_match_via_gemini(name, catalog_listing, auth_token)
+    match_id = str(gemini_result.get('match') or '').strip()
+    confidence = gemini_result.get('confidence', 0.0)
+    reason = gemini_result.get('reason', '')
+    
+    if match_id and confidence >= 0.5:
+        matched_model = next((m for m in models if (m.get('id') or m.get('slug') or '') == match_id), None)
+        if matched_model:
+            result = {'match': {'id': match_id, 'confidence': confidence, 'reason': reason, 'metadata': matched_model}}
+            MODEL_CARD_LOOKUP_CACHE[cache_key] = {'result': result, 'timestamp': datetime.now()}
+            return result
+    
+    result = {'match': None, 'reason': reason or 'No confident match'}
+    MODEL_CARD_LOOKUP_CACHE[cache_key] = {'result': result, 'timestamp': datetime.now()}
+    return result
+
+
+@app.route('/api/model-card-lookup', methods=['POST'])
+def model_card_lookup_api():
+    """API endpoint for LLM-based model card lookup."""
+    data = request.get_json(silent=True) or {}
+    source = (data.get('source') or '').lower().strip()
+    name = (data.get('name') or '').strip()
+    
+    if not source or not name:
+        return jsonify({'error': 'source and name are required'}), 400
+    
+    valid_sources = ['llms', 'text-to-image', 'fal']
+    if source not in valid_sources:
+        return jsonify({'error': f'Invalid source. Must be one of: {valid_sources}'}), 400
+    
+    try:
+        auth_token = require_user_openrouter_token()
+    except MissingOpenRouterKeyError:
+        return openrouter_key_required_response()
+    
+    try:
+        result = _perform_model_card_lookup(source, name, auth_token)
+        return jsonify(result), 200, {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, x-api-key'
+        }
+    except Exception as exc:
+        print(f"ERROR: model-card-lookup failed: {exc}")
+        return jsonify({'error': 'Lookup failed', 'details': str(exc)}), 500
+
+
 @app.route('/api/openrouter-models', methods=['GET'])
 def get_openrouter_models():
     """Fetch and cache OpenRouter model catalogue."""
