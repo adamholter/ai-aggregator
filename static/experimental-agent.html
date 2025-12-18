@@ -1011,29 +1011,56 @@
       return null;
     }
 
-    // Build tooltip HTML for a model
-    function buildModelTooltip(model) {
+
+    // Build tooltip HTML for a model (handles LLM, image gen, and fal models)
+    function buildModelTooltip(model, source) {
       if (!model) return '';
-      const name = model.name || 'Unknown';
-      const provider = model.model_creator?.name || 'Unknown';
-      const speed = model.median_output_tokens_per_second;
-      const evals = model.evaluations || {};
-      const pricing = model.pricing || {};
+      const name = model.name || model.title || 'Unknown';
+      const provider = model.model_creator?.name || model.provider || source || 'Unknown';
 
       let html = `<div class="tooltip-header"><strong>${escapeHtml(name)}</strong><br><span class="tooltip-provider">${escapeHtml(provider)}</span></div>`;
-      html += `<div class="tooltip-section"><span class="tooltip-label">OUTPUT SPEED</span><span class="tooltip-value">${speed ? Math.round(speed).toLocaleString() + ' tokens/s' : 'N/A'}</span></div>`;
 
-      if (pricing.price_1m_input_tokens != null || pricing.price_1m_output_tokens != null) {
-        html += `<div class="tooltip-section"><span class="tooltip-label">Cost</span>`;
+      // LLM specific fields
+      const speed = model.median_output_tokens_per_second;
+      if (speed) {
+        html += `<div class="tooltip-section"><span class="tooltip-label">OUTPUT SPEED</span><span class="tooltip-value">${Math.round(speed).toLocaleString()} tokens/s</span></div>`;
+      }
+
+      // Image generation specific fields (text-to-image)
+      if (model.elo) {
+        html += `<div class="tooltip-section"><span class="tooltip-label">ELO SCORE</span><span class="tooltip-value">${model.elo}</span></div>`;
+      }
+      if (model.rank) {
+        html += `<div class="tooltip-section"><span class="tooltip-label">RANK</span><span class="tooltip-value">#${model.rank}</span></div>`;
+      }
+
+      // Fal.ai specific fields
+      if (model.category) {
+        html += `<div class="tooltip-section"><span class="tooltip-label">CATEGORY</span><span class="tooltip-value">${model.category}</span></div>`;
+      }
+      if (model.description) {
+        const shortDesc = model.description.slice(0, 100) + (model.description.length > 100 ? '...' : '');
+        html += `<div class="tooltip-section"><span class="tooltip-label">DESCRIPTION</span><span class="tooltip-value" style="font-size:0.75rem">${escapeHtml(shortDesc)}</span></div>`;
+      }
+
+      // LLM pricing (structured)
+      const pricing = model.pricing;
+      if (pricing && typeof pricing === 'object' && (pricing.price_1m_input_tokens != null || pricing.price_1m_output_tokens != null)) {
+        html += `<div class="tooltip-section"><span class="tooltip-label">COST</span>`;
         html += `<span class="tooltip-value">Input $${pricing.price_1m_input_tokens?.toFixed(2) || 'N/A'}</span>`;
         html += `<span class="tooltip-value">Output $${pricing.price_1m_output_tokens?.toFixed(2) || 'N/A'}</span></div>`;
       }
+      // Fal pricing (string)
+      if (pricing && typeof pricing === 'string' && pricing.trim()) {
+        html += `<div class="tooltip-section"><span class="tooltip-label">PRICING</span><span class="tooltip-value" style="font-size:0.75rem">${escapeHtml(pricing)}</span></div>`;
+      }
 
-      // Evaluations
+      // LLM evaluations
+      const evals = model.evaluations || {};
       const evalItems = [];
-      if (evals.artificial_analysis_coding_index) evalItems.push(`Coding Index: ${evals.artificial_analysis_coding_index.toFixed(1)}`);
-      if (evals.artificial_analysis_intelligence_index) evalItems.push(`Intelligence Index: ${evals.artificial_analysis_intelligence_index.toFixed(1)}`);
-      if (evals.artificial_analysis_math_index) evalItems.push(`Math Index: ${evals.artificial_analysis_math_index.toFixed(1)}`);
+      if (evals.artificial_analysis_coding_index) evalItems.push(`Coding: ${evals.artificial_analysis_coding_index.toFixed(1)}`);
+      if (evals.artificial_analysis_intelligence_index) evalItems.push(`Intelligence: ${evals.artificial_analysis_intelligence_index.toFixed(1)}`);
+      if (evals.artificial_analysis_math_index) evalItems.push(`Math: ${evals.artificial_analysis_math_index.toFixed(1)}`);
 
       if (evalItems.length) {
         html += `<div class="tooltip-evals">${evalItems.join('<br>')}</div>`;
@@ -1042,27 +1069,61 @@
       return html;
     }
 
-    // Build model card HTML for carousel
-    function buildModelCard(model, provider) {
+    // Build model card HTML for carousel (handles LLM, image gen, and fal models)
+    function buildModelCard(model, source) {
       if (!model) return '';
-      const name = model.name || 'Unknown';
-      const prov = model.model_creator?.name || provider || 'Unknown';
-      const speed = model.median_output_tokens_per_second;
-      const pricing = model.pricing || {};
+      const name = model.name || model.title || 'Unknown';
+      const prov = model.model_creator?.name || model.provider || source || 'Unknown';
 
       // Provider color
-      const colors = { 'Google': '#4285f4', 'OpenAI': '#10a37f', 'Anthropic': '#d97706', 'Meta': '#1877f2', 'Mistral': '#ff7000', 'xAI': '#1d9bf0' };
+      const colors = { 'Google': '#4285f4', 'OpenAI': '#10a37f', 'Anthropic': '#d97706', 'Meta': '#1877f2', 'Mistral': '#ff7000', 'xAI': '#1d9bf0', 'Black Forest Labs': '#6366f1', 'ByteDance Seed': '#ef4444' };
       const accent = colors[prov] || '#6b7280';
 
-      return `<div class="model-card" style="border-left: 4px solid ${accent}">
-        <div class="card-header"><span class="card-icon">🤖</span> <strong>${escapeHtml(name)}</strong></div>
-        <div class="card-provider">${escapeHtml(prov)}</div>
-        <div class="card-stat"><span class="stat-label">OUTPUT SPEED</span><span class="stat-value">${speed ? Math.round(speed).toLocaleString() + ' tokens/s' : 'N/A'}</span></div>
-        <div class="card-pricing">
+      // Build stats based on model type
+      let statsHtml = '';
+
+      // LLM stats
+      const speed = model.median_output_tokens_per_second;
+      if (speed) {
+        statsHtml += `<div class="card-stat"><span class="stat-label">OUTPUT SPEED</span><span class="stat-value">${Math.round(speed).toLocaleString()} tokens/s</span></div>`;
+      }
+
+      // Image gen stats
+      if (model.elo) {
+        statsHtml += `<div class="card-stat"><span class="stat-label">ELO</span><span class="stat-value">${model.elo}</span></div>`;
+      }
+      if (model.rank) {
+        statsHtml += `<div class="card-stat"><span class="stat-label">RANK</span><span class="stat-value">#${model.rank}</span></div>`;
+      }
+
+      // Fal stats
+      if (model.category) {
+        statsHtml += `<div class="card-stat"><span class="stat-label">CATEGORY</span><span class="stat-value">${model.category}</span></div>`;
+      }
+
+      // LLM pricing
+      const pricing = model.pricing;
+      let pricingHtml = '';
+      if (pricing && typeof pricing === 'object' && (pricing.price_1m_input_tokens != null || pricing.price_1m_output_tokens != null)) {
+        pricingHtml = `<div class="card-pricing">
           <span>Input <strong>$${pricing.price_1m_input_tokens?.toFixed(0) || 'N/A'}</strong></span>
           <span>Output <strong>$${pricing.price_1m_output_tokens?.toFixed(0) || 'N/A'}</strong></span>
-        </div>
-        <a class="card-link" href="#" onclick="event.preventDefault()">View Full Card</a>
+        </div>`;
+      }
+
+      // Thumbnail for fal models
+      let thumbnailHtml = '';
+      if (model.thumbnailUrl) {
+        thumbnailHtml = `<img src="${model.thumbnailUrl}" alt="${escapeHtml(name)}" style="width:100%;height:60px;object-fit:cover;border-radius:4px;margin-bottom:8px;">`;
+      }
+
+      return `<div class="model-card" style="border-left: 4px solid ${accent}">
+        ${thumbnailHtml}
+        <div class="card-header"><span class="card-icon">🤖</span> <strong>${escapeHtml(name)}</strong></div>
+        <div class="card-provider">${escapeHtml(prov)}</div>
+        ${statsHtml}
+        ${pricingHtml}
+        <a class="card-link" href="${model.modelUrl || '#'}" target="_blank" rel="noopener">View Full Card</a>
       </div>`;
     }
 
@@ -1283,7 +1344,7 @@
               if (model) {
                 const tooltip = document.createElement('div');
                 tooltip.className = 'model-tooltip';
-                tooltip.innerHTML = buildModelTooltip(model);
+                tooltip.innerHTML = buildModelTooltip(model, ref.source);
                 badge.appendChild(tooltip);
               }
             }
