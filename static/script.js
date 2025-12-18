@@ -4446,6 +4446,117 @@ function renderAgentExpMarkdown(markdown) {
 }
 
 /**
+ * Render charts from JSON in code blocks within a container
+ */
+function renderAgentCharts(container) {
+    if (!container) return;
+
+    const codeBlocks = container.querySelectorAll('pre, code');
+    const seen = new Set();
+
+    codeBlocks.forEach(block => {
+        if (seen.has(block)) return;
+        seen.add(block);
+
+        let text = block.textContent.trim();
+
+        // Try to extract chart JSON - flexible regex
+        const jsonMatch = text.match(/\{[\s\S]*"type"[\s\S]*"datasets"[\s\S]*\}/);
+        if (!jsonMatch) return;
+
+        try {
+            const config = JSON.parse(jsonMatch[0]);
+            if (!config.type || !config.datasets) return;
+
+            // For non-scatter charts, labels are required
+            if (config.type !== 'scatter' && !config.labels) return;
+
+            // Create chart container
+            const chartContainer = document.createElement('div');
+            chartContainer.className = 'chart-container';
+            chartContainer.style.cssText = 'width: 100%; max-width: 600px; margin: 20px 0; padding: 20px; background: var(--card-bg); border-radius: 12px; border: 1px solid var(--border-color);';
+
+            const canvas = document.createElement('canvas');
+            canvas.id = 'chart-' + Date.now() + Math.random().toString(36).slice(2);
+            chartContainer.appendChild(canvas);
+
+            // Replace code block
+            const toReplace = block.closest('pre') || block;
+            toReplace.replaceWith(chartContainer);
+
+            // Grayscale colors
+            const grayscaleColors = [
+                'rgba(0, 0, 0, 0.8)',
+                'rgba(60, 60, 60, 0.8)',
+                'rgba(100, 100, 100, 0.8)',
+                'rgba(140, 140, 140, 0.8)',
+                'rgba(180, 180, 180, 0.8)',
+                'rgba(200, 200, 200, 0.8)'
+            ];
+
+            const chartType = config.type;
+            const isScatter = chartType === 'scatter';
+
+            const chartData = {
+                labels: config.labels || [],
+                datasets: config.datasets.map((ds, i) => ({
+                    label: ds.label || `Dataset ${i + 1}`,
+                    data: ds.data,
+                    backgroundColor: ds.backgroundColor || grayscaleColors[i % grayscaleColors.length],
+                    borderColor: ds.borderColor || 'rgba(0, 0, 0, 0.3)',
+                    borderWidth: 1,
+                    pointRadius: isScatter ? 6 : undefined,
+                    pointHoverRadius: isScatter ? 8 : undefined
+                }))
+            };
+
+            const chartOptions = {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        display: config.datasets.length > 1,
+                        labels: { color: 'rgb(100, 100, 100)' }
+                    },
+                    tooltip: isScatter ? {
+                        callbacks: {
+                            label: (ctx) => {
+                                const point = ctx.raw;
+                                const name = point.name || '';
+                                return name ? `${name}: (${point.x}, ${point.y})` : `(${point.x}, ${point.y})`;
+                            }
+                        }
+                    } : {}
+                },
+                scales: (chartType === 'bar' || chartType === 'line' || isScatter) ? {
+                    y: {
+                        beginAtZero: !isScatter,
+                        ticks: { color: 'rgb(100, 100, 100)' },
+                        grid: { color: 'rgba(0, 0, 0, 0.1)' }
+                    },
+                    x: {
+                        ticks: { color: 'rgb(100, 100, 100)' },
+                        grid: { color: 'rgba(0, 0, 0, 0.05)' }
+                    }
+                } : {}
+            };
+
+            // Render chart
+            if (typeof Chart !== 'undefined') {
+                new Chart(canvas.getContext('2d'), {
+                    type: chartType,
+                    data: chartData,
+                    options: chartOptions
+                });
+                console.log('Chart rendered:', chartType);
+            }
+        } catch (e) {
+            console.log('Chart parse error:', e.message);
+        }
+    });
+}
+
+/**
  * Build a carousel of model cards from references
  * @param {Array} refs - Array of {source, id} objects
  * @returns {string} HTML for the carousel
@@ -4857,6 +4968,8 @@ function handleAgentExpEvent(event, assistantMessage, responseContent) {
             const finalText = agentExpState.streamBuffer ? fixEncodingArtifacts(agentExpState.streamBuffer.trim()) : '';
             if (responseContent) {
                 responseContent.innerHTML = finalText ? renderAgentExpMarkdown(finalText) : '<div class="response-content">No response generated.</div>';
+                // Render any charts in the response
+                setTimeout(() => renderAgentCharts(responseContent), 100);
             }
             if (finalText) {
                 pushAgentExpHistory({ role: 'assistant', content: finalText });
