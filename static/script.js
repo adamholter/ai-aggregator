@@ -62,6 +62,7 @@ let testingCatalogLoadId = 0;
 let currentUser = null;
 let authMode = 'login';
 let pinnedItems = [];
+let compareItems = [];  // Items in compare tray for export/sharing
 const LOCAL_PIN_STORAGE_KEY = 'dashboard-pinned-items';
 const EXPERIMENTAL_FILTER_MODEL = 'google/gemini-2.5-flash-lite-preview-09-2025';
 const FILTERABLE_SECTIONS = {
