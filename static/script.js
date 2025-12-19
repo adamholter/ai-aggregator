@@ -8192,14 +8192,7 @@ function refreshAllData() {
     showToast('Refreshing all data...', 'info');
 }
 
-function toggleTheme() {
-    const html = document.documentElement;
-    const currentTheme = html.getAttribute('data-theme');
-    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-    html.setAttribute('data-theme', newTheme);
-    localStorage.setItem('dashboard-theme', newTheme);
-    showToast(`Theme: ${newTheme}`, 'info');
-}
+
 
 function openSettingsModal() {
     const settingsModal = document.getElementById('settings-modal');
