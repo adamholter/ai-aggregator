@@ -967,7 +967,12 @@
       const apiMap = {
         'llms': '/api/llms',
         'text-to-image': '/api/text-to-image',
-        'fal': '/api/fal-models'
+        'image-editing': '/api/image-editing',
+        'text-to-speech': '/api/text-to-speech',
+        'text-to-video': '/api/text-to-video',
+        'image-to-video': '/api/image-to-video',
+        'fal': '/api/fal-models',
+        'openrouter': '/api/openrouter-models'
       };
 
       const endpoint = apiMap[source];
@@ -1431,18 +1436,25 @@
 
         // If we have model refs, fetch data from all unique sources
         if (refs.length > 0) {
+          console.log('[DEBUG] Model refs found:', refs.length, refs);
+
           // Get unique sources referenced
           const uniqueSources = [...new Set(refs.map(r => r.source))];
+          console.log('[DEBUG] Unique sources to fetch:', uniqueSources);
 
           // Fetch data for all referenced sources
           await Promise.all(uniqueSources.map(src => fetchModelData(src)));
+          console.log('[DEBUG] Model data fetched, modelDataCache keys:', Object.keys(modelDataCache));
 
           // Build all cards first, then filter out empty ones (async)
           const cardPromises = refs.map(async ref => {
+            console.log('[DEBUG] Looking up model:', ref.name, 'from source:', ref.source);
             const model = await findModelData(ref.name, ref.source);
+            console.log('[DEBUG] Found model:', model ? model.name : 'NOT FOUND', model);
             return buildModelCard(model, ref.source);
           });
           const cards = (await Promise.all(cardPromises)).filter(card => card && card.trim() !== '');
+          console.log('[DEBUG] Built', cards.length, 'valid cards');
 
           if (cards.length > 0) {
             const carouselId = 'carousel-' + Date.now();
@@ -1460,21 +1472,29 @@
             </div>`;
 
             bubble.innerHTML += carouselHtml;
+            console.log('[DEBUG] Carousel added to bubble');
+          } else {
+            console.log('[DEBUG] No cards to display - carousel not added');
           }
 
           // Attach tooltips to badges (async)
           await Promise.all(refs.map(async ref => {
             const badge = bubble.querySelector(`#${ref.id}`);
+            console.log('[DEBUG] Looking for badge with id:', ref.id, '- found:', !!badge);
             if (badge) {
               const model = await findModelData(ref.name, ref.source);
+              console.log('[DEBUG] Tooltip model lookup:', ref.name, '- found:', !!model);
               if (model) {
                 const tooltip = document.createElement('div');
                 tooltip.className = 'model-tooltip';
                 tooltip.innerHTML = buildModelTooltip(model, ref.source);
                 badge.appendChild(tooltip);
+                console.log('[DEBUG] Tooltip appended to badge:', ref.id);
               }
             }
           }));
+        } else {
+          console.log('[DEBUG] No model refs found in content');
         }
       }
 
