@@ -1199,13 +1199,29 @@
         thumbnailHtml = `<img src="${model.thumbnailUrl}" alt="${escapeHtml(name)}" style="width:100%;height:60px;object-fit:cover;border-radius:4px;margin-bottom:8px;">`;
       }
 
+      // Construct model URL based on source
+      let cardUrl = '#';
+      const slug = model.slug || name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      if (source === 'llms' || source === 'text-to-image' || source === 'text-to-video' || source === 'image-to-video') {
+        cardUrl = `https://artificialanalysis.ai/models/${slug}`;
+      } else if (source === 'fal') {
+        cardUrl = `https://fal.ai/models/${model.id || slug}`;
+      } else if (source === 'openrouter') {
+        cardUrl = `https://openrouter.ai/models/${model.id || slug}`;
+      }
+
+      // Only show link if we have a valid URL
+      const linkHtml = cardUrl !== '#'
+        ? `<a class="card-link" href="${cardUrl}" target="_blank" rel="noopener">View Full Card</a>`
+        : '';
+
       return `<div class="model-card" style="border-left: 4px solid ${accent}">
         ${thumbnailHtml}
         <div class="card-header"><span class="card-icon">🤖</span> <strong>${escapeHtml(name)}</strong></div>
         <div class="card-provider">${escapeHtml(prov)}</div>
         ${statsHtml}
         ${pricingHtml}
-        <a class="card-link" href="${model.modelUrl || '#'}" target="_blank" rel="noopener">View Full Card</a>
+        ${linkHtml}
       </div>`;
     }
 
