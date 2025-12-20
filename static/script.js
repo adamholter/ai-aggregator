@@ -62,7 +62,6 @@ let testingCatalogLoadId = 0;
 let currentUser = null;
 let authMode = 'login';
 let pinnedItems = [];
-let compareItems = [];  // Items in compare tray for export/sharing
 const LOCAL_PIN_STORAGE_KEY = 'dashboard-pinned-items';
 const EXPERIMENTAL_FILTER_MODEL = 'google/gemini-2.5-flash-lite-preview-09-2025';
 const FILTERABLE_SECTIONS = {
@@ -100,480 +99,12 @@ const filterState = {};
 const displayedSnapshots = {};
 const FILTER_MODEL_STORAGE_KEY = 'dashboard-filter-model-id';
 const FILTER_PROMPT_NOTE_STORAGE_KEY = 'dashboard-filter-prompt-note';
-const MODEL_NOTES_STORAGE_KEY = 'dashboard-model-notes';
-let globalSearchIndex = null;
-let sharedViewSnapshot = null;
-
-const SHAREABLE_TAB_CATEGORY_MAP = {
-    llms: 'llms',
-    'text-to-image': 'text-to-image',
-    'image-editing': 'image-editing',
-    'text-to-speech': 'text-to-speech',
-    'text-to-video': 'text-to-video',
-    'image-to-video': 'image-to-video',
-    'fal-models': 'fal',
-    'replicate-models': 'replicate',
-    'openrouter-models': 'openrouter',
-    hype: 'hype',
-    latest: 'latest',
-    blog: 'blog',
-    'testing-catalog': 'testing-catalog',
-    monitor: 'monitor'
-};
-
-// ============================================
-// Local Notes Storage
-// ============================================
-
-function getModelNoteKey(model, type) {
-    const id = model.id || model.name || model.model_id || model.title;
-    return `${type}::${id}`.toLowerCase();
-}
-
-function getModelNote(model, type) {
-    try {
-        const notes = JSON.parse(localStorage.getItem(MODEL_NOTES_STORAGE_KEY) || '{}');
-        const key = getModelNoteKey(model, type);
-        return notes[key] || '';
-    } catch (e) {
-        return '';
-    }
-}
-
-function saveModelNote(model, type, note) {
-    try {
-        const notes = JSON.parse(localStorage.getItem(MODEL_NOTES_STORAGE_KEY) || '{}');
-        const key = getModelNoteKey(model, type);
-        if (note && note.trim()) {
-            notes[key] = note.trim();
-        } else {
-            delete notes[key];
-        }
-        localStorage.setItem(MODEL_NOTES_STORAGE_KEY, JSON.stringify(notes));
-        showToast('Note saved', 'info');
-    } catch (e) {
-        console.error('Failed to save note:', e);
-    }
-}
-
-function getAllModelNotes() {
-    try {
-        return JSON.parse(localStorage.getItem(MODEL_NOTES_STORAGE_KEY) || '{}');
-    } catch (e) {
-        return {};
-    }
-}
-
-// ============================================
-// Export Utilities
-// ============================================
-
-function exportToJSON(data, filename) {
-    const exportData = {
-        generated_at: new Date().toISOString(),
-        source: 'AI Model Analysis Dashboard',
-        count: Array.isArray(data) ? data.length : Object.keys(data).length,
-        data: data
-    };
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-    downloadBlob(blob, `${filename}.json`);
-    showToast(`Exported ${exportData.count} items to JSON`, 'info');
-}
-
-function exportToCSV(data, filename) {
-    if (!Array.isArray(data) || data.length === 0) {
-        showToast('No data to export', 'warning');
-        return;
-    }
-
-    // Get all unique keys from all objects
-    const allKeys = new Set();
-    data.forEach(item => {
-        Object.keys(item).forEach(key => {
-            // Skip complex nested objects
-            if (typeof item[key] !== 'object' || item[key] === null) {
-                allKeys.add(key);
-            }
-        });
-    });
-    const headers = Array.from(allKeys);
-
-    // Build CSV content
-    const csvRows = [];
-    csvRows.push(headers.map(h => `"${h}"`).join(','));
-
-    data.forEach(item => {
-        const row = headers.map(header => {
-            let value = item[header];
-            if (value === undefined || value === null) value = '';
-            if (typeof value === 'object') value = JSON.stringify(value);
-            // Escape quotes and wrap in quotes
-            value = String(value).replace(/"/g, '""');
-            return `"${value}"`;
-        });
-        csvRows.push(row.join(','));
-    });
-
-    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
-    downloadBlob(blob, `${filename}.csv`);
-    showToast(`Exported ${data.length} items to CSV`, 'info');
-}
-
-function downloadBlob(blob, filename) {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-}
-
-function getCurrentTabData() {
-    const activeBtn = document.querySelector('.nav-btn.active');
-    if (!activeBtn) return { category: null, data: [] };
-
-    const section = activeBtn.dataset.section;
-    const category = section;
-
-    // Get displayed data for this category
-    const data = getDisplayedItems(category) || [];
-    return { category, data };
-}
-
-function exportCurrentTab(format = 'json') {
-    const { category, data } = getCurrentTabData();
-    if (!category) {
-        showToast('No active tab', 'warning');
-        return;
-    }
-    if (!data.length) {
-        showToast('No data to export', 'warning');
-        return;
-    }
-
-    const timestamp = new Date().toISOString().slice(0, 10);
-    const filename = `dashboard-${category}-${timestamp}`;
-
-    if (format === 'csv') {
-        exportToCSV(data, filename);
-    } else {
-        exportToJSON(data, filename);
-    }
-}
-
-function exportPinnedItems() {
-    const timestamp = new Date().toISOString().slice(0, 10);
-    const filename = `dashboard-pinned-${timestamp}`;
-
-    const pinnedData = pinnedItems.map(pin => ({
-        key: pin.key,
-        category: pin.category || pin.categoryId,
-        name: pin.item?.name || pin.item?.title || pin.key,
-        pinned_at: pin.pinned_at || new Date().toISOString()
-    }));
-
-    exportToJSON(pinnedData, filename);
-}
-
-function exportCompareItems() {
-    if (!compareItems || compareItems.length === 0) {
-        showToast('No items in compare tray', 'warning');
-        return;
-    }
-    const timestamp = new Date().toISOString().slice(0, 10);
-    const filename = `dashboard-compare-${timestamp}`;
-    const compareData = compareItems.map(item => ({
-        key: item.key || item.id || item.name,
-        name: item.name || item.title,
-        category: item.category || item.type,
-        provider: item.model_creator?.name || item.vendor || item.provider
-    }));
-    exportToJSON(compareData, filename);
-}
-
-// ============================================
-// Export Dropdown UI
-// ============================================
-
-function toggleExportDropdown() {
-    const dropdown = document.getElementById('export-dropdown');
-    if (dropdown) {
-        dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
-    }
-}
-
-function closeExportDropdown() {
-    const dropdown = document.getElementById('export-dropdown');
-    if (dropdown) {
-        dropdown.style.display = 'none';
-    }
-}
-
-// Close dropdown when clicking outside
-document.addEventListener('click', (e) => {
-    if (!e.target.closest('.export-dropdown-container')) {
-        closeExportDropdown();
-    }
-});
-
-// ============================================
-// Shareable Deep Links (Stateful URLs)
-// ============================================
-
-function getDashboardState() {
-    const state = {
-        v: 1  // Version for future compatibility
-    };
-
-    // Current tab
-    const activeTab = document.querySelector('.nav-btn.active');
-    if (activeTab && activeTab.dataset.section) {
-        state.tab = activeTab.dataset.section;
-    }
-
-    // Global search
-    const searchInput = document.getElementById('global-search-input');
-    if (searchInput && searchInput.value.trim()) {
-        state.q = searchInput.value.trim();
-    }
-
-    // Compare tray
-    if (compareItems && compareItems.length > 0) {
-        state.cmp = compareItems.map(item => item.key || item.id || item.name).join(',');
-    }
-
-    // Tab-specific filters/sorts
-    if (state.tab) {
-        const tabSearch = document.querySelector(`#${state.tab}-search, [id$="${state.tab}-search"]`);
-        if (tabSearch && tabSearch.value.trim()) {
-            state.ts = tabSearch.value.trim();
-        }
-        const tabSort = document.querySelector(`#${state.tab}-sort, [id$="${state.tab}-sort"]`);
-        if (tabSort && tabSort.value) {
-            state.sort = tabSort.value;
-        }
-    }
-
-    return state;
-}
-
-function encodeStateToUrl(state) {
-    const url = new URL(window.location.href);
-    url.search = '';  // Clear existing params
-
-    Object.entries(state).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== '') {
-            url.searchParams.set(key, value);
-        }
-    });
-
-    return url.toString();
-}
-
-function copyTextToClipboard(text) {
-    return navigator.clipboard.writeText(text).catch(() => {
-        const input = document.createElement('input');
-        input.value = text;
-        document.body.appendChild(input);
-        input.select();
-        document.execCommand('copy');
-        document.body.removeChild(input);
-    });
-}
-
-function resolveShareCategory(tab) {
-    return SHAREABLE_TAB_CATEGORY_MAP[tab] || '';
-}
-
-function hasShareableFilters(state, category) {
-    if (state.q || state.ts) {
-        return true;
-    }
-    const filter = filterState[category];
-    return Boolean(filter && filter.enabled && Array.isArray(filter.items) && filter.items.length);
-}
-
-function buildSharedViewSnapshot(state, category) {
-    return {
-        tab: state.tab,
-        category,
-        items: getDisplayedItems(category),
-        created_at: new Date().toISOString()
-    };
-}
-
-async function createSharedView(snapshot, state) {
-    const response = await fetch('/api/shared-views', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ snapshot, state })
-    });
-    if (!response.ok) {
-        throw new Error(`Shared view save failed: ${response.status}`);
-    }
-    return response.json();
-}
-
-async function copyShareableLink() {
-    const state = getDashboardState();
-    const category = resolveShareCategory(state.tab);
-    let url = encodeStateToUrl(state);
-    let saved = false;
-
-    if (category && hasShareableFilters(state, category)) {
-        const snapshot = buildSharedViewSnapshot(state, category);
-        if (snapshot.items.length) {
-            try {
-                const payload = await createSharedView(snapshot, state);
-                if (payload && payload.id) {
-                    const savedState = { v: state.v, tab: state.tab, view: payload.id };
-                    url = encodeStateToUrl(savedState);
-                    saved = true;
-                }
-            } catch (error) {
-                console.error('Failed to save shared view:', error);
-            }
-        }
-    }
-
-    await copyTextToClipboard(url);
-    showToast(saved ? '📋 Saved view link copied!' : '📋 Link copied to clipboard!', 'info');
-}
-
-function parseUrlState() {
-    const params = new URLSearchParams(window.location.search);
-    const state = {};
-
-    for (const [key, value] of params.entries()) {
-        state[key] = value;
-    }
-
-    return state;
-}
-
-async function fetchSharedView(viewId) {
-    const response = await fetch(`/api/shared-views/${encodeURIComponent(viewId)}`);
-    if (!response.ok) {
-        throw new Error(`Shared view not found (${response.status}).`);
-    }
-    return response.json();
-}
-
-function applySharedViewSnapshot(sharedView) {
-    if (!sharedView || !sharedView.snapshot) {
-        return;
-    }
-    const snapshot = sharedView.snapshot;
-    if (!snapshot.category || !Array.isArray(snapshot.items)) {
-        return;
-    }
-    sharedViewSnapshot = {
-        category: snapshot.category,
-        items: snapshot.items
-    };
-}
-
-async function applyUrlState(state) {
-    if (!state || Object.keys(state).length === 0) return;
-    let effectiveState = { ...state };
-    if (state.view) {
-        try {
-            const sharedView = await fetchSharedView(state.view);
-            applySharedViewSnapshot(sharedView);
-            const sharedState = sharedView.state || {};
-            effectiveState = { ...sharedState, view: state.view };
-            if (!effectiveState.tab && state.tab) {
-                effectiveState.tab = state.tab;
-            }
-        } catch (error) {
-            console.warn('Failed to load shared view:', error);
-        }
-    }
-
-    // Switch to tab
-    if (effectiveState.tab) {
-        const tabBtn = document.querySelector(`.nav-btn[data-section="${effectiveState.tab}"]`);
-        if (tabBtn) {
-            tabBtn.click();
-        }
-    }
-
-    // Apply global search
-    if (effectiveState.q) {
-        const searchInput = document.getElementById('global-search-input');
-        if (searchInput) {
-            searchInput.value = effectiveState.q;
-            // Trigger search after a short delay
-            setTimeout(() => {
-                searchInput.dispatchEvent(new Event('input'));
-            }, 500);
-        }
-    }
-
-    // Apply tab-specific search
-    if (effectiveState.tab && effectiveState.ts) {
-        setTimeout(() => {
-            const tabSearch = document.querySelector(`#${effectiveState.tab}-search, [id$="${effectiveState.tab}-search"]`);
-            if (tabSearch) {
-                tabSearch.value = effectiveState.ts;
-                tabSearch.dispatchEvent(new Event('input'));
-            }
-        }, 600);
-    }
-
-    // Apply tab-specific sort
-    if (effectiveState.tab && effectiveState.sort) {
-        setTimeout(() => {
-            const tabSort = document.querySelector(`#${effectiveState.tab}-sort, [id$="${effectiveState.tab}-sort"]`);
-            if (tabSort) {
-                tabSort.value = effectiveState.sort;
-                tabSort.dispatchEvent(new Event('change'));
-            }
-        }, 600);
-    }
-
-    // Note: Compare tray restoration would require items to be loaded first
-    // This could be enhanced in the future
-    if (effectiveState.cmp) {
-        console.log('Compare items to restore (requires data load):', effectiveState.cmp.split(','));
-    }
-}
-
-// Apply URL state on page load
-document.addEventListener('DOMContentLoaded', () => {
-    const state = parseUrlState();
-    if (Object.keys(state).length > 1 || (Object.keys(state).length === 1 && !state.v)) {
-        // Wait for data to load before applying state
-        setTimeout(() => applyUrlState(state), 1000);
-    }
-});
-
-document.addEventListener('input', (event) => {
-    if (!sharedViewSnapshot || !event.isTrusted) {
-        return;
-    }
-    if (event.target && event.target.matches('input, select, textarea')) {
-        sharedViewSnapshot = null;
-    }
-});
-
-document.addEventListener('change', (event) => {
-    if (!sharedViewSnapshot || !event.isTrusted) {
-        return;
-    }
-    if (event.target && event.target.matches('input, select, textarea')) {
-        sharedViewSnapshot = null;
-    }
-});
 
 function recordDisplayedItems(category, items) {
     if (typeof category !== 'string') {
         return;
     }
     displayedSnapshots[category] = Array.isArray(items) ? items.slice() : [];
-    globalSearchIndex = null;
 }
 
 function getDisplayedItems(category) {
@@ -581,9 +112,6 @@ function getDisplayedItems(category) {
 }
 
 function getFilteredItems(category, fallback = []) {
-    if (sharedViewSnapshot && sharedViewSnapshot.category === category && Array.isArray(sharedViewSnapshot.items)) {
-        return sharedViewSnapshot.items;
-    }
     const state = filterState[category];
     if (!state || !state.enabled || !Array.isArray(state.items)) {
         return fallback;
@@ -1378,7 +906,6 @@ document.addEventListener('DOMContentLoaded', async function () {
     ensureExperimentalSections();
     ensureExperimentalNavButtons();
     setupNavigation();
-    setupGlobalSearch();
     initializeTheme();
     initializeAuthControls();
     setupFilterControls();
@@ -2297,152 +1824,24 @@ function ensureExperimentalSections() {
     }
 }
 function setupNavigation() {
-    const navButtons = document.querySelectorAll('.nav-btn[data-section]');
+    const navButtons = document.querySelectorAll('.nav-btn');
     const sections = document.querySelectorAll('.content-section');
 
     navButtons.forEach(button => {
         button.addEventListener('click', () => {
             const targetSection = button.getAttribute('data-section');
-            if (!targetSection) return; // Skip custom dashboard tabs
-
-            // Clear custom dashboard active state
-            if (typeof activeDashboardId !== 'undefined') {
-                activeDashboardId = null;
-            }
-            // Re-render dashboard tabs to remove active state
-            if (typeof renderDashboardTabs === 'function') {
-                renderDashboardTabs();
-            }
 
             // Update active states
-            document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
+            navButtons.forEach(btn => btn.classList.remove('active'));
             sections.forEach(section => section.classList.remove('active'));
 
             button.classList.add('active');
-            const targetEl = document.getElementById(targetSection);
-            if (targetEl) targetEl.classList.add('active');
+            document.getElementById(targetSection).classList.add('active');
 
             // Load data for the selected section
             loadSectionData(targetSection);
         });
     });
-}
-
-function categoryToSection(categoryId) {
-    const mapping = {
-        fal: 'fal-models',
-        replicate: 'replicate-models',
-        openrouter: 'openrouter-models'
-    };
-    return mapping[categoryId] || categoryId;
-}
-
-function getItemStableKey(categoryId, item) {
-    return buildPinKey(categoryId, item);
-}
-
-function setupGlobalSearch() {
-    const input = document.getElementById('global-search-input');
-    const resultsEl = document.getElementById('global-search-results');
-    if (!input || !resultsEl) return;
-
-    const closeResults = () => {
-        resultsEl.style.display = 'none';
-        resultsEl.innerHTML = '';
-    };
-
-    input.addEventListener('input', () => {
-        const q = input.value.trim().toLowerCase();
-        if (!q) return closeResults();
-        const results = runGlobalSearch(q);
-        renderGlobalSearchResults(resultsEl, results);
-        resultsEl.style.display = results.length ? 'block' : 'none';
-    });
-
-    // Prefetch data on focus to ensure search works across all tabs
-    input.addEventListener('focus', () => {
-        prefetchAllData();
-    });
-
-    // Also auto-prefetch shortly after load to ensure data is ready even without interaction
-    setTimeout(() => {
-        prefetchAllData();
-    }, 3000);
-
-    document.addEventListener('click', (e) => {
-        if (!resultsEl.contains(e.target) && e.target !== input) {
-            closeResults();
-        }
-    });
-}
-
-function prefetchAllData() {
-    if (!cachedData.falModels) loadFalModelsData();
-    if (!cachedData.replicateModels) loadReplicateModelsData();
-    if (!cachedData.testingCatalog) loadTestingCatalogData();
-    if (!cachedData.hype) loadHypeData();
-    if (!cachedData.monitor) loadMonitorFeed();
-    if (!cachedData.blog) loadBlogPosts();
-    if (!cachedData.openRouterModels) ensureOpenRouterDataLoaded();
-}
-
-function rebuildGlobalSearchIndex() {
-    const index = [];
-    Object.entries(FILTERABLE_SECTIONS).forEach(([categoryId, cfg]) => {
-        const items = Array.isArray(cfg.getItems()) ? cfg.getItems() : [];
-        items.forEach((item) => {
-            const key = getItemStableKey(categoryId, item);
-            const label = item.name || item.title || item.id || key;
-            const meta = item.vendor || item.owner || item.provider || item.source_label || item.source || '';
-            const haystack = `${label} ${meta} ${item.description || item.excerpt || ''} ${item.tags || ''}`.toLowerCase();
-            index.push({ categoryId, sectionId: categoryToSection(categoryId), key, label, meta, item, haystack });
-        });
-    });
-    globalSearchIndex = index;
-}
-
-function runGlobalSearch(queryLower) {
-    if (!globalSearchIndex) rebuildGlobalSearchIndex();
-    const results = (globalSearchIndex || []).filter(r => r.haystack.includes(queryLower));
-    return results.slice(0, 120);
-}
-
-function renderGlobalSearchResults(container, results) {
-    const grouped = {};
-    results.forEach(r => {
-        grouped[r.categoryId] = grouped[r.categoryId] || [];
-        grouped[r.categoryId].push(r);
-    });
-    container.innerHTML = '';
-    Object.entries(grouped).forEach(([categoryId, items]) => {
-        const group = document.createElement('div');
-        group.className = 'global-search-group';
-        group.innerHTML = `<div class="global-search-group-title">${escapeHtml(categoryId)}</div>`;
-        items.slice(0, 10).forEach((r) => {
-            const row = document.createElement('div');
-            row.className = 'global-search-item';
-            row.innerHTML = `<div class="title">${escapeHtml(r.label)}</div><div class="meta">${escapeHtml(r.meta)}</div>`;
-            row.addEventListener('click', () => {
-                container.style.display = 'none';
-                const navBtn = document.querySelector(`.nav-btn[data-section="${r.sectionId}"]`);
-                navBtn && navBtn.click();
-                setTimeout(() => scrollToCard(r.sectionId, r.key), 400);
-            });
-            group.appendChild(row);
-        });
-        container.appendChild(group);
-    });
-}
-
-function scrollToCard(sectionId, itemKey) {
-    const section = document.getElementById(sectionId);
-    if (!section) return;
-    const el = section.querySelector(`[data-item-key="${CSS.escape(itemKey)}"]`);
-    if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        el.classList.add('highlight-pulse');
-        setTimeout(() => el.classList.remove('highlight-pulse'), 1600);
-    }
 }
 
 // Load data based on selected section
@@ -4699,8 +4098,7 @@ function appendAgentExpMessage(role, content, options = {}) {
     const responseContent = document.createElement('div');
     responseContent.className = 'response-content';
     if (content) {
-        const result = renderAgentExpMarkdown(content);
-        responseContent.innerHTML = result.html;
+        responseContent.innerHTML = renderAgentExpMarkdown(content);
     } else if (options.streaming) {
         responseContent.innerHTML = '<div class="typing-indicator">Thinking...</div>';
     }
@@ -4712,476 +4110,18 @@ function appendAgentExpMessage(role, content, options = {}) {
 
 function renderAgentExpMarkdown(markdown) {
     if (!markdown) {
-        return { html: '', refs: [] };
+        return '';
     }
     let sanitized = typeof fixEncodingArtifacts === 'function' ? fixEncodingArtifacts(markdown) : markdown;
-
-    // Collect model references for carousel at end
-    const modelRefs = [];
-    let badgeId = 0;
-
-    // Custom bracket-aware parser for [[model:source:name]] tags
-    // Handles model names with brackets like FLUX.2 [max]
-    function parseModelTags(text) {
-        let result = '';
-        let i = 0;
-        while (i < text.length) {
-            // Check for [[model: or [[models:
-            if ((text.slice(i, i + 8) === '[[model:' || text.slice(i, i + 9) === '[[models:')) {
-                const prefixLen = text.slice(i, i + 9) === '[[models:' ? 9 : 8;
-                const innerStart = i + prefixLen;
-                let j = innerStart;
-                let bracketCount = 0;
-                let found = false;
-
-                // Scan forward, tracking nested brackets
-                while (j < text.length) {
-                    if (text[j] === '[') {
-                        bracketCount++;
-                    } else if (text[j] === ']') {
-                        if (bracketCount > 0) {
-                            bracketCount--;
-                        } else if (text[j + 1] === ']') {
-                            // Found closing ]] while not inside nested brackets
-                            const inner = text.slice(innerStart, j);
-                            const colonIdx = inner.indexOf(':');
-
-                            if (colonIdx !== -1) {
-                                const source = inner.substring(0, colonIdx).trim();
-                                const modelName = inner.substring(colonIdx + 1).trim();
-
-                                if (source && modelName) {
-                                    modelRefs.push({ source, name: modelName, id: `agent-badge-${badgeId}` });
-                                    result += `<span class="agent-model-badge" id="agent-badge-${badgeId}" data-source="${escapeHtml(source)}" data-model-name="${escapeHtml(modelName)}">🤖 ${escapeHtml(modelName)}</span>`;
-                                    badgeId++;
-                                    i = j + 2; // Skip past ]]
-                                    found = true;
-                                    break;
-                                }
-                            }
-                            // Invalid format, output as-is
-                            result += text.slice(i, j + 2);
-                            i = j + 2;
-                            found = true;
-                            break;
-                        }
-                    }
-                    j++;
-                }
-
-                if (!found) {
-                    // No closing ]] found, output character and continue
-                    result += text[i];
-                    i++;
-                }
-            } else {
-                result += text[i];
-                i++;
-            }
-        }
-        return result;
-    }
-
-    sanitized = parseModelTags(sanitized);
-
-    // Render markdown
-    let html = '';
     if (typeof marked !== 'undefined' && marked.parse) {
         try {
-            html = marked.parse(sanitized);
+            return marked.parse(sanitized);
         } catch (error) {
             console.warn('Marked.js failed, using fallback markdown renderer.', error);
-            html = simpleMarkdownToHtml(sanitized);
         }
-    } else {
-        html = simpleMarkdownToHtml(sanitized);
     }
-
-    return { html, refs: modelRefs };
+    return simpleMarkdownToHtml(sanitized);
 }
-
-/**
- * Enhance agent response with model carousel and tooltips
- * @param {HTMLElement} container - The response content container
- * @param {Array} refs - Model references from renderAgentExpMarkdown
- */
-function enhanceAgentResponse(container, refs) {
-    if (!container || !refs || refs.length === 0) return;
-
-    // Build carousel HTML at the end
-    const carouselHtml = buildAgentCarousel(refs);
-    if (carouselHtml) {
-        container.insertAdjacentHTML('beforeend', carouselHtml);
-    }
-
-    // Attach tooltips to badges
-    refs.forEach(ref => {
-        const badge = container.querySelector(`#${ref.id}`);
-        if (badge) {
-            const model = findModelByRef(ref.source, ref.name);
-            if (model) {
-                const tooltipHtml = buildAgentTooltip(model);
-                if (tooltipHtml) {
-                    const tooltip = document.createElement('div');
-                    tooltip.className = 'agent-badge-tooltip';
-                    tooltip.innerHTML = tooltipHtml;
-                    badge.appendChild(tooltip);
-                }
-            }
-        }
-    });
-}
-
-/**
- * Build tooltip HTML for model badge
- */
-function buildAgentTooltip(model) {
-    if (!model) return '';
-    const name = model.name || 'Unknown';
-    const provider = model.model_creator?.name || 'Unknown';
-    const speed = model.median_output_tokens_per_second;
-    const evals = model.evaluations || {};
-    const pricing = model.pricing || {};
-
-    let html = `<div class="agent-tooltip-header"><strong>${escapeHtml(name)}</strong><br><span>${escapeHtml(provider)}</span></div>`;
-    html += `<div class="agent-tooltip-row"><span>OUTPUT SPEED</span><span>${speed ? Math.round(speed).toLocaleString() + ' tokens/s' : 'N/A'}</span></div>`;
-
-    if (pricing.price_1m_input_tokens != null) {
-        html += `<div class="agent-tooltip-row"><span>Cost</span><span>Input $${pricing.price_1m_input_tokens?.toFixed(2)} · Output $${pricing.price_1m_output_tokens?.toFixed(2)}</span></div>`;
-    }
-
-    const evalItems = [];
-    if (evals.artificial_analysis_coding_index) evalItems.push(`Coding: ${evals.artificial_analysis_coding_index.toFixed(1)}`);
-    if (evals.artificial_analysis_intelligence_index) evalItems.push(`Intelligence: ${evals.artificial_analysis_intelligence_index.toFixed(1)}`);
-    if (evals.artificial_analysis_math_index) evalItems.push(`Math: ${evals.artificial_analysis_math_index.toFixed(1)}`);
-
-    if (evalItems.length) {
-        html += `<div class="agent-tooltip-evals">${evalItems.join(' · ')}</div>`;
-    }
-
-    return html;
-}
-
-/**
- * Build model cards carousel at end of response
- */
-function buildAgentCarousel(refs) {
-    if (!refs || refs.length === 0) return '';
-
-    const cards = refs.map(ref => {
-        const model = findModelByRef(ref.source, ref.name);
-        if (!model) return '';
-        const name = model.name || 'Unknown';
-        const provider = model.model_creator?.name || ref.source || 'Unknown';
-        const speed = model.median_output_tokens_per_second;
-        const pricing = model.pricing || {};
-
-        // Provider colors
-        const colors = { 'Google': '#4285f4', 'OpenAI': '#10a37f', 'Anthropic': '#d97706', 'Meta': '#1877f2', 'xAI': '#1d9bf0' };
-        const accent = colors[provider] || '#6b7280';
-
-        return `<div class="agent-carousel-card" style="border-left: 4px solid ${accent}">
-            <div class="carousel-card-name">🤖 ${escapeHtml(name)}</div>
-            <div class="carousel-card-provider">${escapeHtml(provider)}</div>
-            <div class="carousel-card-stat"><span>OUTPUT SPEED</span><span>${speed ? Math.round(speed).toLocaleString() + ' tokens/s' : 'N/A'}</span></div>
-            <div class="carousel-card-pricing">
-                <span>Input <strong>$${pricing.price_1m_input_tokens?.toFixed(0) || 'N/A'}</strong></span>
-                <span>Output <strong>$${pricing.price_1m_output_tokens?.toFixed(0) || 'N/A'}</strong></span>
-            </div>
-            <a class="carousel-card-link" href="#" onclick="event.preventDefault()">View Full Card</a>
-        </div>`;
-    }).filter(c => c && c.trim());
-
-    if (cards.length === 0) return '';
-
-    const carouselId = 'agent-carousel-' + Date.now();
-
-    return `<div class="agent-model-section" id="${carouselId}">
-        <h4>Model Cards</h4>
-        <div class="agent-carousel-wrapper">
-            <button class="agent-carousel-nav" onclick="document.querySelector('#${carouselId} .agent-carousel-track').scrollBy({left:-220,behavior:'smooth'})">‹</button>
-            <div class="agent-carousel-track">${cards.join('')}</div>
-            <button class="agent-carousel-nav" onclick="document.querySelector('#${carouselId} .agent-carousel-track').scrollBy({left:220,behavior:'smooth'})">›</button>
-        </div>
-    </div>`;
-}
-
-/**
- * Render charts from JSON in code blocks within a container
- */
-function renderAgentCharts(container) {
-    if (!container) return;
-
-    const codeBlocks = container.querySelectorAll('pre, code');
-    const seen = new Set();
-
-    codeBlocks.forEach(block => {
-        if (seen.has(block)) return;
-        seen.add(block);
-
-        let text = block.textContent.trim();
-
-        // Try to extract chart JSON - flexible regex
-        const jsonMatch = text.match(/\{[\s\S]*"type"[\s\S]*"datasets"[\s\S]*\}/);
-        if (!jsonMatch) return;
-
-        try {
-            const config = JSON.parse(jsonMatch[0]);
-            if (!config.type || !config.datasets) return;
-
-            // For non-scatter charts, labels are required
-            if (config.type !== 'scatter' && !config.labels) return;
-
-            // Create chart container
-            const chartContainer = document.createElement('div');
-            chartContainer.className = 'chart-container';
-            chartContainer.style.cssText = 'width: 100%; max-width: 600px; margin: 20px 0; padding: 20px; background: var(--card-bg); border-radius: 12px; border: 1px solid var(--border-color);';
-
-            const canvas = document.createElement('canvas');
-            canvas.id = 'chart-' + Date.now() + Math.random().toString(36).slice(2);
-            chartContainer.appendChild(canvas);
-
-            // Replace code block
-            const toReplace = block.closest('pre') || block;
-            toReplace.replaceWith(chartContainer);
-
-            // Grayscale colors
-            const grayscaleColors = [
-                'rgba(0, 0, 0, 0.8)',
-                'rgba(60, 60, 60, 0.8)',
-                'rgba(100, 100, 100, 0.8)',
-                'rgba(140, 140, 140, 0.8)',
-                'rgba(180, 180, 180, 0.8)',
-                'rgba(200, 200, 200, 0.8)'
-            ];
-
-            const chartType = config.type;
-            const isScatter = chartType === 'scatter';
-
-            const chartData = {
-                labels: config.labels || [],
-                datasets: config.datasets.map((ds, i) => ({
-                    label: ds.label || `Dataset ${i + 1}`,
-                    data: ds.data,
-                    backgroundColor: ds.backgroundColor || grayscaleColors[i % grayscaleColors.length],
-                    borderColor: ds.borderColor || 'rgba(0, 0, 0, 0.3)',
-                    borderWidth: 1,
-                    pointRadius: isScatter ? 6 : undefined,
-                    pointHoverRadius: isScatter ? 8 : undefined
-                }))
-            };
-
-            const chartOptions = {
-                responsive: true,
-                maintainAspectRatio: true,
-                plugins: {
-                    legend: {
-                        display: config.datasets.length > 1,
-                        labels: { color: 'rgb(100, 100, 100)' }
-                    },
-                    tooltip: isScatter ? {
-                        callbacks: {
-                            title: (ctxArr) => {
-                                const point = ctxArr[0]?.raw;
-                                return point?.name || point?.label || point?.title || '';
-                            },
-                            label: (ctx) => {
-                                const point = ctx.raw;
-                                const name = point.name || point.label || point.title || '';
-                                const xLabel = config.options?.scales?.x?.title?.text || 'X';
-                                const yLabel = config.options?.scales?.y?.title?.text || 'Y';
-                                const lines = [];
-                                if (name) lines.push(name);
-                                lines.push(`${xLabel}: ${point.x}`);
-                                lines.push(`${yLabel}: ${point.y}`);
-                                return lines;
-                            }
-                        }
-                    } : {}
-                },
-                scales: (chartType === 'bar' || chartType === 'line' || isScatter) ? {
-                    y: {
-                        beginAtZero: !isScatter,
-                        ticks: { color: 'rgb(100, 100, 100)' },
-                        grid: { color: 'rgba(0, 0, 0, 0.1)' }
-                    },
-                    x: {
-                        ticks: { color: 'rgb(100, 100, 100)' },
-                        grid: { color: 'rgba(0, 0, 0, 0.05)' }
-                    }
-                } : {}
-            };
-
-            // Render chart
-            if (typeof Chart !== 'undefined') {
-                new Chart(canvas.getContext('2d'), {
-                    type: chartType,
-                    data: chartData,
-                    options: chartOptions
-                });
-                console.log('Chart rendered:', chartType);
-            }
-        } catch (e) {
-            console.log('Chart parse error:', e.message);
-        }
-    });
-}
-
-/**
- * Build a carousel of model cards from references
- * @param {Array} refs - Array of {source, id} objects
- * @returns {string} HTML for the carousel
- */
-function buildModelCarousel(refs) {
-    if (!refs || refs.length === 0) return '';
-
-    const carouselId = 'carousel-' + Date.now() + Math.random().toString(36).substr(2, 5);
-
-    // Build mini cards with hover tooltips
-    const cards = refs.map(ref => {
-        const model = findModelByRef(ref.source, ref.id);
-        if (!model) {
-            return `<div class="mini-model-card not-found">
-                <span class="mini-card-name">🤖 ${escapeHtml(ref.id)}</span>
-            </div>`;
-        }
-
-        const name = model.name || model.title || model.id || 'Unknown Model';
-
-        // Get provider from model_creator or other fields
-        let provider = '';
-        if (model.model_creator && model.model_creator.name) {
-            provider = model.model_creator.name;
-        } else {
-            provider = model.provider || model.vendor || model.org || ref.source;
-        }
-
-        // Build tooltip content with model metrics
-        let tooltipParts = [`<strong>${escapeHtml(name)}</strong>`, `<em>${escapeHtml(provider)}</em>`];
-
-        // Add quality/ELO for LLMs
-        if (model.evaluations && model.evaluations.artificial_analysis_intelligence_index) {
-            tooltipParts.push(`Quality: ${model.evaluations.artificial_analysis_intelligence_index.toFixed(1)}`);
-        }
-
-        // Add speed
-        if (model.median_output_tokens_per_second) {
-            tooltipParts.push(`Speed: ${Math.round(model.median_output_tokens_per_second)} tok/s`);
-        }
-
-        // Add pricing
-        if (model.pricing) {
-            const inputCost = model.pricing.price_1m_input_tokens;
-            const outputCost = model.pricing.price_1m_output_tokens;
-            if (inputCost != null) tooltipParts.push(`Input: $${inputCost.toFixed(2)}/1M`);
-            if (outputCost != null) tooltipParts.push(`Output: $${outputCost.toFixed(2)}/1M`);
-        }
-
-        const tooltipHtml = tooltipParts.join('<br>');
-
-        return `<div class="mini-model-card" data-source="${escapeHtml(ref.source)}" data-model-id="${escapeHtml(ref.id)}" onclick="openModelFromCarousel('${escapeHtml(ref.source)}', '${escapeHtml(ref.id)}')">
-            <div class="mini-card-tooltip">${tooltipHtml}</div>
-            <div class="mini-card-header">
-                <span class="mini-card-source">${escapeHtml(ref.source)}</span>
-            </div>
-            <div class="mini-card-name">🤖 ${escapeHtml(name)}</div>
-            <div class="mini-card-provider">${escapeHtml(provider)}</div>
-            <div class="mini-card-actions">
-                <button class="mini-action" onclick="event.stopPropagation(); pinModelFromCarousel('${escapeHtml(ref.source)}', '${escapeHtml(ref.id)}')" title="Pin">📌</button>
-            </div>
-        </div>`;
-    }).join('');
-
-    return `<div class="agent-model-carousel" id="${carouselId}">
-        <button class="carousel-nav carousel-prev" onclick="scrollCarousel('${carouselId}', -1)">‹</button>
-        <div class="carousel-track">${cards}</div>
-        <button class="carousel-nav carousel-next" onclick="scrollCarousel('${carouselId}', 1)">›</button>
-    </div>`;
-}
-
-/**
- * Find a model by source and ID
- */
-function findModelByRef(source, id) {
-    // Helper to get array from various data structures
-    const getArray = (data) => {
-        if (!data) return [];
-        if (Array.isArray(data)) return data;
-        if (data.data && Array.isArray(data.data)) return data.data;
-        return [];
-    };
-
-    const sourceMap = {
-        'llms': () => getArray(rawData.llms) || getArray(cachedData.llms) || [],
-        'openrouter': () => getArray(cachedData.openrouter) || getArray(cachedData.openRouterModels) || [],
-        'fal': () => getArray(rawData.falModels) || getArray(cachedData.fal) || [],
-        'replicate': () => getArray(rawData.replicateModels) || getArray(cachedData.replicate) || [],
-        'text-to-image': () => getArray(rawData.textToImage) || getArray(cachedData['text-to-image']) || [],
-        'image-editing': () => getArray(rawData.imageEditing) || getArray(cachedData['image-editing']) || [],
-        'text-to-speech': () => getArray(rawData.textToSpeech) || getArray(cachedData['text-to-speech']) || [],
-        'text-to-video': () => getArray(rawData.textToVideo) || getArray(cachedData['text-to-video']) || [],
-        'image-to-video': () => getArray(rawData.imageToVideo) || getArray(cachedData['image-to-video']) || [],
-        'testing-catalog': () => getArray(cachedData['testing-catalog']) || [],
-        'blog': () => getArray(cachedData.blog) || [],
-        'hype': () => getArray(rawData.hype) || getArray(cachedData.hype) || []
-    };
-
-    const getter = sourceMap[source];
-    if (!getter) return null;
-
-    const items = getter();
-    if (!items.length) return null;
-
-    // Try exact match first, then partial match
-    const idLower = id.toLowerCase();
-    return items.find(item => {
-        const itemId = (item.id || item.name || item.title || '').toLowerCase();
-        return itemId === idLower;
-    }) || items.find(item => {
-        const itemId = (item.id || item.name || item.title || '').toLowerCase();
-        return itemId.includes(idLower) || idLower.includes(itemId);
-    });
-}
-
-/**
- * Open model modal from carousel click
- */
-function openModelFromCarousel(source, id) {
-    const model = findModelByRef(source, id);
-    if (model) {
-        openModelModal(model, source);
-    }
-}
-
-/**
- * Pin model from carousel
- */
-function pinModelFromCarousel(source, id) {
-    const model = findModelByRef(source, id);
-    if (model) {
-        togglePin(source, model);
-        showToast('Pin toggled!', 'info');
-    }
-}
-
-/**
- * Scroll carousel left or right
- */
-function scrollCarousel(carouselId, direction) {
-    const carousel = document.getElementById(carouselId);
-    if (!carousel) return;
-
-    const track = carousel.querySelector('.carousel-track');
-    if (!track) return;
-
-    const scrollAmount = 280 * direction;
-    track.scrollBy({ left: scrollAmount, behavior: 'smooth' });
-}
-
-// Export carousel functions
-window.scrollCarousel = scrollCarousel;
-window.openModelFromCarousel = openModelFromCarousel;
-window.pinModelFromCarousel = pinModelFromCarousel;
 
 function setAgentExpStatus(message, isError = false) {
     const status = document.getElementById('agent-exp-status');
@@ -5252,6 +4192,12 @@ async function sendAgentExpMessage(event) {
         const errorMessage = error && error.message ? error.message : 'Agent request failed.';
         setAgentExpStatus(errorMessage, true);
         showToast(errorMessage, 'error');
+    }
+}
+
+if (submitButton) {
+    submitButton.disabled = false;
+}
     }
 }
 
@@ -5415,8 +4361,7 @@ function handleAgentExpEvent(event, assistantMessage, responseContent) {
             const chunk = event.content || '';
             agentExpState.streamBuffer += chunk;
             if (responseContent) {
-                const result = renderAgentExpMarkdown(agentExpState.streamBuffer);
-                responseContent.innerHTML = result.html;
+                responseContent.innerHTML = renderAgentExpMarkdown(agentExpState.streamBuffer);
             }
             scrollAgentExpToBottom();
             break;
@@ -5439,16 +4384,7 @@ function handleAgentExpEvent(event, assistantMessage, responseContent) {
             }
             const finalText = agentExpState.streamBuffer ? fixEncodingArtifacts(agentExpState.streamBuffer.trim()) : '';
             if (responseContent) {
-                if (finalText) {
-                    const result = renderAgentExpMarkdown(finalText);
-                    responseContent.innerHTML = result.html;
-                    // Add carousel and tooltips
-                    enhanceAgentResponse(responseContent, result.refs);
-                } else {
-                    responseContent.innerHTML = '<div class="response-content">No response generated.</div>';
-                }
-                // Render any charts in the response
-                setTimeout(() => renderAgentCharts(responseContent), 100);
+                responseContent.innerHTML = finalText ? renderAgentExpMarkdown(finalText) : '<div class="response-content">No response generated.</div>';
             }
             if (finalText) {
                 pushAgentExpHistory({ role: 'assistant', content: finalText });
@@ -6231,23 +5167,12 @@ async function openModelModal(model, type) {
             <div class="modal-tabs">
                 <button class="modal-tab active" data-tab="overview">Data Overview</button>
                 <button class="modal-tab" data-tab="openrouter" hidden>OpenRouter Data</button>
-                <button class="modal-tab" data-tab="notes">📝 Notes</button>
                 <button class="modal-tab" data-tab="analysis">AI Analysis</button>
             </div>
             <div class="modal-tab-content active" data-tab="overview">
                 <div class="modal-overview"></div>
             </div>
             <div class="modal-tab-content" data-tab="openrouter" hidden></div>
-            <div class="modal-tab-content" data-tab="notes">
-                <div class="notes-container">
-                    <p class="notes-intro">Add personal notes, tags, or annotations for this model. Notes are stored locally in your browser.</p>
-                    <textarea class="notes-textarea" placeholder="Type your notes here..." rows="6"></textarea>
-                    <div class="notes-actions">
-                        <button class="primary-btn notes-save-btn">Save Note</button>
-                        <span class="notes-status"></span>
-                    </div>
-                </div>
-            </div>
             <div class="modal-tab-content" data-tab="analysis">
                 <div class="analysis-container">
                     <div class="analysis-intro">
@@ -6291,28 +5216,6 @@ async function openModelModal(model, type) {
             });
         });
     });
-
-    // Notes functionality
-    const notesTextarea = modalContent.querySelector('.notes-textarea');
-    const notesSaveBtn = modalContent.querySelector('.notes-save-btn');
-    const notesStatus = modalContent.querySelector('.notes-status');
-
-    if (notesTextarea && notesSaveBtn) {
-        // Load existing note
-        const existingNote = getModelNote(model, type);
-        if (existingNote) {
-            notesTextarea.value = existingNote;
-        }
-
-        // Save handler
-        notesSaveBtn.addEventListener('click', () => {
-            saveModelNote(model, type, notesTextarea.value);
-            if (notesStatus) {
-                notesStatus.textContent = 'Saved!';
-                setTimeout(() => { notesStatus.textContent = ''; }, 2000);
-            }
-        });
-    }
 
     const analysisContainer = modalContent.querySelector('.analysis-container');
     const analysisButton = modalContent.querySelector('[data-action="start-analysis"]');
@@ -7716,6 +6619,31 @@ function setupModelDropdown(inputId, dropdownId) {
     });
 }
 
+// Setup dropdown functionality
+function setupModelDropdown(inputId, dropdownId) {
+    const input = document.getElementById(inputId);
+    const dropdown = document.getElementById(dropdownId);
+
+    if (!input || !dropdown) return;
+
+    // Show dropdown on focus
+    input.addEventListener('focus', () => {
+        showModelDropdown(inputId, dropdownId, input.value);
+    });
+
+    // Filter on input
+    input.addEventListener('input', (e) => {
+        showModelDropdown(inputId, dropdownId, e.target.value);
+    });
+
+    // Hide dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+            hideModelDropdown(dropdownId);
+        }
+    });
+}
+
 // Main settings functionality
 document.addEventListener('DOMContentLoaded', function () {
     const settingsBtn = document.getElementById('settings-btn');
@@ -7983,354 +6911,270 @@ window.updateAgentModel = updateAgentModel;
 window.loadMonitorFeed = loadMonitorFeed;
 
 // ============================================
-// Command Palette + Hotkeys
+// Chart Comparison Functions
 // ============================================
 
-const COMMAND_PALETTE_ACTIONS = [
-    // Navigation commands
-    { id: 'go-llms', label: 'Go to LLMs', icon: '🤖', category: 'Navigation', shortcut: ['G', 'L'], action: () => navigateToTab('llms') },
-    { id: 'go-openrouter', label: 'Go to OpenRouter', icon: '🌐', category: 'Navigation', shortcut: ['G', 'O'], action: () => navigateToTab('openrouter-models') },
-    { id: 'go-fal', label: 'Go to Fal.ai', icon: '⚡', category: 'Navigation', shortcut: ['G', 'F'], action: () => navigateToTab('fal-models') },
-    { id: 'go-replicate', label: 'Go to Replicate', icon: '🔁', category: 'Navigation', shortcut: ['G', 'R'], action: () => navigateToTab('replicate-models') },
-    { id: 'go-latest', label: 'Go to Latest', icon: '🆕', category: 'Navigation', action: () => navigateToTab('latest') },
-    { id: 'go-agent', label: 'Go to Agent', icon: '💬', category: 'Navigation', shortcut: ['G', 'A'], action: () => navigateToTab('agent') },
-    { id: 'go-pinned', label: 'Go to Pinned', icon: '📌', category: 'Navigation', action: () => navigateToTab('pinned') },
-    { id: 'go-monitor', label: 'Go to Monitor', icon: '📊', category: 'Navigation', action: () => navigateToTab('monitor') },
+// Store models selected for comparison
+let chartComparisonModels = [];
 
-    // Search commands
-    { id: 'focus-search', label: 'Focus Global Search', icon: '🔍', category: 'Search', shortcut: ['/'], action: () => focusGlobalSearch() },
-
-    // Refresh commands
-    { id: 'refresh-tab', label: 'Refresh Current Tab', icon: '🔄', category: 'Data', shortcut: ['R'], action: () => refreshCurrentTab() },
-    { id: 'refresh-all', label: 'Refresh All Data', icon: '♻️', category: 'Data', action: () => refreshAllData() },
-
-    // UI commands
-    { id: 'toggle-theme', label: 'Toggle Theme', icon: '🌓', category: 'UI', shortcut: ['T'], action: () => toggleTheme() },
-    { id: 'open-settings', label: 'Open Settings', icon: '⚙️', category: 'UI', shortcut: ['S'], action: () => openSettingsModal() },
-    { id: 'show-hotkeys', label: 'Show Keyboard Shortcuts', icon: '⌨️', category: 'UI', shortcut: ['?'], action: () => showHotkeysOverlay() },
-
-    // Export commands
-    { id: 'export-json', label: 'Export Current Tab as JSON', icon: '📄', category: 'Export', action: () => exportCurrentTab('json') },
-    { id: 'export-csv', label: 'Export Current Tab as CSV', icon: '📊', category: 'Export', action: () => exportCurrentTab('csv') },
-    { id: 'export-pinned', label: 'Export Pinned Items', icon: '📌', category: 'Export', action: () => exportPinnedItems() },
+const CHART_AVAILABLE_METRICS = [
+    { id: 'quality', label: 'Quality Score' },
+    { id: 'speed', label: 'Speed' },
+    { id: 'price', label: 'Price' },
+    { id: 'latency', label: 'Latency' },
+    { id: 'context_length', label: 'Context Length' }
 ];
 
-let commandPaletteOpen = false;
-let hotkeysOverlayOpen = false;
-let selectedCommandIndex = 0;
-let filteredCommands = [...COMMAND_PALETTE_ACTIONS];
-let pendingGKey = false;
-let gKeyTimeout = null;
+/**
+ * Add a model to the comparison list
+ * @param {Object} model - Model data object
+ */
+function addToComparison(model) {
+    if (!model) return;
 
-function setupCommandPalette() {
-    const overlay = document.getElementById('command-palette');
-    const input = document.getElementById('command-palette-input');
-    const resultsContainer = document.getElementById('command-palette-results');
+    const modelId = model.id || model.name || model.model;
+    if (!modelId) return;
 
-    if (!overlay || !input || !resultsContainer) return;
-
-    // Input filtering
-    input.addEventListener('input', () => {
-        const query = input.value.toLowerCase().trim();
-        filterCommands(query);
-        renderCommandResults();
-    });
-
-    // Keyboard navigation
-    input.addEventListener('keydown', (e) => {
-        if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            selectedCommandIndex = Math.min(selectedCommandIndex + 1, filteredCommands.length - 1);
-            renderCommandResults();
-        } else if (e.key === 'ArrowUp') {
-            e.preventDefault();
-            selectedCommandIndex = Math.max(selectedCommandIndex - 1, 0);
-            renderCommandResults();
-        } else if (e.key === 'Enter') {
-            e.preventDefault();
-            executeSelectedCommand();
-        } else if (e.key === 'Escape') {
-            e.preventDefault();
-            closeCommandPalette();
-        }
-    });
-
-    // Click outside to close
-    overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) {
-            closeCommandPalette();
-        }
-    });
-}
-
-function filterCommands(query) {
-    if (!query) {
-        filteredCommands = [...COMMAND_PALETTE_ACTIONS];
-    } else {
-        filteredCommands = COMMAND_PALETTE_ACTIONS.filter(cmd =>
-            cmd.label.toLowerCase().includes(query) ||
-            cmd.category.toLowerCase().includes(query)
-        );
+    // Check if already in list
+    if (chartComparisonModels.some(m => (m.id || m.name) === modelId)) {
+        showToast('Model already in comparison', 'warning');
+        return;
     }
-    selectedCommandIndex = 0;
+
+    // Limit to 8 models
+    if (chartComparisonModels.length >= 8) {
+        showToast('Maximum 8 models for comparison', 'warning');
+        return;
+    }
+
+    chartComparisonModels.push(model);
+    showToast(`Added ${model.name || modelId} to comparison (${chartComparisonModels.length}/8)`, 'info');
+    updateCompareButtonStates();
 }
 
-function renderCommandResults() {
-    const container = document.getElementById('command-palette-results');
+/**
+ * Remove a model from comparison
+ * @param {string} modelId - Model identifier
+ */
+function removeFromComparison(modelId) {
+    chartComparisonModels = chartComparisonModels.filter(m => (m.id || m.name) !== modelId);
+    updateCompareButtonStates();
+}
+
+/**
+ * Clear all models from comparison
+ */
+function clearComparison() {
+    chartComparisonModels = [];
+    updateCompareButtonStates();
+}
+
+/**
+ * Update compare button states across the UI
+ */
+function updateCompareButtonStates() {
+    // Update any compare buttons in cards
+    document.querySelectorAll('[data-compare-id]').forEach(btn => {
+        const modelId = btn.dataset.compareId;
+        const isInComparison = chartComparisonModels.some(m => (m.id || m.name) === modelId);
+        btn.classList.toggle('active', isInComparison);
+        btn.textContent = isInComparison ? '✓ Compare' : 'Compare';
+    });
+
+    // Update floating compare button if exists
+    updateFloatingCompareButton();
+}
+
+/**
+ * Create or update the floating compare button
+ */
+function updateFloatingCompareButton() {
+    let floatBtn = document.getElementById('floating-compare-btn');
+
+    if (chartComparisonModels.length >= 2) {
+        if (!floatBtn) {
+            floatBtn = document.createElement('button');
+            floatBtn.id = 'floating-compare-btn';
+            floatBtn.className = 'floating-compare-btn';
+            floatBtn.onclick = () => openChartModal();
+            document.body.appendChild(floatBtn);
+
+            // Add styles if not present
+            if (!document.getElementById('chart-float-styles')) {
+                const style = document.createElement('style');
+                style.id = 'chart-float-styles';
+                style.textContent = `
+                    .floating-compare-btn {
+                        position: fixed;
+                        bottom: 24px;
+                        right: 24px;
+                        background: #111827;
+                        color: white;
+                        border: none;
+                        border-radius: 50px;
+                        padding: 14px 24px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+                        z-index: 1000;
+                        transition: transform 0.2s, box-shadow 0.2s;
+                    }
+                    .floating-compare-btn:hover {
+                        transform: translateY(-2px);
+                        box-shadow: 0 6px 24px rgba(0,0,0,0.3);
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+        }
+        floatBtn.textContent = `Compare ${chartComparisonModels.length} Models`;
+        floatBtn.style.display = 'block';
+    } else if (floatBtn) {
+        floatBtn.style.display = 'none';
+    }
+}
+
+/**
+ * Open the chart comparison modal
+ */
+function openChartModal() {
+    if (chartComparisonModels.length < 2) {
+        showToast('Select at least 2 models to compare', 'warning');
+        return;
+    }
+
+    const modal = document.getElementById('chart-modal');
+    if (!modal) return;
+
+    modal.style.display = 'flex';
+
+    // Initialize metrics toggles
+    const metricsContainer = document.getElementById('chart-metrics-container');
+    if (metricsContainer) {
+        metricsContainer.innerHTML = CHART_AVAILABLE_METRICS.map(m => `
+            <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;padding:6px 10px;background:#f3f4f6;border-radius:6px;">
+                <input type="checkbox" class="chart-metric-toggle" value="${m.id}" ${['quality', 'speed', 'price'].includes(m.id) ? 'checked' : ''}>
+                ${m.label}
+            </label>
+        `).join('');
+
+        // Add event listeners
+        metricsContainer.querySelectorAll('.chart-metric-toggle').forEach(cb => {
+            cb.addEventListener('change', () => renderChart());
+        });
+    }
+
+    // Add chart type listener
+    const typeSelect = document.getElementById('chart-type-select');
+    if (typeSelect && !typeSelect.dataset.listenerAttached) {
+        typeSelect.addEventListener('change', () => renderChart());
+        typeSelect.dataset.listenerAttached = 'true';
+    }
+
+    // Render initial chart
+    renderChart();
+
+    // Update models list
+    const modelsList = document.getElementById('chart-models-list');
+    if (modelsList) {
+        modelsList.innerHTML = `Comparing: ${chartComparisonModels.map(m => m.name || m.id).join(', ')}`;
+    }
+}
+
+/**
+ * Close the chart modal
+ */
+function closeChartModal() {
+    const modal = document.getElementById('chart-modal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+/**
+ * Get selected metrics from UI
+ */
+function getSelectedMetrics() {
+    const checked = document.querySelectorAll('.chart-metric-toggle:checked');
+    return Array.from(checked).map(cb => cb.value);
+}
+
+/**
+ * Render the chart using the API
+ */
+async function renderChart() {
+    const container = document.getElementById('chart-container');
     if (!container) return;
 
-    // Group by category
-    const grouped = {};
-    filteredCommands.forEach(cmd => {
-        if (!grouped[cmd.category]) grouped[cmd.category] = [];
-        grouped[cmd.category].push(cmd);
-    });
+    container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:400px;color:#6b7280;">Loading chart...</div>';
 
-    container.innerHTML = Object.entries(grouped).map(([category, commands]) => `
-        <div class="command-group">
-            <div class="command-group-title">${escapeHtml(category)}</div>
-            ${commands.map((cmd, idx) => {
-        const globalIdx = filteredCommands.indexOf(cmd);
-        return `
-                    <div class="command-item ${globalIdx === selectedCommandIndex ? 'selected' : ''}" 
-                         data-command-id="${cmd.id}">
-                        <span class="command-item-icon">${cmd.icon}</span>
-                        <span class="command-item-label">${escapeHtml(cmd.label)}</span>
-                        ${cmd.shortcut ? `
-                            <span class="command-item-shortcut">
-                                ${cmd.shortcut.map(k => `<kbd>${k}</kbd>`).join('')}
-                            </span>
-                        ` : ''}
-                    </div>
-                `;
-    }).join('')}
-        </div>
-    `).join('');
+    const chartType = document.getElementById('chart-type-select')?.value || 'bar';
+    const metrics = getSelectedMetrics();
 
-    // Click handlers
-    container.querySelectorAll('.command-item').forEach(item => {
-        item.addEventListener('click', () => {
-            const cmdId = item.dataset.commandId;
-            const cmd = COMMAND_PALETTE_ACTIONS.find(c => c.id === cmdId);
-            if (cmd) {
-                closeCommandPalette();
-                cmd.action();
-            }
+    if (metrics.length === 0) {
+        container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:400px;color:#6b7280;">Select at least one metric</div>';
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/charts/model-comparison', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                models: chartComparisonModels,
+                chart_type: chartType,
+                metrics: metrics,
+                title: `Model Comparison (${chartComparisonModels.length} models)`
+            })
         });
-    });
 
-    // Scroll selected into view
-    const selected = container.querySelector('.command-item.selected');
-    if (selected) {
-        selected.scrollIntoView({ block: 'nearest' });
-    }
-}
-
-function executeSelectedCommand() {
-    const cmd = filteredCommands[selectedCommandIndex];
-    if (cmd) {
-        closeCommandPalette();
-        cmd.action();
-    }
-}
-
-function openCommandPalette() {
-    const overlay = document.getElementById('command-palette');
-    const input = document.getElementById('command-palette-input');
-    if (!overlay) return;
-
-    commandPaletteOpen = true;
-    overlay.style.display = 'flex';
-    filteredCommands = [...COMMAND_PALETTE_ACTIONS];
-    selectedCommandIndex = 0;
-    renderCommandResults();
-
-    if (input) {
-        input.value = '';
-        input.focus();
-    }
-}
-
-function closeCommandPalette() {
-    const overlay = document.getElementById('command-palette');
-    if (overlay) {
-        overlay.style.display = 'none';
-    }
-    commandPaletteOpen = false;
-}
-
-function showHotkeysOverlay() {
-    const overlay = document.getElementById('hotkeys-overlay');
-    if (overlay) {
-        overlay.style.display = 'flex';
-        hotkeysOverlayOpen = true;
-    }
-}
-
-function closeHotkeysOverlay() {
-    const overlay = document.getElementById('hotkeys-overlay');
-    if (overlay) {
-        overlay.style.display = 'none';
-        hotkeysOverlayOpen = false;
-    }
-}
-
-function setupHotkeysOverlay() {
-    const closeBtn = document.getElementById('hotkeys-close');
-    const overlay = document.getElementById('hotkeys-overlay');
-
-    if (closeBtn) {
-        closeBtn.addEventListener('click', closeHotkeysOverlay);
-    }
-
-    if (overlay) {
-        overlay.addEventListener('click', (e) => {
-            if (e.target === overlay) {
-                closeHotkeysOverlay();
-            }
-        });
-    }
-}
-
-function setupGlobalHotkeys() {
-    document.addEventListener('keydown', (e) => {
-        // Ignore if typing in an input
-        const target = e.target;
-        const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
-
-        // Cmd/Ctrl+K opens command palette (works even in inputs)
-        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-            e.preventDefault();
-            if (commandPaletteOpen) {
-                closeCommandPalette();
-            } else {
-                openCommandPalette();
-            }
-            return;
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
         }
 
-        // Escape closes modals
-        if (e.key === 'Escape') {
-            if (commandPaletteOpen) {
-                closeCommandPalette();
-                return;
-            }
-            if (hotkeysOverlayOpen) {
-                closeHotkeysOverlay();
-                return;
-            }
+        const result = await response.json();
+
+        if (result.error) {
+            throw new Error(result.error);
         }
 
-        // Don't process other hotkeys while typing
-        if (isInput) return;
-
-        const key = e.key.toUpperCase();
-
-        // Handle G+key sequences
-        if (pendingGKey) {
-            clearTimeout(gKeyTimeout);
-            pendingGKey = false;
-
-            const gCommands = {
-                'L': 'go-llms',
-                'O': 'go-openrouter',
-                'F': 'go-fal',
-                'R': 'go-replicate',
-                'A': 'go-agent'
-            };
-
-            if (gCommands[key]) {
-                e.preventDefault();
-                const cmd = COMMAND_PALETTE_ACTIONS.find(c => c.id === gCommands[key]);
-                if (cmd) cmd.action();
-                return;
-            }
+        // Render with Plotly
+        if (typeof Plotly !== 'undefined' && result.plotly_data && result.plotly_layout) {
+            container.innerHTML = '';
+            Plotly.newPlot(container, result.plotly_data, result.plotly_layout, {
+                responsive: true,
+                displayModeBar: true,
+                displaylogo: false
+            });
+        } else {
+            container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:400px;color:#ef4444;">Plotly not loaded or invalid data</div>';
         }
-
-        // Start G sequence
-        if (key === 'G') {
-            pendingGKey = true;
-            gKeyTimeout = setTimeout(() => {
-                pendingGKey = false;
-            }, 500);
-            return;
-        }
-
-        // Single-key shortcuts
-        if (e.key === '?') {
-            e.preventDefault();
-            showHotkeysOverlay();
-            return;
-        }
-
-        if (key === '/') {
-            e.preventDefault();
-            focusGlobalSearch();
-            return;
-        }
-
-        if (key === 'T') {
-            e.preventDefault();
-            toggleTheme();
-            return;
-        }
-
-        if (key === 'S') {
-            e.preventDefault();
-            openSettingsModal();
-            return;
-        }
-
-        if (key === 'R' && !e.metaKey && !e.ctrlKey) {
-            e.preventDefault();
-            refreshCurrentTab();
-            return;
-        }
-    });
-}
-
-// Action implementations
-function navigateToTab(sectionId) {
-    const navBtn = document.querySelector(`.nav-btn[data-section="${sectionId}"]`);
-    if (navBtn) {
-        navBtn.click();
+    } catch (error) {
+        console.error('Chart render error:', error);
+        container.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:400px;color:#ef4444;">Error: ${error.message}</div>`;
     }
 }
 
-function focusGlobalSearch() {
-    const input = document.getElementById('global-search-input');
-    if (input) {
-        input.focus();
-        input.select();
-    }
-}
-
-function refreshCurrentTab() {
-    const activeBtn = document.querySelector('.nav-btn.active');
-    if (activeBtn) {
-        const section = activeBtn.dataset.section;
-        loadSectionData(section);
-        showToast('Refreshing...', 'info');
-    }
-}
-
-function refreshAllData() {
-    prefetchAllData();
-    showToast('Refreshing all data...', 'info');
-}
-
-
-
-function openSettingsModal() {
-    const settingsModal = document.getElementById('settings-modal');
-    if (settingsModal) {
-        settingsModal.style.display = 'flex';
-    }
-}
-
-// Initialize command palette and hotkeys
+// Setup chart modal close handlers
 document.addEventListener('DOMContentLoaded', () => {
-    setupCommandPalette();
-    setupHotkeysOverlay();
-    setupGlobalHotkeys();
+    const chartClose = document.getElementById('chart-close');
+    if (chartClose) {
+        chartClose.addEventListener('click', closeChartModal);
+    }
+
+    const chartModal = document.getElementById('chart-modal');
+    if (chartModal) {
+        chartModal.addEventListener('click', (e) => {
+            if (e.target === chartModal) {
+                closeChartModal();
+            }
+        });
+    }
 });
+
+// Export chart functions globally
+window.addToComparison = addToComparison;
+window.removeFromComparison = removeFromComparison;
+window.clearComparison = clearComparison;
+window.openChartModal = openChartModal;
+window.closeChartModal = closeChartModal;

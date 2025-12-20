@@ -7666,6 +7666,10 @@ def _parse_latest_window_days(timeframe, days_override=None):
         except (TypeError, ValueError):
             pass
     normalized = str(timeframe or 'day').strip().lower()
+    if normalized in {'year', 'years', '365d', '365days'}:
+        return 365
+    if normalized in {'month', 'months', '30d', '30days'}:
+        return 30
     if normalized in {'week', 'weeks', '7d', '7day', '7days'}:
         return 7
     if normalized in {'day', '1d', '1day', '1days', 'daily'}:
