@@ -7916,16 +7916,7 @@ def generate_latest_feed_payload(timeframe='day', days=None, force_refresh=False
         dt = entry.pop('timestamp_dt')
         entry['timestamp'] = dt.replace(microsecond=0).isoformat().replace('+00:00', 'Z')
 
-    # Scale max items based on timeframe
-    if window_days <= 1:
-        max_items = 50
-    elif window_days <= 7:
-        max_items = 150
-    elif window_days <= 30:
-        max_items = 500
-    else:
-        max_items = 1000
-    entries = entries[:max_items]
+    # No limit - return all aggregated entries
 
     if window_days == 1:
         window_label = 'Last 24 hours'
