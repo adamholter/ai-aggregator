@@ -4195,12 +4195,6 @@ async function sendAgentExpMessage(event) {
     }
 }
 
-if (submitButton) {
-    submitButton.disabled = false;
-}
-    }
-}
-
 // Safety timeout to prevent infinite hanging
 const AGENT_STREAM_TIMEOUT_MS = 60000; // 60 seconds
 
