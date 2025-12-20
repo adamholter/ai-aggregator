@@ -435,6 +435,8 @@ def _record_provider_check(provider):
 
 USERS_DB_PATH = os.path.join(DATA_DIR, 'users.json')
 PINS_DB_PATH = os.path.join(DATA_DIR, 'pins.json')
+SHARED_VIEWS_DB_PATH = os.path.join(DATA_DIR, 'shared_views.json')
+SHARED_VIEW_TTL = timedelta(days=7)
 
 # API Configuration
 ARTIFICIAL_ANALYSIS_API_KEY = (os.environ.get('ARTIFICIAL_ANALYSIS_API_KEY') or '').strip()
@@ -520,6 +522,7 @@ USAGE_HISTORY_LIMIT = 400
 USAGE_STATS = defaultdict(int)
 _USAGE_HISTORY = deque(maxlen=USAGE_HISTORY_LIMIT)
 _USAGE_LOG_LOCK = Lock()
+_SHARED_VIEWS_LOCK = Lock()
 
 
 def _merge_testing_catalog_items(history, recent):
@@ -706,6 +709,43 @@ def _write_user_pins(user_id, pins):
     store = _load_pin_store()
     store[user_id] = pins
     _save_pin_store(store)
+
+
+def _load_shared_views():
+    try:
+        with open(SHARED_VIEWS_DB_PATH, 'r', encoding='utf-8') as handle:
+            data = json.load(handle)
+            if isinstance(data, dict):
+                return data
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+    except Exception:
+        return {}
+    return {}
+
+
+def _save_shared_views(store):
+    os.makedirs(os.path.dirname(SHARED_VIEWS_DB_PATH), exist_ok=True)
+    with open(SHARED_VIEWS_DB_PATH, 'w', encoding='utf-8') as handle:
+        json.dump(store, handle, ensure_ascii=False, indent=2)
+
+
+def _prune_shared_views(store, now=None):
+    if not isinstance(store, dict):
+        return False
+    now = now or datetime.utcnow()
+    removed = False
+    for key, entry in list(store.items()):
+        if not isinstance(entry, dict):
+            store.pop(key, None)
+            removed = True
+            continue
+        expires_at = entry.get('expires_at')
+        expires_dt = coerce_to_datetime(expires_at)
+        if expires_dt and expires_dt <= now:
+            store.pop(key, None)
+            removed = True
+    return removed
 
 
 def _extract_filter_timestamp(item):
@@ -8319,6 +8359,15 @@ def api_fetch():
         return jsonify({'error': timeframe_error}), 400
 
     include_hype = _parse_bool_param('include_hype') or _parse_bool_param('includeHype')
+    days_param = request.args.get('days')
+    days_value = None
+    if days_param is not None and str(days_param).strip():
+        try:
+            days_value = int(days_param)
+        except (TypeError, ValueError):
+            return jsonify({'error': 'days must be a positive integer.'}), 400
+        if days_value <= 0:
+            return jsonify({'error': 'days must be a positive integer.'}), 400
 
     fal_category_raw = request.args.get('fal_category') or request.args.get('falCategory')
     normalized_fal_category = normalize_fal_category_value(fal_category_raw)
@@ -8329,6 +8378,8 @@ def api_fetch():
             return jsonify({'error': f"Invalid fal_category '{fal_category_raw}'. Use one of: {valid_list}."}), 400
 
     fetch_options = {'_fal_category_normalized': normalized_fal_category}
+    if days_value is not None:
+        fetch_options['days'] = days_value
 
     try:
         fetch_result = fetch_data_for_categories(
@@ -10083,6 +10134,49 @@ def delete_pin_by_key():
     removed = len(updated) != len(pins)
     _write_user_pins(user.get('id'), updated)
     return jsonify({'success': removed})
+
+
+@app.route('/api/shared-views', methods=['POST'])
+def create_shared_view():
+    data = request.get_json(silent=True) or {}
+    state = data.get('state') or {}
+    snapshot = data.get('snapshot') or {}
+    items = snapshot.get('items')
+    category = (snapshot.get('category') or '').strip()
+    if not category or not isinstance(items, list):
+        return jsonify({'error': 'Snapshot category and items are required.'}), 400
+    now = datetime.utcnow().replace(microsecond=0)
+    expires_at = now + SHARED_VIEW_TTL
+    view_id = uuid.uuid4().hex
+    entry = {
+        'id': view_id,
+        'created_at': now.isoformat() + 'Z',
+        'expires_at': expires_at.isoformat() + 'Z',
+        'state': state,
+        'snapshot': snapshot
+    }
+    with _SHARED_VIEWS_LOCK:
+        store = _load_shared_views()
+        _prune_shared_views(store, now=now)
+        store[view_id] = entry
+        _save_shared_views(store)
+    return jsonify({'id': view_id, 'expires_at': entry['expires_at']})
+
+
+@app.route('/api/shared-views/<view_id>', methods=['GET'])
+def get_shared_view(view_id):
+    view_id = (view_id or '').strip()
+    if not view_id:
+        return jsonify({'error': 'Shared view id is required.'}), 400
+    with _SHARED_VIEWS_LOCK:
+        store = _load_shared_views()
+        removed = _prune_shared_views(store)
+        entry = store.get(view_id)
+        if removed:
+            _save_shared_views(store)
+    if not entry:
+        return jsonify({'error': 'Shared view not found.'}), 404
+    return jsonify(entry)
 
 
 @app.route('/api/experimental-filter', methods=['POST'])

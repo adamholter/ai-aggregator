@@ -102,6 +102,24 @@ const FILTER_MODEL_STORAGE_KEY = 'dashboard-filter-model-id';
 const FILTER_PROMPT_NOTE_STORAGE_KEY = 'dashboard-filter-prompt-note';
 const MODEL_NOTES_STORAGE_KEY = 'dashboard-model-notes';
 let globalSearchIndex = null;
+let sharedViewSnapshot = null;
+
+const SHAREABLE_TAB_CATEGORY_MAP = {
+    llms: 'llms',
+    'text-to-image': 'text-to-image',
+    'image-editing': 'image-editing',
+    'text-to-speech': 'text-to-speech',
+    'text-to-video': 'text-to-video',
+    'image-to-video': 'image-to-video',
+    'fal-models': 'fal',
+    'replicate-models': 'replicate',
+    'openrouter-models': 'openrouter',
+    hype: 'hype',
+    latest: 'latest',
+    blog: 'blog',
+    'testing-catalog': 'testing-catalog',
+    monitor: 'monitor'
+};
 
 // ============================================
 // Local Notes Storage
@@ -354,22 +372,74 @@ function encodeStateToUrl(state) {
     return url.toString();
 }
 
-function copyShareableLink() {
-    const state = getDashboardState();
-    const url = encodeStateToUrl(state);
-
-    navigator.clipboard.writeText(url).then(() => {
-        showToast('📋 Link copied to clipboard!', 'info');
-    }).catch(() => {
-        // Fallback for older browsers
+function copyTextToClipboard(text) {
+    return navigator.clipboard.writeText(text).catch(() => {
         const input = document.createElement('input');
-        input.value = url;
+        input.value = text;
         document.body.appendChild(input);
         input.select();
         document.execCommand('copy');
         document.body.removeChild(input);
-        showToast('📋 Link copied!', 'info');
     });
+}
+
+function resolveShareCategory(tab) {
+    return SHAREABLE_TAB_CATEGORY_MAP[tab] || '';
+}
+
+function hasShareableFilters(state, category) {
+    if (state.q || state.ts) {
+        return true;
+    }
+    const filter = filterState[category];
+    return Boolean(filter && filter.enabled && Array.isArray(filter.items) && filter.items.length);
+}
+
+function buildSharedViewSnapshot(state, category) {
+    return {
+        tab: state.tab,
+        category,
+        items: getDisplayedItems(category),
+        created_at: new Date().toISOString()
+    };
+}
+
+async function createSharedView(snapshot, state) {
+    const response = await fetch('/api/shared-views', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ snapshot, state })
+    });
+    if (!response.ok) {
+        throw new Error(`Shared view save failed: ${response.status}`);
+    }
+    return response.json();
+}
+
+async function copyShareableLink() {
+    const state = getDashboardState();
+    const category = resolveShareCategory(state.tab);
+    let url = encodeStateToUrl(state);
+    let saved = false;
+
+    if (category && hasShareableFilters(state, category)) {
+        const snapshot = buildSharedViewSnapshot(state, category);
+        if (snapshot.items.length) {
+            try {
+                const payload = await createSharedView(snapshot, state);
+                if (payload && payload.id) {
+                    const savedState = { v: state.v, tab: state.tab, view: payload.id };
+                    url = encodeStateToUrl(savedState);
+                    saved = true;
+                }
+            } catch (error) {
+                console.error('Failed to save shared view:', error);
+            }
+        }
+    }
+
+    await copyTextToClipboard(url);
+    showToast(saved ? '📋 Saved view link copied!' : '📋 Link copied to clipboard!', 'info');
 }
 
 function parseUrlState() {
@@ -383,22 +453,58 @@ function parseUrlState() {
     return state;
 }
 
-function applyUrlState(state) {
+async function fetchSharedView(viewId) {
+    const response = await fetch(`/api/shared-views/${encodeURIComponent(viewId)}`);
+    if (!response.ok) {
+        throw new Error(`Shared view not found (${response.status}).`);
+    }
+    return response.json();
+}
+
+function applySharedViewSnapshot(sharedView) {
+    if (!sharedView || !sharedView.snapshot) {
+        return;
+    }
+    const snapshot = sharedView.snapshot;
+    if (!snapshot.category || !Array.isArray(snapshot.items)) {
+        return;
+    }
+    sharedViewSnapshot = {
+        category: snapshot.category,
+        items: snapshot.items
+    };
+}
+
+async function applyUrlState(state) {
     if (!state || Object.keys(state).length === 0) return;
+    let effectiveState = { ...state };
+    if (state.view) {
+        try {
+            const sharedView = await fetchSharedView(state.view);
+            applySharedViewSnapshot(sharedView);
+            const sharedState = sharedView.state || {};
+            effectiveState = { ...sharedState, view: state.view };
+            if (!effectiveState.tab && state.tab) {
+                effectiveState.tab = state.tab;
+            }
+        } catch (error) {
+            console.warn('Failed to load shared view:', error);
+        }
+    }
 
     // Switch to tab
-    if (state.tab) {
-        const tabBtn = document.querySelector(`.nav-btn[data-section="${state.tab}"]`);
+    if (effectiveState.tab) {
+        const tabBtn = document.querySelector(`.nav-btn[data-section="${effectiveState.tab}"]`);
         if (tabBtn) {
             tabBtn.click();
         }
     }
 
     // Apply global search
-    if (state.q) {
+    if (effectiveState.q) {
         const searchInput = document.getElementById('global-search-input');
         if (searchInput) {
-            searchInput.value = state.q;
+            searchInput.value = effectiveState.q;
             // Trigger search after a short delay
             setTimeout(() => {
                 searchInput.dispatchEvent(new Event('input'));
@@ -407,22 +513,22 @@ function applyUrlState(state) {
     }
 
     // Apply tab-specific search
-    if (state.tab && state.ts) {
+    if (effectiveState.tab && effectiveState.ts) {
         setTimeout(() => {
-            const tabSearch = document.querySelector(`#${state.tab}-search, [id$="${state.tab}-search"]`);
+            const tabSearch = document.querySelector(`#${effectiveState.tab}-search, [id$="${effectiveState.tab}-search"]`);
             if (tabSearch) {
-                tabSearch.value = state.ts;
+                tabSearch.value = effectiveState.ts;
                 tabSearch.dispatchEvent(new Event('input'));
             }
         }, 600);
     }
 
     // Apply tab-specific sort
-    if (state.tab && state.sort) {
+    if (effectiveState.tab && effectiveState.sort) {
         setTimeout(() => {
-            const tabSort = document.querySelector(`#${state.tab}-sort, [id$="${state.tab}-sort"]`);
+            const tabSort = document.querySelector(`#${effectiveState.tab}-sort, [id$="${effectiveState.tab}-sort"]`);
             if (tabSort) {
-                tabSort.value = state.sort;
+                tabSort.value = effectiveState.sort;
                 tabSort.dispatchEvent(new Event('change'));
             }
         }, 600);
@@ -430,8 +536,8 @@ function applyUrlState(state) {
 
     // Note: Compare tray restoration would require items to be loaded first
     // This could be enhanced in the future
-    if (state.cmp) {
-        console.log('Compare items to restore (requires data load):', state.cmp.split(','));
+    if (effectiveState.cmp) {
+        console.log('Compare items to restore (requires data load):', effectiveState.cmp.split(','));
     }
 }
 
@@ -441,6 +547,24 @@ document.addEventListener('DOMContentLoaded', () => {
     if (Object.keys(state).length > 1 || (Object.keys(state).length === 1 && !state.v)) {
         // Wait for data to load before applying state
         setTimeout(() => applyUrlState(state), 1000);
+    }
+});
+
+document.addEventListener('input', (event) => {
+    if (!sharedViewSnapshot || !event.isTrusted) {
+        return;
+    }
+    if (event.target && event.target.matches('input, select, textarea')) {
+        sharedViewSnapshot = null;
+    }
+});
+
+document.addEventListener('change', (event) => {
+    if (!sharedViewSnapshot || !event.isTrusted) {
+        return;
+    }
+    if (event.target && event.target.matches('input, select, textarea')) {
+        sharedViewSnapshot = null;
     }
 });
 
@@ -457,6 +581,9 @@ function getDisplayedItems(category) {
 }
 
 function getFilteredItems(category, fallback = []) {
+    if (sharedViewSnapshot && sharedViewSnapshot.category === category && Array.isArray(sharedViewSnapshot.items)) {
+        return sharedViewSnapshot.items;
+    }
     const state = filterState[category];
     if (!state || !state.enabled || !Array.isArray(state.items)) {
         return fallback;

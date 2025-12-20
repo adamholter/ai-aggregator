@@ -14,6 +14,9 @@ Fetch data from multiple tabs at once.
 **Query Parameters:**
 - `tabs` (string): Comma-separated list of tab IDs to fetch
 - `limit` (int, optional): Max items per tab (default: 50)
+- `recency` / `timeframe` (string, optional): `day`, `week`, `month`, or `year` to constrain results for time-sensitive tabs
+- `days` (int, optional): Override the Latest tab window with an exact day count (for example, `days=14`)
+- `include_hype` (bool, optional): Blend hype signals into supported tabs (Latest/Hype)
 
 **Tab IDs:**
 - `llms` - LLM benchmarks from Artificial Analysis
@@ -24,6 +27,8 @@ Fetch data from multiple tabs at once.
 - `testing-catalog` - Testing Catalog items
 - `blog` - Blog posts
 - `hype` - Hype signals
+- `latest` - Combined activity feed from all sources
+- `monitor` - Monitor feed updates
 
 **Example:**
 ```
@@ -159,8 +164,17 @@ Remove a pin.
 ### POST `/api/smart-search`
 AI-powered search across all data sources.
 
-### GET `/api/latest-feed`
-Combined activity feed from all sources.
+### GET `/api/latest-preview`
+Preview of the Latest activity feed (limited results for fast UI load).
+
+### GET `/latest`
+Latest activity feed across Blog, OpenRouter, Replicate, fal.ai, and optional Hype entries.
+
+**Query Parameters:**
+- `timeframe` (string, optional): `day`, `week`, `month`, or `year` (default: `day`)
+- `days` (int, optional): Override the window with an exact number of days (e.g. `days=10`)
+- `cache_bust` (bool, optional): Force fresh aggregation
+- `include_hype` (bool, optional): Blend in Hype signals
 
 ### GET `/api/hype-feed`
 Trending AI topics and signals.
