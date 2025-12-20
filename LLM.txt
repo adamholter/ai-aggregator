@@ -11,6 +11,7 @@ Provides compressed dataset snapshots for the same categories and tabs that the 
 - `limit`: positive integer limit per category (defaults to the agent’s standard page size when omitted).
 - `recency`: `day`, `week`, `month`, or `year` to restrict entries to recent activity.
 - `timeframe`: alias for `recency` when you prefer that term.
+- `days`: positive integer override for the Latest window when fetching `latest` (e.g., `days=14`).
 - `include_hype`: boolean (`1`, `true`, `yes`, `on`) to blend hype signals into supported tabs.
 - `fal_category` / `falCategory`: fal.ai category filter (Text-to-Image, Text-to-Speech, etc.); values must match the options enumerated in `FAL_CATEGORY_OPTIONS` (`server.py`).
 - `cache_bust`: optional boolean (`true`/`1`) that, when present, forces the backend to build a fresh snapshot instead of returning cached data (most useful for `latest`, `hype`, and other frequently updating experimental tabs).
