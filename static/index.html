@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Model Analysis Dashboard</title>
-    <link rel="stylesheet" href="static/styles.css">
+    <link rel="stylesheet" href="static/styles.css?v=1766074500">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
@@ -59,6 +59,17 @@
                 </div>
             </div>
             <div class="header-actions">
+                <div class="export-dropdown-container">
+                    <button class="export-btn" onclick="toggleExportDropdown()" title="Export current view">📥
+                        Export</button>
+                    <div class="export-dropdown" id="export-dropdown" style="display:none;">
+                        <button onclick="exportCurrentTab('json'); closeExportDropdown();">Export as JSON</button>
+                        <button onclick="exportCurrentTab('csv'); closeExportDropdown();">Export as CSV</button>
+                        <button onclick="exportPinnedItems(); closeExportDropdown();">Export Pinned</button>
+                        <button onclick="exportCompareItems(); closeExportDropdown();">Export Compare</button>
+                    </div>
+                </div>
+                <button class="share-btn" onclick="copyShareableLink()" title="Copy shareable link">🔗 Share</button>
                 <button class="theme-toggle" onclick="toggleTheme()">🌙 Dark Mode</button>
                 <button class="auth-button" id="auth-button">Log In</button>
             </div>
@@ -81,7 +92,9 @@
             <button class="nav-btn" data-section="testing-catalog">Testing Catalog</button>
             <button class="nav-btn" data-section="agent-exp">Agent</button>
             <button class="nav-btn" data-section="about">About</button>
+            <button class="nav-btn" data-section="monitor">Monitor</button>
         </nav>
+
 
         <main class="main-content">
             <!-- LLMs Section -->
@@ -388,7 +401,7 @@
             <!-- Agent Section -->
             <section id="agent-exp" class="content-section">
                 <div class="agent-iframe-container">
-                    <iframe src="/static/experimental-agent.html" title="Agent"></iframe>
+                    <iframe src="/experimental-agent" title="Agent"></iframe>
                 </div>
             </section>
 
@@ -672,31 +685,51 @@
         </div>
     </div>
 
-    <!-- Compare Tray -->
-    <div id="compare-tray" class="compare-tray" style="display:none;">
-        <div class="compare-tray-content">
-            <div id="compare-tray-items" class="compare-tray-items"></div>
-            <div class="compare-tray-actions">
-                <button id="compare-open" class="chart-btn">Compare</button>
-                <button id="compare-clear" class="chart-btn secondary">Clear</button>
+    <!-- Command Palette Modal -->
+    <div id="command-palette" class="command-palette-overlay" style="display:none;">
+        <div class="command-palette">
+            <div class="command-palette-header">
+                <input type="text" id="command-palette-input" placeholder="Type a command..." autocomplete="off">
+                <span class="command-palette-hint">↑↓ navigate • Enter select • Esc close</span>
+            </div>
+            <div class="command-palette-results" id="command-palette-results"></div>
+        </div>
+    </div>
+
+    <!-- Hotkeys Help Overlay -->
+    <div id="hotkeys-overlay" class="hotkeys-overlay" style="display:none;">
+        <div class="hotkeys-content">
+            <div class="hotkeys-header">
+                <h3>Keyboard Shortcuts</h3>
+                <button class="hotkeys-close" id="hotkeys-close">×</button>
+            </div>
+            <div class="hotkeys-grid">
+                <div class="hotkeys-section">
+                    <h4>Navigation</h4>
+                    <div class="hotkey-row"><kbd>⌘</kbd><kbd>K</kbd> <span>Command palette</span></div>
+                    <div class="hotkey-row"><kbd>?</kbd> <span>Show this help</span></div>
+                    <div class="hotkey-row"><kbd>Esc</kbd> <span>Close modal/palette</span></div>
+                    <div class="hotkey-row"><kbd>/</kbd> <span>Focus search</span></div>
+                </div>
+                <div class="hotkeys-section">
+                    <h4>Quick Actions</h4>
+                    <div class="hotkey-row"><kbd>G</kbd> <kbd>L</kbd> <span>Go to LLMs</span></div>
+                    <div class="hotkey-row"><kbd>G</kbd> <kbd>O</kbd> <span>Go to OpenRouter</span></div>
+                    <div class="hotkey-row"><kbd>G</kbd> <kbd>F</kbd> <span>Go to Fal.ai</span></div>
+                    <div class="hotkey-row"><kbd>G</kbd> <kbd>R</kbd> <span>Go to Replicate</span></div>
+                    <div class="hotkey-row"><kbd>G</kbd> <kbd>A</kbd> <span>Go to Agent</span></div>
+                </div>
+                <div class="hotkeys-section">
+                    <h4>UI</h4>
+                    <div class="hotkey-row"><kbd>T</kbd> <span>Toggle theme</span></div>
+                    <div class="hotkey-row"><kbd>S</kbd> <span>Open settings</span></div>
+                    <div class="hotkey-row"><kbd>R</kbd> <span>Refresh current tab</span></div>
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- Compare Modal -->
-    <div id="compare-modal" class="modal-overlay" style="display:none;">
-        <div class="modal-content" style="max-width:1100px;">
-            <div class="modal-header">
-                <h2>Compare Models</h2>
-                <button class="modal-close" id="compare-close">×</button>
-            </div>
-            <div class="modal-body">
-                <div id="compare-table-container"></div>
-            </div>
-        </div>
-    </div>
-
-    <script src="static/script.js"></script>
+    <script src="static/script.js?v=1766078500"></script>
 </body>
 
 </html>
