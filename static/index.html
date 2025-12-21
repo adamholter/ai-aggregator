@@ -36,6 +36,21 @@
         <header class="header">
             <div class="header-main">
                 <h1>AI Model Analysis Dashboard</h1>
+                <a id="timeline-banner" href="/static/ai-timeline-2025.html" style="display:inline-block; background:linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                          color:#fff; padding:8px 16px; border-radius:20px; font-size:0.85rem; font-weight:600; 
+                          text-decoration:none; margin:8px 0; box-shadow:0 2px 8px rgba(102,126,234,0.3);
+                          transition:transform 0.2s, box-shadow 0.2s;">
+                    ✨ View the AI Timeline 2025
+                </a>
+                <script>
+                    (function () {
+                        var banner = document.getElementById('timeline-banner');
+                        var hideDate = new Date('2026-01-16T00:00:00');
+                        if (banner && new Date() >= hideDate) {
+                            banner.style.display = 'none';
+                        }
+                    })();
+                </script>
                 <p>Powered by Artificial Analysis, OpenRouter, Fal, and Replicate APIs</p>
                 <div class="global-search global-search-centered">
                     <input id="global-search-input" type="text" autocomplete="off"
