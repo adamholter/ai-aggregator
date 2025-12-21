@@ -1043,28 +1043,46 @@ function searchAllData(query) {
 }
 
 function displayGlobalSearchResults(results, container, query) {
-    if (!results.length) {
-        container.innerHTML = '<div style="padding:12px;color:var(--info-text);font-size:0.85rem;">No results found</div>';
-        container.style.display = 'block';
-        return;
+    let html = '';
+
+    if (results.length) {
+        html = results.map((r, i) => `
+            <div class="global-search-item" data-index="${i}" style="
+                padding:10px 14px;
+                cursor:pointer;
+                border-bottom:1px solid var(--border-color);
+                transition:background 0.15s;
+            " onmouseover="this.style.background='var(--info-bg)'" onmouseout="this.style.background='transparent'">
+                <div style="font-weight:500;font-size:0.9rem;color:var(--text-color);">${escapeHtml(r.name)}</div>
+                <div style="font-size:0.75rem;color:var(--info-text);">${escapeHtml(r.subtitle)} · ${r.type}</div>
+            </div>
+        `).join('');
+    } else {
+        html = '<div style="padding:12px;color:var(--info-text);font-size:0.85rem;">No results found</div>';
     }
 
-    container.innerHTML = results.map((r, i) => `
-        <div class="global-search-item" data-index="${i}" style="
-            padding:10px 14px;
+    // Always show Ask Agent option
+    html += `
+        <div class="global-search-item ask-agent-item" style="
+            padding:12px 14px;
             cursor:pointer;
-            border-bottom:1px solid var(--border-color);
+            background:var(--info-bg);
+            border-top:1px solid var(--border-color);
             transition:background 0.15s;
-        " onmouseover="this.style.background='var(--info-bg)'" onmouseout="this.style.background='transparent'">
-            <div style="font-weight:500;font-size:0.9rem;color:var(--text-color);">${escapeHtml(r.name)}</div>
-            <div style="font-size:0.75rem;color:var(--info-text);">${escapeHtml(r.subtitle)} · ${r.type}</div>
+        " onmouseover="this.style.background='var(--button-bg)';this.style.color='var(--button-text)'" 
+           onmouseout="this.style.background='var(--info-bg)';this.style.color='var(--text-color)'">
+            <div style="font-weight:600;font-size:0.9rem;display:flex;align-items:center;gap:6px;">
+                🤖 Ask Agent: "${escapeHtml(query.length > 40 ? query.slice(0, 40) + '...' : query)}"
+            </div>
+            <div style="font-size:0.75rem;color:var(--info-text);">Open Agent tab with this query</div>
         </div>
-    `).join('');
+    `;
 
+    container.innerHTML = html;
     container.style.display = 'block';
 
-    // Add click handlers
-    container.querySelectorAll('.global-search-item').forEach((item, i) => {
+    // Add click handlers for results
+    container.querySelectorAll('.global-search-item:not(.ask-agent-item)').forEach((item, i) => {
         item.addEventListener('click', () => {
             const result = results[i];
             navigateToResult(result);
@@ -1072,6 +1090,45 @@ function displayGlobalSearchResults(results, container, query) {
             document.getElementById('global-search-input').value = '';
         });
     });
+
+    // Add click handler for Ask Agent
+    const askAgentItem = container.querySelector('.ask-agent-item');
+    if (askAgentItem) {
+        askAgentItem.addEventListener('click', () => {
+            askAgentWithQuery(query);
+            container.style.display = 'none';
+            document.getElementById('global-search-input').value = '';
+        });
+    }
+}
+
+function askAgentWithQuery(query) {
+    // Navigate to Agent tab
+    const navBtn = document.querySelector('.nav-btn[data-section="agent-exp"]');
+    if (navBtn) {
+        navBtn.click();
+    }
+
+    // Wait for the agent iframe to be ready, then send the query
+    setTimeout(() => {
+        const iframe = document.querySelector('#agent-exp iframe');
+        if (iframe && iframe.contentWindow) {
+            // Try to set the input in the iframe
+            try {
+                const agentInput = iframe.contentDocument?.getElementById('agent-input') ||
+                    iframe.contentDocument?.querySelector('textarea');
+                if (agentInput) {
+                    agentInput.value = query;
+                    agentInput.focus();
+                    // Trigger input event
+                    agentInput.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+            } catch (e) {
+                // Cross-origin issues - try postMessage
+                iframe.contentWindow.postMessage({ type: 'set-agent-query', query }, '*');
+            }
+        }
+    }, 500);
 }
 
 function navigateToResult(result) {
@@ -1083,14 +1140,51 @@ function navigateToResult(result) {
 
     // Try to scroll to and highlight the card after a short delay
     setTimeout(() => {
-        const key = result.data?.id || result.data?.name || result.data?.model || result.name;
-        const card = document.querySelector(`[data-item-key="${key}"]`);
+        const data = result.data || {};
+        const searchName = (result.name || '').toLowerCase();
+
+        // Build multiple possible selectors to find the card
+        const possibleKeys = [
+            data.id,
+            data.name,
+            data.model,
+            data.slug,
+            result.name
+        ].filter(Boolean);
+
+        let card = null;
+
+        // Try data-item-key first
+        for (const key of possibleKeys) {
+            card = document.querySelector(`[data-item-key="${key}"]`);
+            if (card) break;
+        }
+
+        // Fallback: search by card title text content
+        if (!card) {
+            const section = document.getElementById(result.type);
+            if (section) {
+                const cards = section.querySelectorAll('.model-card');
+                for (const c of cards) {
+                    const title = c.querySelector('h3, .card-title');
+                    if (title && title.textContent.toLowerCase().includes(searchName)) {
+                        card = c;
+                        break;
+                    }
+                }
+            }
+        }
+
         if (card) {
             card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            card.style.outline = '2px solid var(--button-bg)';
-            setTimeout(() => { card.style.outline = ''; }, 2000);
+            card.style.outline = '3px solid var(--button-bg)';
+            card.style.outlineOffset = '2px';
+            setTimeout(() => {
+                card.style.outline = '';
+                card.style.outlineOffset = '';
+            }, 3000);
         }
-    }, 300);
+    }, 400);
 }
 
 // Theme management
