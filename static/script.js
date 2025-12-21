@@ -935,7 +935,163 @@ document.addEventListener('DOMContentLoaded', async function () {
             }
         });
     }
+
+    // Setup global search
+    setupGlobalSearch();
 });
+
+// Global Search Implementation
+function setupGlobalSearch() {
+    const input = document.getElementById('global-search-input');
+    const resultsContainer = document.getElementById('global-search-results');
+    if (!input || !resultsContainer) return;
+
+    let debounceTimer = null;
+
+    input.addEventListener('input', () => {
+        clearTimeout(debounceTimer);
+        const query = input.value.trim().toLowerCase();
+
+        if (query.length < 2) {
+            resultsContainer.style.display = 'none';
+            resultsContainer.innerHTML = '';
+            return;
+        }
+
+        debounceTimer = setTimeout(() => {
+            const results = searchAllData(query);
+            displayGlobalSearchResults(results, resultsContainer, query);
+        }, 200);
+    });
+
+    // Close on click outside
+    document.addEventListener('click', (e) => {
+        if (!input.contains(e.target) && !resultsContainer.contains(e.target)) {
+            resultsContainer.style.display = 'none';
+        }
+    });
+
+    // Close on escape
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            resultsContainer.style.display = 'none';
+            input.blur();
+        }
+    });
+}
+
+function searchAllData(query) {
+    const results = [];
+    const maxPerCategory = 5;
+
+    // Search LLMs
+    if (rawData.llms && rawData.llms.length) {
+        const matches = rawData.llms.filter(m =>
+            (m.name || '').toLowerCase().includes(query) ||
+            (m.model_creator?.name || '').toLowerCase().includes(query)
+        ).slice(0, maxPerCategory);
+        matches.forEach(m => results.push({
+            type: 'llms',
+            name: m.name,
+            subtitle: m.model_creator?.name || '',
+            data: m
+        }));
+    }
+
+    // Search OpenRouter models
+    if (rawData.openRouterModels && rawData.openRouterModels.length) {
+        const matches = rawData.openRouterModels.filter(m =>
+            (m.name || m.id || '').toLowerCase().includes(query)
+        ).slice(0, maxPerCategory);
+        matches.forEach(m => results.push({
+            type: 'openrouter-models',
+            name: m.name || m.id,
+            subtitle: 'OpenRouter',
+            data: m
+        }));
+    }
+
+    // Search Fal models
+    if (rawData.falModels && rawData.falModels.length) {
+        const matches = rawData.falModels.filter(m =>
+            (m.name || m.title || '').toLowerCase().includes(query) ||
+            (m.category || '').toLowerCase().includes(query)
+        ).slice(0, maxPerCategory);
+        matches.forEach(m => results.push({
+            type: 'fal-models',
+            name: m.name || m.title,
+            subtitle: m.category || 'fal.ai',
+            data: m
+        }));
+    }
+
+    // Search Replicate models
+    if (rawData.replicateModels && rawData.replicateModels.length) {
+        const matches = rawData.replicateModels.filter(m =>
+            (m.name || m.model || '').toLowerCase().includes(query) ||
+            (m.owner || '').toLowerCase().includes(query)
+        ).slice(0, maxPerCategory);
+        matches.forEach(m => results.push({
+            type: 'replicate-models',
+            name: m.name || m.model,
+            subtitle: m.owner || 'Replicate',
+            data: m
+        }));
+    }
+
+    return results.slice(0, 15); // Max 15 total results
+}
+
+function displayGlobalSearchResults(results, container, query) {
+    if (!results.length) {
+        container.innerHTML = '<div style="padding:12px;color:var(--info-text);font-size:0.85rem;">No results found</div>';
+        container.style.display = 'block';
+        return;
+    }
+
+    container.innerHTML = results.map((r, i) => `
+        <div class="global-search-item" data-index="${i}" style="
+            padding:10px 14px;
+            cursor:pointer;
+            border-bottom:1px solid var(--border-color);
+            transition:background 0.15s;
+        " onmouseover="this.style.background='var(--info-bg)'" onmouseout="this.style.background='transparent'">
+            <div style="font-weight:500;font-size:0.9rem;color:var(--text-color);">${escapeHtml(r.name)}</div>
+            <div style="font-size:0.75rem;color:var(--info-text);">${escapeHtml(r.subtitle)} · ${r.type}</div>
+        </div>
+    `).join('');
+
+    container.style.display = 'block';
+
+    // Add click handlers
+    container.querySelectorAll('.global-search-item').forEach((item, i) => {
+        item.addEventListener('click', () => {
+            const result = results[i];
+            navigateToResult(result);
+            container.style.display = 'none';
+            document.getElementById('global-search-input').value = '';
+        });
+    });
+}
+
+function navigateToResult(result) {
+    // Navigate to the appropriate section
+    const navBtn = document.querySelector(`.nav-btn[data-section="${result.type}"]`);
+    if (navBtn) {
+        navBtn.click();
+    }
+
+    // Try to scroll to and highlight the card after a short delay
+    setTimeout(() => {
+        const key = result.data?.id || result.data?.name || result.data?.model || result.name;
+        const card = document.querySelector(`[data-item-key="${key}"]`);
+        if (card) {
+            card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            card.style.outline = '2px solid var(--button-bg)';
+            setTimeout(() => { card.style.outline = ''; }, 2000);
+        }
+    }, 300);
+}
 
 // Theme management
 function initializeTheme() {
