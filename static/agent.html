@@ -705,10 +705,73 @@
     });
 
     function renderMarkdown(content) {
-      if (typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
-        return DOMPurify.sanitize(marked.parse(content || ''));
+      if (!content) return '';
+      
+      // Parse [[model:source:name]] tags and convert to badges
+      function parseModelTags(text) {
+        let result = '';
+        let i = 0;
+        while (i < text.length) {
+          // Check for [[model: or [[models:
+          if ((text.slice(i, i + 8) === '[[model:' || text.slice(i, i + 9) === '[[models:')) {
+            const prefixLen = text.slice(i, i + 9) === '[[models:' ? 9 : 8;
+            const innerStart = i + prefixLen;
+            let j = innerStart;
+            let bracketCount = 0;
+            let found = false;
+
+            // Scan forward, tracking nested brackets
+            while (j < text.length) {
+              if (text[j] === '[') {
+                bracketCount++;
+              } else if (text[j] === ']') {
+                if (bracketCount > 0) {
+                  bracketCount--;
+                } else if (text[j + 1] === ']') {
+                  // Found closing ]] while not inside nested brackets
+                  const inner = text.slice(innerStart, j);
+                  const colonIdx = inner.indexOf(':');
+
+                  if (colonIdx !== -1) {
+                    const source = inner.substring(0, colonIdx).trim();
+                    const modelName = inner.substring(colonIdx + 1).trim();
+
+                    if (source && modelName) {
+                      // Create a styled badge instead of raw text
+                      result += `<strong style="color: var(--button-bg); cursor: default;">🤖 ${escapeHtml(modelName)}</strong>`;
+                      i = j + 2; // Skip past ]]
+                      found = true;
+                      break;
+                    }
+                  }
+                  // Invalid format, output as-is
+                  result += text.slice(i, j + 2);
+                  i = j + 2;
+                  found = true;
+                  break;
+                }
+              }
+              j++;
+            }
+
+            if (!found) {
+              result += text[i];
+              i++;
+            }
+          } else {
+            result += text[i];
+            i++;
+          }
+        }
+        return result;
       }
-      return content;
+      
+      const processed = parseModelTags(content);
+      
+      if (typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
+        return DOMPurify.sanitize(marked.parse(processed));
+      }
+      return processed;
     }
 
     // Chart rendering function - handles various code block formats

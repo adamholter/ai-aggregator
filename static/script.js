@@ -2050,7 +2050,6 @@ function createLLMCard(model) {
     const pricing = model.pricing || {};
 
     card.innerHTML = `
-        <div class="source-badge">Artificial Analysis</div>
         <h3>${model.name}</h3>
         <div class="model-creator">${model.model_creator.name}</div>
         
@@ -3786,7 +3785,6 @@ function createMediaCard(model, mediaCategory = '') {
     card.onclick = () => openModelModal(decoratedModel, 'media');
 
     card.innerHTML = `
-        <div class="source-badge">Artificial Analysis</div>
         <h3>${model.name}</h3>
         <div class="model-creator">${model.model_creator.name}</div>
         

@@ -467,14 +467,15 @@ FALLBACK_CATEGORY_FILES = {
     'fal': os.path.join(BASE_DIR, 'data', 'fallback', 'fal_models.json'),
     'replicate': os.path.join(BASE_DIR, 'data', 'fallback', 'replicate_models.json')
 }
-EXPERIMENTAL_FILTER_MODEL = os.environ.get('EXPERIMENTAL_FILTER_MODEL', 'google/gemini-2.5-flash-0905')
+EXPERIMENTAL_FILTER_MODEL = os.environ.get('EXPERIMENTAL_FILTER_MODEL', 'openai/gpt-oss-120b')
 DEFAULT_FILTER_SYSTEM_PROMPT = (
-    "You are an AI assistant that filters dashboard entries. Each dataset in the `Input TOON` table "
-    "contains title, summary, link, and timestamp fields. Select only the most important and timely "
-    "items (novel launches, major updates, highly impactful releases). Strictly respond with ONE TOON "
-    "table named filtered[...] using the same headers from the input. Do not emit prose, bullet points, "
-    "or code fences. Escape commas inside fields with a backslash. If nothing qualifies, return an empty "
-    "filtered[...] TOON table."
+    "You are an AI assistant that filters dashboard entries based on user queries. Each dataset in the `Input TOON` table "
+    "contains title, summary, link, and timestamp fields. Your task is to select entries that MATCH the user's query. "
+    "For ranking/comparison queries (e.g. 'best models', 'top performers'), select the most relevant entries. "
+    "For specific queries (e.g. 'models that support X'), only include entries that match. "
+    "Strictly respond with ONE TOON table named filtered[...] using the same headers from the input. "
+    "Do not emit prose, bullet points, or code fences. Escape commas inside fields with a backslash. "
+    "If nothing qualifies, return an empty filtered[...] TOON table."
 )
 
 GOOGLE_SHEETS_API_KEY = (os.environ.get('GOOGLE_SHEETS_API_KEY') or '').strip()
