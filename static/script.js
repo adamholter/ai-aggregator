@@ -3672,7 +3672,6 @@ function createMonitorCard(item) {
     card.innerHTML = `
         <div class="card-header">
             <div class="card-header-content">
-                <div class="source-badge">Monitor</div>
                 <div class="card-title">
                     ${url ? `<a href="${url}" target="_blank" rel="noopener noreferrer">${title}</a>` : title}
                 </div>

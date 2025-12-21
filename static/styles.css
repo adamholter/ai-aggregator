@@ -241,12 +241,10 @@ body {
 
 [data-theme="source"] .source-legend .legend-item[data-source="testingcatalog"] {
     color: var(--source-testingcatalog);
-    border-color: rgba(4, 120, 87, 0.4);
 }
 
 [data-theme="source"] .source-legend .legend-item[data-source="monitor"] {
     color: var(--source-monitor);
-    border-color: rgba(220, 38, 38, 0.35);
 }
 
 [data-theme="source"] .legend-item[data-source="aa-llm"] {
