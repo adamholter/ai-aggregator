@@ -171,10 +171,44 @@ Preview of the Latest activity feed (limited results for fast UI load).
 Latest activity feed across Blog, OpenRouter, Replicate, fal.ai, and optional Hype entries.
 
 **Query Parameters:**
-- `timeframe` (string, optional): `day`, `week`, `month`, or `year` (default: `day`)
-- `days` (int, optional): Override the window with an exact number of days (e.g. `days=10`)
+- `timeframe` (string, optional): Time window for results. Options:
+  - `day` (default) - Last 24 hours
+  - `week` - Last 7 days
+  - `month` - Last 30 days
+  - `year` - Last 365 days (no item limit)
+- `days` (int, optional): Override the window with an exact number of days (e.g. `days=14`)
 - `cache_bust` (bool, optional): Force fresh aggregation
 - `include_hype` (bool, optional): Blend in Hype signals
+
+**Examples:**
+```bash
+# Get last 24 hours
+GET /latest
+
+# Get last week
+GET /latest?timeframe=week
+
+# Get full year - returns all items, no limit
+GET /latest?timeframe=year
+
+# Custom: last 14 days
+GET /latest?days=14
+
+# Include hype signals
+GET /latest?timeframe=month&include_hype=true
+```
+
+**Response:**
+```json
+{
+  "entries": [...],
+  "metadata": {
+    "window_days": 365,
+    "total_entries": 2000,
+    "sources": ["blog", "openrouter", "fal", "replicate"]
+  }
+}
+```
 
 ### GET `/api/hype-feed`
 Trending AI topics and signals.

@@ -7170,3 +7170,266 @@ window.removeFromComparison = removeFromComparison;
 window.clearComparison = clearComparison;
 window.openChartModal = openChartModal;
 window.closeChartModal = closeChartModal;
+
+// ====== Shareable View Snapshots ======
+
+/**
+ * Get the category ID for a given section ID
+ */
+function sectionToCategoryId(sectionId) {
+    // Check FILTERABLE_SECTIONS for matching sectionId
+    for (const [category, config] of Object.entries(FILTERABLE_SECTIONS)) {
+        if (config.sectionId === sectionId) {
+            return category;
+        }
+    }
+    // Fallback: section ID might be same as category
+    return sectionId;
+}
+
+/**
+ * Copy a shareable link to clipboard.
+ * If AI filter or search is active, saves a view snapshot to the server.
+ * Otherwise, generates a simple section link.
+ */
+async function copyShareableLink() {
+    try {
+        const activeBtn = document.querySelector('.nav-btn.active');
+        const section = activeBtn?.dataset?.section || 'llms';
+        const category = sectionToCategoryId(section);
+
+        // Check if filter is active for this category
+        const fs = filterState[category];
+        const hasFilter = fs && fs.enabled && Array.isArray(fs.items) && fs.items.length > 0;
+
+        // Check if search is active
+        const searchInput = document.getElementById(`${section}-search`);
+        const searchTerm = searchInput ? searchInput.value.trim() : '';
+        const hasSearch = searchTerm.length > 0;
+
+        if (hasFilter || hasSearch) {
+            // Save snapshot to server
+            const items = getDisplayedItems(category) || fs?.items || [];
+            if (!items.length) {
+                showToast('No items to share in current view.', 'warning');
+                return;
+            }
+
+            const response = await fetch('/api/shared-views', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    state: {
+                        section,
+                        search: searchTerm,
+                        filterEnabled: hasFilter
+                    },
+                    snapshot: {
+                        category,
+                        items: items.slice(0, 200) // Limit items to avoid huge payloads
+                    }
+                })
+            });
+
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error || 'Failed to create shareable link');
+            }
+
+            const data = await response.json();
+            const url = `${location.origin}/?view=${data.id}`;
+            await navigator.clipboard.writeText(url);
+            showToast('Filtered view link copied! Expires in 7 days.', 'success');
+        } else {
+            // Simple tab link - no server save needed
+            const url = `${location.origin}/?section=${section}`;
+            await navigator.clipboard.writeText(url);
+            showToast('Link copied!', 'success');
+        }
+    } catch (error) {
+        console.error('Failed to copy shareable link:', error);
+        showToast('Failed to create link: ' + error.message, 'error');
+    }
+}
+
+/**
+ * Apply a shared view from the server
+ */
+async function applySharedView(viewId) {
+    try {
+        const response = await fetch(`/api/shared-views/${viewId}`);
+        if (!response.ok) {
+            if (response.status === 404) {
+                showToast('Shared view not found or expired.', 'warning');
+            } else {
+                showToast('Failed to load shared view.', 'error');
+            }
+            return false;
+        }
+
+        const view = await response.json();
+        const state = view.state || {};
+        const snapshot = view.snapshot || {};
+
+        // Navigate to the section
+        const section = state.section || 'llms';
+        const navBtn = document.querySelector(`.nav-btn[data-section="${section}"]`);
+        if (navBtn) {
+            navBtn.click();
+        }
+
+        // Apply search term if present
+        if (state.search) {
+            const searchInput = document.getElementById(`${section}-search`);
+            if (searchInput) {
+                searchInput.value = state.search;
+                // Trigger input event to filter
+                searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+        }
+
+        // Apply snapshot items if present
+        if (snapshot.category && Array.isArray(snapshot.items) && snapshot.items.length > 0) {
+            const category = snapshot.category;
+            // Store as filter result so it displays
+            filterState[category] = {
+                enabled: true,
+                items: snapshot.items
+            };
+            // Refresh the view
+            refreshCategoryView(category);
+            showToast(`Loaded shared view with ${snapshot.items.length} items`, 'success');
+        }
+
+        return true;
+    } catch (error) {
+        console.error('Failed to apply shared view:', error);
+        showToast('Failed to load shared view.', 'error');
+        return false;
+    }
+}
+
+/**
+ * Check URL for shared view parameter on page load
+ */
+function checkForSharedView() {
+    const params = new URLSearchParams(window.location.search);
+    const viewId = params.get('view');
+    const section = params.get('section');
+
+    if (viewId) {
+        // Load shared view after a short delay to let page initialize
+        setTimeout(() => applySharedView(viewId), 500);
+    } else if (section) {
+        // Just navigate to section
+        const navBtn = document.querySelector(`.nav-btn[data-section="${section}"]`);
+        if (navBtn) {
+            navBtn.click();
+        }
+    }
+}
+
+// Run on page load
+document.addEventListener('DOMContentLoaded', checkForSharedView);
+
+// ====== Export Dropdown Functions ======
+
+function toggleExportDropdown() {
+    const dropdown = document.getElementById('export-dropdown');
+    if (dropdown) {
+        dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+    }
+}
+
+function closeExportDropdown() {
+    const dropdown = document.getElementById('export-dropdown');
+    if (dropdown) {
+        dropdown.style.display = 'none';
+    }
+}
+
+function exportCurrentTab(format) {
+    const activeBtn = document.querySelector('.nav-btn.active');
+    const section = activeBtn?.dataset?.section || 'llms';
+    const category = sectionToCategoryId(section);
+    const items = getDisplayedItems(category) || [];
+
+    if (!items.length) {
+        showToast('No data to export.', 'warning');
+        return;
+    }
+
+    let content, filename, type;
+    if (format === 'json') {
+        content = JSON.stringify(items, null, 2);
+        filename = `${section}-export.json`;
+        type = 'application/json';
+    } else {
+        // CSV format
+        const headers = Object.keys(items[0] || {});
+        const rows = items.map(item =>
+            headers.map(h => JSON.stringify(item[h] ?? '')).join(',')
+        );
+        content = [headers.join(','), ...rows].join('\n');
+        filename = `${section}-export.csv`;
+        type = 'text/csv';
+    }
+
+    const blob = new Blob([content], { type });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast(`Exported ${items.length} items as ${format.toUpperCase()}`, 'success');
+}
+
+function exportPinnedItems() {
+    if (!pinnedItems.length) {
+        showToast('No pinned items to export.', 'warning');
+        return;
+    }
+    const content = JSON.stringify(pinnedItems, null, 2);
+    const blob = new Blob([content], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'pinned-items.json';
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast(`Exported ${pinnedItems.length} pinned items`, 'success');
+}
+
+function exportCompareItems() {
+    if (!chartComparisonModels.length) {
+        showToast('No items in comparison.', 'warning');
+        return;
+    }
+    const content = JSON.stringify(chartComparisonModels, null, 2);
+    const blob = new Blob([content], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'comparison-items.json';
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast(`Exported ${chartComparisonModels.length} comparison items`, 'success');
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', (e) => {
+    const container = document.querySelector('.export-dropdown-container');
+    if (container && !container.contains(e.target)) {
+        closeExportDropdown();
+    }
+});
+
+// Export globally
+window.copyShareableLink = copyShareableLink;
+window.applySharedView = applySharedView;
+window.toggleExportDropdown = toggleExportDropdown;
+window.closeExportDropdown = closeExportDropdown;
+window.exportCurrentTab = exportCurrentTab;
+window.exportPinnedItems = exportPinnedItems;
+window.exportCompareItems = exportCompareItems;
