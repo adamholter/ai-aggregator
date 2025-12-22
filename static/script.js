@@ -982,25 +982,30 @@ function setupGlobalSearch() {
 
 function searchAllData(query) {
     const results = [];
-    const maxPerCategory = 5;
+    const maxPerCategory = 4;
+
+    // Helper to get data - tries rawData first, then cachedData
+    const getData = (key) => rawData[key] || cachedData[key] || [];
 
     // Search LLMs
-    if (rawData.llms && rawData.llms.length) {
-        const matches = rawData.llms.filter(m =>
+    const llms = getData('llms');
+    if (llms && llms.length) {
+        const matches = llms.filter(m =>
             (m.name || '').toLowerCase().includes(query) ||
             (m.model_creator?.name || '').toLowerCase().includes(query)
         ).slice(0, maxPerCategory);
         matches.forEach(m => results.push({
             type: 'llms',
             name: m.name,
-            subtitle: m.model_creator?.name || '',
+            subtitle: m.model_creator?.name || 'LLM',
             data: m
         }));
     }
 
     // Search OpenRouter models
-    if (rawData.openRouterModels && rawData.openRouterModels.length) {
-        const matches = rawData.openRouterModels.filter(m =>
+    const openRouter = getData('openRouterModels');
+    if (openRouter && openRouter.length) {
+        const matches = openRouter.filter(m =>
             (m.name || m.id || '').toLowerCase().includes(query)
         ).slice(0, maxPerCategory);
         matches.forEach(m => results.push({
@@ -1012,8 +1017,9 @@ function searchAllData(query) {
     }
 
     // Search Fal models
-    if (rawData.falModels && rawData.falModels.length) {
-        const matches = rawData.falModels.filter(m =>
+    const falModels = getData('falModels');
+    if (falModels && falModels.length) {
+        const matches = falModels.filter(m =>
             (m.name || m.title || '').toLowerCase().includes(query) ||
             (m.category || '').toLowerCase().includes(query)
         ).slice(0, maxPerCategory);
@@ -1026,8 +1032,9 @@ function searchAllData(query) {
     }
 
     // Search Replicate models
-    if (rawData.replicateModels && rawData.replicateModels.length) {
-        const matches = rawData.replicateModels.filter(m =>
+    const replicateModels = getData('replicateModels');
+    if (replicateModels && replicateModels.length) {
+        const matches = replicateModels.filter(m =>
             (m.name || m.model || '').toLowerCase().includes(query) ||
             (m.owner || '').toLowerCase().includes(query)
         ).slice(0, maxPerCategory);
@@ -1039,7 +1046,82 @@ function searchAllData(query) {
         }));
     }
 
-    return results.slice(0, 15); // Max 15 total results
+    // Search Text-to-Image models (Artificial Analysis)
+    const textToImage = getData('textToImage');
+    if (textToImage && textToImage.length) {
+        const matches = textToImage.filter(m =>
+            (m.name || '').toLowerCase().includes(query) ||
+            (m.model_creator?.name || '').toLowerCase().includes(query)
+        ).slice(0, maxPerCategory);
+        matches.forEach(m => results.push({
+            type: 'text-to-image',
+            name: m.name,
+            subtitle: m.model_creator?.name || 'Text-to-Image',
+            data: m
+        }));
+    }
+
+    // Search Image Editing models
+    const imageEditing = getData('imageEditing');
+    if (imageEditing && imageEditing.length) {
+        const matches = imageEditing.filter(m =>
+            (m.name || '').toLowerCase().includes(query) ||
+            (m.model_creator?.name || '').toLowerCase().includes(query)
+        ).slice(0, maxPerCategory);
+        matches.forEach(m => results.push({
+            type: 'image-editing',
+            name: m.name,
+            subtitle: m.model_creator?.name || 'Image Editing',
+            data: m
+        }));
+    }
+
+    // Search Text-to-Video models
+    const textToVideo = getData('textToVideo');
+    if (textToVideo && textToVideo.length) {
+        const matches = textToVideo.filter(m =>
+            (m.name || '').toLowerCase().includes(query) ||
+            (m.model_creator?.name || '').toLowerCase().includes(query)
+        ).slice(0, maxPerCategory);
+        matches.forEach(m => results.push({
+            type: 'text-to-video',
+            name: m.name,
+            subtitle: m.model_creator?.name || 'Text-to-Video',
+            data: m
+        }));
+    }
+
+    // Search Image-to-Video models
+    const imageToVideo = getData('imageToVideo');
+    if (imageToVideo && imageToVideo.length) {
+        const matches = imageToVideo.filter(m =>
+            (m.name || '').toLowerCase().includes(query) ||
+            (m.model_creator?.name || '').toLowerCase().includes(query)
+        ).slice(0, maxPerCategory);
+        matches.forEach(m => results.push({
+            type: 'image-to-video',
+            name: m.name,
+            subtitle: m.model_creator?.name || 'Image-to-Video',
+            data: m
+        }));
+    }
+
+    // Search Text-to-Speech models
+    const textToSpeech = getData('textToSpeech');
+    if (textToSpeech && textToSpeech.length) {
+        const matches = textToSpeech.filter(m =>
+            (m.name || '').toLowerCase().includes(query) ||
+            (m.model_creator?.name || '').toLowerCase().includes(query)
+        ).slice(0, maxPerCategory);
+        matches.forEach(m => results.push({
+            type: 'text-to-speech',
+            name: m.name,
+            subtitle: m.model_creator?.name || 'Text-to-Speech',
+            data: m
+        }));
+    }
+
+    return results.slice(0, 20); // Max 20 total results
 }
 
 function displayGlobalSearchResults(results, container, query) {
