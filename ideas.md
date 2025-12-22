@@ -30,69 +30,53 @@ AI Model Analysis Dashboard: a Flask backend (`server.py`) serving a static HTML
 
 ## Shippable Product Features (I can implement end-to-end here)
 
-### 1) Zero-Config “Demo Mode” + Graceful Fallbacks
+### 1) Alerts & Watchlists (keywords, vendors, models) + In‑Browser Notifications
 
-**Rationale:** Right now, some tabs hard-fail without server env keys (notably Replicate + Hype + Artificial Analysis). A demo/fallback mode makes the dashboard usable immediately with no manual setup.
-
-**Implementation outline:**
-- Add a backend “capabilities” endpoint (e.g. `/api/capabilities`) that reports which integrations are live vs fallback.
-- Make `/api/replicate-models` use the existing `data/fallback/replicate_models.json` when `REPLICATE_API_KEY` is missing or upstream fails.
-- Make `/api/hype` return a safe empty payload + message when Supabase keys are missing (instead of 503), and optionally load a local fallback JSON file.
-- For Artificial Analysis endpoints, add explicit “demo dataset” fallbacks (clearly labeled synthetic/sample) so LLM + media tabs can render without `ARTIFICIAL_ANALYSIS_API_KEY`.
-- Frontend: show a non-intrusive banner when the app is in fallback/demo mode; link to a “Status” panel.
-
-### 2) “Insights” Tab: Correlations, Outliers, and Value Picks (No AI Key Required)
-
-**Rationale:** The backend already has `/api/correlation-analysis` and `/api/smart-insights`, but the UI doesn’t surface them. This unlocks data-science style discovery inside the dashboard.
+**Rationale:** Users want to know when *something they care about* ships (e.g., “gpt-5”, “flux”, “gemini”, “video”). A watchlist turns the dashboard into an always-on radar without needing AI.
 
 **Implementation outline:**
-- Add a new nav tab + section (e.g. “Insights”) in `static/index.html`.
-- UI controls: dataset selector (LLMs/OpenRouter/Replicate/fal/etc), metric toggles, and a “Run analysis” button.
-- Render: correlation table + top insights + optional Plotly scatter/heatmap visualizations (Plotly already loaded).
-- Improve backend endpoints (if needed) to accept direct item payloads (so Insights works even if the cache isn’t warmed).
-- Add tests for the new/updated endpoints using small synthetic datasets (no external calls).
+- Add an “Alerts” tab: create/edit watch rules (keyword include/exclude, source toggles, vendor/model id match), plus “Test against current Latest”.
+- Background polling (configurable interval) against `/api/latest-preview` or `/latest` and local diffing with persistent “seen” IDs in `localStorage`.
+- Toast + optional Notifications API (permission-gated); alerts list is clickable cards that deep-link to the relevant tab or external URL.
 
-### 3) Latest Feed Reliability Fix (“New stuff should show up”)
+### 2) OpenRouter Cost Calculator + Budget Scenarios
 
-**Rationale:** `HANDOFF.md` flags that Latest sometimes misses new OpenRouter/Replicate items even when their tabs show them. Fixing this improves trust in the primary “what changed” view.
+**Rationale:** Model selection is often a budget question. A built-in calculator lets users turn pricing into “$/request/day/month” quickly, and compare multiple models side-by-side.
 
 **Implementation outline:**
-- Audit `generate_latest_feed_payload()` timestamp selection per source.
-- Adjust “first-seen” timestamp assignment for items missing upstream dates so they don’t get placed outside short windows after long downtime.
-- Add regression tests for Latest-window filtering with missing timestamps.
+- Add a “Cost” tab: choose model(s) from cached OpenRouter catalog; enter prompt/output tokens + requests/day; show daily/monthly cost.
+- Allow “copy as shareable link” (serialize scenario in query params) and export the comparison table to CSV/Markdown.
 
-### 4) Account + Pins: Secure Auth + Auto-Sync Local Pins on Login
+### 3) Change Tracker: “New Models” + “Pricing/Context Changes” Since Last Visit
 
-**Rationale:** The UI already supports login and server-backed pins, but registration stores plaintext passwords and local pins can be lost when a user signs in. Fixing both improves trust and cross-device continuity.
-
-**Implementation outline:**
-- Hash passwords at registration (`werkzeug.security.generate_password_hash`) and auto-migrate plaintext entries on successful login.
-- Add a “Sync local pins” merge step after login: upload any local pins missing on the server, then optionally clear local pins.
-- Add tests for register/login, password migration, and pin CRUD.
-
-### 5) Snapshot Import/Export (Portable Dashboards)
-
-**Rationale:** Sharing links is great, but a portable snapshot enables offline demos, reproducible comparisons, and long-term archiving without relying on server TTLs.
+**Rationale:** “What changed?” is more than new releases—pricing and context windows change too. A change tracker makes OpenRouter (and fal.ai) updates actionable.
 
 **Implementation outline:**
-- Add “Export snapshot” (JSON) combining: current tab datasets (or all loaded datasets), pinned items, compare set, and saved view state.
-- Add “Import snapshot” file upload to restore state entirely client-side.
-- Optional: server endpoint to store snapshots for logged-in users, with cleanup.
+- Store lightweight per-source snapshots in `localStorage` (e.g., `openrouter:id -> {pricing, context_length, modalities}`).
+- Add a “Changes” view with filters: New, Changed, Price up/down, Context up/down; show diffs inline on cards.
+- Optional: one-click “Add changed models to Compare”.
 
-### 6) Better Filtering UX: Numeric Ranges + “Value Score” Sorting
+### 4) Cross-Source Linking Without AI Keys (“Where Can I Run This?”)
 
-**Rationale:** The dashboard has search + sorting but limited constraint filtering. Adding numeric filters and composite ranking helps users converge on “best model for my budget/latency”.
-
-**Implementation outline:**
-- LLM tab: min intelligence/coding, max price (input/output), min speed, min context length.
-- OpenRouter tab: price range, context length, modality toggles, vendor quick chips.
-- Compute and display a “value score” (user-adjustable weights) and add as a sort option; persist weights in localStorage.
-
-### 7) Developer/Deploy Quality: Make Local Runs Match Production
-
-**Rationale:** `run_server.sh` is hardcoded to a local path, and `server.py` defines functions after the `__main__` `app.run()` call (so some endpoints can break when running via `python server.py`). Fixing this reduces “works on Render but not locally” bugs.
+**Rationale:** The modal tries to cross-link AA ↔ OpenRouter but currently relies on `/api/model-match` (AI key). Users should get cross-source availability and pricing *without* needing an AI key.
 
 **Implementation outline:**
-- Fix `run_server.sh` to use the repo directory (relative) and default to `PORT=8765` (or align docs).
-- Move the `if __name__ == '__main__':` block to the end of `server.py` so all functions are defined before `app.run()`.
-- Update README port/docs consistency if needed.
+- Implement deterministic matching fallback in `static/script.js` using the existing local similarity/index helpers (`findOpenRouterMatch`) when AI matching fails.
+- In AA model modals: show best-match OpenRouter card + pricing + context + link; label as “heuristic match” with confidence.
+- In OpenRouter modals: match back to any loaded AA data and show benchmark metrics when available.
+
+### 5) Compare Report (Charts + Table + “Copy as Markdown”)
+
+**Rationale:** Charts are useful, but decisions need a readable report. A compare report turns the compare set into something you can paste into a doc or share in Slack/email.
+
+**Implementation outline:**
+- Extend the existing chart modal to include a sortable metrics table (normalized units, highlight best/worst).
+- Add export buttons: “Copy Markdown”, “Download CSV”, “Share compare link”.
+
+### 6) Pinned Collections as Real Shortlists (notes, tags, share)
+
+**Rationale:** Pins are currently binary. Turning pins into shortlists (collections + notes + lightweight scoring) supports real evaluation workflows.
+
+**Implementation outline:**
+- Add “Add to collection” + “note” UI on pin; filter Pinned by collection; quick search within Pinned.
+- Add “Share collection” as a shared view snapshot; export collection to Markdown/CSV for handoff.
