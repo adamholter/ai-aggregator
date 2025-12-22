@@ -43,32 +43,21 @@ def get_api_key():
     except:
         return ''
 
-# Pricing extraction prompt
-SYSTEM_PROMPT = """You are a pricing parser for AI model APIs. Your task is to extract standardized pricing from raw pricing text.
+# Pricing extraction prompt - STRICT JSON enforcement
+SYSTEM_PROMPT = """You are a JSON-only pricing parser. Output ONLY valid JSON, no other text.
 
 RULES:
-1. For VIDEO models: Calculate cost for 5 seconds at the LOWEST available resolution
-2. For IMAGE models: Calculate cost for 1 megapixel (1024x1024 = 1MP) output
-3. For 3D models: Calculate cost for 1 generation at lowest quality
-4. For AUDIO/SPEECH: Calculate cost for 10 seconds of audio
-5. Always use the cheapest option when multiple tiers exist
+1. VIDEO models: Cost for 5 seconds at LOWEST resolution
+2. IMAGE models: Cost for 1 megapixel (1024x1024 = 1MP) output
+3. 3D models: Cost for 1 generation at lowest quality
+4. AUDIO/SPEECH: Cost for 10 seconds of audio
+5. Use the CHEAPEST option when multiple tiers exist
 6. Ignore audio add-ons for video unless it's the only option
 
-OUTPUT FORMAT (JSON only, no explanation):
-{
-  "model_type": "video|image|3d|audio|other",
-  "reference_price_usd": <number>,
-  "price_per_unit": <number>,
-  "unit": "second|megapixel|image|generation|token|request",
-  "reference_unit": "<description like '5s at 720p' or '1MP'>",
-  "resolution": "<lowest resolution if applicable>",
-  "confidence": <0.0-1.0>,
-  "notes": "<brief calculation explanation>"
-}
+RESPOND WITH ONLY THIS JSON (no markdown, no explanation):
+{"model_type":"video|image|3d|audio|other","reference_price_usd":0.00,"price_per_unit":0.00,"unit":"second|megapixel|image|generation","reference_unit":"5s at 720p","confidence":0.95,"notes":"calculation"}
 
-If pricing cannot be determined, return:
-{"error": "unable to parse", "confidence": 0}
-"""
+If unparseable: {"error":"unable to parse","confidence":0}"""
 
 def fetch_fal_models() -> list:
     """Fetch all fal.ai models from the API."""
@@ -80,62 +69,101 @@ def fetch_fal_models() -> list:
         print(f"Error fetching models: {e}")
         return []
 
-def call_llm(messages: list) -> Optional[str]:
-    """Call GPT-OSS 120B via OpenRouter."""
+def call_llm(messages: list, retries: int = 2) -> Optional[str]:
+    """Call GPT-OSS 120B via OpenRouter with retries."""
     api_key = get_api_key()
     if not api_key:
         print("Warning: No OpenRouter API key available")
         return None
     
-    try:
-        resp = requests.post(
-            'https://openrouter.ai/api/v1/chat/completions',
-            headers={
-            'Authorization': f'Bearer {api_key}',
-                'Content-Type': 'application/json',
-            },
-            json={
-                'model': LLM_MODEL,
-                'messages': messages,
-                'temperature': 0.1,
-                'max_tokens': 500,
-            },
-            timeout=60
-        )
-        resp.raise_for_status()
-        return resp.json()['choices'][0]['message']['content']
-    except Exception as e:
-        print(f"LLM call error: {e}")
-        return None
+    for attempt in range(retries + 1):
+        try:
+            resp = requests.post(
+                'https://openrouter.ai/api/v1/chat/completions',
+                headers={
+                    'Authorization': f'Bearer {api_key}',
+                    'Content-Type': 'application/json',
+                },
+                json={
+                    'model': LLM_MODEL,
+                    'messages': messages,
+                    'temperature': 0.0,  # Zero temp for consistent JSON
+                    'max_tokens': 300,
+                },
+                timeout=60
+            )
+            resp.raise_for_status()
+            return resp.json()['choices'][0]['message']['content']
+        except Exception as e:
+            if attempt < retries:
+                continue
+            print(f"LLM error: {e}")
+            return None
+    return None
 
-def parse_pricing_with_llm(model_title: str, category: str, pricing_text: str) -> dict:
-    """Parse a single pricing string using LLM."""
+def extract_json(text: str) -> Optional[dict]:
+    """Extract JSON object from text with multiple strategies."""
+    if not text:
+        return None
+    
+    # Strategy 1: Direct parse
+    try:
+        return json.loads(text.strip())
+    except:
+        pass
+    
+    # Strategy 2: Find JSON with nested braces support
+    try:
+        # Find the first { and last }
+        start = text.find('{')
+        end = text.rfind('}')
+        if start != -1 and end != -1 and end > start:
+            return json.loads(text[start:end+1])
+    except:
+        pass
+    
+    # Strategy 3: Clean markdown code blocks
+    try:
+        cleaned = re.sub(r'```json\s*', '', text)
+        cleaned = re.sub(r'```\s*', '', cleaned)
+        return json.loads(cleaned.strip())
+    except:
+        pass
+    
+    return None
+
+def parse_pricing_with_llm(model_title: str, category: str, pricing_text: str, max_retries: int = 2) -> dict:
+    """Parse a single pricing string using LLM with retries."""
     if not pricing_text or 'Pricing details available on platform' in pricing_text:
         return {'error': 'no_pricing_data', 'confidence': 0}
     
     user_message = f"""Model: {model_title}
 Category: {category}
-Pricing text: {pricing_text}
+Pricing: {pricing_text}
 
-Extract standardized pricing."""
+Output JSON only:"""
 
-    response = call_llm([
-        {'role': 'system', 'content': SYSTEM_PROMPT},
-        {'role': 'user', 'content': user_message}
-    ])
+    for attempt in range(max_retries + 1):
+        response = call_llm([
+            {'role': 'system', 'content': SYSTEM_PROMPT},
+            {'role': 'user', 'content': user_message}
+        ])
+        
+        if not response:
+            if attempt < max_retries:
+                continue
+            return {'error': 'llm_failed', 'confidence': 0}
+        
+        result = extract_json(response)
+        if result:
+            return result
+        
+        # Retry with stricter prompt
+        if attempt < max_retries:
+            user_message = f"ONLY OUTPUT JSON. {user_message}"
+            continue
     
-    if not response:
-        return {'error': 'llm_failed', 'confidence': 0}
-    
-    # Try to extract JSON from response
-    try:
-        # Find JSON in response
-        json_match = re.search(r'\{[^{}]*\}', response, re.DOTALL)
-        if json_match:
-            return json.loads(json_match.group())
-        return json.loads(response)
-    except json.JSONDecodeError:
-        return {'error': 'json_parse_failed', 'raw_response': response[:200], 'confidence': 0}
+    return {'error': 'json_parse_failed', 'raw_response': response[:150] if response else '', 'confidence': 0}
 
 def batch_process_models(models: list, batch_size: int = 5) -> dict:
     """Process models and extract standardized pricing."""
