@@ -2937,7 +2937,6 @@ function createHypeCard(item, index, fetchedAt) {
     card.innerHTML = `
         <div class="card-header">
             <div class="card-header-content">
-                <div class="source-badge">Hype Signals</div>
                 <div class="card-title">
                     <a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${name}</a>
                 </div>
@@ -3496,7 +3495,6 @@ function createBlogCard(post) {
     card.innerHTML = `
         <div class="card-header">
             <div class="card-header-content">
-                <div class="source-badge">Blog</div>
                 <div class="card-title">
                     <a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(titleText)}</a>
                 </div>
@@ -3740,7 +3738,6 @@ function createLatestCard(item) {
     card.innerHTML = `
         <div class="card-header">
             <div class="card-header-content">
-                <div class="source-badge">${escapeHtml(badgeLabel)}</div>
                 <div class="card-title">
                     ${item.url ? `<a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">${titleText}</a>` : `<span class="title-text">${titleText}</span>`}
                 </div>
@@ -3964,6 +3961,7 @@ function createOpenRouterCard(model) {
     const card = document.createElement('div');
     card.className = 'model-card clickable';
     card.dataset.source = 'openrouter';
+    card.dataset.itemKey = model.id || model.name;
     card.onclick = () => openModelModal(model, 'openrouter');
 
     const title = getOpenRouterCardTitle(model);
@@ -3978,7 +3976,6 @@ function createOpenRouterCard(model) {
     const modalities = inputModalities.length ? inputModalities.join(', ') : 'Text';
 
     card.innerHTML = `
-        <div class="source-badge">OpenRouter Catalog</div>
         <h3>${title}</h3>
         <div class="model-creator">${provider}</div>
         
@@ -5232,6 +5229,7 @@ function createFalModelCard(model) {
     const card = document.createElement('div');
     card.className = 'model-card clickable';
     card.dataset.source = 'fal';
+    card.dataset.itemKey = model.title || model.name || model.id;
     card.onclick = () => openModelModal(model, 'fal-models');
 
     // Format date
@@ -5246,7 +5244,6 @@ function createFalModelCard(model) {
     const pricing = model.pricing || 'Pricing details available on platform';
 
     card.innerHTML = `
-        <div class="source-badge">fal.ai</div>
         <h3>${model.title}</h3>
         <div class="model-creator">fal.ai</div>
         
@@ -5302,6 +5299,7 @@ function createReplicateModelCard(model) {
     const card = document.createElement('div');
     card.className = 'model-card clickable';
     card.dataset.source = 'replicate';
+    card.dataset.itemKey = model.name || model.model || model.id;
     card.onclick = () => openModelModal(model, 'replicate-models');
 
     // Format date
@@ -5311,7 +5309,6 @@ function createReplicateModelCard(model) {
     const runCount = model.run_count ? model.run_count.toLocaleString() : 'N/A';
 
     card.innerHTML = `
-        <div class="source-badge">Replicate</div>
         <h3>${model.name}</h3>
         <div class="model-creator">${model.owner} (Replicate)</div>
         
