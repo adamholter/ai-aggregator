@@ -201,6 +201,20 @@ def inline_exp_agent_page():
     response.headers['Expires'] = '0'
     return response
 
+@app.route('/agent-ui-variation')
+def agent_ui_variation_page():
+    """Serve the enhanced agent UI variation"""
+    import os
+    from flask import Response
+    path = os.path.join(os.path.dirname(__file__), 'static', 'agent-ui-variation.html')
+    with open(path, 'r', encoding='utf-8') as f:
+        content = f.read()
+    response = Response(content, mimetype='text/html')
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
+
 @app.route('/api/experimental-agent', methods=['POST'])
 def inline_exp_agent_api():
     """Run the agent - 100% synchronous, uses requests library."""
