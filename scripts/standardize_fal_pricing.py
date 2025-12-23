@@ -12,6 +12,7 @@ This script:
 import os
 import json
 import re
+import time
 import requests
 from typing import Optional
 
@@ -88,7 +89,7 @@ def call_llm(messages: list, retries: int = 2) -> Optional[str]:
                     'model': LLM_MODEL,
                     'messages': messages,
                     'temperature': 0.0,  # Zero temp for consistent JSON
-                    'max_tokens': 300,
+                    'max_tokens': 500,  # High enough for reasoning + output tokens
                 },
                 timeout=60
             )
@@ -199,6 +200,9 @@ def batch_process_models(models: list, batch_size: int = 5) -> dict:
             print(f"${result['reference_price_usd']:.3f} ({result.get('reference_unit', 'unit')})")
         else:
             print(f"Error: {result.get('error', 'unknown')}")
+        
+        # Small delay to avoid rate limiting
+        time.sleep(0.5)
     
     return results
 

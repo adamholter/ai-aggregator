@@ -80,3 +80,74 @@ AI Model Analysis Dashboard: a Flask backend (`server.py`) serving a static HTML
 **Implementation outline:**
 - Add “Add to collection” + “note” UI on pin; filter Pinned by collection; quick search within Pinned.
 - Add “Share collection” as a shared view snapshot; export collection to Markdown/CSV for handoff.
+
+---
+
+### 7) Interactive Model Comparison Arena (Artificial Analysis-style Charts)
+
+**Rationale:** Artificial Analysis has a great charting experience where users can select specific models to visualize and compare. Building a dedicated comparison page with auto-generated charts powered by AA, OpenRouter, and cross-matched data would give users the same power for custom model selections.
+
+**Implementation outline:**
+- Add a new “Compare” tab with a main chart area and model selection sidebar
+- Use cached data from multiple sources:
+  - AA LLMs (intelligence, speed, pricing)
+  - AA media models (ELO scores)
+  - OpenRouter catalog (pricing, context length)
+  - Cross-match AA ↔ OpenRouter using deterministic string matching (fallback to fuzzy match)
+- Default to a curated set of popular models (e.g., GPT-5, Claude, Gemini, Grok) so the page isn't empty on first load
+- Chart types using Plotly.js (already loaded):
+  - Bar charts: Intelligence index, output speed, cost comparison
+  - Scatter plots: Speed vs Cost (log scale), Quality vs Price
+  - Radar charts: Multi-metric comparison for 2-4 selected models
+  - Line charts: Pricing trends if historical data available
+- Model selection UI:
+  - Searchable multi-select dropdown (with checkboxes)
+  - Group by: Provider/Vendor (OpenAI, Anthropic, Google, Meta, xAI, etc.)
+  - Filter by: Price range, Context length, Modalities
+  - Quick presets: “Top 5 by Intelligence”, “Fastest under $10/1M”, “Best value”
+- When models are selected, auto-generate relevant charts and update in real-time
+- Show data source badges (AA, OpenRouter, fal.ai) with tooltips explaining provenance
+- “Share this comparison” button using existing `/api/shared-views` infrastructure
+- Export options: “Copy as Markdown table”, “Download CSV”, “Save chart image”
+- Responsive: On mobile, charts stack vertically; selection panel collapses into drawer
+- Main section focused on LLMs initially, but add category switcher for:
+  - LLMs (AA benchmarks)
+  - Text-to-Image (AA ELO + standardized fal.ai pricing)
+  - Text-to-Video (AA ELO + standardized pricing)
+  - Use `scripts/standardize_fal_pricing.py` patterns for media model pricing normalization
+
+**Data flow:**
+1. Page loads → fetch from `/api/llms`, `/api/openrouter-models`, `/api/fal-models`
+2. Cross-match models in-memory on page load (build lookup map)
+3. User selects models → re-render charts with selected subset
+4. Charts use Plotly.js with existing `plotly-2.27.0.min.js` CDN
+
+---
+
+### 8) Onboarding Tour for First-Time Users
+
+**Rationale:** The dashboard has many tabs, data sources, and features. New users need guided discovery to understand what's available and how to get value quickly.
+
+**Implementation outline:**
+- Create tour configuration array: `[{target (selector), title, content, position}]`
+- Implement lightweight tour overlay in `static/script.js`:
+  - Dark backdrop with highlighted element cutout
+  - Tooltip with title, content, prev/next/close buttons
+  - Keyboard shortcuts: Escape to close, arrows to navigate
+  - Store progress in `localStorage` (`onboarding_completed`, `last_step_index`)
+- Tour stops (7 stops, ~2 minutes total):
+  1. **Welcome** → Overview: “AI Model Analysis Dashboard aggregates benchmarks, pricing, and news across multiple sources”
+  2. **Navigation** → Explain tabs: LLMs, Text-to-Image, Agent, Pinned, Latest, Hype, etc.
+  3. **Global Search** → Cmd/Ctrl+K to search across all tabs and sources
+  4. **Model Cards** → Double-click for AI-powered analysis, pin for later, add to compare
+  5. **Compare Tray** → Select models, click Compare button for charts and tables
+  6. **Agent Tab** → Ask questions about models, get recommendations with live tool traces
+  7. **Settings** → Configure API keys, available models, filter defaults
+- Trigger tour on first visit (check `localStorage` flag)
+- Add “Start tour” link in:
+  - Empty Pinned state
+  - Settings modal footer
+  - About page
+- Dismissible “Show me around” toast on first load (auto-dismiss after 10 seconds)
+- Uses existing modal overlay CSS patterns for consistency
+- Mobile-aware: smaller tooltips, positioned to avoid virtual keyboard
