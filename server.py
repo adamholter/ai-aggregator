@@ -355,7 +355,7 @@ def inline_exp_agent_api():
                         tool_args = {}
                     
                     # Execute tool using internal function (defined later in file)
-                    tool_result = _execute_agent_tool(tool_name, tool_args)
+                    tool_result = _execute_agent_tool(tool_name, tool_args, api_key)
                     
                     tool_calls_made.append({
                         "tool": tool_name,
@@ -4055,7 +4055,7 @@ def fetch_data_for_categories(categories, limit_per_category=None, recency=None,
 # AGENT TOOL EXECUTION - Defined here after fetch_data_for_categories
 # This is called by the inline experimental agent routes above
 # ============================================================
-def _execute_agent_tool(tool_name, tool_args):
+def _execute_agent_tool(tool_name, tool_args, api_key=None):
     """Execute an agent tool by calling internal data functions directly."""
     try:
         # Map tool names to category IDs (matches FETCH_DATA_CATEGORY_CONFIG)
@@ -4093,8 +4093,8 @@ def _execute_agent_tool(tool_name, tool_args):
             if not query:
                 return "Error: ask_perplexity requires a query parameter"
             try:
-                # Use the existing perplexity execution function
-                result, _ = _agent_exp_execute_perplexity(tool_args, None)
+                # Use the existing perplexity execution function with user's API key
+                result, _ = _agent_exp_execute_perplexity(tool_args, api_key)
                 return result.get("content", str(result))
             except Exception as e:
                 return f"Web search failed: {str(e)}"
