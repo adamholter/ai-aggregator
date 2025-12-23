@@ -294,7 +294,80 @@ let latestIncludeHype = false;
 let latestMetadata = null;
 let latestLoadId = 0;
 const LATEST_PREVIEW_LIMIT = 10;
+const LATEST_CACHE_STORAGE_KEY = 'dashboard-latest-cache';
 let latestControlsWired = false;
+
+// Toast notification helper
+function showToast(message, type = 'info', duration = 5000) {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+
+    const toast = document.createElement('div');
+    toast.className = `toast${type !== 'info' ? ` toast-${type}` : ''}`;
+
+    const content = document.createElement('div');
+    content.style.flex = '1';
+    content.innerHTML = message;
+
+    const closeBtn = document.createElement('button');
+    closeBtn.innerHTML = '×';
+    closeBtn.onclick = () => dismissToast(toast);
+
+    toast.appendChild(content);
+    toast.appendChild(closeBtn);
+    container.appendChild(toast);
+
+    if (duration > 0) {
+        setTimeout(() => dismissToast(toast), duration);
+    }
+
+    return toast;
+}
+
+function dismissToast(toast) {
+    if (!toast || !toast.parentElement) return;
+    toast.classList.add('fade-out');
+    setTimeout(() => toast.remove(), 200);
+}
+
+// Check for new items in latest feed and show toast
+function checkForNewLatestItems(currentItems) {
+    if (!Array.isArray(currentItems) || currentItems.length === 0) return;
+
+    try {
+        const cachedJson = localStorage.getItem(LATEST_CACHE_STORAGE_KEY);
+        const cached = cachedJson ? JSON.parse(cachedJson) : { ids: [], timestamp: 0 };
+
+        // Create unique ID for each item (use link or title+source combo)
+        const getItemId = (item) => item.link || `${item.title || ''}-${item.source || ''}`;
+
+        const currentIds = new Set(currentItems.map(getItemId));
+        const cachedIds = new Set(cached.ids || []);
+
+        // Find new items (in current but not in cached)
+        const newItems = currentItems.filter(item => !cachedIds.has(getItemId(item)));
+
+        if (cachedIds.size > 0 && newItems.length > 0) {
+            // Only show notification if we had previous cache (not first visit)
+            if (newItems.length === 1) {
+                const item = newItems[0];
+                const preview = `<strong>${escapeHtml(item.title || 'New item')}</strong>` +
+                    (item.source ? ` <span style="opacity:0.7">from ${escapeHtml(item.source)}</span>` : '');
+                showToast(`🔔 New in Latest: ${preview}`, 'info', 8000);
+            } else {
+                showToast(`🔔 ${newItems.length} new appearances in the Latest tab since your last visit.`, 'info', 6000);
+            }
+        }
+
+        // Update cache with current items
+        localStorage.setItem(LATEST_CACHE_STORAGE_KEY, JSON.stringify({
+            ids: Array.from(currentIds),
+            timestamp: Date.now()
+        }));
+    } catch (e) {
+        console.warn('Failed to check for new latest items:', e);
+    }
+}
 
 function getLatestControls() {
     const section = document.getElementById('latest');
@@ -4068,6 +4141,8 @@ async function loadLatestFeed(forceRefresh = false) {
                 }
                 ensureLatestControlListeners();
                 displayLatestFeed(items);
+                // Check for new items and show toast notification
+                checkForNewLatestItems(items);
                 errorElement.style.display = 'none';
             } catch (error) {
                 if (loadId !== latestLoadId) {
