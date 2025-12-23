@@ -1864,16 +1864,21 @@ function setAuthMode(mode) {
     const modalTitle = document.getElementById('auth-modal-title');
     const submitButton = document.getElementById('auth-submit');
     const modeToggle = document.getElementById('auth-mode-toggle');
+    const requirements = document.getElementById('auth-requirements');
+
     if (modalTitle) {
-        modalTitle.textContent = mode === 'register' ? 'Create Account' : 'Log In';
+        modalTitle.textContent = mode === 'register' ? 'Create account' : 'Sign in';
     }
     if (submitButton) {
-        submitButton.textContent = mode === 'register' ? 'Register' : 'Log In';
+        submitButton.textContent = mode === 'register' ? 'Create account' : 'Sign in';
     }
     if (modeToggle) {
         modeToggle.textContent = mode === 'register'
-            ? 'Already have an account? Log In'
-            : 'Need an account? Register';
+            ? 'Sign in instead'
+            : 'Create account';
+    }
+    if (requirements) {
+        requirements.style.display = mode === 'register' ? 'block' : 'none';
     }
     const passwordInput = document.getElementById('auth-password');
     if (passwordInput) {
