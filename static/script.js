@@ -473,6 +473,455 @@ function showToast(message, type = 'error', duration = 5000) {
     }
 }
 
+// ============ What's New Change Detection ============
+
+const SNAPSHOT_KEY = 'dashboard-whatsnew-snapshot';
+
+/**
+ * Create a minimal snapshot of current data for change tracking
+ */
+function createDataSnapshot() {
+    const snapshot = {
+        timestamp: Date.now(),
+        openrouter: {},
+        llms: [],
+        falModels: []
+    };
+
+    // OpenRouter: track model IDs, pricing, context_length
+    const orModels = cachedData.openRouterModels || [];
+    orModels.forEach(m => {
+        if (m.id) {
+            snapshot.openrouter[m.id] = {
+                prompt: m.pricing?.prompt || 0,
+                completion: m.pricing?.completion || 0,
+                context: m.context_length || 0
+            };
+        }
+    });
+
+    // LLMs: just track names for new model detection
+    const llms = cachedData.llms || [];
+    snapshot.llms = llms.map(m => m.name).filter(Boolean);
+
+    // Fal: track model IDs
+    const fal = cachedData.falModels || [];
+    snapshot.falModels = fal.map(m => m.id || m.title).filter(Boolean);
+
+    return snapshot;
+}
+
+/**
+ * Save current data snapshot to localStorage
+ */
+function saveDataSnapshot() {
+    try {
+        const snapshot = createDataSnapshot();
+        localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(snapshot));
+    } catch (e) {
+        console.warn('Failed to save data snapshot:', e);
+    }
+}
+
+/**
+ * Load previous snapshot from localStorage
+ */
+function loadPreviousSnapshot() {
+    try {
+        const stored = localStorage.getItem(SNAPSHOT_KEY);
+        return stored ? JSON.parse(stored) : null;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Detect changes between old snapshot and current data
+ */
+function detectChanges(oldSnapshot) {
+    if (!oldSnapshot) return null;
+
+    const changes = {
+        newModels: [],
+        priceUp: [],
+        priceDown: [],
+        contextChanges: []
+    };
+
+    // Check OpenRouter for new models and price/context changes
+    const orModels = cachedData.openRouterModels || [];
+    orModels.forEach(m => {
+        if (!m.id) return;
+        const old = oldSnapshot.openrouter?.[m.id];
+
+        if (!old) {
+            // New model
+            changes.newModels.push({ source: 'OpenRouter', name: m.name || m.id });
+        } else {
+            // Check pricing changes (>5% threshold)
+            const newPrompt = parseFloat(m.pricing?.prompt) || 0;
+            const oldPrompt = parseFloat(old.prompt) || 0;
+            if (oldPrompt > 0 && newPrompt > 0) {
+                const pctChange = ((newPrompt - oldPrompt) / oldPrompt) * 100;
+                if (pctChange > 5) {
+                    changes.priceUp.push({ name: m.name || m.id, pct: pctChange.toFixed(0) });
+                } else if (pctChange < -5) {
+                    changes.priceDown.push({ name: m.name || m.id, pct: Math.abs(pctChange).toFixed(0) });
+                }
+            }
+
+            // Check context length changes
+            const newCtx = m.context_length || 0;
+            const oldCtx = old.context || 0;
+            if (oldCtx > 0 && newCtx !== oldCtx && Math.abs(newCtx - oldCtx) > 1000) {
+                changes.contextChanges.push({
+                    name: m.name || m.id,
+                    old: oldCtx,
+                    new: newCtx
+                });
+            }
+        }
+    });
+
+    // Check for new LLMs
+    const llms = cachedData.llms || [];
+    const oldLlms = new Set(oldSnapshot.llms || []);
+    llms.forEach(m => {
+        if (m.name && !oldLlms.has(m.name)) {
+            changes.newModels.push({ source: 'AA Benchmark', name: m.name });
+        }
+    });
+
+    // Check for new fal.ai models
+    const fal = cachedData.falModels || [];
+    const oldFal = new Set(oldSnapshot.falModels || []);
+    fal.forEach(m => {
+        const id = m.id || m.title;
+        if (id && !oldFal.has(id)) {
+            changes.newModels.push({ source: 'fal.ai', name: m.title || id });
+        }
+    });
+
+    // Only return if there are actual changes
+    const hasChanges = changes.newModels.length > 0 ||
+        changes.priceUp.length > 0 ||
+        changes.priceDown.length > 0 ||
+        changes.contextChanges.length > 0;
+
+    return hasChanges ? changes : null;
+}
+
+/**
+ * Show What's New toast notification
+ */
+function showWhatsNewToast(changes) {
+    if (!changes) return;
+
+    const parts = [];
+    if (changes.newModels.length > 0) {
+        parts.push(`${changes.newModels.length} new model${changes.newModels.length > 1 ? 's' : ''}`);
+    }
+    if (changes.priceDown.length > 0) {
+        parts.push(`${changes.priceDown.length} price drop${changes.priceDown.length > 1 ? 's' : ''}`);
+    }
+    if (changes.priceUp.length > 0) {
+        parts.push(`${changes.priceUp.length} price increase${changes.priceUp.length > 1 ? 's' : ''}`);
+    }
+    if (changes.contextChanges.length > 0) {
+        parts.push(`${changes.contextChanges.length} context update${changes.contextChanges.length > 1 ? 's' : ''}`);
+    }
+
+    if (parts.length === 0) return;
+
+    const message = `✨ What's New: ${parts.join(', ')} since your last visit`;
+    showToast(message, 'info', 10000);
+
+    // Log details to console for debugging
+    console.log('What\'s New details:', changes);
+}
+
+/**
+ * Check for changes after data loads
+ */
+async function checkWhatsNew() {
+    // Wait a bit for data to load
+    await new Promise(r => setTimeout(r, 3000));
+
+    const oldSnapshot = loadPreviousSnapshot();
+
+    // If no previous snapshot, just save current and don't show toast
+    if (!oldSnapshot) {
+        saveDataSnapshot();
+        return;
+    }
+
+    // Only check if snapshot is at least 1 hour old (avoid spamming on page refresh)
+    const hoursSinceSnapshot = (Date.now() - oldSnapshot.timestamp) / (1000 * 60 * 60);
+    if (hoursSinceSnapshot < 1) {
+        return;
+    }
+
+    const changes = detectChanges(oldSnapshot);
+    if (changes) {
+        showWhatsNewToast(changes);
+    }
+
+    // Save new snapshot for next visit
+    saveDataSnapshot();
+}
+
+// Start checking when page loads
+document.addEventListener('DOMContentLoaded', () => {
+    // Delay to let data load first
+    setTimeout(checkWhatsNew, 5000);
+});
+
+// Also save snapshot before user leaves
+window.addEventListener('beforeunload', saveDataSnapshot);
+
+// ============ Onboarding Tour ============
+
+const TOUR_COMPLETED_KEY = 'dashboard-tour-completed';
+
+const tourSteps = [
+    {
+        selector: '.nav-tabs',
+        title: 'Welcome to AI Dashboard! 👋',
+        content: 'Browse AI models from multiple sources: benchmarks, OpenRouter, fal.ai, Replicate, and more. Use these tabs to explore different categories.',
+        position: 'bottom'
+    },
+    {
+        selector: '#globalSearch, .search-input, [type="search"]',
+        title: 'Global Search',
+        content: 'Press Cmd+K (or Ctrl+K) to search across all models and sources. Find any model instantly.',
+        position: 'bottom'
+    },
+    {
+        selector: '.model-card, .llm-card',
+        title: 'Model Cards',
+        content: 'Click cards to view details. Use the pin button to save favorites, or add to Compare for side-by-side analysis.',
+        position: 'right'
+    },
+    {
+        selector: '[data-tab="agent"], .nav-tabs button:contains("Agent")',
+        title: 'AI Agent',
+        content: 'Ask questions about models, get recommendations, and explore data with our AI assistant. Requires an OpenRouter API key.',
+        position: 'bottom'
+    },
+    {
+        selector: '.settings-btn, #settingsBtn, [aria-label*="Settings"]',
+        title: 'Settings',
+        content: 'Configure your API keys, theme preferences, and more. Your settings are saved locally.',
+        position: 'left'
+    }
+];
+
+let currentTourStep = 0;
+let tourOverlay = null;
+let tourTooltip = null;
+
+function isTourCompleted() {
+    return localStorage.getItem(TOUR_COMPLETED_KEY) === 'true';
+}
+
+function markTourCompleted() {
+    localStorage.setItem(TOUR_COMPLETED_KEY, 'true');
+}
+
+function findTourElement(selector) {
+    // Try multiple strategies to find element
+    let el = document.querySelector(selector);
+    if (el) return el;
+
+    // Try finding by partial text match for tabs
+    if (selector.includes('Agent')) {
+        el = Array.from(document.querySelectorAll('.nav-tabs button, .nav-tabs a'))
+            .find(btn => btn.textContent.includes('Agent'));
+        if (el) return el;
+    }
+
+    // Try common fallbacks
+    const fallbacks = {
+        '.nav-tabs': '.nav-tabs, nav, .tabs',
+        '.model-card': '.model-card, .llm-card, .card',
+        '.settings-btn': '.settings-btn, #settingsBtn, button[aria-label*="Settings"], .gear-icon'
+    };
+
+    if (fallbacks[selector]) {
+        el = document.querySelector(fallbacks[selector]);
+    }
+
+    return el;
+}
+
+function positionTooltip(targetEl, position) {
+    const rect = targetEl.getBoundingClientRect();
+    const tooltip = tourTooltip;
+    const padding = 12;
+
+    // Remove existing arrow classes
+    tooltip.classList.remove('arrow-top', 'arrow-bottom', 'arrow-left', 'arrow-right');
+
+    let top, left;
+
+    switch (position) {
+        case 'bottom':
+            top = rect.bottom + padding;
+            left = rect.left;
+            tooltip.classList.add('arrow-top');
+            break;
+        case 'top':
+            top = rect.top - tooltip.offsetHeight - padding;
+            left = rect.left;
+            tooltip.classList.add('arrow-bottom');
+            break;
+        case 'left':
+            top = rect.top;
+            left = rect.left - tooltip.offsetWidth - padding;
+            tooltip.classList.add('arrow-right');
+            break;
+        case 'right':
+            top = rect.top;
+            left = rect.right + padding;
+            tooltip.classList.add('arrow-left');
+            break;
+        default:
+            top = rect.bottom + padding;
+            left = rect.left;
+            tooltip.classList.add('arrow-top');
+    }
+
+    // Keep tooltip in viewport
+    const maxLeft = window.innerWidth - tooltip.offsetWidth - 20;
+    const maxTop = window.innerHeight - tooltip.offsetHeight - 20;
+    left = Math.max(20, Math.min(left, maxLeft));
+    top = Math.max(20, Math.min(top, maxTop));
+
+    tooltip.style.top = `${top}px`;
+    tooltip.style.left = `${left}px`;
+}
+
+function renderTourStep(stepIndex) {
+    const step = tourSteps[stepIndex];
+    if (!step) return;
+
+    const targetEl = findTourElement(step.selector);
+
+    // Update spotlight position
+    if (targetEl) {
+        const rect = targetEl.getBoundingClientRect();
+        const spotlight = document.querySelector('.tour-spotlight');
+        if (spotlight) {
+            spotlight.style.top = `${rect.top - 8}px`;
+            spotlight.style.left = `${rect.left - 8}px`;
+            spotlight.style.width = `${rect.width + 16}px`;
+            spotlight.style.height = `${rect.height + 16}px`;
+        }
+    }
+
+    // Update tooltip content
+    tourTooltip.innerHTML = `
+        <h3>${step.title}</h3>
+        <p>${step.content}</p>
+        <div class="tour-progress">
+            ${tourSteps.map((_, i) => `
+                <div class="tour-progress-dot ${i < stepIndex ? 'completed' : ''} ${i === stepIndex ? 'active' : ''}"></div>
+            `).join('')}
+        </div>
+        <div class="tour-actions">
+            <button class="tour-skip" onclick="endTour()">Skip tour</button>
+            <div class="tour-nav">
+                ${stepIndex > 0 ? '<button class="tour-prev" onclick="prevTourStep()">Previous</button>' : ''}
+                <button class="tour-next" onclick="nextTourStep()">
+                    ${stepIndex === tourSteps.length - 1 ? 'Finish' : 'Next'}
+                </button>
+            </div>
+        </div>
+    `;
+
+    // Position tooltip
+    if (targetEl) {
+        // Small delay to let DOM update
+        requestAnimationFrame(() => {
+            positionTooltip(targetEl, step.position);
+        });
+    }
+}
+
+function startTour() {
+    currentTourStep = 0;
+
+    // Create overlay
+    tourOverlay = document.createElement('div');
+    tourOverlay.className = 'tour-overlay';
+    tourOverlay.innerHTML = '<div class="tour-spotlight"></div>';
+    document.body.appendChild(tourOverlay);
+
+    // Create tooltip
+    tourTooltip = document.createElement('div');
+    tourTooltip.className = 'tour-tooltip';
+    document.body.appendChild(tourTooltip);
+
+    // Render first step
+    renderTourStep(0);
+
+    // Handle escape key
+    document.addEventListener('keydown', handleTourKeydown);
+}
+
+function handleTourKeydown(e) {
+    if (e.key === 'Escape') {
+        endTour();
+    } else if (e.key === 'ArrowRight' || e.key === 'Enter') {
+        nextTourStep();
+    } else if (e.key === 'ArrowLeft') {
+        prevTourStep();
+    }
+}
+
+window.nextTourStep = function () {
+    currentTourStep++;
+    if (currentTourStep >= tourSteps.length) {
+        endTour();
+        markTourCompleted();
+    } else {
+        renderTourStep(currentTourStep);
+    }
+};
+
+window.prevTourStep = function () {
+    if (currentTourStep > 0) {
+        currentTourStep--;
+        renderTourStep(currentTourStep);
+    }
+};
+
+window.endTour = function () {
+    if (tourOverlay) {
+        tourOverlay.remove();
+        tourOverlay = null;
+    }
+    if (tourTooltip) {
+        tourTooltip.remove();
+        tourTooltip = null;
+    }
+    document.removeEventListener('keydown', handleTourKeydown);
+    markTourCompleted();
+};
+
+// Expose startTour globally for "Start tour" links
+window.startTour = startTour;
+
+// Auto-start tour for first-time visitors
+document.addEventListener('DOMContentLoaded', () => {
+    // Delay to let page render
+    setTimeout(() => {
+        if (!isTourCompleted()) {
+            startTour();
+        }
+    }, 2000);
+});
+
 function clearAgentLoadingState() {
     const chatMessages = document.getElementById('chat-messages');
     if (!chatMessages) return;
