@@ -39,6 +39,12 @@ app = Flask(__name__, static_folder='.', static_url_path='')
 CORS(app)
 app.secret_key = os.environ.get('APP_SECRET_KEY') or 'change-me-in-production'
 
+# Session configuration for persistence
+app.config['SESSION_PERMANENT'] = True
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)  # Stay logged in for 30 days
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+
 # Set proper encoding for Flask responses
 app.config['JSON_AS_ASCII'] = False
 app.config['JSONIFY_MIMETYPE'] = 'application/json; charset=utf-8'
@@ -10081,6 +10087,7 @@ def auth_register():
     }
     users.append(user_entry)
     _save_users(users)
+    session.permanent = True
     session['user_email'] = email
     return jsonify({'user': _serialize_user(user_entry)}), 201
 
@@ -10094,6 +10101,7 @@ def auth_login():
     user_entry = _find_user_by_email(email)
     if not user_entry or not _password_matches(user_entry, data.get('password')):
         return jsonify({'error': 'Invalid email or password.'}), 401
+    session.permanent = True
     session['user_email'] = email
     return jsonify({'user': _serialize_user(user_entry)})
 
