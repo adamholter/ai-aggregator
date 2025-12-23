@@ -1444,8 +1444,27 @@
       const bubble = document.createElement('div');
       bubble.className = 'bubble prose';
 
+      // Check if content is raw JSON chart data (not wrapped in code blocks)
+      // If so, wrap it so renderCharts can detect and render it
+      let processedContent = content;
+      if (role === 'assistant' && content) {
+        const trimmed = content.trim();
+        // Check if it looks like raw JSON chart data
+        if (trimmed.startsWith('{') && trimmed.includes('"type"') && trimmed.includes('"datasets"')) {
+          try {
+            const parsed = JSON.parse(trimmed);
+            if (parsed.type && parsed.datasets) {
+              // It's chart JSON - wrap in code block for renderCharts
+              processedContent = '```json\n' + trimmed + '\n```';
+            }
+          } catch (e) {
+            // Not valid JSON, proceed normally
+          }
+        }
+      }
+
       // Use new renderMarkdown that returns {html, refs}
-      const result = renderMarkdown(content);
+      const result = renderMarkdown(processedContent);
       let htmlContent = typeof result === 'string' ? result : result.html;
       const refs = result.refs || [];
 
