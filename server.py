@@ -332,6 +332,15 @@ def inline_exp_agent_api():
             choice = result.get("choices", [{}])[0]
             msg = choice.get("message", {})
             tool_calls = msg.get("tool_calls", [])
+            content = msg.get("content", "")
+            
+            # Always capture any content returned (even if tool calls also present)
+            if content:
+                # Accumulate content - some models return text + charts across iterations
+                if final_response:
+                    final_response += "\n\n" + content
+                else:
+                    final_response = content
             
             if tool_calls:
                 # Model wants to call tools
@@ -360,14 +369,15 @@ def inline_exp_agent_api():
                         "tool_call_id": tc.get("id", ""),
                         "content": tool_result
                     })
+                # Continue to next iteration to get model's response to tool results
             
-            elif msg.get("content"):
-                # Final response
-                final_response = msg["content"]
+            elif content:
+                # No tool calls but we have content - this is the final response
+                # (content already captured above, so just break)
                 break
             else:
                 # No content and no tools - done
-                final_response = "Agent finished without response."
+                final_response = final_response or "Agent finished without response."
                 break
         
         if not final_response and not error_msg:
