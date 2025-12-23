@@ -1387,6 +1387,48 @@ document.addEventListener('DOMContentLoaded', async function () {
 
     // Setup global search
     setupGlobalSearch();
+
+    // Background load all data sources for global search
+    // Staggered loading to avoid overwhelming the server
+    setTimeout(async () => {
+        console.log('Background loading data for global search...');
+        try {
+            // Load OpenRouter models first (most searched)
+            if (!cachedData.openRouterModels) {
+                await loadOpenRouterModels();
+            }
+        } catch (e) { console.warn('Background load OpenRouter failed:', e); }
+
+        // Stagger remaining loads
+        setTimeout(async () => {
+            try {
+                if (!cachedData.falModels) {
+                    await loadFalModelsData();
+                }
+            } catch (e) { console.warn('Background load Fal failed:', e); }
+        }, 1000);
+
+        setTimeout(async () => {
+            try {
+                if (!cachedData.replicateModels) {
+                    await loadReplicateModelsData();
+                }
+            } catch (e) { console.warn('Background load Replicate failed:', e); }
+        }, 2000);
+
+        setTimeout(async () => {
+            try {
+                if (!cachedData.textToImage) {
+                    await loadTextToImageData();
+                }
+                if (!cachedData.textToVideo) {
+                    await loadTextToVideoData();
+                }
+            } catch (e) { console.warn('Background load media failed:', e); }
+        }, 3000);
+
+        console.log('Background data loading complete');
+    }, 2000); // Start after 2s to allow page to render
 });
 
 // Global Search Implementation
