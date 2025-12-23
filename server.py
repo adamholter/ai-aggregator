@@ -29,7 +29,7 @@ from decimal import Decimal
 from collections import defaultdict, deque
 from threading import Lock
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
-from werkzeug.security import check_password_hash
+from werkzeug.security import check_password_hash, generate_password_hash
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 
@@ -10056,8 +10056,10 @@ def _validate_credentials(email, password):
     normalized_email = _normalize_email(email)
     if not normalized_email or '@' not in normalized_email:
         return None, 'A valid email address is required.'
-    if not password or len(password) < 6:
-        return None, 'Password must be at least 6 characters.'
+    if not password or len(password) < 8:
+        return None, 'Password must be at least 8 characters.'
+    if not any(c.isdigit() for c in password):
+        return None, 'Password must contain at least one number.'
     return normalized_email, None
 
 
@@ -10074,7 +10076,7 @@ def auth_register():
     user_entry = {
         'id': str(uuid.uuid4()),
         'email': email,
-        'password': password_value,
+        'password_hash': generate_password_hash(password_value, method='pbkdf2:sha256'),
         'created_at': datetime.utcnow().replace(microsecond=0).isoformat() + 'Z'
     }
     users.append(user_entry)
