@@ -1,0 +1,39 @@
+<!-- Auth modal (Google-style) -->
+<div id="auth-modal" class="modal-overlay" style="display:none;">
+    <div class="auth-card">
+        <div class="auth-header">
+            <div class="auth-logo">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M12 6v6l4 2" />
+                </svg>
+            </div>
+            <h1 id="auth-modal-title">Sign in</h1>
+            <p class="auth-subtitle">to continue to AI Dashboard</p>
+        </div>
+        <form id="auth-form" autocomplete="off">
+            <div class="auth-field">
+                <input type="email" id="auth-email" autocomplete="off" required placeholder=" ">
+                <label for="auth-email">Email</label>
+            </div>
+            <div class="auth-field">
+                <input type="password" id="auth-password" autocomplete="off" required minlength="8" placeholder=" ">
+                <label for="auth-password">Password</label>
+            </div>
+            <div class="auth-requirements" id="auth-requirements" style="display:none;">
+                <small>Password must be at least 8 characters with one number</small>
+            </div>
+            <div class="auth-error" id="auth-error" role="alert"></div>
+            <div class="auth-actions">
+                <button type="button" class="auth-link" id="auth-mode-toggle">Create account</button>
+                <button type="submit" class="auth-submit" id="auth-submit">Sign in</button>
+            </div>
+        </form>
+        <button class="auth-close" id="auth-close" aria-label="Close">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+        </button>
+    </div>
+</div>

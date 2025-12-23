@@ -5707,12 +5707,10 @@ Return a concise markdown report that cites sources inline when available."""
 
 @app.route('/')
 def index():
-    """Serve the main dashboard page - read file directly to bypass cache."""
-    from flask import Response
-    # Read file directly instead of using send_static_file to bypass Render CDN cache
-    index_path = os.path.join(os.path.dirname(__file__), 'static', 'index.html')
-    with open(index_path, 'r', encoding='utf-8') as f:
-        html_content = f.read()
+    """Serve the main dashboard page using Jinja2 templates."""
+    from flask import render_template, Response
+    # Use render_template for modular template includes
+    html_content = render_template('index.html')
     response = Response(html_content, mimetype='text/html')
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
     response.headers['Pragma'] = 'no-cache'
