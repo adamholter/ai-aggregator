@@ -1986,6 +1986,31 @@ function showAuthError(message) {
     }
 }
 
+/**
+ * Merge local pins to server after login/register
+ * This transfers any pins a user had before logging in to their server account
+ */
+async function mergeLocalPinsToServer() {
+    const localPins = loadLocalPins();
+    if (!localPins.length) return;
+
+    let merged = 0;
+    for (const pin of localPins) {
+        try {
+            await addRemotePin(pin.category, pin.item, pin.key);
+            merged++;
+        } catch (error) {
+            console.warn('Failed to merge pin:', pin.key, error);
+        }
+    }
+
+    if (merged > 0) {
+        // Clear local storage after successful merge
+        saveLocalPins([]);
+        showToast(`Transferred ${merged} pin${merged > 1 ? 's' : ''} to your account`, 'success');
+    }
+}
+
 async function handleAuthSubmit(event) {
     event.preventDefault();
     const emailInput = document.getElementById('auth-email');
@@ -2013,6 +2038,11 @@ async function handleAuthSubmit(event) {
         currentUser = payload.user || null;
         closeAuthModal();
         updateAuthButton();
+
+        // Merge local pins to server account
+        await mergeLocalPinsToServer();
+
+        // Refresh pins from server
         await refreshPinnedItems();
     } catch (error) {
         console.error('Auth request failed:', error);

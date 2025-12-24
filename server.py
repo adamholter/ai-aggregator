@@ -765,7 +765,15 @@ def get_current_user():
     email = session.get('user_email')
     if not email:
         return None
-    return _find_user_by_email(email)
+    # Try local file lookup first
+    user = _find_user_by_email(email)
+    if user:
+        return user
+    # If using Google Sheets auth, user won't be in local file
+    # Create a virtual user object using email as ID for pins/data storage
+    if GOOGLE_SHEETS_AUTH_URL:
+        return {'id': email, 'email': email}
+    return None
 
 
 def _load_pin_store():
