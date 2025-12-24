@@ -795,9 +795,37 @@ def _save_pin_store(store):
         json.dump(store, handle, ensure_ascii=False, indent=2)
 
 
+def _call_sheets_data(action, **kwargs):
+    """Call Google Sheets API for data operations (pins, views)."""
+    if not GOOGLE_SHEETS_AUTH_URL:
+        return {'success': False, 'use_local': True}
+    try:
+        payload = {'action': action, **kwargs}
+        resp = requests.post(
+            GOOGLE_SHEETS_AUTH_URL,
+            json=payload,
+            timeout=15,
+            headers={'Content-Type': 'application/json'}
+        )
+        if resp.status_code == 200:
+            return resp.json()
+        return {'success': False, 'error': f'API error: {resp.status_code}'}
+    except requests.exceptions.Timeout:
+        return {'success': False, 'error': 'Request timed out', 'use_local': True}
+    except requests.exceptions.RequestException as e:
+        return {'success': False, 'error': str(e), 'use_local': True}
+
+
 def _get_user_pins(user_id):
     if not user_id:
         return []
+    
+    # Try Google Sheets first
+    result = _call_sheets_data('get_pins', email=user_id)
+    if result.get('success') and not result.get('use_local'):
+        return result.get('pins', [])
+    
+    # Fall back to local file
     store = _load_pin_store()
     pins = store.get(user_id)
     if isinstance(pins, list):
@@ -805,7 +833,72 @@ def _get_user_pins(user_id):
     return []
 
 
+def _add_user_pin(user_id, key, category, item):
+    """Add a pin for user, returns the created pin entry or None."""
+    if not user_id:
+        return None
+    
+    # Try Google Sheets first
+    result = _call_sheets_data('add_pin', email=user_id, key=key, category=category, item=item)
+    if result.get('success') and not result.get('use_local'):
+        return {'key': key, 'category': category, 'item': item, 'created_at': datetime.utcnow().isoformat() + 'Z'}
+    
+    # Fall back to local file
+    store = _load_pin_store()
+    pins = store.get(user_id, [])
+    if not isinstance(pins, list):
+        pins = []
+    
+    existing = next((p for p in pins if p.get('key') == key), None)
+    if existing:
+        return existing
+    
+    entry = {
+        'id': uuid.uuid4().hex,
+        'key': key,
+        'category': category,
+        'item': item,
+        'created_at': datetime.utcnow().replace(microsecond=0).isoformat() + 'Z'
+    }
+    pins.insert(0, entry)
+    pins = pins[:200]
+    store[user_id] = pins
+    _save_pin_store(store)
+    return entry
+
+
+def _remove_user_pin(user_id, key=None, pin_id=None):
+    """Remove a pin by key or id. Returns True if removed."""
+    if not user_id:
+        return False
+    
+    # Try Google Sheets first (for key-based removal)
+    if key:
+        result = _call_sheets_data('remove_pin', email=user_id, key=key)
+        if result.get('success') and not result.get('use_local'):
+            return True
+    
+    # Fall back to local file
+    store = _load_pin_store()
+    pins = store.get(user_id, [])
+    if not isinstance(pins, list):
+        return False
+    
+    original_len = len(pins)
+    if key:
+        pins = [p for p in pins if p.get('key') != key]
+    elif pin_id:
+        pins = [p for p in pins if p.get('id') != pin_id]
+    
+    if len(pins) != original_len:
+        store[user_id] = pins
+        _save_pin_store(store)
+        return True
+    return False
+
+
 def _write_user_pins(user_id, pins):
+    """Legacy function for compatibility - writes pins to local store."""
     if not user_id:
         return
     store = _load_pin_store()
@@ -848,6 +941,62 @@ def _prune_shared_views(store, now=None):
             store.pop(key, None)
             removed = True
     return removed
+
+
+def _create_shared_view(state, snapshot):
+    """Create a shared view, using Google Sheets if available, else file storage."""
+    # Try Google Sheets first
+    result = _call_sheets_data('create_view', state=state, snapshot=snapshot)
+    if result.get('success') and not result.get('use_local'):
+        return {
+            'id': result.get('id'),
+            'expires_at': result.get('expires_at')
+        }
+    
+    # Fall back to local file
+    now = datetime.utcnow().replace(microsecond=0)
+    expires_at = now + SHARED_VIEW_TTL
+    view_id = uuid.uuid4().hex
+    entry = {
+        'id': view_id,
+        'created_at': now.isoformat() + 'Z',
+        'expires_at': expires_at.isoformat() + 'Z',
+        'state': state,
+        'snapshot': snapshot
+    }
+    with _SHARED_VIEWS_LOCK:
+        store = _load_shared_views()
+        _prune_shared_views(store, now=now)
+        store[view_id] = entry
+        _save_shared_views(store)
+    return {'id': view_id, 'expires_at': entry['expires_at']}
+
+
+def _get_shared_view(view_id):
+    """Get a shared view by ID, using Google Sheets if available, else file storage."""
+    # Try Google Sheets first
+    result = _call_sheets_data('get_view', view_id=view_id)
+    if result.get('success') and not result.get('use_local'):
+        return {
+            'id': result.get('id'),
+            'state': result.get('state', {}),
+            'snapshot': result.get('snapshot', {}),
+            'created_at': result.get('created_at'),
+            'expires_at': result.get('expires_at')
+        }
+    
+    # If Google Sheets returned an error (not found, expired), don't fall back
+    if result.get('error') and not result.get('use_local'):
+        return None
+    
+    # Fall back to local file
+    with _SHARED_VIEWS_LOCK:
+        store = _load_shared_views()
+        removed = _prune_shared_views(store)
+        entry = store.get(view_id)
+        if removed:
+            _save_shared_views(store)
+    return entry
 
 
 def _extract_filter_timestamp(item):
@@ -10235,21 +10384,11 @@ def add_pin():
         return jsonify({'error': 'Category and item payload are required.'}), 400
     if not key:
         key = f"{category}:{uuid.uuid4().hex}"
-    pins = _get_user_pins(user.get('id'))
-    existing = next((entry for entry in pins if entry.get('key') == key), None)
-    if existing:
-        return jsonify({'pin': existing})
-    entry = {
-        'id': uuid.uuid4().hex,
-        'key': key,
-        'category': category,
-        'item': item,
-        'created_at': datetime.utcnow().replace(microsecond=0).isoformat() + 'Z'
-    }
-    pins.insert(0, entry)
-    pins = pins[:200]
-    _write_user_pins(user.get('id'), pins)
-    return jsonify({'pin': entry})
+    
+    entry = _add_user_pin(user.get('id'), key, category, item)
+    if entry:
+        return jsonify({'pin': entry})
+    return jsonify({'error': 'Failed to add pin.'}), 500
 
 
 @app.route('/api/pins/<pin_id>', methods=['DELETE'])
@@ -10257,10 +10396,7 @@ def delete_pin(pin_id):
     user = get_current_user()
     if not user:
         return jsonify({'error': 'Login required.'}), 401
-    pins = _get_user_pins(user.get('id'))
-    updated = [entry for entry in pins if entry.get('id') != pin_id]
-    removed = len(updated) != len(pins)
-    _write_user_pins(user.get('id'), updated)
+    removed = _remove_user_pin(user.get('id'), pin_id=pin_id)
     return jsonify({'success': removed})
 
 
@@ -10272,10 +10408,7 @@ def delete_pin_by_key():
     key = (request.args.get('key') or '').strip()
     if not key:
         return jsonify({'error': 'Pin key is required.'}), 400
-    pins = _get_user_pins(user.get('id'))
-    updated = [entry for entry in pins if entry.get('key') != key]
-    removed = len(updated) != len(pins)
-    _write_user_pins(user.get('id'), updated)
+    removed = _remove_user_pin(user.get('id'), key=key)
     return jsonify({'success': removed})
 
 
@@ -10288,22 +10421,9 @@ def create_shared_view():
     category = (snapshot.get('category') or '').strip()
     if not category or not isinstance(items, list):
         return jsonify({'error': 'Snapshot category and items are required.'}), 400
-    now = datetime.utcnow().replace(microsecond=0)
-    expires_at = now + SHARED_VIEW_TTL
-    view_id = uuid.uuid4().hex
-    entry = {
-        'id': view_id,
-        'created_at': now.isoformat() + 'Z',
-        'expires_at': expires_at.isoformat() + 'Z',
-        'state': state,
-        'snapshot': snapshot
-    }
-    with _SHARED_VIEWS_LOCK:
-        store = _load_shared_views()
-        _prune_shared_views(store, now=now)
-        store[view_id] = entry
-        _save_shared_views(store)
-    return jsonify({'id': view_id, 'expires_at': entry['expires_at']})
+    
+    result = _create_shared_view(state, snapshot)
+    return jsonify({'id': result.get('id'), 'expires_at': result.get('expires_at')})
 
 
 @app.route('/api/shared-views/<view_id>', methods=['GET'])
@@ -10311,12 +10431,8 @@ def get_shared_view(view_id):
     view_id = (view_id or '').strip()
     if not view_id:
         return jsonify({'error': 'Shared view id is required.'}), 400
-    with _SHARED_VIEWS_LOCK:
-        store = _load_shared_views()
-        removed = _prune_shared_views(store)
-        entry = store.get(view_id)
-        if removed:
-            _save_shared_views(store)
+    
+    entry = _get_shared_view(view_id)
     if not entry:
         return jsonify({'error': 'Shared view not found.'}), 404
     return jsonify(entry)
