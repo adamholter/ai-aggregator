@@ -820,10 +820,24 @@ def _get_user_pins(user_id):
     if not user_id:
         return []
     
-    # Try Google Sheets first
-    result = _call_sheets_data('get_pins', email=user_id)
+    # Try Google Sheets first using generic query
+    result = _call_sheets_data('query', sheet='Pins', where={'user_email': user_id}, orderBy='created_at', desc=True, limit=200)
     if result.get('success') and not result.get('use_local'):
-        return result.get('pins', [])
+        pins = []
+        for row in result.get('results', []):
+            item = row.get('item_json')
+            if isinstance(item, str):
+                try:
+                    item = json.loads(item)
+                except:
+                    item = {}
+            pins.append({
+                'key': row.get('pin_key'),
+                'category': row.get('category'),
+                'item': item,
+                'created_at': row.get('created_at')
+            })
+        return pins
     
     # Fall back to local file
     store = _load_pin_store()
@@ -838,10 +852,18 @@ def _add_user_pin(user_id, key, category, item):
     if not user_id:
         return None
     
-    # Try Google Sheets first
-    result = _call_sheets_data('add_pin', email=user_id, key=key, category=category, item=item)
+    created_at = datetime.utcnow().replace(microsecond=0).isoformat() + 'Z'
+    
+    # Try Google Sheets first using generic set
+    result = _call_sheets_data('set', sheet='Pins', keyColumn='pin_key', key=key, data={
+        'user_email': user_id,
+        'pin_key': key,
+        'category': category,
+        'item_json': json.dumps(item) if isinstance(item, dict) else '{}',
+        'created_at': created_at
+    })
     if result.get('success') and not result.get('use_local'):
-        return {'key': key, 'category': category, 'item': item, 'created_at': datetime.utcnow().isoformat() + 'Z'}
+        return {'key': key, 'category': category, 'item': item, 'created_at': created_at}
     
     # Fall back to local file
     store = _load_pin_store()
@@ -858,7 +880,7 @@ def _add_user_pin(user_id, key, category, item):
         'key': key,
         'category': category,
         'item': item,
-        'created_at': datetime.utcnow().replace(microsecond=0).isoformat() + 'Z'
+        'created_at': created_at
     }
     pins.insert(0, entry)
     pins = pins[:200]
@@ -872,11 +894,11 @@ def _remove_user_pin(user_id, key=None, pin_id=None):
     if not user_id:
         return False
     
-    # Try Google Sheets first (for key-based removal)
+    # Try Google Sheets first using generic delete
     if key:
-        result = _call_sheets_data('remove_pin', email=user_id, key=key)
+        result = _call_sheets_data('delete', sheet='Pins', keyColumn='pin_key', key=key)
         if result.get('success') and not result.get('use_local'):
-            return True
+            return result.get('deleted', 0) > 0
     
     # Fall back to local file
     store = _load_pin_store()
@@ -945,22 +967,28 @@ def _prune_shared_views(store, now=None):
 
 def _create_shared_view(state, snapshot):
     """Create a shared view, using Google Sheets if available, else file storage."""
-    # Try Google Sheets first
-    result = _call_sheets_data('create_view', state=state, snapshot=snapshot)
-    if result.get('success') and not result.get('use_local'):
-        return {
-            'id': result.get('id'),
-            'expires_at': result.get('expires_at')
-        }
-    
-    # Fall back to local file
     now = datetime.utcnow().replace(microsecond=0)
     expires_at = now + SHARED_VIEW_TTL
-    view_id = uuid.uuid4().hex
+    view_id = uuid.uuid4().hex[:16]
+    created_at = now.isoformat() + 'Z'
+    expires_at_str = expires_at.isoformat() + 'Z'
+    
+    # Try Google Sheets first using generic set
+    result = _call_sheets_data('set', sheet='SharedViews', keyColumn='view_id', key=view_id, data={
+        'view_id': view_id,
+        'state_json': json.dumps(state) if isinstance(state, dict) else '{}',
+        'snapshot_json': json.dumps(snapshot) if isinstance(snapshot, dict) else '{}',
+        'created_at': created_at,
+        'expires_at': expires_at_str
+    })
+    if result.get('success') and not result.get('use_local'):
+        return {'id': view_id, 'expires_at': expires_at_str}
+    
+    # Fall back to local file
     entry = {
         'id': view_id,
-        'created_at': now.isoformat() + 'Z',
-        'expires_at': expires_at.isoformat() + 'Z',
+        'created_at': created_at,
+        'expires_at': expires_at_str,
         'state': state,
         'snapshot': snapshot
     }
@@ -969,23 +997,42 @@ def _create_shared_view(state, snapshot):
         _prune_shared_views(store, now=now)
         store[view_id] = entry
         _save_shared_views(store)
-    return {'id': view_id, 'expires_at': entry['expires_at']}
+    return {'id': view_id, 'expires_at': expires_at_str}
 
 
 def _get_shared_view(view_id):
     """Get a shared view by ID, using Google Sheets if available, else file storage."""
-    # Try Google Sheets first
-    result = _call_sheets_data('get_view', view_id=view_id)
-    if result.get('success') and not result.get('use_local'):
+    # Try Google Sheets first using generic get
+    result = _call_sheets_data('get', sheet='SharedViews', keyColumn='view_id', key=view_id)
+    if result.get('success') and not result.get('use_local') and result.get('data'):
+        row = result.get('data', {})
+        # Check if expired
+        expires_at = row.get('expires_at')
+        if expires_at:
+            expires_dt = coerce_to_datetime(expires_at)
+            if expires_dt and expires_dt <= datetime.utcnow():
+                return None  # Expired
+        
+        state = row.get('state_json')
+        snapshot = row.get('snapshot_json')
+        try:
+            state = json.loads(state) if isinstance(state, str) else {}
+        except:
+            state = {}
+        try:
+            snapshot = json.loads(snapshot) if isinstance(snapshot, str) else {}
+        except:
+            snapshot = {}
+        
         return {
-            'id': result.get('id'),
-            'state': result.get('state', {}),
-            'snapshot': result.get('snapshot', {}),
-            'created_at': result.get('created_at'),
-            'expires_at': result.get('expires_at')
+            'id': row.get('view_id'),
+            'state': state,
+            'snapshot': snapshot,
+            'created_at': row.get('created_at'),
+            'expires_at': row.get('expires_at')
         }
     
-    # If Google Sheets returned an error (not found, expired), don't fall back
+    # If Google Sheets returned an error (not found), don't fall back
     if result.get('error') and not result.get('use_local'):
         return None
     
