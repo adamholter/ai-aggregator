@@ -498,6 +498,8 @@ ARTIFICIAL_ANALYSIS_BASE_URL = 'https://artificialanalysis.ai/api/v2'
 OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
 REPLICATE_API_KEY = (os.environ.get('REPLICATE_API_KEY') or '').strip()
 REPLICATE_BASE_URL = 'https://api.replicate.com/v1'
+# Google Sheets authentication URL (Apps Script web app)
+GOOGLE_SHEETS_AUTH_URL = (os.environ.get('GOOGLE_SHEETS_AUTH_URL') or '').strip()
 DEEP_RESEARCH_MODEL_ID = 'openai/o4-mini-deep-research'
 MAX_REPLICATE_MODELS = max(int(os.environ.get('MAX_REPLICATE_MODELS', '60')), 1)
 MAX_REPLICATE_TOTAL = max(int(os.environ.get('MAX_REPLICATE_TOTAL', '250')), MAX_REPLICATE_MODELS)
@@ -709,6 +711,44 @@ def _password_matches(user_entry, password):
         except ValueError:
             return False
     return candidate == (password or '')
+
+
+def _call_sheets_auth(action, email, password=None):
+    """Call Google Sheets Apps Script for user authentication.
+    
+    Args:
+        action: 'register', 'login', or 'check'
+        email: User's email address
+        password: User's password (required for register/login)
+    
+    Returns:
+        dict: Response from Google Sheets API with 'success' key
+    """
+    if not GOOGLE_SHEETS_AUTH_URL:
+        # Fall back to local file storage if no Sheets URL configured
+        print("WARNING: GOOGLE_SHEETS_AUTH_URL not configured, using local file storage")
+        return {'success': False, 'error': 'Google Sheets not configured', 'use_local': True}
+    
+    try:
+        payload = {'action': action, 'email': _normalize_email(email)}
+        if password:
+            payload['password'] = password
+        
+        resp = requests.post(
+            GOOGLE_SHEETS_AUTH_URL,
+            json=payload,
+            timeout=15,
+            headers={'Content-Type': 'application/json'}
+        )
+        
+        if resp.status_code == 200:
+            return resp.json()
+        else:
+            return {'success': False, 'error': f'API error: {resp.status_code}'}
+    except requests.exceptions.Timeout:
+        return {'success': False, 'error': 'Request timed out'}
+    except requests.exceptions.RequestException as e:
+        return {'success': False, 'error': f'Request failed: {str(e)}'}
 
 
 def _serialize_user(user):
@@ -10093,17 +10133,38 @@ def auth_register():
     email, error = _validate_credentials(data.get('email'), password_value)
     if error:
         return jsonify({'error': error}), 400
-    users = _load_users()
-    if _find_user_by_email(email, users):
-        return jsonify({'error': 'An account already exists for that email.'}), 409
+    
+    # Try Google Sheets API first
+    sheets_result = _call_sheets_auth('register', email, password_value)
+    
+    if sheets_result.get('use_local'):
+        # Fall back to local file storage
+        users = _load_users()
+        if _find_user_by_email(email, users):
+            return jsonify({'error': 'An account already exists for that email.'}), 409
+        user_entry = {
+            'id': str(uuid.uuid4()),
+            'email': email,
+            'password_hash': generate_password_hash(password_value, method='pbkdf2:sha256'),
+            'created_at': datetime.utcnow().replace(microsecond=0).isoformat() + 'Z'
+        }
+        users.append(user_entry)
+        _save_users(users)
+        session.permanent = True
+        session['user_email'] = email
+        return jsonify({'user': _serialize_user(user_entry)}), 201
+    
+    if not sheets_result.get('success'):
+        error_msg = sheets_result.get('error', 'Registration failed')
+        status = 409 if 'exists' in error_msg.lower() else 400
+        return jsonify({'error': error_msg}), status
+    
+    # Google Sheets registration successful
     user_entry = {
         'id': str(uuid.uuid4()),
         'email': email,
-        'password_hash': generate_password_hash(password_value, method='pbkdf2:sha256'),
         'created_at': datetime.utcnow().replace(microsecond=0).isoformat() + 'Z'
     }
-    users.append(user_entry)
-    _save_users(users)
     session.permanent = True
     session['user_email'] = email
     return jsonify({'user': _serialize_user(user_entry)}), 201
@@ -10115,9 +10176,24 @@ def auth_login():
     email, error = _validate_credentials(data.get('email'), data.get('password'))
     if error:
         return jsonify({'error': error}), 400
-    user_entry = _find_user_by_email(email)
-    if not user_entry or not _password_matches(user_entry, data.get('password')):
+    
+    # Try Google Sheets API first
+    sheets_result = _call_sheets_auth('login', email, data.get('password'))
+    
+    if sheets_result.get('use_local'):
+        # Fall back to local file storage
+        user_entry = _find_user_by_email(email)
+        if not user_entry or not _password_matches(user_entry, data.get('password')):
+            return jsonify({'error': 'Invalid email or password.'}), 401
+        session.permanent = True
+        session['user_email'] = email
+        return jsonify({'user': _serialize_user(user_entry)})
+    
+    if not sheets_result.get('success'):
         return jsonify({'error': 'Invalid email or password.'}), 401
+    
+    # Google Sheets login successful
+    user_entry = {'id': email, 'email': email}
     session.permanent = True
     session['user_email'] = email
     return jsonify({'user': _serialize_user(user_entry)})
