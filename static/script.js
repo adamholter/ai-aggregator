@@ -8220,11 +8220,13 @@ function checkForSharedView() {
         // Load shared view after a short delay to let page initialize
         setTimeout(() => applySharedView(viewId), 500);
     } else if (section) {
-        // Just navigate to section
-        const navBtn = document.querySelector(`.nav-btn[data-section="${section}"]`);
-        if (navBtn) {
-            navBtn.click();
-        }
+        // Just navigate to section after a short delay to ensure initialization
+        setTimeout(() => {
+            const navBtn = document.querySelector(`.nav-btn[data-section="${section}"]`);
+            if (navBtn) {
+                navBtn.click();
+            }
+        }, 500);
     }
 }
 
