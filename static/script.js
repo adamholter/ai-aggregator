@@ -5819,10 +5819,243 @@ function displayFalModelsData(models) {
 
     const displayModels = getFilteredItems('fal', models);
     recordDisplayedItems('fal', displayModels);
-    displayModels.forEach(model => {
-        const modelCard = createFalModelCard(model);
-        container.appendChild(modelCard);
+    displayFalModelsDataWithGroups(displayModels, container);
+}
+
+/**
+ * Extract a grouping key from a Fal model.
+ * Groups models by their base family, ignoring version suffixes.
+ * 
+ * Examples:
+ * - "fal-ai/flux-pro/v1.1" -> "fal-ai/flux-pro"
+ * - "fal-ai/flux/dev" -> "fal-ai/flux"
+ * - "fal-ai/kling-video/v1.5" -> "fal-ai/kling-video"
+ * 
+ * IMPORTANT: Only extracts from slash-separated paths, not from titles.
+ * This avoids false matches like "GPT Image 1.5" matching "Hanyuan V1.5".
+ */
+function getFalGroupKey(model) {
+    // Primary source: model ID (e.g., "fal-ai/flux-pro/v1.1")
+    let pathSource = model.id || '';
+
+    // Fallback: extract from modelUrl
+    if (!pathSource && model.modelUrl) {
+        // Extract path after fal.ai/models/ or just use last segments
+        const urlMatch = model.modelUrl.match(/fal\.ai\/models\/(.+)/i) ||
+            model.modelUrl.match(/fal\.ai\/(.+)/i);
+        if (urlMatch) {
+            pathSource = urlMatch[1];
+        }
+    }
+
+    if (!pathSource) return null;
+
+    // Normalize: lowercase, trim
+    pathSource = pathSource.toLowerCase().trim();
+
+    // Split by slash
+    const segments = pathSource.split('/').filter(s => s);
+    if (segments.length < 2) return null;
+
+    // Version patterns to strip from the LAST segment only
+    // These patterns identify version suffixes that should be removed
+    const versionPatterns = [
+        /^v\d+(\.\d+)*$/i,           // v1, v1.0, v1.5.2
+        /^v\d+-\d+$/i,               // v1-5
+        /^\d+\.\d+(\.\d+)?$/,        // 1.0, 1.5, 1.5.2
+        /^(dev|pro|standard|ultra|turbo|fast|schnell)$/i,  // Common variant names
+        /^(hd|sd|xl|xxl|mini|lite|max|redux)$/i,  // Size/quality variants
+        /^(image|text|video|audio)$/i,  // Modality suffixes
+        /^(checkpoint|lora|controlnet)$/i,  // Technical variants
+    ];
+
+    // Check if last segment looks like a version
+    const lastSegment = segments[segments.length - 1];
+    const isVersionSuffix = versionPatterns.some(p => p.test(lastSegment));
+
+    if (isVersionSuffix && segments.length >= 2) {
+        // Remove version suffix, return parent path
+        return segments.slice(0, -1).join('/');
+    }
+
+    // For 3+ segments, also check if it's a deeply nested version
+    // e.g., "fal-ai/flux/dev/v1.5" -> "fal-ai/flux"
+    if (segments.length >= 3) {
+        const secondLast = segments[segments.length - 2];
+        const isSecondLastVariant = versionPatterns.some(p => p.test(secondLast));
+        if (isVersionSuffix && isSecondLastVariant) {
+            return segments.slice(0, -2).join('/');
+        }
+    }
+
+    // Return full path (no grouping if no version pattern found)
+    return segments.join('/');
+}
+
+/**
+ * Group Fal models by their family key.
+ * Returns an array of groups, each with:
+ * - key: the group key
+ * - primary: the "main" model (most recent or highest version)
+ * - variants: array of related model variants
+ */
+function groupFalModels(models) {
+    const groupMap = new Map();
+    const ungrouped = [];
+
+    for (const model of models) {
+        const key = getFalGroupKey(model);
+        if (!key) {
+            ungrouped.push(model);
+            continue;
+        }
+
+        if (!groupMap.has(key)) {
+            groupMap.set(key, []);
+        }
+        groupMap.get(key).push(model);
+    }
+
+    const result = [];
+
+    // Process groups
+    for (const [key, members] of groupMap) {
+        if (members.length === 1) {
+            // Single model, treat as ungrouped
+            ungrouped.push(members[0]);
+        } else {
+            // Sort by date (newest first), then by title
+            members.sort((a, b) => {
+                const dateA = new Date(a.date || 0);
+                const dateB = new Date(b.date || 0);
+                if (dateB - dateA !== 0) return dateB - dateA;
+                return (a.title || '').localeCompare(b.title || '');
+            });
+
+            result.push({
+                key,
+                primary: members[0],
+                variants: members.slice(1),
+                count: members.length
+            });
+        }
+    }
+
+    // Add ungrouped models as single-member groups
+    for (const model of ungrouped) {
+        result.push({
+            key: model.id || model.title,
+            primary: model,
+            variants: [],
+            count: 1
+        });
+    }
+
+    // Sort groups by primary model date
+    result.sort((a, b) => {
+        const dateA = new Date(a.primary.date || 0);
+        const dateB = new Date(b.primary.date || 0);
+        return dateB - dateA;
     });
+
+    return result;
+}
+
+/**
+ * Display Fal models with grouping - stacked cards for model families
+ */
+function displayFalModelsDataWithGroups(models, container) {
+    if (!container) {
+        container = document.getElementById('fal-models-data');
+    }
+    container.innerHTML = '';
+
+    const groups = groupFalModels(models);
+
+    for (const group of groups) {
+        if (group.variants.length === 0) {
+            // Single model - render normally
+            const card = createFalModelCard(group.primary);
+            container.appendChild(card);
+        } else {
+            // Grouped models - render stacked
+            const stackWrapper = createFalModelStack(group);
+            container.appendChild(stackWrapper);
+        }
+    }
+}
+
+/**
+ * Create a stacked card display for a group of related Fal models
+ */
+function createFalModelStack(group) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'fal-model-stack';
+    wrapper.dataset.groupKey = group.key;
+
+    // Stack configuration
+    const shiftX = 4;  // Horizontal offset per card
+    const liftY = -3;  // Vertical offset per card (negative = up)
+    const maxVisible = 3;  // Max cards to show in collapsed state
+
+    // Create cards for all variants (limited for performance)
+    const allModels = [group.primary, ...group.variants];
+    const visibleModels = allModels.slice(0, maxVisible + 1);
+
+    visibleModels.forEach((model, idx) => {
+        const card = createFalModelCard(model);
+        card.classList.add('fal-stack-card');
+        card.style.setProperty('--stack-index', idx);
+        card.style.transform = `translate(${idx * shiftX}px, ${idx * liftY}px)`;
+        card.style.zIndex = 10 + idx;
+
+        if (idx === visibleModels.length - 1) {
+            card.classList.add('fal-stack-top');
+        }
+
+        wrapper.appendChild(card);
+    });
+
+    // Add badge showing variant count
+    if (group.count > 1) {
+        const badge = document.createElement('div');
+        badge.className = 'fal-stack-badge';
+        badge.textContent = `+${group.count - 1} variant${group.count > 2 ? 's' : ''}`;
+        badge.title = `${group.count} versions of this model`;
+        wrapper.appendChild(badge);
+    }
+
+    // Expand on hover
+    let hoverTimer = null;
+    const expandDelay = 400;
+
+    wrapper.addEventListener('mouseenter', () => {
+        hoverTimer = setTimeout(() => {
+            wrapper.classList.add('fal-stack-expanded');
+            // Rearrange cards horizontally
+            const cards = wrapper.querySelectorAll('.fal-stack-card');
+            cards.forEach((card, idx) => {
+                card.style.transform = '';
+                card.style.zIndex = 100 + idx;
+            });
+        }, expandDelay);
+    });
+
+    wrapper.addEventListener('mouseleave', () => {
+        if (hoverTimer) {
+            clearTimeout(hoverTimer);
+            hoverTimer = null;
+        }
+        wrapper.classList.remove('fal-stack-expanded');
+        // Restore stacked layout
+        const cards = wrapper.querySelectorAll('.fal-stack-card');
+        cards.forEach((card, idx) => {
+            card.style.transform = `translate(${idx * shiftX}px, ${idx * liftY}px)`;
+            card.style.zIndex = 10 + idx;
+        });
+    });
+
+    return wrapper;
 }
 
 // Create Fal.ai model card
