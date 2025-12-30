@@ -79,7 +79,7 @@ AI agent with tools for model analysis.
 ```json
 {
   "question": "What are the best LLMs for coding?",
-  "model": "anthropic/claude-3.5-sonnet",
+  "model": "anthropic/claude-sonnet-4.5",
   "history": [],
   "deeper_mode": false,
   "image": null
