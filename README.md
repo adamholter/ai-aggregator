@@ -135,6 +135,14 @@ API keys and endpoints are configured in `server.py`:
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
+## Support the Project
+
+If you find this project useful, please consider supporting its development:
+
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/adamholter)
+
+**Attribution Request:** If you fork or use this project, I kindly ask that you keep the "Buy Me a Coffee" link intact. This is not a legal requirement, but a friendly request to support continued development. Thank you! ☕
+
 ## Contributing
 
 1. Fork the repository
