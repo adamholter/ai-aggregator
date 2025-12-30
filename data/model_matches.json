@@ -1,0 +1,737 @@
+{
+  "artificial-analysis::openrouter::gpt-4o::openai": {
+    "result": {
+      "match": {
+        "id": "openai/gpt-4o:extended",
+        "confidence": 0.95,
+        "reason": "Target is 'GPT-4o' and provider hint is 'OpenAI'. Found 'openai/gpt-4o:extended' which is a direct match for the model name and provider.",
+        "target": "openrouter",
+        "metadata": {
+          "id": "openai/gpt-4o:extended",
+          "slug": "openai/gpt-4o",
+          "name": "OpenAI: GPT-4o (extended)",
+          "vendor": "OpenAI",
+          "base_name": "GPT-4o (extended)",
+          "created": 1715558400,
+          "description": "GPT-4o (\"o\" for \"omni\") is OpenAI's latest AI model, supporting both text and image inputs with text outputs. It maintains the intelligence level of [GPT-4 Turbo](/models/openai/gpt-4-turbo) while being twice as fast and 50% more cost-effective. GPT-4o also offers improved performance in processing non-English languages and enhanced visual capabilities.\n\nFor benchmarking against other models, it was briefly called [\"im-also-a-good-gpt2-chatbot\"](https://twitter.com/LiamFedus/status/1790064963966370209)\n\n#multimodal",
+          "context_length": 128000,
+          "hugging_face_id": null,
+          "architecture": {
+            "modality": "text+image->text",
+            "input_modalities": [
+              "text",
+              "image",
+              "file"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "tokenizer": "GPT",
+            "instruct_type": null
+          },
+          "pricing": {
+            "prompt": "0.000006",
+            "completion": "0.000018",
+            "request": "0",
+            "image": "0.007225",
+            "web_search": "0",
+            "internal_reasoning": "0"
+          },
+          "top_provider": {
+            "context_length": 128000,
+            "max_completion_tokens": 64000,
+            "is_moderated": true
+          },
+          "per_request_limits": null,
+          "supported_parameters": [
+            "frequency_penalty",
+            "logit_bias",
+            "logprobs",
+            "max_tokens",
+            "presence_penalty",
+            "response_format",
+            "seed",
+            "stop",
+            "structured_outputs",
+            "temperature",
+            "tool_choice",
+            "tools",
+            "top_logprobs",
+            "top_p",
+            "web_search_options"
+          ],
+          "default_parameters": {},
+          "tags": [],
+          "display_url": "https://openrouter.ai/models/openai/gpt-4o"
+        }
+      },
+      "persisted_at": "2025-10-15T11:51:20.785431"
+    },
+    "saved_at": "2025-10-15T11:51:20.785473"
+  },
+  "openrouter::artificial-analysis::openai: gpt-4o (extended)::openai": {
+    "result": {
+      "match": {
+        "id": "e98e911e-9fb2-4a9a-826e-3d681d0cdca8",
+        "confidence": 0.95,
+        "reason": "Target name 'OpenAI: GPT-4o (extended)' is a strong match for 'OpenAI: GPT-4o (May '24)' given the provider and model family, suggesting a specific version of GPT-4o.",
+        "target": "artificial-analysis",
+        "metadata": {
+          "id": "e98e911e-9fb2-4a9a-826e-3d681d0cdca8",
+          "name": "GPT-4o (May '24)",
+          "slug": "gpt-4o-2024-05-13",
+          "release_date": "2024-05-13",
+          "model_creator": {
+            "id": "e67e56e3-15cd-43db-b679-da4660a69f41",
+            "name": "OpenAI",
+            "slug": "openai"
+          },
+          "evaluations": {
+            "artificial_analysis_intelligence_index": 26.3,
+            "artificial_analysis_coding_index": 24.2,
+            "artificial_analysis_math_index": null,
+            "mmlu_pro": 0.74,
+            "gpqa": 0.526,
+            "hle": 0.028,
+            "livecodebench": 0.334,
+            "scicode": 0.309,
+            "math_500": 0.791,
+            "aime": 0.11,
+            "aime_25": null,
+            "ifbench": null,
+            "lcr": null,
+            "terminalbench_hard": null,
+            "tau2": null
+          },
+          "pricing": {
+            "price_1m_blended_3_to_1": 7.5,
+            "price_1m_input_tokens": 5,
+            "price_1m_output_tokens": 15
+          },
+          "median_output_tokens_per_second": 85.616,
+          "median_time_to_first_token_seconds": 0.527,
+          "median_time_to_first_answer_token": 0.527
+        }
+      },
+      "persisted_at": "2025-10-15T11:52:18.006163"
+    },
+    "saved_at": "2025-10-15T11:52:18.006185"
+  },
+  "openrouter::artificial-analysis::gpt-5 image mini::openai": {
+    "result": {
+      "match": {
+        "id": "bc26bfdb-4923-4442-a6ca-e77392923581",
+        "confidence": 0.95,
+        "reason": "Target name 'GPT-5 Image Mini' strongly suggests 'GPT-5 mini' from OpenAI, which is present in the catalogue.",
+        "target": "artificial-analysis",
+        "metadata": {
+          "id": "bc26bfdb-4923-4442-a6ca-e77392923581",
+          "name": "GPT-5 mini (minimal)",
+          "slug": "gpt-5-mini-minimal",
+          "release_date": "2025-08-07",
+          "model_creator": {
+            "id": "e67e56e3-15cd-43db-b679-da4660a69f41",
+            "name": "OpenAI",
+            "slug": "openai"
+          },
+          "evaluations": {
+            "artificial_analysis_intelligence_index": 41.6,
+            "artificial_analysis_coding_index": 35,
+            "artificial_analysis_math_index": 46.7,
+            "mmlu_pro": 0.775,
+            "gpqa": 0.687,
+            "hle": 0.05,
+            "livecodebench": 0.545,
+            "scicode": 0.369,
+            "math_500": null,
+            "aime": null,
+            "aime_25": 0.467,
+            "ifbench": 0.456,
+            "lcr": 0.357,
+            "terminalbench_hard": 0.135,
+            "tau2": 0.319
+          },
+          "pricing": {
+            "price_1m_blended_3_to_1": 0.688,
+            "price_1m_input_tokens": 0.25,
+            "price_1m_output_tokens": 2
+          },
+          "median_output_tokens_per_second": 81.633,
+          "median_time_to_first_token_seconds": 1.307,
+          "median_time_to_first_answer_token": 1.307
+        }
+      },
+      "persisted_at": "2025-10-16T17:47:00.147889"
+    },
+    "saved_at": "2025-10-16T17:47:00.147914"
+  },
+  "openrouter::artificial-analysis::claude haiku 4.5::anthropic": {
+    "result": {
+      "match": {
+        "id": "a6340098-d7ae-462d-b372-0a0a67fc44b4",
+        "confidence": 1.0,
+        "reason": "Target model 'Claude Haiku 4.5' strongly matches 'Anthropic: Claude 4.5 Haiku (Reasoning)' and provider hint is Anthropic.",
+        "target": "artificial-analysis",
+        "metadata": {
+          "id": "a6340098-d7ae-462d-b372-0a0a67fc44b4",
+          "name": "Claude 4.5 Haiku (Reasoning)",
+          "slug": "claude-4-5-haiku-reasoning",
+          "release_date": "2025-10-15",
+          "model_creator": {
+            "id": "f0aa413f-e8ae-4fcd-9c48-0e049f4f3128",
+            "name": "Anthropic",
+            "slug": "anthropic"
+          },
+          "evaluations": {
+            "artificial_analysis_intelligence_index": 54.6,
+            "artificial_analysis_coding_index": 43.4,
+            "artificial_analysis_math_index": 83.7,
+            "mmlu_pro": 0.76,
+            "gpqa": 0.672,
+            "hle": 0.097,
+            "livecodebench": 0.615,
+            "scicode": 0.433,
+            "math_500": null,
+            "aime": null,
+            "aime_25": 0.837,
+            "ifbench": 0.543,
+            "lcr": 0.703,
+            "terminalbench_hard": 0.255,
+            "tau2": 0.547
+          },
+          "pricing": {
+            "price_1m_blended_3_to_1": 2,
+            "price_1m_input_tokens": 1,
+            "price_1m_output_tokens": 5
+          },
+          "median_output_tokens_per_second": 48.681,
+          "median_time_to_first_token_seconds": 0.675,
+          "median_time_to_first_answer_token": 41.759
+        }
+      },
+      "persisted_at": "2025-10-16T17:48:37.944915"
+    },
+    "saved_at": "2025-10-16T17:48:37.945195"
+  },
+  "artificial-analysis::openrouter::claude 4.5 sonnet (reasoning)::anthropic": {
+    "result": {
+      "match": {
+        "id": "anthropic/claude-sonnet-4.5",
+        "confidence": 1.0,
+        "reason": "Exact match found for 'Claude 4.5 Sonnet' from provider 'Anthropic'.",
+        "target": "openrouter",
+        "metadata": {
+          "id": "anthropic/claude-sonnet-4.5",
+          "slug": "anthropic/claude-4.5-sonnet-20250929",
+          "name": "Anthropic: Claude Sonnet 4.5",
+          "vendor": "Anthropic",
+          "base_name": "Claude Sonnet 4.5",
+          "created": 1759161676,
+          "description": "Claude Sonnet 4.5 is Anthropic’s most advanced Sonnet model to date, optimized for real-world agents and coding workflows. It delivers state-of-the-art performance on coding benchmarks such as SWE-bench Verified, with improvements across system design, code security, and specification adherence. The model is designed for extended autonomous operation, maintaining task continuity across sessions and providing fact-based progress tracking.\n\nSonnet 4.5 also introduces stronger agentic capabilities, including improved tool orchestration, speculative parallel execution, and more efficient context and memory management. With enhanced context tracking and awareness of token usage across tool calls, it is particularly well-suited for multi-context and long-running workflows. Use cases span software engineering, cybersecurity, financial analysis, research agents, and other domains requiring sustained reasoning and tool use.",
+          "context_length": 1000000,
+          "hugging_face_id": "",
+          "architecture": {
+            "modality": "text+image->text",
+            "input_modalities": [
+              "text",
+              "image",
+              "file"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "tokenizer": "Claude",
+            "instruct_type": null
+          },
+          "pricing": {
+            "prompt": "0.000003",
+            "completion": "0.000015",
+            "request": "0",
+            "image": "0",
+            "web_search": "0",
+            "internal_reasoning": "0"
+          },
+          "top_provider": {
+            "context_length": 1000000,
+            "max_completion_tokens": 64000,
+            "is_moderated": false
+          },
+          "per_request_limits": null,
+          "supported_parameters": [
+            "include_reasoning",
+            "max_tokens",
+            "reasoning",
+            "stop",
+            "temperature",
+            "tool_choice",
+            "tools",
+            "top_k",
+            "top_p"
+          ],
+          "default_parameters": {
+            "temperature": 1,
+            "top_p": 1,
+            "frequency_penalty": null
+          },
+          "tags": [],
+          "display_url": "https://openrouter.ai/models/anthropic/claude-4.5-sonnet-20250929"
+        }
+      },
+      "persisted_at": "2025-10-16T17:48:53.993458"
+    },
+    "saved_at": "2025-10-16T17:48:53.993467"
+  },
+  "openrouter::artificial-analysis::claude sonnet 4.5::anthropic": {
+    "result": {
+      "match": {
+        "id": "90e078f2-051b-4c63-8919-76618971cb3f",
+        "confidence": 0.95,
+        "reason": "Target name 'Claude Sonnet 4.5' strongly suggests 'Anthropic: Claude 4.5 Sonnet (Reasoning)' or its non-reasoning counterpart. Since 4.5 is the version, and Sonnet is the tier, this is the closest match available.",
+        "target": "artificial-analysis",
+        "metadata": {
+          "id": "90e078f2-051b-4c63-8919-76618971cb3f",
+          "name": "Claude 4.5 Sonnet (Reasoning)",
+          "slug": "claude-4-5-sonnet-thinking",
+          "release_date": "2025-09-29",
+          "model_creator": {
+            "id": "f0aa413f-e8ae-4fcd-9c48-0e049f4f3128",
+            "name": "Anthropic",
+            "slug": "anthropic"
+          },
+          "evaluations": {
+            "artificial_analysis_intelligence_index": 62.7,
+            "artificial_analysis_coding_index": 49.8,
+            "artificial_analysis_math_index": 88,
+            "mmlu_pro": 0.875,
+            "gpqa": 0.834,
+            "hle": 0.173,
+            "livecodebench": 0.714,
+            "scicode": 0.447,
+            "math_500": null,
+            "aime": null,
+            "aime_25": 0.88,
+            "ifbench": 0.573,
+            "lcr": 0.657,
+            "terminalbench_hard": 0.333,
+            "tau2": 0.781
+          },
+          "pricing": {
+            "price_1m_blended_3_to_1": 6,
+            "price_1m_input_tokens": 3,
+            "price_1m_output_tokens": 15
+          },
+          "median_output_tokens_per_second": 58.088,
+          "median_time_to_first_token_seconds": 1.818,
+          "median_time_to_first_answer_token": 36.248
+        }
+      },
+      "persisted_at": "2025-10-16T17:49:30.373794"
+    },
+    "saved_at": "2025-10-16T17:49:30.373822"
+  },
+  "openrouter::artificial-analysis::glm 4.6::z.ai": {
+    "result": {
+      "match": {
+        "id": "6a5d56e1-bb68-4205-8d9b-26b97888bc84",
+        "confidence": 1.0,
+        "reason": "Exact match for 'GLM 4.6' with provider hint 'Z.AI'.",
+        "target": "artificial-analysis",
+        "metadata": {
+          "id": "6a5d56e1-bb68-4205-8d9b-26b97888bc84",
+          "name": "GLM-4.6 (Reasoning)",
+          "slug": "glm-4-6-reasoning",
+          "release_date": "2025-09-30",
+          "model_creator": {
+            "id": "67437eb6-7dc1-4e93-befd-22c8b8ec2065",
+            "name": "Z AI",
+            "slug": "zai"
+          },
+          "evaluations": {
+            "artificial_analysis_intelligence_index": 56,
+            "artificial_analysis_coding_index": 43.8,
+            "artificial_analysis_math_index": 86,
+            "mmlu_pro": 0.829,
+            "gpqa": 0.78,
+            "hle": 0.133,
+            "livecodebench": 0.695,
+            "scicode": 0.384,
+            "math_500": null,
+            "aime": null,
+            "aime_25": 0.86,
+            "ifbench": 0.434,
+            "lcr": 0.543,
+            "terminalbench_hard": 0.234,
+            "tau2": 0.705
+          },
+          "pricing": {
+            "price_1m_blended_3_to_1": 0.975,
+            "price_1m_input_tokens": 0.6,
+            "price_1m_output_tokens": 2.1
+          },
+          "median_output_tokens_per_second": 54.311,
+          "median_time_to_first_token_seconds": 0.634,
+          "median_time_to_first_answer_token": 37.459
+        }
+      },
+      "persisted_at": "2025-10-16T17:49:43.610532"
+    },
+    "saved_at": "2025-10-16T17:49:43.610545"
+  },
+  "artificial-analysis::openrouter::gpt-5 (medium)::openai": {
+    "result": {
+      "match": {
+        "id": "openai/gpt-5",
+        "confidence": 0.9,
+        "reason": "Exact match found for 'GPT-5' from provider 'OpenAI', although the target specifies '(medium)' which is not present in the catalogue entry.",
+        "target": "openrouter",
+        "metadata": {
+          "id": "openai/gpt-5",
+          "slug": "openai/gpt-5-2025-08-07",
+          "name": "OpenAI: GPT-5",
+          "vendor": "OpenAI",
+          "base_name": "GPT-5",
+          "created": 1754587413,
+          "description": "GPT-5 is OpenAI’s most advanced model, offering major improvements in reasoning, code quality, and user experience. It is optimized for complex tasks that require step-by-step reasoning, instruction following, and accuracy in high-stakes use cases. It supports test-time routing features and advanced prompt understanding, including user-specified intent like \"think hard about this.\" Improvements include reductions in hallucination, sycophancy, and better performance in coding, writing, and health-related tasks.",
+          "context_length": 400000,
+          "hugging_face_id": "",
+          "architecture": {
+            "modality": "text+image->text",
+            "input_modalities": [
+              "text",
+              "image",
+              "file"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "tokenizer": "GPT",
+            "instruct_type": null
+          },
+          "pricing": {
+            "prompt": "0.00000125",
+            "completion": "0.00001",
+            "request": "0",
+            "image": "0",
+            "web_search": "0.01",
+            "internal_reasoning": "0",
+            "input_cache_read": "0.000000125"
+          },
+          "top_provider": {
+            "context_length": 400000,
+            "max_completion_tokens": 128000,
+            "is_moderated": true
+          },
+          "per_request_limits": null,
+          "supported_parameters": [
+            "include_reasoning",
+            "max_tokens",
+            "reasoning",
+            "response_format",
+            "seed",
+            "structured_outputs",
+            "tool_choice",
+            "tools"
+          ],
+          "default_parameters": {
+            "temperature": null,
+            "top_p": null,
+            "frequency_penalty": null
+          },
+          "tags": [],
+          "display_url": "https://openrouter.ai/models/openai/gpt-5-2025-08-07"
+        }
+      },
+      "persisted_at": "2025-10-16T17:54:04.254335"
+    },
+    "saved_at": "2025-10-16T17:54:04.254369"
+  },
+  "artificial-analysis::openrouter::qwen3 max::alibaba": {
+    "result": {
+      "match": {
+        "id": "qwen/qwen3-max",
+        "confidence": 1.0,
+        "reason": "Exact match found in the catalogue for 'Qwen3 Max'.",
+        "target": "openrouter",
+        "metadata": {
+          "id": "qwen/qwen3-max",
+          "slug": "qwen/qwen3-max",
+          "name": "Qwen: Qwen3 Max",
+          "vendor": "Qwen",
+          "base_name": "Qwen3 Max",
+          "created": 1758662808,
+          "description": "Qwen3-Max is an updated release built on the Qwen3 series, offering major improvements in reasoning, instruction following, multilingual support, and long-tail knowledge coverage compared to the January 2025 version. It delivers higher accuracy in math, coding, logic, and science tasks, follows complex instructions in Chinese and English more reliably, reduces hallucinations, and produces higher-quality responses for open-ended Q&A, writing, and conversation. The model supports over 100 languages with stronger translation and commonsense reasoning, and is optimized for retrieval-augmented generation (RAG) and tool calling, though it does not include a dedicated “thinking” mode.",
+          "context_length": 256000,
+          "hugging_face_id": "",
+          "architecture": {
+            "modality": "text->text",
+            "input_modalities": [
+              "text"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "tokenizer": "Qwen3",
+            "instruct_type": null
+          },
+          "pricing": {
+            "prompt": "0.0000012",
+            "completion": "0.000006",
+            "request": "0",
+            "image": "0",
+            "web_search": "0",
+            "internal_reasoning": "0",
+            "input_cache_read": "0.00000024"
+          },
+          "top_provider": {
+            "context_length": 256000,
+            "max_completion_tokens": 32768,
+            "is_moderated": false
+          },
+          "per_request_limits": null,
+          "supported_parameters": [
+            "max_tokens",
+            "presence_penalty",
+            "response_format",
+            "seed",
+            "temperature",
+            "tool_choice",
+            "tools",
+            "top_p"
+          ],
+          "default_parameters": {},
+          "tags": [],
+          "display_url": "https://openrouter.ai/models/qwen/qwen3-max"
+        }
+      },
+      "persisted_at": "2025-10-16T17:54:11.421531"
+    },
+    "saved_at": "2025-10-16T17:54:11.421545"
+  },
+  "artificial-analysis::openrouter::grok 4::xai": {
+    "result": {
+      "match": {
+        "id": "x-ai/grok-4",
+        "confidence": 1.0,
+        "reason": "Exact match found for 'Grok 4' from provider 'xAI'.",
+        "target": "openrouter",
+        "metadata": {
+          "id": "x-ai/grok-4",
+          "slug": "x-ai/grok-4-07-09",
+          "name": "xAI: Grok 4",
+          "vendor": "xAI",
+          "base_name": "Grok 4",
+          "created": 1752087689,
+          "description": "Grok 4 is xAI's latest reasoning model with a 256k context window. It supports parallel tool calling, structured outputs, and both image and text inputs. Note that reasoning is not exposed, reasoning cannot be disabled, and the reasoning effort cannot be specified. Pricing increases once the total tokens in a given request is greater than 128k tokens. See more details on the [xAI docs](https://docs.x.ai/docs/models/grok-4-0709)",
+          "context_length": 256000,
+          "hugging_face_id": "",
+          "architecture": {
+            "modality": "text+image->text",
+            "input_modalities": [
+              "image",
+              "text"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "tokenizer": "Grok",
+            "instruct_type": null
+          },
+          "pricing": {
+            "prompt": "0.000003",
+            "completion": "0.000015",
+            "request": "0",
+            "image": "0",
+            "web_search": "0",
+            "internal_reasoning": "0",
+            "input_cache_read": "0.00000075"
+          },
+          "top_provider": {
+            "context_length": 256000,
+            "max_completion_tokens": null,
+            "is_moderated": false
+          },
+          "per_request_limits": null,
+          "supported_parameters": [
+            "include_reasoning",
+            "logprobs",
+            "max_tokens",
+            "reasoning",
+            "response_format",
+            "seed",
+            "structured_outputs",
+            "temperature",
+            "tool_choice",
+            "tools",
+            "top_logprobs",
+            "top_p"
+          ],
+          "default_parameters": {},
+          "tags": [],
+          "display_url": "https://openrouter.ai/models/x-ai/grok-4-07-09"
+        }
+      },
+      "persisted_at": "2025-10-16T20:56:07.884286"
+    },
+    "saved_at": "2025-10-16T20:56:07.884308"
+  },
+  "openrouter::artificial-analysis::mistral 7b instruct v0.1::mistral": {
+    "result": {
+      "match": {
+        "id": "217b34ec-5920-4fc1-8886-6a70a324837d",
+        "confidence": 1.0,
+        "reason": "Exact match for 'Mistral 7B Instruct v0.1' found as 'Mistral: Mistral 7B Instruct'.",
+        "target": "artificial-analysis",
+        "metadata": {
+          "id": "217b34ec-5920-4fc1-8886-6a70a324837d",
+          "name": "Mistral 7B Instruct",
+          "slug": "mistral-7b-instruct",
+          "release_date": "2023-09-27",
+          "model_creator": {
+            "id": "b5c0639a-cc9c-443b-a07e-bae6b7088933",
+            "name": "Mistral",
+            "slug": "mistral"
+          },
+          "evaluations": {
+            "artificial_analysis_intelligence_index": 1,
+            "artificial_analysis_coding_index": null,
+            "artificial_analysis_math_index": null,
+            "mmlu_pro": 0.245,
+            "gpqa": 0.177,
+            "hle": 0.043,
+            "livecodebench": 0.046,
+            "scicode": 0.024,
+            "math_500": 0.121,
+            "aime": 0,
+            "aime_25": null,
+            "ifbench": null,
+            "lcr": null,
+            "terminalbench_hard": null,
+            "tau2": null
+          },
+          "pricing": {
+            "price_1m_blended_3_to_1": 0.25,
+            "price_1m_input_tokens": 0.25,
+            "price_1m_output_tokens": 0.25
+          },
+          "median_output_tokens_per_second": 115.416,
+          "median_time_to_first_token_seconds": 0.291,
+          "median_time_to_first_answer_token": 0.291
+        }
+      },
+      "persisted_at": "2025-10-16T21:00:50.248048"
+    },
+    "saved_at": "2025-10-16T21:00:50.248093"
+  },
+  "openrouter::artificial-analysis::grok 4 fast::xai": {
+    "result": {
+      "match": {
+        "id": "573bbd93-114c-4b71-9ede-a73a7d4bdf84",
+        "confidence": 1.0,
+        "reason": "Exact match for 'Grok 4 Fast' with the provider hint 'xAI' and the specific 'Reasoning' variant listed in the catalogue.",
+        "target": "artificial-analysis",
+        "metadata": {
+          "id": "573bbd93-114c-4b71-9ede-a73a7d4bdf84",
+          "name": "Grok 4 Fast (Reasoning)",
+          "slug": "grok-4-fast-reasoning",
+          "release_date": "2025-09-19",
+          "model_creator": {
+            "id": "a1e3ddcf-d3e4-44a5-9e8f-029a69850875",
+            "name": "xAI",
+            "slug": "xai"
+          },
+          "evaluations": {
+            "artificial_analysis_intelligence_index": 60.3,
+            "artificial_analysis_coding_index": 48.4,
+            "artificial_analysis_math_index": 89.7,
+            "mmlu_pro": 0.85,
+            "gpqa": 0.847,
+            "hle": 0.17,
+            "livecodebench": 0.832,
+            "scicode": 0.442,
+            "math_500": null,
+            "aime": null,
+            "aime_25": 0.897,
+            "ifbench": 0.505,
+            "lcr": 0.647,
+            "terminalbench_hard": 0.177,
+            "tau2": 0.658
+          },
+          "pricing": {
+            "price_1m_blended_3_to_1": 0.275,
+            "price_1m_input_tokens": 0.2,
+            "price_1m_output_tokens": 0.5
+          },
+          "median_output_tokens_per_second": 96.431,
+          "median_time_to_first_token_seconds": 7.636,
+          "median_time_to_first_answer_token": 7.636
+        }
+      },
+      "persisted_at": "2025-10-17T07:58:56.190245"
+    },
+    "saved_at": "2025-10-17T07:58:56.190287"
+  },
+  "artificial-analysis::openrouter::gpt-5 mini (high)::openai": {
+    "result": {
+      "match": {
+        "id": "openai/gpt-5-mini",
+        "confidence": 1.0,
+        "reason": "Exact match found for 'GPT-5 mini' from provider 'OpenAI'.",
+        "target": "openrouter",
+        "metadata": {
+          "id": "openai/gpt-5-mini",
+          "slug": "openai/gpt-5-mini-2025-08-07",
+          "name": "OpenAI: GPT-5 Mini",
+          "vendor": "OpenAI",
+          "base_name": "GPT-5 Mini",
+          "created": 1754587407,
+          "description": "GPT-5 Mini is a compact version of GPT-5, designed to handle lighter-weight reasoning tasks. It provides the same instruction-following and safety-tuning benefits as GPT-5, but with reduced latency and cost. GPT-5 Mini is the successor to OpenAI's o4-mini model.",
+          "context_length": 400000,
+          "hugging_face_id": "",
+          "architecture": {
+            "modality": "text+image->text",
+            "input_modalities": [
+              "text",
+              "image",
+              "file"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "tokenizer": "GPT",
+            "instruct_type": null
+          },
+          "pricing": {
+            "prompt": "0.00000025",
+            "completion": "0.000002",
+            "request": "0",
+            "image": "0",
+            "web_search": "0.01",
+            "internal_reasoning": "0",
+            "input_cache_read": "0.000000025"
+          },
+          "top_provider": {
+            "context_length": 400000,
+            "max_completion_tokens": 128000,
+            "is_moderated": true
+          },
+          "per_request_limits": null,
+          "supported_parameters": [
+            "include_reasoning",
+            "max_tokens",
+            "reasoning",
+            "response_format",
+            "seed",
+            "structured_outputs",
+            "tool_choice",
+            "tools"
+          ],
+          "default_parameters": {},
+          "tags": [],
+          "display_url": "https://openrouter.ai/models/openai/gpt-5-mini-2025-08-07"
+        }
+      },
+      "persisted_at": "2025-10-17T09:21:48.081082"
+    },
+    "saved_at": "2025-10-17T09:21:48.081100"
+  }
+}

@@ -1,0 +1,114 @@
+    <!-- Settings modal -->
+    <div id="settings-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-content" style="max-width:520px;">
+            <div class="modal-header">
+                <h2>Dashboard Settings</h2>
+                <button class="modal-close" id="settings-close">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="settings-section">
+                    <h3>AI Agent Configuration</h3>
+                    <div class="form-row">
+                        <label for="setting-available-models">Available Models in Agent</label>
+                        <div class="model-dropdown-container">
+                            <input id="setting-available-models" type="text"
+                                placeholder="Search and select models for agent dropdown..." class="model-search-input"
+                                autocomplete="off" />
+                            <div class="model-dropdown" id="available-models-dropdown" style="display: none;"></div>
+                            <div class="loading-indicator" id="available-models-loading" style="display: none;">Loading
+                                models...</div>
+                            <div class="selected-models" id="selected-available-models"></div>
+                        </div>
+                        <p class="help-text">Choose which models appear in the AI agent dropdown.</p>
+                    </div>
+                    <div class="form-row">
+                        <label for="setting-speed-model">Speed Mode Model</label>
+                        <div class="model-dropdown-container">
+                            <input id="setting-speed-model" type="text" placeholder="Search models..."
+                                class="model-search-input" autocomplete="off" />
+                            <div class="model-dropdown" id="speed-model-dropdown" style="display: none;"></div>
+                            <div class="loading-indicator" id="speed-model-loading" style="display: none;">Loading
+                                models...</div>
+                        </div>
+                        <p class="help-text">Fast, lightweight model for speed mode option.</p>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h3>Analysis Configuration</h3>
+                    <div class="form-row">
+                        <label for="setting-analysis-model">Model Analysis Model</label>
+                        <div class="model-dropdown-container">
+                            <input id="setting-analysis-model" type="text" placeholder="Search models..."
+                                class="model-search-input" autocomplete="off" />
+                            <div class="model-dropdown" id="analysis-model-dropdown" style="display: none;"></div>
+                            <div class="loading-indicator" id="analysis-model-loading" style="display: none;">Loading
+                                models...</div>
+                        </div>
+                        <p class="help-text">Model to use for detailed model analysis (double-click).</p>
+                    </div>
+                    <div class="form-row">
+                        <label for="setting-fallback-models">Fallback Models</label>
+                        <div class="model-dropdown-container">
+                            <input id="setting-fallback-models" type="text"
+                                placeholder="Search and select multiple models..." class="model-search-input"
+                                autocomplete="off" />
+                            <div class="model-dropdown" id="fallback-models-dropdown" style="display: none;"></div>
+                            <div class="loading-indicator" id="fallback-models-loading" style="display: none;">Loading
+                                models...</div>
+                            <div class="selected-models" id="selected-fallback-models"></div>
+                        </div>
+                        <p class="help-text">Order of fallback models for agent requests.</p>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h3>API Access</h3>
+                    <div class="form-row">
+                        <label for="setting-openrouter-key">OpenRouter API Key</label>
+                        <input id="setting-openrouter-key" type="password" class="model-search-input"
+                            placeholder="sk-or-..." autocomplete="off">
+                        <div class="api-key-actions">
+                            <button type="button" class="chart-btn secondary" id="clear-openrouter-key">Remove
+                                Key</button>
+                            <span class="inline-note">Stored locally in your browser and required for AI Analysis &amp;
+                                chat.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h3>Experimental Features</h3>
+                    <div class="form-row toggle-row">
+                        <label for="setting-experimental-mode">Enable Experimental Mode</label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="setting-experimental-mode">
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <p class="help-text">Unlock in-progress tabs like Hype. Changes apply immediately after saving.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h3>Filtering Defaults</h3>
+                    <div class="form-row">
+                        <label for="filter-model-id">Filter model ID</label>
+                        <input id="filter-model-id" type="text"
+                            placeholder="google/gemini-2.5-flash-lite-preview-09-2025" />
+                        <p class="help-text">Default OpenRouter model used by the experimental filter.</p>
+                    </div>
+                    <div class="form-row">
+                        <label for="filter-prompt-note">Filter prompt note</label>
+                        <input id="filter-prompt-note" type="text" placeholder="Prioritize recency and impact" />
+                        <p class="help-text">Appended to the system prompt to customize filtering behavior.</p>
+                    </div>
+                </div>
+
+                <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:24px;">
+                    <button class="chart-btn" id="settings-save">Save Settings</button>
+                    <button class="chart-btn secondary" id="settings-cancel">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>

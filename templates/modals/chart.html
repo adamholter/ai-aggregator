@@ -1,0 +1,21 @@
+    <!-- Chart Comparison Modal -->
+    <div id="chart-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-content" style="max-width:900px;">
+            <div class="modal-header">
+                <h2>Model Comparison Chart</h2>
+                <button class="modal-close" id="chart-close">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="chart-controls" style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
+                    <select id="chart-type-select" style="padding:8px 12px;border-radius:8px;border:1px solid #e5e5e5;">
+                        <option value="bar">Bar Chart</option>
+                        <option value="radar">Radar Chart</option>
+                        <option value="scatter">Scatter Plot</option>
+                    </select>
+                    <div id="chart-metrics-container" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
+                </div>
+                <div id="chart-container" style="min-height:450px;background:#fafafa;border-radius:8px;"></div>
+                <div id="chart-models-list" style="margin-top:12px;font-size:13px;color:#6b7280;"></div>
+            </div>
+        </div>
+    </div>

@@ -1,0 +1,29 @@
+# Logs and caches
+logs/
+__pycache__/
+*.pyc
+*.log
+.DS_Store
+~/
+sandbox/
+.pytest_cache/
+
+# Environment files (NEVER commit these)
+.env
+.env.*
+.env.local
+*.local
+
+# User data (ephemeral on each deploy)
+data/users.json
+data/pins.json
+data/shared_views.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+Thumbs.db

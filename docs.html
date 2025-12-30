@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Documentation &amp; LLM Copy — AI Dashboard</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        :root {
+            font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+            background: #eceff4;
+            color: #0d1726;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            background: #eceff4;
+        }
+
+        .docs-shell {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 36px 20px 56px;
+        }
+
+        .docs-header {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-bottom: 22px;
+        }
+
+        .docs-header h1 {
+            margin: 0;
+            font-size: 2.4rem;
+        }
+
+        .docs-header a {
+            color: #0052cc;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .section-card {
+            background: #ffffff;
+            border-radius: 18px;
+            padding: 24px;
+            box-shadow: 0 16px 36px rgba(15, 23, 42, 0.08);
+            margin-bottom: 20px;
+            border: 1px solid rgba(15, 23, 42, 0.06);
+        }
+
+        .section-card h2 {
+            margin-top: 0;
+            font-size: 1.7rem;
+        }
+
+        .section-card p {
+            margin: 8px 0 16px;
+            color: #3c4b61;
+        }
+
+        #api-docs {
+            line-height: 1.7;
+        }
+
+        #api-docs :is(h1, h2, h3, h4) {
+            margin-top: 1.4em;
+            margin-bottom: 0.6em;
+        }
+
+        #api-docs pre {
+            background: #111827;
+            color: #e5e7eb;
+            padding: 16px;
+            border-radius: 12px;
+            overflow-x: auto;
+        }
+
+        #api-docs code {
+            font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+            padding: 0 4px;
+            background: #111827;
+            color: #e5e7eb;
+            border-radius: 4px;
+        }
+
+        .copy-bar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        .copy-btn {
+            border: none;
+            padding: 10px 18px;
+            border-radius: 999px;
+            background: #111827;
+            color: #ffffff;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .copy-btn:hover {
+            background: #1f2937;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 320px;
+            border-radius: 12px;
+            border: 1px solid rgba(15, 23, 42, 0.2);
+            padding: 16px;
+            font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+            font-size: 0.95rem;
+            resize: vertical;
+            background: #0b1220;
+            color: #e5e7eb;
+        }
+
+        .status {
+            color: #047857;
+            font-weight: 600;
+        }
+
+        .status.error {
+            color: #dc2626;
+        }
+
+        @media (max-width: 640px) {
+            .section-card {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="docs-shell">
+        <header class="docs-header">
+            <h1>API Reference &amp; LLM Copy</h1>
+            <p>Base URL for every endpoint: <a href="https://ai-dashboard-c8bp.onrender.com" target="_blank"
+                    rel="noreferrer">https://ai-dashboard-c8bp.onrender.com</a></p>
+        </header>
+
+        <section class="section-card">
+            <div class="copy-bar">
+                <h2 style="margin:0;">LLM-friendly Markdown Copy</h2>
+                <button id="copy-llm" class="copy-btn" type="button">Copy LLM.md</button>
+                <span id="copy-status" class="status"></span>
+            </div>
+            <p>This textarea mirrors <code>LLM.txt</code>. Paste into any LLM prompt or chat and the markdown formatting
+                is preserved.</p>
+            <textarea id="llm-text" readonly>Loading markdown…</textarea>
+        </section>
+
+        <section class="section-card">
+            <h2>API Documentation</h2>
+            <p>The markdown below mirrors the API docs repository owners already maintain. It includes examples,
+                responses, and parameter guidance.</p>
+            <div id="api-docs">Loading API docs...</div>
+        </section>
+    </div>
+
+    <script>
+        const API_PATH = 'API_DOCS.md';
+        const LLM_PATH = 'LLM.txt';
+        const apiTarget = document.getElementById('api-docs');
+        const llmTextarea = document.getElementById('llm-text');
+        const copyStatus = document.getElementById('copy-status');
+
+        async function fetchText(path) {
+            const response = await fetch(path);
+            if (!response.ok) {
+                throw new Error(`Unable to load ${path}: ${response.status} ${response.statusText}`);
+            }
+            return response.text();
+        }
+
+        async function renderApiDocs() {
+            try {
+                const content = await fetchText(API_PATH);
+                apiTarget.innerHTML = marked.parse(content);
+            } catch (error) {
+                apiTarget.innerHTML = `<p class="status error">Error loading API docs: ${error.message}</p>`;
+            }
+        }
+
+        async function renderLlmText() {
+            try {
+                const content = await fetchText(LLM_PATH);
+                llmTextarea.value = content.trim();
+            } catch (error) {
+                llmTextarea.value = `Error loading ${LLM_PATH}: ${error.message}`;
+            }
+        }
+
+        document.getElementById('copy-llm').addEventListener('click', async () => {
+            const text = llmTextarea.value;
+            try {
+                if (!text.trim()) return;
+                await navigator.clipboard.writeText(text);
+                copyStatus.textContent = 'Copied!';
+                copyStatus.classList.remove('error');
+            } catch (error) {
+                copyStatus.textContent = 'Clipboard denied.';
+                copyStatus.classList.add('error');
+            }
+            setTimeout(() => {
+                copyStatus.textContent = '';
+                copyStatus.classList.remove('error');
+            }, 1800);
+        });
+
+        renderApiDocs();
+        renderLlmText();
+    </script>
+</body>
+
+</html>

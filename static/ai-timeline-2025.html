@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2025 AI Timeline Explorer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800;900&family=Inter:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #fafafa;
+        }
+
+        .font-mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Hide scrollbars for a cleaner look while keeping functionality */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+
+<body class="overflow-hidden bg-zinc-50 text-zinc-900">
+    <div id="root"></div>
+
+    <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@19.2.3",
+        "react/": "https://esm.sh/react@19.2.3/",
+        "react-dom/client": "https://esm.sh/react-dom@19.2.3/client"
+      }
+    }
+    </script>
+
+    <script type="module">
+        import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+        import { createRoot } from 'react-dom/client';
+
+        // ============ CONSTANTS ============
+        const PIXELS_PER_DAY = 280;
+        const START_OFFSET = 400;
+        const CARD_WIDTH = 320;
+        const SMALL_CARD_WIDTH = 200;
+        const CARD_HEIGHT_ESTIMATE = 110;
+        const AXIS_BUFFER = 25;
+        const LANE_HEIGHT = 115;
+        const AUDIO_URL = "https://adam.holter.com/wp-content/uploads/2025/12/AI-Timeline.mp3";
+
+        const rawEvents = [
+            // JANUARY
+            { date: "2025-01-20", title: "DeepSeek R1 Released", score: 10, link: "https://openrouter.ai/models/deepseek/deepseek-r1", desc: "Performance on par with OpenAI o1, but open-sourced. A massive disruption that crashed US tech stocks." },
+            { date: "2025-01-23", title: "OpenAI Operator", score: 9, desc: "Autonomous AI agent capable of complex, multi-step tasks like coding and travel booking." },
+            { date: "2025-01-27", title: "Luma Ray 2", score: 8, desc: "Large-scale video generative model capable of creating realistic visuals with natural motion." },
+            { date: "2025-01-31", title: "OpenAI o3-mini", score: 9, desc: "Cost-efficient reasoning model optimized for STEM. massive hallucination reduction vs DeepSeek R1." },
+
+            // FEBRUARY
+            { date: "2025-02-05", title: "Gemini 2.0 Pro", score: 10, desc: "Google's most powerful AI model launches. Includes 'Deep Think' capabilities." },
+            { date: "2025-02-14", title: "Kokoro TTS v1", score: 7, desc: "High-quality, incredibly fast text-to-speech model that proves small models can beat giants." },
+            { date: "2025-02-17", title: "Grok 3 Released", score: 9, desc: "Trained on 100k H100s. Features DeepSearch and massive reasoning capabilities." },
+            { date: "2025-02-24", title: "Claude 3.7 Sonnet", score: 10, desc: "The first true hybrid reasoning model. Users can toggle 'thinking' on or off. Crushes coding benchmarks." },
+            { date: "2025-02-26", title: "Wan 2.1 Video", score: 9, desc: "Alibaba's video model. 2.5x faster than competitors and highly cost-effective." },
+
+            // MARCH
+            { date: "2025-03-05", title: "Juggernaut Flux Pro", score: 6, desc: "RunDiffusion's fine-tune achieves photorealism that rivals midjourney v7." },
+            { date: "2025-03-12", title: "Gemma 3 Multimodal", score: 8, desc: "Google releases Gemma 3 (4B, 12B, 27B) supporting native vision-language and audio." },
+            { date: "2025-03-19", title: "OpenAI o1-pro", score: 9, desc: "High-compute reasoning model. Solves complex physics and math problems reliability." },
+            { date: "2025-03-24", title: "DeepSeek V3 (0324)", score: 8, desc: "Iterative update to the flagship model, further optimizing coding and logic." },
+
+            // APRIL
+            { date: "2025-04-01", title: "Runway Gen-4", score: 9, desc: "Unmatched consistency and control in AI video. Features 'Director Mode'." },
+            { date: "2025-04-05", title: "Llama 4 Leaks", score: 8, desc: "'Maverick' and 'Scout' variants appear. Multimodal native architecture confirmed." },
+            { date: "2025-04-14", title: "GPT-4.1 Family", score: 9, desc: "Includes GPT-4.1, Mini, and Nano. Major boost in instruction following and agentic reliability." },
+            { date: "2025-04-16", title: "OpenAI o4-mini", score: 9, desc: "Autonomous tool use arrives in a small package. The new standard for fast agents." },
+            { date: "2025-04-30", title: "Ideogram V3", score: 8, desc: "Text rendering perfected. Graphic design capabilities surpass human templates." },
+
+            // MAY
+            { date: "2025-05-07", title: "Gemini 2.5 Preview", score: 9, desc: "Advanced reasoning and coding. Introduces 'Flash-Lite' for extreme efficiency." },
+            { date: "2025-05-08", title: "OpenAI Buys Windsurf", score: 8, desc: "$3B acquisition. OpenAI moves to dominate the developer IDE stack." },
+            { date: "2025-05-19", title: "Google I/O: Flow", score: 10, desc: "Flow AI video editor transforms video creation. Veo 3 integration announced." },
+            { date: "2025-05-22", title: "Claude Opus 4", score: 10, desc: "Benchmarked as world's best coding model. 72.5% on SWE-bench Verified." },
+            { date: "2025-05-28", title: "DeepSeek R1 Update", score: 8, desc: "R1-0528 version. Incremental reasoning improvements, fully open source." },
+
+            // JUNE
+            { date: "2025-06-05", title: "Veo 3 GA", score: 9, desc: "Google's video model goes broad. Native vertical video and 1080p generation." },
+            { date: "2025-06-10", title: "OpenAI o3 Pro", score: 9, desc: "Reinforcement learning model designed for multi-day research tasks." },
+            { date: "2025-06-17", title: "MiniMax M1", score: 8, desc: "Open-weight reasoning model with a massive 4M token context window." },
+            { date: "2025-06-30", title: "Microsoft MAI-DxO", score: 7, desc: "Medical AI achieves 85% accuracy on complex cases vs doctors' 20%." },
+
+            // JULY
+            { date: "2025-07-15", title: "Mistral Voxtral", score: 8, desc: "Open-source audio models for business. Speech-to-action capabilities." },
+            { date: "2025-07-17", title: "OpenAI Agent Mode", score: 10, desc: "Complex task handling. Can operate web browser, terminal, and file systems autonomously." },
+            { date: "2025-07-23", title: "Qwen3 Coder", score: 9, desc: "Alibaba's agentic coding model. 480B parameters. A serious rival to Claude." },
+            { date: "2025-07-25", title: "Z.AI GLM 4.5", score: 8, desc: "Flagship agent model optimized for tool use and long-horizon planning." },
+
+            // AUGUST
+            { date: "2025-08-05", title: "OpenAI GPT-OSS", score: 10, desc: "History made. OpenAI releases open weights (120B and 20B models). 'Sloptimization' debates ensue." },
+            { date: "2025-08-07", title: "GPT-5 Official", score: 10, desc: "Available in Auto, Thinking, and Nano modes. The 'God Model' arrives." },
+            { date: "2025-08-26", title: "Nano Banana (Gemini)", score: 9, desc: "Gemini 2.5 Flash Image. State-of-the-art native image generation API." },
+
+            // SEPTEMBER
+            { date: "2025-09-01", title: "OpenAI Realtime GA", score: 9, desc: "Speech-to-speech model goes General Availability. Zero latency conversations." },
+            { date: "2025-09-17", title: "Flux 1 Kontext", score: 7, desc: "Precision image editing model from Black Forest Labs. High control." },
+            { date: "2025-09-23", title: "Qwen3 235B", score: 9, desc: "Massive MoE model. The 'Thinking' variant challenges closed frontier models." },
+            { date: "2025-09-30", title: "Sora 2 Release", score: 10, desc: "Native audio, Cameos, real physics. iOS app launch. The video Turing test passed." },
+
+            // OCTOBER
+            { date: "2025-10-06", title: "OpenAI DevDay", score: 10, desc: "AgentKit launch. Apps platform play. GPT-5 Pro for heavy enterprise workloads." },
+            { date: "2025-10-15", title: "Claude Haiku 4.5", score: 8, desc: "Fast, cheap, near-frontier coding. The new standard for agentic loops." },
+            { date: "2025-10-20", title: "Liquid AI LFM2", score: 7, desc: "Edge-native foundation model. High performance on consumer hardware." },
+
+            // NOVEMBER
+            { date: "2025-11-13", title: "OpenAI GPT-5.1", score: 9, desc: "Stronger reasoning, improved instruction adherence. 'Instant' and 'Thinking' modes." },
+            { date: "2025-11-18", title: "Google Gemini 3", score: 10, desc: "Available globally. Gemini 3 Pro preview. 1M token context becomes standard." },
+            { date: "2025-11-24", title: "Claude Opus 4.5", score: 9, desc: "Frontier reasoning. 100% on SWE-bench Verified. The agentic king." },
+
+            // DECEMBER
+            { date: "2025-12-01", title: "Video AI Wave", score: 9, desc: "Runway Gen-4.5, Kling O1, and PixVerse V5.5 drop same day. Native audio standard." },
+            { date: "2025-12-10", title: "OpenAI GPT-5.2", score: 9, desc: "Frontier-grade. Adaptive reasoning. 'Code Red' release to counter Gemini 3." },
+            { date: "2025-12-11", title: "Gemini 3 Flash", score: 9, desc: "High speed, high value thinking model. Powers the new 'Antigravity' code editor." },
+            { date: "2025-12-19", title: "GPT-5.2-Codex", score: 8, desc: "Specialized for long-horizon agentic coding. Handles repo-wide refactors." },
+            { date: "2025-12-20", title: "Anthropic Bloom", score: 7, desc: "Open-source evaluation tool for behavioral misalignment. Safety focus." },
+            { date: "2025-12-22", title: "Z.AI GLM 4.7", score: 9, desc: "Officially the smartest open-source model by benchmarks. Major gains in coding and agentic tool use." },
+            { date: "2025-12-23", title: "MiniMax M2.1", score: 9, desc: "Open-weight frontier model. Rivals Opus on benchmarks. Best-in-class for local coding on beefy hardware." }
+        ];
+
+        // ============ LAYOUT UTILITY ============
+        const parseDate = (str) => {
+            const [y, m, d] = str.split('-').map(Number);
+            return new Date(y, m - 1, d);
+        };
+
+        const checkOverlap = (box1, box2) => {
+            const bufferX = 140;
+            const bufferY = 40;
+            return !(box1.x2 + bufferX < box2.x1 ||
+                box1.x1 - bufferX > box2.x2 ||
+                box1.y2 + bufferY < box2.y1 ||
+                box1.y1 - bufferY > box2.y2);
+        };
+
+        const computeTimelineLayout = (events) => {
+            const sorted = [...events].sort((a, b) => parseDate(a.date).getTime() - parseDate(b.date).getTime());
+            const startDate = new Date(2025, 0, 1);
+            const placed = [];
+            const boxes = [];
+
+            const EFFECTIVE_BUFFER = AXIS_BUFFER + 30;
+
+            sorted.forEach((evt, i) => {
+                const dateObj = parseDate(evt.date);
+                const dayDiff = (dateObj.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24);
+                const x = START_OFFSET + (dayDiff * PIXELS_PER_DAY);
+                const isSmall = evt.score < 5;
+                const width = isSmall ? SMALL_CARD_WIDTH : CARD_WIDTH;
+
+                let side = i % 2 === 0 ? 'top' : 'bottom';
+                let lane = 0;
+                let foundSpot = false;
+                let sideAttempts = 0;
+
+                while (!foundSpot) {
+                    const yDisplacement = EFFECTIVE_BUFFER + lane * LANE_HEIGHT;
+                    const y = side === 'top' ? -yDisplacement : yDisplacement;
+
+                    const currentBox = {
+                        x1: x - width / 2,
+                        x2: x + width / 2,
+                        y1: side === 'top' ? y - CARD_HEIGHT_ESTIMATE : y,
+                        y2: side === 'top' ? y : y + CARD_HEIGHT_ESTIMATE,
+                    };
+
+                    const hasOverlap = boxes.some(box => box.side === side && checkOverlap(box, currentBox));
+
+                    if (!hasOverlap) {
+                        foundSpot = true;
+                        placed.push({
+                            ...evt,
+                            id: `evt-${i}-${evt.date}`,
+                            x,
+                            y,
+                            side,
+                            lane,
+                            dateObj
+                        });
+                        boxes.push({ ...currentBox, side });
+                    } else {
+                        if (sideAttempts === 0) {
+                            side = side === 'top' ? 'bottom' : 'top';
+                            sideAttempts++;
+                        } else {
+                            lane++;
+                            sideAttempts = 0;
+                            side = i % 2 === 0 ? 'top' : 'bottom';
+                        }
+
+                        if (lane > 2) {
+                            foundSpot = true;
+                            placed.push({
+                                ...evt,
+                                id: `evt-fallback-${i}`,
+                                x,
+                                y: (i % 2 === 0 ? -1 : 1) * (EFFECTIVE_BUFFER + 3 * LANE_HEIGHT),
+                                side: i % 2 === 0 ? 'top' : 'bottom',
+                                lane: 3,
+                                dateObj
+                            });
+                        }
+                    }
+                }
+            });
+
+            return placed;
+        };
+
+        // ============ EVENT CARD COMPONENT ============
+        const EventCard = ({ event }) => {
+            const isHighImp = event.score >= 9;
+            const isLowImp = event.score < 5;
+            const cardDate = event.dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+            const axisHalfWidth = 3;
+            const stemHeight = Math.abs(event.y) - axisHalfWidth;
+
+            const baseZ = 500;
+            const laneZIndex = baseZ - (event.lane * 10);
+            const finalZIndex = isHighImp ? laneZIndex + 5 : laneZIndex;
+
+            return React.createElement('div', {
+                className: "absolute transition-all duration-500 flex flex-col items-center pointer-events-none",
+                style: {
+                    left: `${event.x}px`,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    height: '0px',
+                    zIndex: finalZIndex
+                }
+            },
+                // Axis Contact Marker
+                React.createElement('div', {
+                    className: "absolute w-2 h-2 rounded-full bg-zinc-900 z-[1]",
+                    style: {
+                        top: '50%',
+                        left: '50%',
+                        transform: 'translate(-50%, -50%)'
+                    }
+                }),
+                // The Stem
+                React.createElement('div', {
+                    className: `bg-zinc-900 absolute left-1/2 -translate-x-1/2 z-[-1] ${isHighImp ? 'w-[3px]' : 'w-[1.5px] opacity-30'}`,
+                    style: {
+                        height: `${stemHeight}px`,
+                        [event.side === 'top' ? 'bottom' : 'top']: `${axisHalfWidth}px`,
+                    }
+                }),
+                // The Actual Content Card
+                React.createElement('div', {
+                    className: "absolute pointer-events-auto flex flex-col items-center",
+                    style: {
+                        top: event.side === 'top' ? 'auto' : `${axisHalfWidth + stemHeight}px`,
+                        bottom: event.side === 'top' ? `${axisHalfWidth + stemHeight}px` : 'auto',
+                    }
+                },
+                    isLowImp ? (
+                        React.createElement('div', { className: "group relative flex flex-col items-center" },
+                            React.createElement('div', { className: `w-3 h-3 rounded-full border-2 border-zinc-900 bg-white shadow-sm group-hover:scale-150 transition-transform ${event.side === 'top' ? '-mb-1.5' : '-mt-1.5'}` }),
+                            React.createElement('div', { className: "w-[180px] mt-2 px-2 py-1 bg-white border-2 border-zinc-900 shadow-sm rounded-none text-[9px] font-bold whitespace-nowrap overflow-hidden text-ellipsis text-zinc-500 group-hover:opacity-0 transition-opacity" },
+                                React.createElement('span', { className: "text-zinc-900 mr-2" }, cardDate),
+                                ' ',
+                                event.title
+                            ),
+                            // Expanded tooltip
+                            React.createElement('div', {
+                                className: `hidden group-hover:block absolute z-[1000] w-[260px] bg-white border-4 border-zinc-900 p-4 shadow-[8px_8px_0px_rgba(0,0,0,1)] ${event.side === 'top' ? 'bottom-full mb-4' : 'top-full mt-4'}`
+                            },
+                                React.createElement('div', { className: "flex justify-between items-start mb-2 border-b-2 border-zinc-100 pb-1" },
+                                    React.createElement('span', { className: "text-[9px] font-black uppercase text-zinc-400" }, cardDate),
+                                    React.createElement('span', { className: "text-[9px] font-black bg-zinc-200 px-1" }, `IMP: ${event.score}/10`)
+                                ),
+                                React.createElement('h4', { className: "text-xs font-black leading-tight mb-2 uppercase tracking-tight" }, event.title),
+                                React.createElement('p', { className: "text-[10px] text-zinc-600 font-bold leading-snug mb-3" }, event.desc),
+                                event.link && React.createElement('a', {
+                                    href: event.link,
+                                    target: "_blank",
+                                    rel: "noreferrer",
+                                    className: "text-[9px] font-black underline hover:bg-zinc-900 hover:text-white transition-colors p-1"
+                                }, "SOURCE_URL")
+                            )
+                        )
+                    ) : (
+                        React.createElement('div', { className: "flex flex-col items-center" },
+                            React.createElement('div', { className: `w-3 h-3 rounded-full border-2 border-zinc-900 bg-white z-10 ${event.side === 'top' ? 'order-last -mt-1.5' : 'order-first -mb-1.5'}` }),
+                            React.createElement('div', {
+                                className: `w-[280px] bg-white p-3 border-2 border-zinc-900 shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-[8px_8px_0px_rgba(0,0,0,1)] transition-all duration-300 ${isHighImp ? 'border-[3px]' : ''}`
+                            },
+                                // Compact inline header
+                                React.createElement('div', { className: "flex justify-between items-center mb-1.5 text-[9px] font-black" },
+                                    React.createElement('span', { className: "text-zinc-400" }, cardDate),
+                                    React.createElement('span', { className: `px-1.5 py-0.5 ${isHighImp ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-500'}` }, `${event.score}/10`)
+                                ),
+                                React.createElement('h3', { className: `font-black leading-[1.1] mb-1.5 uppercase tracking-tighter ${isHighImp ? 'text-sm' : 'text-xs'}` }, event.title),
+                                React.createElement('p', { className: "text-[10px] text-zinc-600 font-medium leading-snug" }, event.desc),
+                                event.link && React.createElement('a', {
+                                    href: event.link,
+                                    target: "_blank",
+                                    rel: "noreferrer",
+                                    className: "inline-block mt-1.5 text-[9px] font-black text-zinc-400 hover:text-zinc-900"
+                                }, "→")
+                            )
+                        )
+                    )
+                )
+            );
+        };
+
+        // ============ MAIN APP COMPONENT ============
+        const App = () => {
+            const [events, setEvents] = useState([]);
+            const [isAutoScrolling, setIsAutoScrolling] = useState(false);
+            const [scrollSpeed, setScrollSpeed] = useState(1.000);
+            const [currentDateLabel, setCurrentDateLabel] = useState('January 1, 2025');
+            const [dayCounter, setDayCounter] = useState(1);
+            
+            // Audio State
+            const [volume, setVolume] = useState(0.5);
+            const [isAudioPlaying, setIsAudioPlaying] = useState(false);
+            const audioRef = useRef(null);
+
+            const viewportRef = useRef(null);
+            const autoScrollRef = useRef(null);
+
+            // Audio Initialization
+            useEffect(() => {
+                const audio = new Audio(AUDIO_URL);
+                audio.loop = true;
+                audio.volume = volume;
+                audioRef.current = audio;
+
+                // Attempt autoplay (might fail due to browser policy)
+                const playPromise = audio.play();
+                if (playPromise !== undefined) {
+                    playPromise.then(_ => {
+                        setIsAudioPlaying(true);
+                    }).catch(error => {
+                        console.log("Autoplay prevented by browser policy.");
+                        setIsAudioPlaying(false);
+                    });
+                }
+
+                return () => {
+                    audio.pause();
+                    audio.src = "";
+                };
+            }, []);
+
+            // Handle Volume Changes
+            useEffect(() => {
+                if (audioRef.current) {
+                    audioRef.current.volume = volume;
+                }
+            }, [volume]);
+
+            const toggleAudio = () => {
+                if (!audioRef.current) return;
+                if (isAudioPlaying) {
+                    audioRef.current.pause();
+                } else {
+                    audioRef.current.play();
+                }
+                setIsAudioPlaying(!isAudioPlaying);
+            };
+
+            useEffect(() => {
+                const layout = computeTimelineLayout(rawEvents);
+                setEvents(layout);
+            }, []);
+
+            const endOfYearX = START_OFFSET + 365 * PIXELS_PER_DAY;
+            const totalWidth = endOfYearX + 1600;
+
+            // Dynamic Velocity Engine
+            const FOCUS_RANGE = 750;
+            const FAST_MULTIPLIER = 5.0;
+
+            const getDynamicStep = useCallback((currentX, viewportWidth, baseSpeed) => {
+                const centerX = currentX + viewportWidth / 2;
+                const hasEventNear = events.some(e => Math.abs(e.x - centerX) < FOCUS_RANGE);
+
+                let step = baseSpeed;
+                if (!hasEventNear) {
+                    step *= FAST_MULTIPLIER;
+                }
+
+                return step;
+            }, [events]);
+
+            const handleScroll = useCallback(() => {
+                if (!viewportRef.current) return;
+                const scrollLeft = viewportRef.current.scrollLeft;
+                const dayIndex = Math.max(0, Math.floor((scrollLeft - START_OFFSET) / PIXELS_PER_DAY));
+                const date = new Date(2025, 0, 1 + dayIndex);
+
+                setDayCounter(dayIndex + 1);
+
+                if (date.getFullYear() > 2025) {
+                    setCurrentDateLabel('Beyond 2025');
+                } else {
+                    setCurrentDateLabel(date.toLocaleDateString('en-US', {
+                        month: 'long',
+                        day: 'numeric',
+                        year: 'numeric'
+                    }));
+                }
+            }, []);
+
+            const handleWheel = (e) => {
+                if (viewportRef.current) {
+                    const isVertical = Math.abs(e.deltaY) > Math.abs(e.deltaX);
+                    viewportRef.current.scrollLeft += isVertical ? e.deltaY : e.deltaX;
+                }
+            };
+
+            const toggleAutoScroll = () => {
+                setIsAutoScrolling(prev => !prev);
+            };
+
+            useEffect(() => {
+                if (isAutoScrolling) {
+                    const step = () => {
+                        if (viewportRef.current) {
+                            const currentX = viewportRef.current.scrollLeft;
+                            const viewportWidth = viewportRef.current.clientWidth;
+                            const dynamicStep = getDynamicStep(currentX, viewportWidth, scrollSpeed);
+
+                            viewportRef.current.scrollLeft += dynamicStep;
+                            if (viewportRef.current.scrollLeft >= viewportRef.current.scrollWidth - viewportRef.current.clientWidth) {
+                                setIsAutoScrolling(false);
+                                return;
+                            }
+                        }
+                        autoScrollRef.current = requestAnimationFrame(step);
+                    };
+                    autoScrollRef.current = requestAnimationFrame(step);
+                } else {
+                    if (autoScrollRef.current) cancelAnimationFrame(autoScrollRef.current);
+                }
+                return () => {
+                    if (autoScrollRef.current) cancelAnimationFrame(autoScrollRef.current);
+                };
+            }, [isAutoScrolling, scrollSpeed, getDynamicStep]);
+
+            const monthLabels = [
+                'JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE',
+                'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'
+            ];
+
+            const dailyLines = useMemo(() => {
+                const lines = [];
+                for (let i = 0; i <= 365; i++) {
+                    const left = START_OFFSET + (i * PIXELS_PER_DAY);
+                    lines.push(
+                        React.createElement('div', {
+                            key: `day-${i}`,
+                            className: "absolute top-0 bottom-0 border-l border-dotted border-zinc-200 z-0 opacity-50",
+                            style: { left: `${left}px` }
+                        })
+                    );
+                }
+                return lines;
+            }, []);
+
+            return React.createElement('div', { className: "h-screen w-screen flex flex-col bg-zinc-50 overflow-hidden select-none font-mono" },
+                // NAV
+                React.createElement('nav', { className: "h-16 border-b-4 border-zinc-900 bg-white flex items-center justify-between px-8 shrink-0 z-50" },
+                    React.createElement('div', { className: "flex items-baseline gap-4" },
+                        React.createElement('h1', { className: "text-xl font-black tracking-tighter uppercase leading-none italic underline decoration-red-600 underline-offset-4" }, "AI 2025"),
+                        React.createElement('span', { className: "text-[10px] font-bold text-zinc-400 uppercase tracking-widest" }, "Master Chrono-Log")
+                    ),
+                    React.createElement('div', { className: "flex items-center gap-8" },
+                        // AUDIO CONTROLS
+                        React.createElement('div', { className: "flex flex-col items-end gap-1 mr-4" },
+                            React.createElement('div', { className: "flex items-center gap-2"}, 
+                                React.createElement('span', { className: "text-[10px] font-black uppercase text-zinc-400 tracking-widest" }, "AMBIANCE"),
+                                React.createElement('button', {
+                                    onClick: toggleAudio,
+                                    className: `text-[9px] font-bold px-2 py-0.5 border border-zinc-900 ${isAudioPlaying ? 'bg-zinc-900 text-white' : 'bg-white text-zinc-900'}`
+                                }, isAudioPlaying ? "AUDIO: ON" : "AUDIO: OFF")
+                            ),
+                            React.createElement('div', { className: "flex items-center gap-2" },
+                                React.createElement('input', {
+                                    type: "range",
+                                    min: "0",
+                                    max: "1",
+                                    step: "0.01",
+                                    value: volume,
+                                    onChange: (e) => setVolume(parseFloat(e.target.value)),
+                                    className: "w-24 h-1 bg-zinc-200 appearance-none cursor-pointer accent-zinc-900"
+                                }),
+                                React.createElement('span', { className: "text-[9px] font-black w-8 text-right font-mono" }, `${Math.round(volume * 100)}%`)
+                            )
+                        ),
+                        React.createElement('div', { className: "h-8 w-[2px] bg-zinc-200" }),
+                        // SPEED CONTROLS
+                        React.createElement('div', { className: "flex flex-col items-start gap-1" },
+                            React.createElement('span', { className: "text-[10px] font-black uppercase text-zinc-400 tracking-widest" }, "Pacing Control"),
+                            React.createElement('div', { className: "flex items-center gap-3" },
+                                React.createElement('input', {
+                                    type: "range",
+                                    min: "0.1",
+                                    max: "15",
+                                    step: "0.1",
+                                    value: scrollSpeed,
+                                    onChange: (e) => setScrollSpeed(parseFloat(e.target.value)),
+                                    className: "w-44 h-1 bg-zinc-200 appearance-none cursor-pointer accent-zinc-900"
+                                }),
+                                React.createElement('span', { className: "text-[10px] font-black w-14 font-mono" }, `${scrollSpeed.toFixed(2)}px`)
+                            )
+                        ),
+                        React.createElement('button', {
+                            onClick: toggleAutoScroll,
+                            className: `px-10 py-2 border-4 border-zinc-900 font-black text-[12px] tracking-widest uppercase transition-all duration-200 ${isAutoScrolling ? 'bg-zinc-900 text-white' : 'bg-white text-zinc-900 shadow-[6px_6px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-1 hover:translate-y-1'}`
+                        }, isAutoScrolling ? 'TERMINATE' : 'AUTO-PLAY')
+                    )
+                ),
+                // VIEWPORT
+                React.createElement('div', {
+                    ref: viewportRef,
+                    onScroll: handleScroll,
+                    onWheel: handleWheel,
+                    className: "flex-grow overflow-x-auto overflow-y-hidden relative no-scrollbar bg-white"
+                },
+                    dailyLines,
+                    React.createElement('div', { className: "relative h-full", style: { width: `${totalWidth}px` } },
+                        React.createElement('div', { className: "absolute top-1/2 left-0 w-full h-[6px] bg-zinc-900 -translate-y-[3px] z-10" }),
+                        monthLabels.map((month, i) => {
+                            const date = new Date(2025, i, 1);
+                            const dayDiff = (date.getTime() - new Date(2025, 0, 1).getTime()) / (1000 * 60 * 60 * 24);
+                            const left = START_OFFSET + (dayDiff * PIXELS_PER_DAY);
+                            return React.createElement(React.Fragment, { key: month },
+                                React.createElement('div', {
+                                    className: "absolute top-0 bottom-0 border-l-4 border-zinc-900/5 z-0",
+                                    style: { left: `${left}px` }
+                                }),
+                                React.createElement('div', {
+                                    className: "absolute top-1/2 -translate-y-[40%] pointer-events-none z-0 px-10 select-none opacity-20",
+                                    style: { left: `${left}px` }
+                                },
+                                    React.createElement('span', {
+                                        className: "text-[12rem] font-black uppercase text-transparent",
+                                        style: { WebkitTextStroke: '2px #000' }
+                                    }, month)
+                                )
+                            );
+                        }),
+                        React.createElement('div', {
+                            className: "absolute top-0 bottom-0 flex items-center justify-center z-0",
+                            style: { left: `${endOfYearX}px`, width: '1200px' }
+                        },
+                            React.createElement('div', { className: "text-[14rem] font-black uppercase text-zinc-100 whitespace-nowrap select-none tracking-tighter" }, "FINISH 2025"),
+                            React.createElement('div', { className: "absolute left-0 top-0 bottom-0 border-l-[10px] border-zinc-900" })
+                        ),
+                        React.createElement('div', { className: "absolute inset-0 pointer-events-none" },
+                            events.map((evt) => React.createElement(EventCard, { key: evt.id, event: evt }))
+                        )
+                    )
+                ),
+                // FOOTER
+                React.createElement('footer', { className: "h-10 bg-zinc-900 text-white text-[11px] font-black flex items-center justify-center gap-6 shrink-0 uppercase tracking-widest border-t-4 border-zinc-900" },
+                    React.createElement('span', { className: "text-zinc-500 font-mono" }, "2025_RELEASE"),
+                    React.createElement('div', { className: "h-4 w-[2px] bg-zinc-700" }),
+                    React.createElement('span', { className: "w-64 text-center" }, currentDateLabel),
+                    React.createElement('div', { className: "h-4 w-[2px] bg-zinc-700" }),
+                    React.createElement('span', { className: "text-zinc-500 font-mono" }, `CHRONO_D${String(dayCounter).padStart(3, '0')}`)
+                )
+            );
+        };
+
+        // ============ RENDER ============
+        const rootElement = document.getElementById('root');
+        const root = createRoot(rootElement);
+        root.render(React.createElement(React.StrictMode, null, React.createElement(App)));
+    </script>
+</body>
+
+</html>

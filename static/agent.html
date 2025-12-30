@@ -1,0 +1,1113 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agent</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    /* Agent-specific overrides to match the shell look */
+    body {
+      background-color: var(--bg-color);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .agent-layout {
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      height: 100%;
+      max-width: 1600px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    @media (max-width: 900px) {
+      .agent-layout {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        display: none;
+      }
+    }
+
+    /* Main Chat Area */
+    .chat-panel {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      min-height: 0;
+      /* Critical for flex scrolling */
+      overflow: hidden;
+      position: relative;
+      background: var(--bg-color);
+    }
+
+    .chat-header {
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--bg-color);
+      z-index: 10;
+    }
+
+    .model-selector {
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+      background: var(--input-bg);
+      color: var(--text-color);
+      font-size: 0.9rem;
+      cursor: pointer;
+      min-width: 200px;
+    }
+
+    .chat-messages {
+      flex: 1;
+      min-height: 0;
+      /* Critical for flex scrolling */
+      overflow-y: auto;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .message {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-width: 85%;
+      animation: fadeIn 0.2s ease-out;
+    }
+
+    .message.user {
+      align-self: flex-end;
+      align-items: flex-end;
+      max-width: 70%;
+      margin-left: auto;
+    }
+
+    .message.assistant {
+      align-self: flex-start;
+    }
+
+    .message.system {
+      align-self: center;
+      max-width: 100%;
+      background: var(--info-bg);
+      padding: 8px 16px;
+      border-radius: 99px;
+      font-size: 0.85rem;
+      color: var(--info-text);
+    }
+
+    .bubble {
+      padding: 12px 18px;
+      border-radius: 12px;
+      font-size: 0.95rem;
+      line-height: 1.5;
+      position: relative;
+    }
+
+    .message.user .bubble {
+      background: var(--button-bg);
+      color: var(--button-text);
+      border-bottom-right-radius: 2px;
+    }
+
+    .message.assistant .bubble {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      color: var(--text-color);
+      border-bottom-left-radius: 2px;
+    }
+
+    /* Removed message-meta styles */
+
+    /* Input Area */
+    .input-container {
+      flex-shrink: 0;
+      padding: 16px 24px 24px;
+      background: var(--bg-color);
+    }
+
+    .input-box {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--input-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 24px;
+      padding: 8px 12px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .input-box:focus-within {
+      border-color: var(--text-color);
+      box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.05);
+    }
+
+    .input-field {
+      flex: 1;
+      border: none;
+      background: transparent;
+      padding: 8px 4px;
+      font-size: 0.95rem;
+      color: var(--text-color);
+      outline: none;
+    }
+
+    .icon-btn {
+      background: none;
+      border: none;
+      padding: 8px;
+      cursor: pointer;
+      color: var(--info-text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .icon-btn:hover {
+      background: var(--info-bg);
+      color: var(--text-color);
+    }
+
+    .icon-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .icon-btn.send {
+      background: var(--button-bg);
+      color: var(--button-text);
+    }
+
+    .icon-btn.send:hover {
+      opacity: 0.9;
+    }
+
+    .icon-btn.send:disabled {
+      opacity: 0.4;
+    }
+
+    /* Sidebar (Stack Trace) */
+    .sidebar {
+      border-left: 1px solid var(--border-color);
+      background: var(--card-bg);
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    .sidebar-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border-color);
+      font-weight: 600;
+      font-size: 0.9rem;
+      color: var(--text-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .step-count {
+      background: var(--info-bg);
+      color: var(--text-color);
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+    }
+
+    .trace-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .trace-item {
+      background: transparent;
+      overflow: hidden;
+      transition: all 0.15s;
+    }
+
+    .trace-item+.trace-item {
+      margin-top: 2px;
+    }
+
+    .trace-header {
+      padding: 8px 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      user-select: none;
+      border-radius: 6px;
+    }
+
+    .trace-header:hover {
+      background: var(--info-bg);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .status-dot.running {
+      background: #f59e0b;
+      animation: pulse 1s infinite;
+    }
+
+    .status-dot.done {
+      background: #10b981;
+    }
+
+    .status-dot.error {
+      background: #ef4444;
+    }
+
+    .status-dot.pending {
+      background: var(--border-color);
+    }
+
+    .trace-title {
+      flex: 1;
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--text-color);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .trace-time {
+      font-size: 0.7rem;
+      color: var(--info-text);
+      font-weight: 500;
+    }
+
+    .trace-details {
+      display: none;
+      padding: 8px 12px;
+      margin-left: 16px;
+      background: var(--info-bg);
+      border-radius: 6px;
+      font-size: 0.75rem;
+    }
+
+    .trace-item.expanded .trace-details {
+      display: block;
+    }
+
+    .code-block {
+      font-family: monospace;
+      background: var(--card-bg);
+      padding: 8px;
+      border-radius: 4px;
+      border: 1px solid var(--border-color);
+      overflow-x: auto;
+      margin-top: 4px;
+      color: var(--text-color);
+    }
+
+    .label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      color: var(--info-text);
+      font-weight: 600;
+      margin-bottom: 4px;
+      display: block;
+    }
+
+    @keyframes pulse {
+      0% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.5;
+      }
+
+      100% {
+        opacity: 1;
+      }
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(5px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* Markdown Styles */
+    .prose p {
+      margin-bottom: 0.5em;
+    }
+
+    .prose p:last-child {
+      margin-bottom: 0;
+    }
+
+    .prose a {
+      color: inherit;
+      text-decoration: underline;
+    }
+
+    .prose ul,
+    .prose ol {
+      margin: 0.5em 0;
+      padding-left: 1.2em;
+    }
+
+    .prose code {
+      background: rgba(0, 0, 0, 0.1);
+      padding: 2px 4px;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 0.9em;
+    }
+
+    /* Markdown Styles & Tables */
+    .prose table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1em 0;
+      font-size: 0.9em;
+    }
+
+    .prose th,
+    .prose td {
+      padding: 8px 12px;
+      border: 1px solid var(--border-color);
+      text-align: left;
+    }
+
+    .prose th {
+      background: var(--input-bg);
+      font-weight: 600;
+    }
+
+    .prose tr:nth-child(even) {
+      background: rgba(0, 0, 0, 0.02);
+    }
+
+    .message.user .prose code {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    /* Modal Styles */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.4);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-overlay.active {
+      display: flex;
+    }
+
+    .modal {
+      background: var(--card-bg);
+      border-radius: 12px;
+      padding: 24px;
+      min-width: 320px;
+      max-width: 400px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+    }
+
+    .modal h3 {
+      margin: 0 0 16px 0;
+      font-size: 1rem;
+      font-weight: 600;
+    }
+
+    .modal select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      background: var(--input-bg);
+      color: var(--text-color);
+      font-size: 0.9rem;
+      margin-bottom: 16px;
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .modal-btn {
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      border: 1px solid var(--border-color);
+      background: var(--bg-color);
+      color: var(--text-color);
+    }
+
+    .modal-btn.primary {
+      background: var(--button-bg);
+      color: var(--button-text);
+      border: none;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="agent-layout">
+    <!-- Chat Area -->
+    <div class="chat-panel">
+      <div class="chat-header">
+        <span style="font-weight: 600; font-size: 0.95rem;">AI Agent</span>
+        <button id="settingsBtn" class="icon-btn" title="Settings">
+          <i data-lucide="settings" style="width:18px; height:18px;"></i>
+        </button>
+      </div>
+
+      <div id="messages" class="chat-messages">
+        <div class="message system">
+          Ask me about AI models, benchmarks, pricing, or news.
+        </div>
+      </div>
+
+      <div class="input-container">
+        <form id="chatForm" class="input-box">
+          <button type="button" id="attachBtn" class="icon-btn" title="Attach image">
+            <i data-lucide="paperclip" style="width:18px; height:18px;"></i>
+          </button>
+          <input type="text" id="questionInput" class="input-field"
+            placeholder="Ask about AI models, benchmarks, or news..." autocomplete="off">
+          <button type="submit" id="submitBtn" class="icon-btn send" title="Send">
+            <i data-lucide="send" style="width:18px; height:18px;"></i>
+          </button>
+        </form>
+        <input type="file" id="fileInput" accept="image/*" style="display:none;">
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <span>Live Trace</span>
+        <span id="stepCount" class="step-count">0</span>
+      </div>
+      <div id="activityLog" class="trace-list">
+        <div style="text-align:center; color:var(--info-text); font-size:0.85rem; margin-top:20px;">
+          Ready to start
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div id="settingsModal" class="modal-overlay">
+    <div class="modal">
+      <h3>Settings</h3>
+      <label style="display:block; font-size:0.8rem; color:var(--info-text); margin-bottom:6px;">Model</label>
+      <select id="modelSelect">
+        <option value="x-ai/grok-4-fast">Loading models...</option>
+      </select>
+
+      <label style="display:flex; align-items:center; gap:8px; margin-top:12px; font-size:0.85rem; cursor:pointer;">
+        <input type="checkbox" id="deeperModeToggle" style="width:16px; height:16px;">
+        <span>Deeper Mode</span>
+      </label>
+      <p style="font-size:0.75rem; color:var(--info-text); margin:4px 0 12px 24px;">
+        Agent will research more before responding
+      </p>
+
+      <div class="modal-actions">
+        <button type="button" class="modal-btn" id="modalClose">Cancel</button>
+        <button type="button" class="modal-btn primary" id="modalSave">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Initialize Lucide icons
+    document.addEventListener('DOMContentLoaded', () => {
+      if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+      }
+    });
+
+    // Theme handling
+    function syncTheme() {
+      try {
+        const parentTheme = window.parent.document.documentElement.getAttribute('data-theme');
+        if (parentTheme) {
+          document.documentElement.setAttribute('data-theme', parentTheme);
+        }
+      } catch (e) {
+        // Fallback if not in iframe or cross-origin
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      }
+    }
+    syncTheme();
+    // Listen for theme changes if possible
+    window.addEventListener('message', (event) => {
+      if (event.data && event.data.type === 'theme-change') {
+        document.documentElement.setAttribute('data-theme', event.data.theme);
+      }
+    });
+
+    // App Logic
+    const USER_KEY = 'dashboard-user-openrouter-key';
+    const MODEL_KEY = 'dashboard-agent-exp-model';
+    const MODELS_KEY = 'dashboard-available-models';
+
+    const messagesEl = document.getElementById('messages');
+    const form = document.getElementById('chatForm');
+    const input = document.getElementById('questionInput');
+    const submitBtn = document.getElementById('submitBtn');
+    const modelSelect = document.getElementById('modelSelect');
+    const activityLog = document.getElementById('activityLog');
+    const stepCount = document.getElementById('stepCount');
+    const settingsBtn = document.getElementById('settingsBtn');
+    const attachBtn = document.getElementById('attachBtn');
+    const fileInput = document.getElementById('fileInput');
+
+    let pendingImage = null; // For image attachments
+    let traceHistory = []; // Store traces per message: [{msgIndex, traces}]
+    let currentMsgIndex = 0; // Track which message's trace is displayed
+    const settingsModal = document.getElementById('settingsModal');
+    const modalClose = document.getElementById('modalClose');
+    const modalSave = document.getElementById('modalSave');
+    const deeperModeToggle = document.getElementById('deeperModeToggle');
+    const DEEPER_MODE_KEY = 'dashboard-agent-deeper-mode';
+
+    // Load deeper mode setting
+    deeperModeToggle.checked = localStorage.getItem(DEEPER_MODE_KEY) === 'true';
+
+    // Settings button - open modal
+    settingsBtn.addEventListener('click', () => {
+      deeperModeToggle.checked = localStorage.getItem(DEEPER_MODE_KEY) === 'true';
+      settingsModal.classList.add('active');
+    });
+
+    // Modal close
+    modalClose.addEventListener('click', () => {
+      settingsModal.classList.remove('active');
+    });
+
+    // Modal save
+    modalSave.addEventListener('click', () => {
+      localStorage.setItem(MODEL_KEY, modelSelect.value);
+      localStorage.setItem(DEEPER_MODE_KEY, deeperModeToggle.checked);
+      const modeNote = deeperModeToggle.checked ? ' (Deeper Mode ON)' : '';
+      addMessage('system', `Settings saved${modeNote}`);
+      settingsModal.classList.remove('active');
+    });
+
+    // Close modal on overlay click
+    settingsModal.addEventListener('click', (e) => {
+      if (e.target === settingsModal) {
+        settingsModal.classList.remove('active');
+      }
+    });
+
+    // Attachment button
+    attachBtn.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = () => {
+          pendingImage = reader.result;
+          addMessage('system', `📎 Image attached: ${file.name}`);
+        };
+        reader.readAsDataURL(file);
+      }
+      fileInput.value = ''; // Reset for next selection
+    });
+
+    let toolSteps = [];
+    let conversationHistory = []; // Track full conversation for context
+
+    function getApiKey() {
+      return (localStorage.getItem(USER_KEY) || '').trim();
+    }
+
+    function formatTime(d) {
+      // Show elapsed seconds since first tool step
+      if (toolSteps.length > 0 && toolSteps[0].time) {
+        const elapsed = Math.round((d - toolSteps[0].time) / 1000);
+        return `${elapsed}s`;
+      }
+      return '0s';
+    }
+
+    async function loadModels() {
+      const stored = localStorage.getItem(MODELS_KEY) || '';
+      let models = stored ? stored.split(',').map(s => s.trim()).filter(Boolean) : [];
+
+      if (!models.length) {
+        try {
+          const res = await fetch('/api/model-config');
+          if (res.ok) {
+            const cfg = await res.json();
+            models = (cfg.agent && cfg.agent.availableModels) || [];
+          }
+        } catch (_) { }
+      }
+
+      if (!models.length) {
+        models = ['x-ai/grok-4-fast', 'anthropic/claude-sonnet-4', 'openai/gpt-4.1', 'google/gemini-2.5-flash'];
+      }
+
+      modelSelect.innerHTML = models.map(id =>
+        `<option value="${id}">${id.split('/').pop()}</option>`
+      ).join('');
+
+      const saved = localStorage.getItem(MODEL_KEY);
+      if (saved && models.includes(saved)) modelSelect.value = saved;
+    }
+
+    modelSelect.addEventListener('change', () => {
+      localStorage.setItem(MODEL_KEY, modelSelect.value);
+    });
+
+    function renderMarkdown(content) {
+      if (!content) return '';
+      
+      // Parse [[model:source:name]] tags and convert to badges
+      function parseModelTags(text) {
+        let result = '';
+        let i = 0;
+        while (i < text.length) {
+          // Check for [[model: or [[models:
+          if ((text.slice(i, i + 8) === '[[model:' || text.slice(i, i + 9) === '[[models:')) {
+            const prefixLen = text.slice(i, i + 9) === '[[models:' ? 9 : 8;
+            const innerStart = i + prefixLen;
+            let j = innerStart;
+            let bracketCount = 0;
+            let found = false;
+
+            // Scan forward, tracking nested brackets
+            while (j < text.length) {
+              if (text[j] === '[') {
+                bracketCount++;
+              } else if (text[j] === ']') {
+                if (bracketCount > 0) {
+                  bracketCount--;
+                } else if (text[j + 1] === ']') {
+                  // Found closing ]] while not inside nested brackets
+                  const inner = text.slice(innerStart, j);
+                  const colonIdx = inner.indexOf(':');
+
+                  if (colonIdx !== -1) {
+                    const source = inner.substring(0, colonIdx).trim();
+                    const modelName = inner.substring(colonIdx + 1).trim();
+
+                    if (source && modelName) {
+                      // Create a styled badge instead of raw text
+                      result += `<strong style="color: var(--button-bg); cursor: default;">🤖 ${escapeHtml(modelName)}</strong>`;
+                      i = j + 2; // Skip past ]]
+                      found = true;
+                      break;
+                    }
+                  }
+                  // Invalid format, output as-is
+                  result += text.slice(i, j + 2);
+                  i = j + 2;
+                  found = true;
+                  break;
+                }
+              }
+              j++;
+            }
+
+            if (!found) {
+              result += text[i];
+              i++;
+            }
+          } else {
+            result += text[i];
+            i++;
+          }
+        }
+        return result;
+      }
+      
+      const processed = parseModelTags(content);
+      
+      if (typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
+        return DOMPurify.sanitize(marked.parse(processed));
+      }
+      return processed;
+    }
+
+    // Chart rendering function - handles various code block formats
+    function renderCharts(container) {
+      // Look for JSON that looks like chart config in code blocks OR raw text
+      const codeBlocks = container.querySelectorAll('pre, code');
+      const seen = new Set();
+
+      codeBlocks.forEach(block => {
+        // Avoid processing same element twice
+        if (seen.has(block)) return;
+        seen.add(block);
+
+        let text = block.textContent.trim();
+
+        // Try to extract JSON from the text
+        const jsonMatch = text.match(/\{[\s\S]*"type"[\s\S]*"labels"[\s\S]*"datasets"[\s\S]*\}/);
+        if (!jsonMatch) return;
+
+        try {
+          const config = JSON.parse(jsonMatch[0]);
+          if (!config.type || !config.labels || !config.datasets) return;
+
+          // Create chart container with B&W aesthetic
+          const chartContainer = document.createElement('div');
+          chartContainer.className = 'chart-container';
+          chartContainer.style.cssText = 'width: 100%; max-width: 600px; margin: 20px 0; padding: 20px; background: var(--card-bg); border-radius: 12px; border: 1px solid var(--border-color);';
+
+          const canvas = document.createElement('canvas');
+          canvas.id = 'chart-' + Date.now() + Math.random().toString(36).slice(2);
+          chartContainer.appendChild(canvas);
+
+          // Replace the code block element (or its parent pre)
+          const toReplace = block.closest('pre') || block;
+          toReplace.replaceWith(chartContainer);
+
+          // Grayscale color palette for B&W aesthetic
+          const grayscaleColors = [
+            'rgba(0, 0, 0, 0.8)',
+            'rgba(60, 60, 60, 0.8)',
+            'rgba(100, 100, 100, 0.8)',
+            'rgba(140, 140, 140, 0.8)',
+            'rgba(180, 180, 180, 0.8)',
+            'rgba(200, 200, 200, 0.8)',
+            'rgba(220, 220, 220, 0.8)',
+            'rgba(240, 240, 240, 0.8)'
+          ];
+
+          // Render chart with grayscale theme
+          new Chart(canvas.getContext('2d'), {
+            type: config.type,
+            data: {
+              labels: config.labels,
+              datasets: config.datasets.map((ds, i) => ({
+                label: ds.label || `Dataset ${i + 1}`,
+                data: ds.data,
+                backgroundColor: ds.backgroundColor || grayscaleColors,
+                borderColor: ds.borderColor || 'rgba(0, 0, 0, 0.3)',
+                borderWidth: 1
+              }))
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: true,
+              plugins: {
+                legend: {
+                  display: config.datasets.length > 1,
+                  labels: { color: 'rgb(100, 100, 100)', font: { family: 'Inter, system-ui, sans-serif' } }
+                }
+              },
+              scales: config.type === 'bar' || config.type === 'line' ? {
+                y: {
+                  beginAtZero: true,
+                  ticks: { color: 'rgb(100, 100, 100)' },
+                  grid: { color: 'rgba(0, 0, 0, 0.1)' }
+                },
+                x: {
+                  ticks: { color: 'rgb(100, 100, 100)' },
+                  grid: { color: 'rgba(0, 0, 0, 0.05)' }
+                }
+              } : {}
+            }
+          });
+
+          console.log('Chart rendered successfully:', config.type);
+        } catch (e) {
+          console.log('Chart parse error:', e.message);
+        }
+      });
+    }
+
+    function addMessage(role, content) {
+      const msgIndex = traceHistory.length;
+      const msg = document.createElement('div');
+      msg.className = `message ${role}`;
+
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble prose';
+      bubble.innerHTML = renderMarkdown(content);
+
+      // Make assistant messages clickable to show their trace
+      if (role === 'assistant') {
+        msg.style.cursor = 'pointer';
+        msg.title = 'Click to view trace for this response';
+        msg.addEventListener('click', () => showTraceForMessage(msgIndex));
+        // Store current toolSteps for this message
+        traceHistory.push({ msgIndex, traces: [...toolSteps] });
+      }
+
+      msg.appendChild(bubble);
+      messagesEl.appendChild(msg);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+
+      // Try to render any charts in the message
+      if (role === 'assistant') {
+        setTimeout(() => renderCharts(bubble), 100);
+      }
+    }
+
+    function showTraceForMessage(msgIndex) {
+      const entry = traceHistory.find(h => h.msgIndex === msgIndex);
+      if (entry) {
+        toolSteps = entry.traces;
+        currentMsgIndex = msgIndex;
+        renderActivityLog();
+      }
+    }
+
+    function addToolStep(title, status = 'running', args = null, result = null) {
+      const step = {
+        id: Date.now() + Math.random(),
+        title,
+        status,
+        args,
+        result,
+        time: new Date(),
+        expanded: false
+      };
+      toolSteps.push(step);
+      renderActivityLog();
+      return step;
+    }
+
+    function updateToolStep(stepId, updates) {
+      const step = toolSteps.find(s => s.id === stepId);
+      if (step) {
+        Object.assign(step, updates);
+        renderActivityLog();
+      }
+    }
+
+    function renderActivityLog() {
+      stepCount.textContent = toolSteps.length;
+
+      if (!toolSteps.length) {
+        activityLog.innerHTML = '<div style="text-align:center; color:var(--info-text); font-size:0.85rem; margin-top:20px;">Ready to start</div>';
+        return;
+      }
+
+      activityLog.innerHTML = toolSteps.map(step => `
+        <div class="trace-item ${step.expanded ? 'expanded' : ''}">
+          <div class="trace-header" onclick="toggleStep(${step.id})">
+            <div class="status-dot ${step.status}"></div>
+            <div class="trace-title" title="${escapeHtml(step.title)}">${escapeHtml(step.title)}</div>
+            <div class="trace-time">${formatTime(step.time)}</div>
+          </div>
+          <div class="trace-details">
+            ${step.args ? `
+              <span class="label">Input</span>
+              <div class="code-block">${escapeHtml(JSON.stringify(step.args, null, 2))}</div>
+            ` : ''}
+            ${step.result ? `
+              <span class="label" style="margin-top:8px">Result</span>
+              <div class="code-block">${escapeHtml(step.result.slice(0, 500))}${step.result.length > 500 ? '...' : ''}</div>
+            ` : ''}
+            ${!step.args && !step.result ? '<span style="color:var(--info-text)">No details available</span>' : ''}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    window.toggleStep = function (id) {
+      const step = toolSteps.find(s => s.id === id);
+      if (step) {
+        step.expanded = !step.expanded;
+        renderActivityLog();
+      }
+    };
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const question = input.value.trim();
+      if (!question) return;
+
+      const apiKey = getApiKey();
+      if (!apiKey) {
+        addMessage('system', '⚠️ Please add your OpenRouter API key in the main dashboard settings.');
+        return;
+      }
+
+      // Reset tool trace for this turn
+      toolSteps = [];
+      renderActivityLog();
+
+      // Build user content (text + optional image)
+      let userContent = question;
+      const currentImage = pendingImage;
+      if (currentImage) {
+        // Show indicator that image is attached
+        addMessage('user', `📷 [Image attached]\n\n${question}`);
+        pendingImage = null; // Clear for next message
+      } else {
+        addMessage('user', question);
+      }
+
+      // Add user message to history
+      conversationHistory.push({ role: 'user', content: question });
+      input.value = '';
+      submitBtn.disabled = true;
+
+      const initStep = addToolStep('Initializing agent', 'running');
+
+      try {
+        const requestBody = {
+          question: question,
+          model: modelSelect.value,
+          history: conversationHistory.slice(-10),
+          deeper_mode: deeperModeToggle.checked
+        };
+
+        // Include image if attached
+        if (currentImage) {
+          requestBody.image = currentImage;
+        }
+
+        // Retry logic for transient 502 errors
+        const maxRetries = 3;
+        let lastError = null;
+        let response = null;
+
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+          try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 120000);
+
+            response = await fetch('/api/experimental-agent', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`
+              },
+              body: JSON.stringify(requestBody),
+              signal: controller.signal,
+              cache: 'no-store'
+            });
+
+            clearTimeout(timeoutId);
+
+            // Check for 502 specifically and retry
+            if (response.status === 502 && attempt < maxRetries - 1) {
+              const delay = Math.pow(2, attempt + 1) * 1000; // 2s, 4s, 8s
+              console.log(`Got 502, retrying in ${delay / 1000}s (attempt ${attempt + 1}/${maxRetries})`);
+              updateToolStep(initStep.id, { title: `Retrying... (attempt ${attempt + 2})` });
+              await new Promise(r => setTimeout(r, delay));
+              continue;
+            }
+
+            break; // Success or non-502 error
+          } catch (e) {
+            lastError = e;
+            if (attempt < maxRetries - 1 && e.name !== 'AbortError') {
+              const delay = Math.pow(2, attempt + 1) * 1000;
+              console.log(`Request failed, retrying in ${delay / 1000}s`);
+              await new Promise(r => setTimeout(r, delay));
+              continue;
+            }
+            throw e;
+          }
+        }
+
+        const contentType = response.headers.get('content-type') || '';
+        if (contentType.includes('text/html')) {
+          throw new Error(`Server returned HTML (status ${response.status}). Service may be restarting.`);
+        }
+
+        const data = await response.json();
+
+        if (data.error) {
+          throw new Error(data.error);
+        }
+
+        updateToolStep(initStep.id, { status: 'done', title: 'Agent ready' });
+
+        // Show tool calls
+        if (data.tool_calls && data.tool_calls.length) {
+          data.tool_calls.forEach(tc => {
+            addToolStep(
+              tc.tool,
+              tc.status || 'done',
+              tc.args,
+              tc.result
+            );
+          });
+        }
+
+        addToolStep('Final response', 'done');
+
+        if (data.response) {
+          // Add assistant response to history
+          conversationHistory.push({ role: 'assistant', content: data.response });
+          addMessage('assistant', data.response);
+        } else {
+          addMessage('system', 'Agent returned no response.');
+        }
+
+      } catch (error) {
+        console.error('Agent error:', error);
+        updateToolStep(initStep.id, { status: 'error', title: 'Error: ' + error.message });
+        addMessage('system', `Error: ${error.message}`);
+      } finally {
+        submitBtn.disabled = false;
+        input.focus();
+      }
+    });
+
+    loadModels();
+    if (!getApiKey()) {
+      addMessage('system', '⚠️ Please add your OpenRouter API key in the main dashboard settings.');
+    }
+  </script>
+</body>
+
+</html>

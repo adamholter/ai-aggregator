@@ -1,0 +1,114 @@
+Base URL: https://ai-dashboard-c8bp.onrender.com
+
+# API Documentation
+
+## `GET /api/fetch`
+Provides compressed dataset snapshots for the same categories and tabs that the agent/tooling supports (LLMs, OpenRouter, fal.ai, Replicate, media leaderboards, plus experimental feeds like Latest, Hype, Monitor, Blog, and Testing Catalog). Use the query parameters below to control the scope.
+
+**Query parameters**
+
+- `categories` / `category` / `tabs` / `tab`: comma-delimited list of category ids or tab aliases. Supported values include `llms`, `openrouter`, `fal`, `replicate`, `text-to-image`, `text-to-video`, and experimental tabs such as `latest`, `hype`, `monitor`, `blog`, and `testing-catalog`. At least one category/tab is required.
+- `limit`: positive integer limit per category (defaults to the agent’s standard page size when omitted).
+- `recency`: `day`, `week`, `month`, or `year` to restrict entries to recent activity.
+- `timeframe`: alias for `recency` when you prefer that term.
+- `days`: positive integer override for the Latest window when fetching `latest` (e.g., `days=14`).
+- `include_hype`: boolean (`1`, `true`, `yes`, `on`) to blend hype signals into supported tabs.
+- `fal_category` / `falCategory`: fal.ai category filter (Text-to-Image, Text-to-Speech, etc.); values must match the options enumerated in `FAL_CATEGORY_OPTIONS` (`server.py`).
+- `cache_bust`: optional boolean (`true`/`1`) that, when present, forces the backend to build a fresh snapshot instead of returning cached data (most useful for `latest`, `hype`, and other frequently updating experimental tabs).
+
+**Response** (JSON)
+
+```json
+{
+  "categories": [...],           // metadata per category
+  "structured": {...},           // structured summary returned by fetch_data
+  "markdown": "...",           // markdown summary string
+  "datasets": {...},             // raw dataset entries per category
+  "compressed": "...",         // compressed text for agent prompts
+  "generated_at": "2023-...",
+  "errors": [...],               // optional warnings/errors
+  "fal_category": "Text-to-Image" // human readable label when filtering
+}
+```
+
+Errors return `400` for invalid input or `500` when the fetch pipeline fails.
+
+**Example**
+
+```
+GET /api/fetch?tabs=latest&limit=20&recency=day&include_hype=true&cache_bust=1
+```
+
+Retrieves the Latest tab feed with hype signals (fresh data, not cached), limited to 20 entries.
+
+## `GET /api/ask-perplexity`
+Runs a Perplexity (web search) tool call and returns the response payload.
+
+**Query parameters**
+
+- `query` (required): natural-language question to send to Perplexity.
+- `key` / `api_key` / `apiKey` / `openrouter_key` / `openrouterKey`: OpenRouter API key used for authentication (required).
+
+**Response**
+
+```json
+{
+  "query": "...",
+  "model": "perplexity/...",
+  "response": "...",
+  "raw": {...} // the complete parsed payload (falls back to raw text when parsing fails)
+}
+```
+
+Returns `400` when parameters are missing or malformed, `502` when the upstream call fails.
+
+**Example**
+
+```
+curl 'https://your-hostname/api/ask-perplexity?query=latest%20ai%20agents&key=sk-xxx'
+```
+
+The endpoint proxies a Perplexity request through OpenRouter using the provided `key`, so you can trigger a live web-search directly from the dashboard helpers rather than issuing the OpenRouter call yourself.
+
+## `GET /latest`
+Existing endpoint that generates the Latest feed aggregated from multiple sources (the same data you get from `/api/fetch?tabs=latest`).
+
+**Query parameters**
+
+- `timeframe`: `day`, `week`, `month`, or `year` (default `day`). These values now map to `window_days` internally.
+- `days`: integer override that lets you request an arbitrary number of days (e.g., `days=14`). When provided, it takes precedence over `timeframe`.
+- `cache_bust` (`true|false`): bypass cached results.
+- `include_hype` (`true|false`): include hype signals when supported.
+
+**Response**
+
+```json
+{
+  "timeframe": "day",
+  "window_days": 7,
+  "window_hours": 168,
+  "window_label": "Last 7 days",
+  "generated_at": "2025-...Z",
+  "count": 42,
+  "sources": {...},
+  "include_hype": true,
+  "items": [...]
+}
+```
+
+When recurring runtime issues occur the endpoint may respond with `503`; unexpected failures return `500`.
+
+## Experimental filtering
+For automatic filtering via Gemini 2.5 Flash 0905. Requires an OpenRouter API key passed as `Authorization: Bearer <your-key>` (no server-side key fallback).
+
+- `POST /api/experimental-filter`
+    - Headers: `Authorization: Bearer <OPENROUTER_KEY>`
+    - Body:
+        - `category` (required): dataset category label (e.g., `llms`, `openrouter`, etc.)
+        - `items` (required): array of entries with `title`, `summary`, `link`, `timestamp`
+        - `instructions` (optional): user guidance; defaults to surfacing the most important, time-sensitive entries
+        - `system_prompt` (optional): overrides the default filtering prompt (TOON-only, no prose)
+        - `model_id` (optional): overrides the default `google/gemini-2.5-flash-0905`
+    - Returns `{"items":[...]}` where each item mirrors the TOON fields returned (title/summary/link/timestamp). Errors return `400` for bad input or `502` for upstream failures.
+
+Use these filtered items to power “AI Filter” style experiences or front-end cards that need pre-filtered lists.

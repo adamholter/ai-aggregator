@@ -1,0 +1,56 @@
+        <header class="header">
+            <div class="header-main">
+                <h1>AI Model Analysis Dashboard</h1>
+                <a id="timeline-banner" href="/static/ai-timeline-2025.html" style="display:inline-block; background:var(--button-bg); 
+                          color:var(--button-text); padding:8px 16px; border-radius:4px; font-size:0.85rem; font-weight:500; 
+                          text-decoration:none; margin:8px 0; border:1px solid var(--border-color);
+                          transition:opacity 0.2s;">
+                    View the AI Timeline 2025
+                </a>
+                <script>
+                    (function () {
+                        var banner = document.getElementById('timeline-banner');
+                        var hideDate = new Date('2026-01-16T00:00:00');
+                        if (banner && new Date() >= hideDate) {
+                            banner.style.display = 'none';
+                        }
+                    })();
+                </script>
+                <p>Powered by Artificial Analysis, OpenRouter, Fal, and Replicate APIs</p>
+                <div class="global-search global-search-centered">
+                    <input id="global-search-input" type="text" autocomplete="off"
+                        placeholder="Search across all tabs…">
+                    <div id="global-search-results" class="global-search-results" style="display:none;"></div>
+                </div>
+                <div class="source-legend" id="source-legend">
+                    <span class="legend-title">Source colors</span>
+                    <span class="legend-item" data-source="aa-llm"><span class="legend-dot"></span>Artificial Analysis
+                        (LLMs)</span>
+                    <span class="legend-item" data-source="aa-media"><span class="legend-dot"></span>Artificial Analysis
+                        (Media)</span>
+                    <span class="legend-item" data-source="fal"><span class="legend-dot"></span>fal.ai</span>
+                    <span class="legend-item" data-source="replicate"><span class="legend-dot"></span>Replicate</span>
+                    <span class="legend-item" data-source="openrouter"><span class="legend-dot"></span>OpenRouter</span>
+                    <span class="legend-item" data-source="hype"><span class="legend-dot"></span>Hype Signals</span>
+                    <span class="legend-item" data-source="monitor"><span class="legend-dot"></span>Monitor Feed</span>
+                    <span class="legend-item" data-source="blog"><span class="legend-dot"></span>Blog</span>
+                    <span class="legend-item" data-source="testingcatalog"><span class="legend-dot"></span>Testing
+                        Catalog</span>
+                </div>
+            </div>
+            <div class="header-actions">
+                <div class="export-dropdown-container">
+                    <button class="export-btn" onclick="toggleExportDropdown()" title="Export current view">📥
+                        Export</button>
+                    <div class="export-dropdown" id="export-dropdown" style="display:none;">
+                        <button onclick="exportCurrentTab('json'); closeExportDropdown();">Export as JSON</button>
+                        <button onclick="exportCurrentTab('csv'); closeExportDropdown();">Export as CSV</button>
+                        <button onclick="exportPinnedItems(); closeExportDropdown();">Export Pinned</button>
+                        <button onclick="exportCompareItems(); closeExportDropdown();">Export Compare</button>
+                    </div>
+                </div>
+                <button class="share-btn" onclick="copyShareableLink()" title="Copy shareable link">🔗 Share</button>
+                <button class="theme-toggle" onclick="toggleTheme()">🌙 Dark Mode</button>
+                <button class="auth-button" id="auth-button">Log In</button>
+            </div>
+        </header>
