@@ -266,11 +266,11 @@ const openRouterMatchCache = new Map();
 const USER_OPENROUTER_KEY_STORAGE = 'dashboard-user-openrouter-key';
 const EXPERIMENTAL_MODE_STORAGE_KEY = 'dashboard-experimental-mode';
 
-const THEME_SEQUENCE = ['light', 'dark', 'source'];
+const THEME_SEQUENCE = ['light', 'dark', 'auto'];
 const THEME_LABELS = {
     light: { label: 'Light Mode', icon: '☀️' },
     dark: { label: 'Dark Mode', icon: '🌙' },
-    source: { label: 'Source Mode', icon: '🌈' }
+    auto: { label: 'Auto', icon: '🔄' }
 };
 
 const LLM_MAIN_INDEX_KEYS = [
@@ -506,44 +506,6 @@ function escapeHtml(value) {
         '"': '&quot;',
         "'": '&#39;'
     }[char]));
-}
-
-function showToast(message, type = 'error', duration = 5000) {
-    const container = document.getElementById('toast-container');
-    if (!container) return;
-
-    const toast = document.createElement('div');
-    toast.className = 'toast';
-    if (type === 'error') {
-        toast.classList.add('toast-error');
-    } else if (type === 'warning') {
-        toast.classList.add('toast-warning');
-    }
-
-    toast.innerHTML = `
-        <span class="toast-message">${escapeHtml(message)}</span>
-        <button type="button" aria-label="Dismiss toast">×</button>
-    `;
-
-    const dismiss = () => {
-        toast.classList.add('fade-out');
-        window.setTimeout(() => {
-            if (toast.parentNode) {
-                toast.parentNode.removeChild(toast);
-            }
-        }, 300);
-    };
-
-    const button = toast.querySelector('button');
-    if (button) {
-        button.addEventListener('click', dismiss);
-    }
-
-    container.appendChild(toast);
-
-    if (duration > 0) {
-        window.setTimeout(dismiss, duration);
-    }
 }
 
 // ============ What's New Change Detection ============
@@ -1835,14 +1797,30 @@ function navigateToResult(result) {
 
 // Theme management
 function initializeTheme() {
-    const stored = localStorage.getItem('theme');
-    const preferredDefault = 'source';
+    let stored = localStorage.getItem('theme');
+    // Migrate from old 'source' theme to 'light' (source colors are now always on)
+    if (stored === 'source') {
+        stored = 'light';
+        localStorage.setItem('theme', 'light');
+    }
+    const preferredDefault = 'light';
     const initialTheme = THEME_SEQUENCE.includes(stored) ? stored : preferredDefault;
     document.documentElement.setAttribute('data-theme', initialTheme);
     if (!THEME_SEQUENCE.includes(stored)) {
         localStorage.setItem('theme', initialTheme);
     }
     updateThemeToggleText(initialTheme);
+
+    // Listen for system theme changes when in auto mode
+    if (window.matchMedia) {
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+            const current = localStorage.getItem('theme');
+            if (current === 'auto') {
+                // Force re-apply auto theme to pick up system change
+                document.documentElement.setAttribute('data-theme', 'auto');
+            }
+        });
+    }
 }
 
 function toggleTheme() {
@@ -7773,31 +7751,6 @@ function setupModelDropdown(inputId, dropdownId) {
     });
 }
 
-// Setup dropdown functionality
-function setupModelDropdown(inputId, dropdownId) {
-    const input = document.getElementById(inputId);
-    const dropdown = document.getElementById(dropdownId);
-
-    if (!input || !dropdown) return;
-
-    // Show dropdown on focus
-    input.addEventListener('focus', () => {
-        showModelDropdown(inputId, dropdownId, input.value);
-    });
-
-    // Filter on input
-    input.addEventListener('input', (e) => {
-        showModelDropdown(inputId, dropdownId, e.target.value);
-    });
-
-    // Hide dropdown when clicking outside
-    document.addEventListener('click', (e) => {
-        if (!input.contains(e.target) && !dropdown.contains(e.target)) {
-            hideModelDropdown(dropdownId);
-        }
-    });
-}
-
 // Main settings functionality
 document.addEventListener('DOMContentLoaded', function () {
     const settingsBtn = document.getElementById('settings-btn');
@@ -8589,6 +8542,378 @@ document.addEventListener('click', (e) => {
     }
 });
 
+// ============================================================
+// CONVERSATION MANAGEMENT - Save/load agent conversations
+// ============================================================
+
+let savedConversations = [];
+let activeConversationId = null;
+
+async function loadConversationList() {
+    try {
+        const response = await fetch('/api/agent/conversations');
+        if (response.ok) {
+            savedConversations = await response.json();
+            renderConversationList();
+        }
+    } catch (e) {
+        console.warn('Could not load conversations:', e);
+    }
+}
+
+function renderConversationList() {
+    const container = document.getElementById('conversation-list');
+    if (!container) return;
+
+    if (!savedConversations.length) {
+        container.innerHTML = '<div class="conversation-item" style="color: var(--info-text); text-align: center;">No saved conversations</div>';
+        return;
+    }
+
+    container.innerHTML = savedConversations.map(conv => `
+        <div class="conversation-item ${conv.id === activeConversationId ? 'active' : ''}" data-id="${conv.id}">
+            <div class="conversation-title">${escapeHtml(conv.title)}</div>
+            <div class="conversation-meta">
+                <span>${conv.message_count || 0} messages</span>
+                <span>${formatRelativeTime(conv.updated_at)}</span>
+            </div>
+            <div class="conversation-actions">
+                <button onclick="resumeConversation('${conv.id}')">Resume</button>
+                <button onclick="forkConversation('${conv.id}')">Fork</button>
+                <button class="delete" onclick="deleteConversation('${conv.id}')">Delete</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function saveCurrentConversation(title) {
+    if (!agentExpState.conversation.length) {
+        showToast('No conversation to save', 'warning');
+        return;
+    }
+
+    const payload = {
+        id: activeConversationId || undefined,
+        title: title || `Conversation ${new Date().toLocaleDateString()}`,
+        messages: agentExpState.conversation,
+        model: agentExpState.model
+    };
+
+    try {
+        const response = await fetch('/api/agent/conversations', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (response.ok) {
+            const result = await response.json();
+            activeConversationId = result.id;
+            showToast('Conversation saved', 'success');
+            await loadConversationList();
+        }
+    } catch (e) {
+        showToast('Failed to save conversation', 'error');
+    }
+}
+
+async function resumeConversation(convId) {
+    try {
+        const response = await fetch(`/api/agent/conversations/${convId}`);
+        if (response.ok) {
+            const conv = await response.json();
+            activeConversationId = conv.id;
+            agentExpState.conversation = conv.messages || [];
+            if (conv.model) {
+                agentExpState.model = conv.model;
+            }
+            // Re-render the agent conversation UI
+            renderAgentConversation();
+            showToast(`Resumed: ${conv.title}`, 'success');
+        }
+    } catch (e) {
+        showToast('Failed to load conversation', 'error');
+    }
+}
+
+async function forkConversation(convId) {
+    try {
+        const response = await fetch(`/api/agent/conversations/${convId}`);
+        if (response.ok) {
+            const conv = await response.json();
+            activeConversationId = null; // New conversation
+            agentExpState.conversation = conv.messages || [];
+            if (conv.model) {
+                agentExpState.model = conv.model;
+            }
+            renderAgentConversation();
+            showToast(`Forked: ${conv.title}`, 'success');
+        }
+    } catch (e) {
+        showToast('Failed to fork conversation', 'error');
+    }
+}
+
+async function deleteConversation(convId) {
+    if (!confirm('Delete this conversation?')) return;
+
+    try {
+        const response = await fetch(`/api/agent/conversations/${convId}`, {
+            method: 'DELETE'
+        });
+        if (response.ok) {
+            if (activeConversationId === convId) {
+                activeConversationId = null;
+            }
+            showToast('Conversation deleted', 'success');
+            await loadConversationList();
+        }
+    } catch (e) {
+        showToast('Failed to delete conversation', 'error');
+    }
+}
+
+function formatAgentResponse(content) {
+    if (!content) return '';
+    // Sanitize then render markdown if available
+    const sanitized = typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(content) : escapeHtml(content);
+    if (typeof marked !== 'undefined' && marked.parse) {
+        try {
+            return marked.parse(sanitized);
+        } catch (e) {
+            return sanitized;
+        }
+    }
+    return sanitized;
+}
+
+function renderAgentConversation() {
+    const container = document.getElementById('agent-exp-conversation');
+    if (!container) return;
+
+    container.innerHTML = agentExpState.conversation.map(msg => {
+        const isUser = msg.role === 'user';
+        return `<div class="agent-message ${isUser ? 'user' : 'assistant'}">
+            <div class="message-content">${isUser ? escapeHtml(msg.content) : formatAgentResponse(msg.content)}</div>
+        </div>`;
+    }).join('');
+
+    container.scrollTop = container.scrollHeight;
+}
+
+// ============================================================
+// FRESHNESS BADGES - Show cache status for datasets
+// ============================================================
+
+function renderFreshnessBadge(metadata, containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    // Remove existing badge
+    const existingBadge = container.querySelector('.freshness-badge');
+    if (existingBadge) existingBadge.remove();
+
+    if (!metadata || !metadata.cached) return;
+
+    const badge = document.createElement('span');
+    badge.className = `freshness-badge ${metadata.stale ? 'stale' : ''}`;
+
+    let timeText = 'Cached';
+    if (metadata.cached_at) {
+        timeText = `Cached ${formatRelativeTime(metadata.cached_at)}`;
+    }
+    if (metadata.stale) {
+        timeText += ' (stale)';
+    }
+
+    badge.innerHTML = `<span class="freshness-icon">${metadata.stale ? '⚠️' : '📦'}</span> ${timeText}`;
+    container.appendChild(badge);
+}
+
+// ============================================================
+// MOBILE OPTIMIZATIONS - Touch gestures and responsive behavior
+// ============================================================
+
+let touchStartX = 0;
+let touchStartY = 0;
+let touchEndX = 0;
+let touchEndY = 0;
+
+function initMobileFeatures() {
+    // Only initialize on touch devices
+    if (!('ontouchstart' in window)) return;
+
+    // Swipe gesture for tab navigation
+    const mainContent = document.querySelector('.main-content');
+    if (mainContent) {
+        mainContent.addEventListener('touchstart', handleTouchStart, { passive: true });
+        mainContent.addEventListener('touchend', handleTouchEnd, { passive: true });
+    }
+
+    // Single tap to open analysis on mobile (instead of double-click)
+    document.addEventListener('click', (e) => {
+        if (window.innerWidth > 768) return;
+
+        const card = e.target.closest('.model-card');
+        if (card && !e.target.closest('button') && !e.target.closest('a')) {
+            // On mobile, single tap opens analysis
+            const modelData = card._modelData;
+            const category = card.dataset.category || card.dataset.source;
+            if (modelData && typeof openModelModal === 'function') {
+                e.preventDefault();
+                openModelModal(modelData, category);
+            }
+        }
+    });
+
+    // Pull-to-refresh
+    let pullStartY = 0;
+    let isPulling = false;
+
+    document.addEventListener('touchstart', (e) => {
+        if (window.scrollY === 0) {
+            pullStartY = e.touches[0].clientY;
+            isPulling = true;
+        }
+    }, { passive: true });
+
+    document.addEventListener('touchmove', (e) => {
+        if (!isPulling) return;
+        const pullDistance = e.touches[0].clientY - pullStartY;
+        if (pullDistance > 80 && window.scrollY === 0) {
+            showPullToRefresh();
+        }
+    }, { passive: true });
+
+    document.addEventListener('touchend', () => {
+        if (isPulling && document.querySelector('.pull-to-refresh.visible')) {
+            refreshCurrentTab();
+            setTimeout(hidePullToRefresh, 1000);
+        }
+        isPulling = false;
+    });
+
+    // Initialize mobile bottom nav
+    initMobileBottomNav();
+}
+
+function handleTouchStart(e) {
+    touchStartX = e.changedTouches[0].screenX;
+    touchStartY = e.changedTouches[0].screenY;
+}
+
+function handleTouchEnd(e) {
+    touchEndX = e.changedTouches[0].screenX;
+    touchEndY = e.changedTouches[0].screenY;
+    handleSwipeGesture();
+}
+
+function handleSwipeGesture() {
+    const diffX = touchEndX - touchStartX;
+    const diffY = touchEndY - touchStartY;
+
+    // Only trigger if horizontal swipe is dominant and significant
+    if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 100) {
+        const navBtns = Array.from(document.querySelectorAll('.nav-btn'));
+        const activeIndex = navBtns.findIndex(btn => btn.classList.contains('active'));
+
+        if (diffX > 0 && activeIndex > 0) {
+            // Swipe right - previous tab
+            navBtns[activeIndex - 1].click();
+        } else if (diffX < 0 && activeIndex < navBtns.length - 1) {
+            // Swipe left - next tab
+            navBtns[activeIndex + 1].click();
+        }
+    }
+}
+
+function showPullToRefresh() {
+    let indicator = document.querySelector('.pull-to-refresh');
+    if (!indicator) {
+        indicator = document.createElement('div');
+        indicator.className = 'pull-to-refresh';
+        indicator.innerHTML = '<div class="spinner"></div><span>Refreshing...</span>';
+        document.body.appendChild(indicator);
+    }
+    indicator.classList.add('visible');
+}
+
+function hidePullToRefresh() {
+    const indicator = document.querySelector('.pull-to-refresh');
+    if (indicator) {
+        indicator.classList.remove('visible');
+    }
+}
+
+function refreshCurrentTab() {
+    const activeBtn = document.querySelector('.nav-btn.active');
+    if (!activeBtn) return;
+
+    const section = activeBtn.dataset.section;
+    const refreshBtn = document.querySelector(`#${section} .refresh-btn`);
+    if (refreshBtn) {
+        refreshBtn.click();
+    }
+}
+
+function initMobileBottomNav() {
+    // Create mobile bottom navigation
+    const nav = document.createElement('nav');
+    nav.className = 'mobile-bottom-nav';
+    nav.innerHTML = `
+        <div class="mobile-nav-items">
+            <button class="mobile-nav-item active" data-section="llms">
+                <span class="nav-icon">🤖</span>
+                <span class="nav-label">LLMs</span>
+            </button>
+            <button class="mobile-nav-item" data-section="text-to-image">
+                <span class="nav-icon">🎨</span>
+                <span class="nav-label">Image</span>
+            </button>
+            <button class="mobile-nav-item" data-section="openrouter-models">
+                <span class="nav-icon">🔌</span>
+                <span class="nav-label">APIs</span>
+            </button>
+            <button class="mobile-nav-item" data-section="pinned">
+                <span class="nav-icon">📌</span>
+                <span class="nav-label">Pinned</span>
+            </button>
+            <button class="mobile-nav-item" data-section="agent-exp">
+                <span class="nav-icon">💬</span>
+                <span class="nav-label">Agent</span>
+            </button>
+        </div>
+    `;
+    document.body.appendChild(nav);
+
+    // Add click handlers
+    nav.querySelectorAll('.mobile-nav-item').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const section = btn.dataset.section;
+            // Click the corresponding desktop nav button
+            const desktopBtn = document.querySelector(`.nav-btn[data-section="${section}"]`);
+            if (desktopBtn) {
+                desktopBtn.click();
+            }
+            // Update mobile nav active state
+            nav.querySelectorAll('.mobile-nav-item').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        });
+    });
+
+    // Sync mobile nav with desktop nav clicks
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const section = btn.dataset.section;
+            nav.querySelectorAll('.mobile-nav-item').forEach(b => {
+                b.classList.toggle('active', b.dataset.section === section);
+            });
+        });
+    });
+}
+
+// Initialize mobile features on load
+document.addEventListener('DOMContentLoaded', initMobileFeatures);
+
 // Export globally
 window.copyShareableLink = copyShareableLink;
 window.applySharedView = applySharedView;
@@ -8597,3 +8922,8 @@ window.closeExportDropdown = closeExportDropdown;
 window.exportCurrentTab = exportCurrentTab;
 window.exportPinnedItems = exportPinnedItems;
 window.exportCompareItems = exportCompareItems;
+window.saveCurrentConversation = saveCurrentConversation;
+window.resumeConversation = resumeConversation;
+window.forkConversation = forkConversation;
+window.deleteConversation = deleteConversation;
+window.loadConversationList = loadConversationList;

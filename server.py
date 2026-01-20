@@ -10684,39 +10684,6 @@ def debug_utf8():
             'Content-Type': 'application/json; charset=utf-8'
         }
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='AI Model Analysis Dashboard Server')
-    parser.add_argument('--port', type=int, help='Port to bind the server')
-    parser.add_argument('--host', type=str, help='Host/IP to bind (default 0.0.0.0)')
-    parser.add_argument('--debug', action='store_true', help='Enable Flask debug mode')
-    args = parser.parse_args()
-
-    # Create static directory if it doesn't exist
-    static_dir = os.path.join(os.path.dirname(__file__), 'static')
-    if not os.path.exists(static_dir):
-        os.makedirs(static_dir)
-    
-    # Copy HTML, CSS, and JS files to static directory
-    import shutil
-    for file in ['index.html', 'styles.css', 'script.js']:
-        if os.path.exists(file):
-            shutil.copy2(file, os.path.join(static_dir, file))
-    
-    # Determine host/port/debug precedence: CLI > env > defaults
-    host = args.host or os.environ.get('HOST', '0.0.0.0')
-
-    port = args.port
-    if port is None:
-        port_str = os.environ.get('PORT', '8765')
-        try:
-            port = int(port_str)
-        except ValueError:
-            print(f"Invalid PORT value '{port_str}', falling back to 8765")
-            port = 8765
-
-    debug_mode = args.debug or os.environ.get('FLASK_DEBUG', 'false').lower() in ('1', 'true', 'yes')
-    print(f"Starting server on {host}:{port} (debug={debug_mode})")
-    app.run(debug=debug_mode, host=host, port=port)
 def _build_monitor_entry(row):
     if not isinstance(row, list) or len(row) < 2:
         return None
@@ -10831,3 +10798,210 @@ def load_monitor_feed(force_refresh=False, limit=None, sanitize=False):
         return sanitized
 
     return result
+
+
+# ============================================================
+# DATASET CACHE SYSTEM - Offline-friendly with freshness tracking
+# ============================================================
+
+DATASET_CACHE_DIR = os.path.join(os.path.dirname(__file__), 'data', 'cache')
+DATASET_CACHE_TTL = timedelta(hours=6)  # Consider data stale after 6 hours
+
+def ensure_cache_dir():
+    """Ensure the cache directory exists."""
+    if not os.path.exists(DATASET_CACHE_DIR):
+        os.makedirs(DATASET_CACHE_DIR, exist_ok=True)
+
+def get_cached_dataset(category):
+    """Load cached dataset from disk if available."""
+    ensure_cache_dir()
+    cache_file = os.path.join(DATASET_CACHE_DIR, f'{category}.json')
+    if not os.path.exists(cache_file):
+        return None
+    try:
+        with open(cache_file, 'r', encoding='utf-8') as f:
+            cached = json.load(f)
+            return cached
+    except (json.JSONDecodeError, IOError):
+        return None
+
+def save_dataset_cache(category, data):
+    """Save dataset to disk cache with timestamp."""
+    ensure_cache_dir()
+    cache_file = os.path.join(DATASET_CACHE_DIR, f'{category}.json')
+    cache_entry = {
+        'data': data,
+        'fetched_at': datetime.utcnow().isoformat() + 'Z',
+        'stale': False
+    }
+    try:
+        with open(cache_file, 'w', encoding='utf-8') as f:
+            json.dump(cache_entry, f, ensure_ascii=False, default=str)
+    except IOError as e:
+        print(f"Warning: Could not cache dataset {category}: {e}")
+
+def get_dataset_with_fallback(category, fetch_func, *args, **kwargs):
+    """
+    Fetch dataset with disk cache fallback.
+    Returns tuple of (data, metadata) where metadata contains cache info.
+    """
+    cached = get_cached_dataset(category)
+    metadata = {'cached': False, 'stale': False, 'cached_at': None}
+
+    try:
+        # Try to fetch fresh data
+        data = fetch_func(*args, **kwargs)
+        if data:
+            save_dataset_cache(category, data)
+            return data, metadata
+    except Exception as e:
+        print(f"Warning: Failed to fetch {category}, falling back to cache: {e}")
+
+    # Fall back to cache
+    if cached:
+        metadata['cached'] = True
+        metadata['cached_at'] = cached.get('fetched_at')
+        # Check if stale
+        try:
+            cached_time = datetime.fromisoformat(cached['fetched_at'].replace('Z', '+00:00'))
+            if datetime.now(timezone.utc) - cached_time > DATASET_CACHE_TTL:
+                metadata['stale'] = True
+        except:
+            metadata['stale'] = True
+        return cached.get('data'), metadata
+
+    return None, metadata
+
+
+# ============================================================
+# CONVERSATION PERSISTENCE - Save/resume agent conversations
+# ============================================================
+
+CONVERSATIONS_FILE = os.path.join(os.path.dirname(__file__), 'data', 'conversations.json')
+
+def load_conversations():
+    """Load all saved conversations from disk."""
+    if not os.path.exists(CONVERSATIONS_FILE):
+        return {}
+    try:
+        with open(CONVERSATIONS_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return {}
+
+def save_conversations(conversations):
+    """Save conversations to disk."""
+    data_dir = os.path.dirname(CONVERSATIONS_FILE)
+    if not os.path.exists(data_dir):
+        os.makedirs(data_dir, exist_ok=True)
+    try:
+        with open(CONVERSATIONS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(conversations, f, ensure_ascii=False, indent=2, default=str)
+    except IOError as e:
+        print(f"Warning: Could not save conversations: {e}")
+
+
+@app.route('/api/agent/conversations', methods=['GET'])
+def list_conversations():
+    """List all saved conversations."""
+    conversations = load_conversations()
+    # Return as list sorted by last updated
+    result = []
+    for conv_id, conv in conversations.items():
+        result.append({
+            'id': conv_id,
+            'title': conv.get('title', 'Untitled'),
+            'created_at': conv.get('created_at'),
+            'updated_at': conv.get('updated_at'),
+            'message_count': len(conv.get('messages', [])),
+            'model': conv.get('model')
+        })
+    result.sort(key=lambda x: x.get('updated_at') or '', reverse=True)
+    return jsonify(result)
+
+
+@app.route('/api/agent/conversations/<conv_id>', methods=['GET'])
+def get_conversation(conv_id):
+    """Get a specific conversation by ID."""
+    conversations = load_conversations()
+    conv = conversations.get(conv_id)
+    if not conv:
+        return jsonify({'error': 'Conversation not found'}), 404
+    return jsonify({
+        'id': conv_id,
+        **conv
+    })
+
+
+@app.route('/api/agent/conversations', methods=['POST'])
+def save_conversation():
+    """Save a new conversation or update existing one."""
+    data = request.get_json() or {}
+    conversations = load_conversations()
+
+    conv_id = data.get('id') or str(uuid.uuid4())
+    now = datetime.utcnow().isoformat() + 'Z'
+
+    if conv_id in conversations:
+        # Update existing
+        conversations[conv_id]['messages'] = data.get('messages', [])
+        conversations[conv_id]['updated_at'] = now
+        if data.get('title'):
+            conversations[conv_id]['title'] = data['title']
+        if data.get('model'):
+            conversations[conv_id]['model'] = data['model']
+    else:
+        # Create new
+        conversations[conv_id] = {
+            'title': data.get('title', 'Untitled Conversation'),
+            'messages': data.get('messages', []),
+            'model': data.get('model'),
+            'created_at': now,
+            'updated_at': now
+        }
+
+    save_conversations(conversations)
+    return jsonify({
+        'id': conv_id,
+        'saved': True,
+        **conversations[conv_id]
+    })
+
+
+@app.route('/api/agent/conversations/<conv_id>', methods=['DELETE'])
+def delete_conversation(conv_id):
+    """Delete a conversation."""
+    conversations = load_conversations()
+    if conv_id not in conversations:
+        return jsonify({'error': 'Conversation not found'}), 404
+    del conversations[conv_id]
+    save_conversations(conversations)
+    return jsonify({'deleted': True, 'id': conv_id})
+
+
+# ============================================================
+# MAIN ENTRY POINT - Local development server
+# ============================================================
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='AI Model Analysis Dashboard Server')
+    parser.add_argument('--port', type=int, help='Port to bind the server')
+    parser.add_argument('--host', type=str, help='Host/IP to bind (default 0.0.0.0)')
+    parser.add_argument('--debug', action='store_true', help='Enable Flask debug mode')
+    args = parser.parse_args()
+
+    # Determine host/port/debug precedence: CLI > env > defaults
+    host = args.host or os.environ.get('HOST', '0.0.0.0')
+
+    port = args.port
+    if port is None:
+        port_str = os.environ.get('PORT', '8765')
+        try:
+            port = int(port_str)
+        except ValueError:
+            print(f"Invalid PORT value '{port_str}', falling back to 8765")
+            port = 8765
+
+    debug_mode = args.debug or os.environ.get('FLASK_DEBUG', 'false').lower() in ('1', 'true', 'yes')
+    print(f"Starting server on {host}:{port} (debug={debug_mode})")
+    app.run(debug=debug_mode, host=host, port=port)

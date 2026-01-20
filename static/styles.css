@@ -38,72 +38,7 @@
 }
 
 :root {
-    /* Light mode colors */
-    --bg-color: #ffffff;
-    --text-color: #000000;
-    --border-color: #e0e0e0;
-    --spinner-track: rgba(0, 0, 0, 0.12);
-    --card-bg: #ffffff;
-    --input-bg: #ffffff;
-    --button-bg: #000000;
-    --button-text: #ffffff;
-    --button-hover-bg: #333333;
-    --error-bg: #ffebee;
-    --error-text: #c62828;
-    --info-bg: #f5f5f5;
-    --info-text: #666666;
-    --hype-github-bg: rgba(36, 41, 46, 0.12);
-    --hype-github-text: #1f2937;
-    --hype-huggingface-bg: rgba(255, 196, 45, 0.25);
-    --hype-huggingface-text: #92400e;
-    --hype-replicate-bg: rgba(16, 185, 129, 0.18);
-    --hype-replicate-text: #065f46;
-    --hype-reddit-bg: rgba(255, 69, 0, 0.2);
-    --hype-reddit-text: #b91c1c;
-    --hype-default-bg: rgba(148, 163, 184, 0.18);
-    --hype-default-text: #1f2937;
-    --source-blog: #f97316;
-    --source-monitor: #dc2626;
-    --source-testingcatalog: #047857;
-    --pin-color: #1d4ed8;
-    --pin-color-dark: #60a5fa;
-    --accent-color: #111827;
-}
-
-[data-theme="dark"] {
-    /* Dark mode colors */
-    --bg-color: #121212;
-    --text-color: #ffffff;
-    --border-color: #333333;
-    --spinner-track: rgba(255, 255, 255, 0.18);
-    --card-bg: #1e1e1e;
-    --input-bg: #2a2a2a;
-    --button-bg: #ffffff;
-    --button-text: #000000;
-    --button-hover-bg: #e0e0e0;
-    --error-bg: #3a1a1a;
-    --error-text: #ff5252;
-    --info-bg: #2a2a2a;
-    --info-text: #b0b0b0;
-    --hype-github-bg: rgba(148, 163, 184, 0.18);
-    --hype-github-text: #e2e8f0;
-    --hype-huggingface-bg: rgba(249, 210, 143, 0.22);
-    --hype-huggingface-text: #fde68a;
-    --hype-replicate-bg: rgba(16, 185, 129, 0.28);
-    --hype-replicate-text: #bbf7d0;
-    --hype-reddit-bg: rgba(255, 109, 55, 0.28);
-    --hype-reddit-text: #fecaca;
-    --hype-default-bg: rgba(148, 163, 184, 0.22);
-    --hype-default-text: #e5e7eb;
-    --source-blog: #fb923c;
-    --source-monitor: #dc2626;
-    --source-testingcatalog: #047857;
-    --pin-color: #bfdbfe;
-    --pin-color-dark: #93c5fd;
-    --accent-color: #f8fafc;
-}
-
-[data-theme="source"] {
+    /* Light mode colors with integrated source colors */
     --bg-color: #f8f9fb;
     --text-color: #111827;
     --border-color: #d4d6dd;
@@ -117,6 +52,7 @@
     --error-text: #c2185b;
     --info-bg: #edf1ff;
     --info-text: #4b5563;
+    /* Source colors for light mode */
     --source-llm: #2563eb;
     --source-media: #0ea5e9;
     --source-fal: #f59e0b;
@@ -136,7 +72,90 @@
     --hype-reddit-text: #9a3412;
     --hype-default-bg: rgba(148, 163, 184, 0.18);
     --hype-default-text: #1f2937;
+    --pin-color: #1d4ed8;
+    --pin-color-dark: #60a5fa;
     --accent-color: #111827;
+}
+
+[data-theme="dark"] {
+    /* Dark mode colors with integrated source colors */
+    --bg-color: #121212;
+    --text-color: #ffffff;
+    --border-color: #333333;
+    --spinner-track: rgba(255, 255, 255, 0.18);
+    --card-bg: #1e1e1e;
+    --input-bg: #2a2a2a;
+    --button-bg: #ffffff;
+    --button-text: #000000;
+    --button-hover-bg: #e0e0e0;
+    --error-bg: #3a1a1a;
+    --error-text: #ff5252;
+    --info-bg: #2a2a2a;
+    --info-text: #b0b0b0;
+    /* Source colors for dark mode - brighter for visibility */
+    --source-llm: #60a5fa;
+    --source-media: #38bdf8;
+    --source-fal: #fbbf24;
+    --source-replicate: #34d399;
+    --source-openrouter: #a78bfa;
+    --source-hype: #f472b6;
+    --source-blog: #fb923c;
+    --source-monitor: #f87171;
+    --source-testingcatalog: #10b981;
+    --hype-github-bg: rgba(148, 163, 184, 0.18);
+    --hype-github-text: #e2e8f0;
+    --hype-huggingface-bg: rgba(249, 210, 143, 0.22);
+    --hype-huggingface-text: #fde68a;
+    --hype-replicate-bg: rgba(16, 185, 129, 0.28);
+    --hype-replicate-text: #bbf7d0;
+    --hype-reddit-bg: rgba(255, 109, 55, 0.28);
+    --hype-reddit-text: #fecaca;
+    --hype-default-bg: rgba(148, 163, 184, 0.22);
+    --hype-default-text: #e5e7eb;
+    --pin-color: #bfdbfe;
+    --pin-color-dark: #93c5fd;
+    --accent-color: #f8fafc;
+}
+
+/* Auto theme: follow system preference when data-theme="auto" */
+@media (prefers-color-scheme: dark) {
+    [data-theme="auto"] {
+        --bg-color: #121212;
+        --text-color: #ffffff;
+        --border-color: #333333;
+        --spinner-track: rgba(255, 255, 255, 0.18);
+        --card-bg: #1e1e1e;
+        --input-bg: #2a2a2a;
+        --button-bg: #ffffff;
+        --button-text: #000000;
+        --button-hover-bg: #e0e0e0;
+        --error-bg: #3a1a1a;
+        --error-text: #ff5252;
+        --info-bg: #2a2a2a;
+        --info-text: #b0b0b0;
+        --source-llm: #60a5fa;
+        --source-media: #38bdf8;
+        --source-fal: #fbbf24;
+        --source-replicate: #34d399;
+        --source-openrouter: #a78bfa;
+        --source-hype: #f472b6;
+        --source-blog: #fb923c;
+        --source-monitor: #f87171;
+        --source-testingcatalog: #10b981;
+        --hype-github-bg: rgba(148, 163, 184, 0.18);
+        --hype-github-text: #e2e8f0;
+        --hype-huggingface-bg: rgba(249, 210, 143, 0.22);
+        --hype-huggingface-text: #fde68a;
+        --hype-replicate-bg: rgba(16, 185, 129, 0.28);
+        --hype-replicate-text: #bbf7d0;
+        --hype-reddit-bg: rgba(255, 109, 55, 0.28);
+        --hype-reddit-text: #fecaca;
+        --hype-default-bg: rgba(148, 163, 184, 0.22);
+        --hype-default-text: #e5e7eb;
+        --pin-color: #bfdbfe;
+        --pin-color-dark: #93c5fd;
+        --accent-color: #f8fafc;
+    }
 }
 
 body {
@@ -197,17 +216,13 @@ body {
 }
 
 .source-legend {
-    display: none;
+    display: flex;
     justify-content: center;
     flex-wrap: wrap;
     gap: 12px;
     margin-top: 16px;
     font-size: 0.85rem;
     color: var(--info-text);
-}
-
-[data-theme="source"] .source-legend {
-    display: flex;
 }
 
 .source-legend .legend-title {
@@ -239,48 +254,40 @@ body {
     background: currentColor;
 }
 
-[data-theme="source"] .source-legend .legend-item[data-source="testingcatalog"] {
+/* Source-colored legend items - always active */
+.legend-item[data-source="testingcatalog"] {
     color: var(--source-testingcatalog);
-}
-
-[data-theme="source"] .source-legend .legend-item[data-source="monitor"] {
-    color: var(--source-monitor);
-}
-
-[data-theme="source"] .legend-item[data-source="aa-llm"] {
-    color: var(--source-llm);
-}
-
-[data-theme="source"] .legend-item[data-source="aa-media"] {
-    color: var(--source-media);
-}
-
-[data-theme="source"] .legend-item[data-source="fal"] {
-    color: var(--source-fal);
-}
-
-[data-theme="source"] .legend-item[data-source="replicate"] {
-    color: var(--source-replicate);
-}
-
-[data-theme="source"] .legend-item[data-source="openrouter"] {
-    color: var(--source-openrouter);
-}
-
-[data-theme="source"] .legend-item[data-source="blog"] {
-    color: var(--source-blog);
-}
-
-[data-theme="source"] .legend-item[data-source="monitor"] {
-    color: var(--source-monitor);
 }
 
 .legend-item[data-source="monitor"] {
     color: var(--source-monitor);
 }
 
-.legend-item[data-source="hype"],
-[data-theme="source"] .legend-item[data-source="hype"] {
+.legend-item[data-source="aa-llm"] {
+    color: var(--source-llm);
+}
+
+.legend-item[data-source="aa-media"] {
+    color: var(--source-media);
+}
+
+.legend-item[data-source="fal"] {
+    color: var(--source-fal);
+}
+
+.legend-item[data-source="replicate"] {
+    color: var(--source-replicate);
+}
+
+.legend-item[data-source="openrouter"] {
+    color: var(--source-openrouter);
+}
+
+.legend-item[data-source="blog"] {
+    color: var(--source-blog);
+}
+
+.legend-item[data-source="hype"] {
     color: var(--source-hype);
 }
 
@@ -1097,91 +1104,92 @@ body {
     border: 1px solid transparent;
 }
 
-[data-theme="source"] .model-card[data-source="aa-llm"] {
+/* Source-colored model cards - always active */
+.model-card[data-source="aa-llm"] {
     border-top-color: var(--source-llm);
 }
 
-[data-theme="source"] .model-card[data-source="aa-llm"] .source-badge {
+.model-card[data-source="aa-llm"] .source-badge {
     background: rgba(37, 99, 235, 0.12);
     color: var(--source-llm);
     border-color: rgba(37, 99, 235, 0.2);
 }
 
-[data-theme="source"] .model-card[data-source="aa-media"] {
+.model-card[data-source="aa-media"] {
     border-top-color: var(--source-media);
 }
 
-[data-theme="source"] .model-card[data-source="aa-media"] .source-badge {
+.model-card[data-source="aa-media"] .source-badge {
     background: rgba(14, 165, 233, 0.12);
     color: var(--source-media);
     border-color: rgba(14, 165, 233, 0.2);
 }
 
-[data-theme="source"] .model-card[data-source="fal"] {
+.model-card[data-source="fal"] {
     border-top-color: var(--source-fal);
 }
 
-[data-theme="source"] .model-card[data-source="fal"] .source-badge {
+.model-card[data-source="fal"] .source-badge {
     background: rgba(245, 158, 11, 0.12);
     color: var(--source-fal);
     border-color: rgba(245, 158, 11, 0.2);
 }
 
-[data-theme="source"] .model-card[data-source="replicate"] {
+.model-card[data-source="replicate"] {
     border-top-color: var(--source-replicate);
 }
 
-[data-theme="source"] .model-card[data-source="replicate"] .source-badge {
+.model-card[data-source="replicate"] .source-badge {
     background: rgba(16, 185, 129, 0.12);
     color: var(--source-replicate);
     border-color: rgba(16, 185, 129, 0.2);
 }
 
-[data-theme="source"] .model-card[data-source="openrouter"] {
+.model-card[data-source="openrouter"] {
     border-top-color: var(--source-openrouter);
 }
 
-[data-theme="source"] .model-card[data-source="openrouter"] .source-badge {
+.model-card[data-source="openrouter"] .source-badge {
     background: rgba(124, 58, 237, 0.12);
     color: var(--source-openrouter);
     border-color: rgba(124, 58, 237, 0.2);
 }
 
-[data-theme="source"] .model-card[data-source="hype"] {
+.model-card[data-source="hype"] {
     border-top-color: var(--source-hype);
 }
 
-[data-theme="source"] .model-card[data-source="hype"] .source-badge {
+.model-card[data-source="hype"] .source-badge {
     background: rgba(236, 72, 153, 0.12);
     color: var(--source-hype);
     border-color: rgba(236, 72, 153, 0.2);
 }
 
-[data-theme="source"] .model-card[data-source="blog"] {
+.model-card[data-source="blog"] {
     border-top-color: var(--source-blog);
 }
 
-[data-theme="source"] .model-card[data-source="blog"] .source-badge {
+.model-card[data-source="blog"] .source-badge {
     background: rgba(249, 115, 22, 0.12);
     color: var(--source-blog);
     border-color: rgba(249, 115, 22, 0.2);
 }
 
-[data-theme="source"] .model-card[data-source="monitor"] {
+.model-card[data-source="monitor"] {
     border-top-color: var(--source-monitor);
 }
 
-[data-theme="source"] .model-card[data-source="monitor"] .source-badge {
+.model-card[data-source="monitor"] .source-badge {
     background: rgba(220, 38, 38, 0.12);
     color: var(--source-monitor);
     border-color: rgba(220, 38, 38, 0.2);
 }
 
-[data-theme="source"] .model-card[data-source="testingcatalog"] {
+.model-card[data-source="testingcatalog"] {
     border-top-color: var(--source-testingcatalog);
 }
 
-[data-theme="source"] .model-card[data-source="testingcatalog"] .source-badge {
+.model-card[data-source="testingcatalog"] .source-badge {
     background: rgba(4, 120, 87, 0.12);
     color: var(--source-testingcatalog);
     border-color: rgba(4, 120, 87, 0.2);
@@ -3359,7 +3367,9 @@ body {
 }
 
 .source-badge {
-    display: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     font-size: 0.75rem;
     letter-spacing: 0.03em;
     text-transform: uppercase;
@@ -3367,13 +3377,7 @@ body {
     margin-bottom: 10px;
 }
 
-[data-theme="source"] .source-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-}
-
-[data-theme="source"] .source-badge::before {
+.source-badge::before {
     content: '';
     width: 8px;
     height: 8px;
@@ -5072,4 +5076,375 @@ body {
         max-width: 100%;
         min-height: 100vh;
     }
+}
+
+/* ============================================================
+   FRESHNESS BADGES - Show cache status for datasets
+   ============================================================ */
+
+.freshness-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--info-bg);
+    color: var(--info-text);
+    margin-left: 8px;
+}
+
+.freshness-badge.stale {
+    background: rgba(245, 158, 11, 0.15);
+    color: #d97706;
+}
+
+[data-theme="dark"] .freshness-badge.stale {
+    background: rgba(251, 191, 36, 0.2);
+    color: #fbbf24;
+}
+
+.freshness-badge .freshness-icon {
+    font-size: 0.85em;
+}
+
+/* ============================================================
+   CONVERSATION HISTORY - Saved agent conversations
+   ============================================================ */
+
+.conversation-list {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    margin-bottom: 16px;
+}
+
+.conversation-item {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-color);
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.conversation-item:last-child {
+    border-bottom: none;
+}
+
+.conversation-item:hover {
+    background: var(--info-bg);
+}
+
+.conversation-item.active {
+    background: rgba(37, 99, 235, 0.1);
+    border-left: 3px solid var(--source-llm);
+}
+
+.conversation-title {
+    font-weight: 500;
+    margin-bottom: 4px;
+}
+
+.conversation-meta {
+    font-size: 0.8rem;
+    color: var(--info-text);
+    display: flex;
+    gap: 12px;
+}
+
+.conversation-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.conversation-actions button {
+    padding: 4px 12px;
+    font-size: 0.8rem;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+    background: var(--card-bg);
+    color: var(--text-color);
+    cursor: pointer;
+}
+
+.conversation-actions button:hover {
+    background: var(--info-bg);
+}
+
+.conversation-actions button.delete {
+    color: var(--error-text);
+    border-color: var(--error-text);
+}
+
+/* ============================================================
+   MOBILE OPTIMIZATIONS - Bottom nav, touch targets, gestures
+   ============================================================ */
+
+/* Mobile bottom navigation */
+.mobile-bottom-nav {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--card-bg);
+    border-top: 1px solid var(--border-color);
+    padding: 8px 0;
+    padding-bottom: env(safe-area-inset-bottom, 8px);
+    z-index: 1000;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.mobile-nav-items {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+.mobile-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 8px 12px;
+    min-width: 64px;
+    min-height: 44px;
+    border: none;
+    background: none;
+    color: var(--info-text);
+    font-size: 0.7rem;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: all 0.15s;
+}
+
+.mobile-nav-item:hover,
+.mobile-nav-item:active {
+    background: var(--info-bg);
+}
+
+.mobile-nav-item.active {
+    color: var(--source-llm);
+}
+
+.mobile-nav-item .nav-icon {
+    font-size: 1.25rem;
+}
+
+.mobile-nav-item .nav-label {
+    font-weight: 500;
+}
+
+/* Mobile tab scroll container */
+.mobile-tab-scroll {
+    position: relative;
+}
+
+.mobile-tab-scroll::before,
+.mobile-tab-scroll::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 24px;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.mobile-tab-scroll::before {
+    left: 0;
+    background: linear-gradient(to right, var(--bg-color), transparent);
+}
+
+.mobile-tab-scroll::after {
+    right: 0;
+    background: linear-gradient(to left, var(--bg-color), transparent);
+}
+
+.mobile-tab-scroll.at-start::before {
+    display: none;
+}
+
+.mobile-tab-scroll.at-end::after {
+    display: none;
+}
+
+/* Touch-friendly adjustments */
+@media (max-width: 768px) {
+    /* Show mobile bottom nav */
+    .mobile-bottom-nav {
+        display: block;
+    }
+
+    /* Add padding to main content for bottom nav */
+    .main-content {
+        padding-bottom: 80px;
+    }
+
+    /* Hide desktop navigation on mobile */
+    .navigation {
+        display: flex;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+        gap: 4px;
+        padding: 0 16px;
+        margin: 0 -20px;
+    }
+
+    .navigation::-webkit-scrollbar {
+        display: none;
+    }
+
+    .nav-btn {
+        flex-shrink: 0;
+        min-height: 44px;
+        padding: 10px 16px;
+        font-size: 0.85rem;
+    }
+
+    /* Larger touch targets for buttons */
+    button,
+    .btn,
+    .refresh-btn,
+    .theme-toggle,
+    .auth-button {
+        min-height: 44px;
+        min-width: 44px;
+    }
+
+    /* Model cards: tap instead of double-click */
+    .model-card {
+        cursor: pointer;
+    }
+
+    /* Header adjustments */
+    .header {
+        padding: 48px 16px 24px;
+    }
+
+    .header h1 {
+        font-size: 1.5rem;
+    }
+
+    .header-actions {
+        top: 8px;
+        right: 8px;
+        gap: 4px;
+    }
+
+    .theme-toggle {
+        padding: 8px 12px;
+        font-size: 0.8rem;
+    }
+
+    /* Source legend: scrollable on mobile */
+    .source-legend {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        padding: 8px 0;
+        margin: 8px -16px 0;
+        padding-left: 16px;
+        padding-right: 16px;
+        justify-content: flex-start;
+    }
+
+    .legend-item {
+        flex-shrink: 0;
+    }
+
+    /* Controls stack vertically */
+    .controls {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .controls input[type="text"],
+    .controls select {
+        width: 100%;
+        min-height: 44px;
+    }
+
+    /* Data container single column */
+    .data-container {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    /* Pinch-to-zoom prevention for better UX */
+    html {
+        touch-action: manipulation;
+    }
+}
+
+/* Extra small screens */
+@media (max-width: 480px) {
+    .container {
+        padding: 12px;
+    }
+
+    .header {
+        padding: 40px 12px 20px;
+    }
+
+    .header h1 {
+        font-size: 1.25rem;
+    }
+
+    .header p {
+        font-size: 0.8rem;
+    }
+
+    .section-header h2 {
+        font-size: 1.1rem;
+    }
+
+    /* Hide some nav items on very small screens */
+    .mobile-nav-item .nav-label {
+        display: none;
+    }
+
+    .mobile-nav-item {
+        min-width: 48px;
+        padding: 8px;
+    }
+}
+
+/* Pull-to-refresh indicator */
+.pull-to-refresh {
+    position: fixed;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%) translateY(-100%);
+    background: var(--card-bg);
+    padding: 12px 24px;
+    border-radius: 0 0 12px 12px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    z-index: 1001;
+    transition: transform 0.3s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.pull-to-refresh.visible {
+    transform: translateX(-50%) translateY(0);
+}
+
+.pull-to-refresh .spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--border-color);
+    border-top-color: var(--source-llm);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
 }
