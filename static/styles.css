@@ -117,47 +117,6 @@
     --accent-color: #f8fafc;
 }
 
-/* Auto theme: follow system preference when data-theme="auto" */
-@media (prefers-color-scheme: dark) {
-    [data-theme="auto"] {
-        --bg-color: #121212;
-        --text-color: #ffffff;
-        --border-color: #333333;
-        --spinner-track: rgba(255, 255, 255, 0.18);
-        --card-bg: #1e1e1e;
-        --input-bg: #2a2a2a;
-        --button-bg: #ffffff;
-        --button-text: #000000;
-        --button-hover-bg: #e0e0e0;
-        --error-bg: #3a1a1a;
-        --error-text: #ff5252;
-        --info-bg: #2a2a2a;
-        --info-text: #b0b0b0;
-        --source-llm: #60a5fa;
-        --source-media: #38bdf8;
-        --source-fal: #fbbf24;
-        --source-replicate: #34d399;
-        --source-openrouter: #a78bfa;
-        --source-hype: #f472b6;
-        --source-blog: #fb923c;
-        --source-monitor: #f87171;
-        --source-testingcatalog: #10b981;
-        --hype-github-bg: rgba(148, 163, 184, 0.18);
-        --hype-github-text: #e2e8f0;
-        --hype-huggingface-bg: rgba(249, 210, 143, 0.22);
-        --hype-huggingface-text: #fde68a;
-        --hype-replicate-bg: rgba(16, 185, 129, 0.28);
-        --hype-replicate-text: #bbf7d0;
-        --hype-reddit-bg: rgba(255, 109, 55, 0.28);
-        --hype-reddit-text: #fecaca;
-        --hype-default-bg: rgba(148, 163, 184, 0.22);
-        --hype-default-text: #e5e7eb;
-        --pin-color: #bfdbfe;
-        --pin-color-dark: #93c5fd;
-        --accent-color: #f8fafc;
-    }
-}
-
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     background-color: var(--bg-color);

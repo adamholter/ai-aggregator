@@ -266,11 +266,10 @@ const openRouterMatchCache = new Map();
 const USER_OPENROUTER_KEY_STORAGE = 'dashboard-user-openrouter-key';
 const EXPERIMENTAL_MODE_STORAGE_KEY = 'dashboard-experimental-mode';
 
-const THEME_SEQUENCE = ['light', 'dark', 'auto'];
+const THEME_SEQUENCE = ['light', 'dark'];
 const THEME_LABELS = {
     light: { label: 'Light Mode', icon: '☀️' },
-    dark: { label: 'Dark Mode', icon: '🌙' },
-    auto: { label: 'Auto', icon: '🔄' }
+    dark: { label: 'Dark Mode', icon: '🌙' }
 };
 
 const LLM_MAIN_INDEX_KEYS = [
@@ -1798,8 +1797,8 @@ function navigateToResult(result) {
 // Theme management
 function initializeTheme() {
     let stored = localStorage.getItem('theme');
-    // Migrate from old 'source' theme to 'light' (source colors are now always on)
-    if (stored === 'source') {
+    // Migrate from old 'source' or 'auto' theme to 'light' (source colors are now always on)
+    if (stored === 'source' || stored === 'auto') {
         stored = 'light';
         localStorage.setItem('theme', 'light');
     }
@@ -1810,17 +1809,6 @@ function initializeTheme() {
         localStorage.setItem('theme', initialTheme);
     }
     updateThemeToggleText(initialTheme);
-
-    // Listen for system theme changes when in auto mode
-    if (window.matchMedia) {
-        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-            const current = localStorage.getItem('theme');
-            if (current === 'auto') {
-                // Force re-apply auto theme to pick up system change
-                document.documentElement.setAttribute('data-theme', 'auto');
-            }
-        });
-    }
 }
 
 function toggleTheme() {
