@@ -5401,9 +5401,9 @@ body {
     border: 2px solid var(--border-color);
     border-top-color: var(--source-llm);
     border-radius: 50%;
-    animation: spin 0.8s linear infinite;
+    animation: spin-refresh 0.8s linear infinite;
 }
 
-@keyframes spin {
+@keyframes spin-refresh {
     to { transform: rotate(360deg); }
 }
