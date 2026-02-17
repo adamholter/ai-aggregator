@@ -1,0 +1,234 @@
+/*
+ * Sidebar variant — moves navigation to a fixed left sidebar.
+ * Everything else (cards, sections, modals, script.js) is identical to default.
+ */
+
+/* Container — full width, normal stacking */
+.variant-sidebar .container {
+    max-width: none;
+    margin: 0;
+    padding: 0;
+}
+
+/* Navigation becomes fixed sidebar */
+.variant-sidebar .navigation {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 220px;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    gap: 2px;
+    margin-bottom: 0;
+    padding: 16px 10px;
+    border-bottom: none;
+    border-right: 1px solid var(--border-color);
+    background: var(--bg-color);
+    overflow-y: auto;
+    overflow-x: hidden;
+    z-index: 100;
+}
+
+/* Bigger, more spacious nav buttons with room for color dots */
+.variant-sidebar .nav-btn {
+    width: 100%;
+    text-align: left;
+    padding: 9px 14px 9px 28px;
+    font-size: 0.9rem;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    position: relative;
+}
+
+/* Color dot decorations on each nav item */
+.variant-sidebar .nav-btn::before {
+    content: '';
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--border-color);
+}
+
+/* Source-colored dots per section */
+.variant-sidebar .nav-btn[data-section="llms"]::before {
+    background: var(--source-llm);
+}
+.variant-sidebar .nav-btn[data-section="text-to-image"]::before,
+.variant-sidebar .nav-btn[data-section="image-editing"]::before,
+.variant-sidebar .nav-btn[data-section="text-to-speech"]::before,
+.variant-sidebar .nav-btn[data-section="text-to-video"]::before,
+.variant-sidebar .nav-btn[data-section="image-to-video"]::before {
+    background: var(--source-media);
+}
+.variant-sidebar .nav-btn[data-section="fal-models"]::before {
+    background: var(--source-fal);
+}
+.variant-sidebar .nav-btn[data-section="replicate-models"]::before {
+    background: var(--source-replicate);
+}
+.variant-sidebar .nav-btn[data-section="openrouter-models"]::before {
+    background: var(--source-openrouter);
+}
+.variant-sidebar .nav-btn[data-section="hype"]::before {
+    background: var(--source-hype);
+}
+.variant-sidebar .nav-btn[data-section="blog"]::before {
+    background: var(--source-blog);
+}
+.variant-sidebar .nav-btn[data-section="testing-catalog"]::before {
+    background: var(--source-testingcatalog);
+}
+.variant-sidebar .nav-btn[data-section="monitor"]::before {
+    background: var(--source-monitor);
+}
+
+.variant-sidebar .nav-btn:hover {
+    background: var(--info-bg);
+}
+
+.variant-sidebar .nav-btn.active {
+    background: var(--button-bg);
+    color: var(--button-text);
+}
+
+/* Header — single-row search bar, buttons top-right */
+.variant-sidebar .header {
+    margin-left: 220px;
+    padding: 0;
+    margin-bottom: 0;
+    border-bottom: 1px solid var(--border-color);
+    position: relative;
+    gap: 0;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    min-height: 48px;
+}
+
+/* Header-main: just shows the search bar, hide everything else */
+.variant-sidebar .header-main {
+    flex: 1;
+    padding: 8px 24px;
+    gap: 0;
+    min-width: 0;
+}
+
+.variant-sidebar .header h1 {
+    display: none;
+}
+
+.variant-sidebar .header p {
+    display: none;
+}
+
+/* Expand the search bar to fill available space */
+.variant-sidebar .global-search {
+    max-width: 600px;
+    width: 100%;
+    margin: 0;
+}
+
+.variant-sidebar .global-search input {
+    width: 100%;
+}
+
+/* Buttons top-right, vertically centered */
+.variant-sidebar .header-actions {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    right: 24px;
+}
+
+/* Kill extra space below header */
+.variant-sidebar .main-content {
+    margin-left: 220px;
+    border: none;
+    border-radius: 0;
+    padding-top: 16px;
+}
+
+/*
+ * Login button — force-match .export-btn / .share-btn with !important
+ * to guarantee override of the default .auth-button in styles.css
+ * for both light and dark modes.
+ */
+.variant-sidebar .auth-button,
+.variant-sidebar #auth-button {
+    background: var(--card-bg) !important;
+    color: var(--text-color) !important;
+    border: 1px solid var(--border-color) !important;
+    padding: 8px 14px !important;
+    border-radius: 4px !important;
+    cursor: pointer;
+    font-size: 0.8rem !important;
+    font-weight: 500 !important;
+    transition: all 0.2s ease !important;
+    opacity: 1 !important;
+}
+
+.variant-sidebar .auth-button:hover,
+.variant-sidebar #auth-button:hover {
+    background: var(--info-bg) !important;
+    border-color: var(--button-bg) !important;
+    opacity: 1 !important;
+}
+
+/* Pull "Showing X of Y" up next to section header to save vertical space */
+.variant-sidebar .section-header {
+    margin-bottom: 8px;
+    padding-bottom: 12px;
+    position: relative;
+}
+
+.variant-sidebar .results-info {
+    margin: 0;
+    padding: 0;
+    font-size: 0.8rem;
+}
+
+/* Hide source legend and timeline */
+.variant-sidebar .source-legend {
+    display: none;
+}
+
+.variant-sidebar #timeline-banner {
+    display: none !important;
+}
+
+/* (main-content rules are above with the header section) */
+
+/* Settings button adjustment */
+.variant-sidebar .settings-button {
+    right: 16px;
+}
+
+/* Responsive: collapse sidebar on small screens */
+@media (max-width: 900px) {
+    .variant-sidebar .navigation {
+        position: static;
+        width: 100%;
+        flex-direction: row;
+        flex-wrap: wrap;
+        border-right: none;
+        border-bottom: 1px solid var(--border-color);
+        padding: 12px;
+    }
+
+    .variant-sidebar .nav-btn {
+        width: auto;
+        padding: 7px 12px 7px 24px;
+    }
+
+    .variant-sidebar .header,
+    .variant-sidebar .main-content {
+        margin-left: 0;
+    }
+}
