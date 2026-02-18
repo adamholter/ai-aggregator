@@ -266,11 +266,10 @@ const openRouterMatchCache = new Map();
 const USER_OPENROUTER_KEY_STORAGE = 'dashboard-user-openrouter-key';
 const EXPERIMENTAL_MODE_STORAGE_KEY = 'dashboard-experimental-mode';
 
-const THEME_SEQUENCE = ['light', 'dark', 'source'];
+const THEME_SEQUENCE = ['light', 'dark'];
 const THEME_LABELS = {
     light: { label: 'Light Mode', icon: '☀️' },
-    dark: { label: 'Dark Mode', icon: '🌙' },
-    source: { label: 'Source Mode', icon: '🌈' }
+    dark: { label: 'Dark Mode', icon: '🌙' }
 };
 
 const LLM_MAIN_INDEX_KEYS = [
@@ -1830,10 +1829,12 @@ function navigateToResult(result) {
 // Theme management
 function initializeTheme() {
     const stored = localStorage.getItem('theme');
-    const preferredDefault = 'source';
-    const initialTheme = THEME_SEQUENCE.includes(stored) ? stored : preferredDefault;
+    const preferredDefault = 'light';
+    const normalizedStored = stored === 'source' ? 'light' : stored;
+    const initialTheme = THEME_SEQUENCE.includes(normalizedStored) ? normalizedStored : preferredDefault;
+    document.documentElement.classList.add('source-mode');
     document.documentElement.setAttribute('data-theme', initialTheme);
-    if (!THEME_SEQUENCE.includes(stored)) {
+    if (!THEME_SEQUENCE.includes(normalizedStored)) {
         localStorage.setItem('theme', initialTheme);
     }
     updateThemeToggleText(initialTheme);

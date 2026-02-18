@@ -150,9 +150,14 @@
 /* Kill extra space below header */
 .variant-sidebar .main-content {
     margin-left: 220px;
+    width: calc(100% - 220px);
+    min-height: calc(100vh - 48px);
     border: none;
     border-radius: 0;
+    background: var(--card-bg);
     padding-top: 16px;
+    padding-right: 24px;
+    padding-bottom: 28px;
 }
 
 /*
@@ -210,6 +215,25 @@
     right: 16px;
 }
 
+/* About page in sidebar mode: prioritize vertical rhythm and readability */
+.variant-sidebar #about .about-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+    max-width: 1040px;
+    margin-bottom: 24px;
+}
+
+.variant-sidebar #about .about-primary {
+    flex: none;
+    width: 100%;
+}
+
+.variant-sidebar #about .about-card {
+    flex: none;
+    width: min(420px, 100%);
+}
+
 /* Responsive: collapse sidebar on small screens */
 @media (max-width: 900px) {
     .variant-sidebar .navigation {
@@ -230,5 +254,6 @@
     .variant-sidebar .header,
     .variant-sidebar .main-content {
         margin-left: 0;
+        width: 100%;
     }
 }

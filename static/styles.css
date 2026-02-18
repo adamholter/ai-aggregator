@@ -62,6 +62,12 @@
     --hype-reddit-text: #b91c1c;
     --hype-default-bg: rgba(148, 163, 184, 0.18);
     --hype-default-text: #1f2937;
+    --source-llm: #2563eb;
+    --source-media: #0ea5e9;
+    --source-fal: #f59e0b;
+    --source-replicate: #10b981;
+    --source-openrouter: #7c3aed;
+    --source-hype: #ec4899;
     --source-blog: #f97316;
     --source-monitor: #dc2626;
     --source-testingcatalog: #047857;
@@ -95,6 +101,12 @@
     --hype-reddit-text: #fecaca;
     --hype-default-bg: rgba(148, 163, 184, 0.22);
     --hype-default-text: #e5e7eb;
+    --source-llm: #60a5fa;
+    --source-media: #38bdf8;
+    --source-fal: #fbbf24;
+    --source-replicate: #34d399;
+    --source-openrouter: #a78bfa;
+    --source-hype: #f472b6;
     --source-blog: #fb923c;
     --source-monitor: #dc2626;
     --source-testingcatalog: #047857;
@@ -206,7 +218,7 @@ body {
     color: var(--info-text);
 }
 
-[data-theme="source"] .source-legend {
+[data-theme="source"] .source-legend, .source-mode .source-legend {
     display: flex;
 }
 
@@ -239,39 +251,39 @@ body {
     background: currentColor;
 }
 
-[data-theme="source"] .source-legend .legend-item[data-source="testingcatalog"] {
+[data-theme="source"] .source-legend .legend-item[data-source="testingcatalog"], .source-mode .source-legend .legend-item[data-source="testingcatalog"] {
     color: var(--source-testingcatalog);
 }
 
-[data-theme="source"] .source-legend .legend-item[data-source="monitor"] {
+[data-theme="source"] .source-legend .legend-item[data-source="monitor"], .source-mode .source-legend .legend-item[data-source="monitor"] {
     color: var(--source-monitor);
 }
 
-[data-theme="source"] .legend-item[data-source="aa-llm"] {
+[data-theme="source"] .legend-item[data-source="aa-llm"], .source-mode .legend-item[data-source="aa-llm"] {
     color: var(--source-llm);
 }
 
-[data-theme="source"] .legend-item[data-source="aa-media"] {
+[data-theme="source"] .legend-item[data-source="aa-media"], .source-mode .legend-item[data-source="aa-media"] {
     color: var(--source-media);
 }
 
-[data-theme="source"] .legend-item[data-source="fal"] {
+[data-theme="source"] .legend-item[data-source="fal"], .source-mode .legend-item[data-source="fal"] {
     color: var(--source-fal);
 }
 
-[data-theme="source"] .legend-item[data-source="replicate"] {
+[data-theme="source"] .legend-item[data-source="replicate"], .source-mode .legend-item[data-source="replicate"] {
     color: var(--source-replicate);
 }
 
-[data-theme="source"] .legend-item[data-source="openrouter"] {
+[data-theme="source"] .legend-item[data-source="openrouter"], .source-mode .legend-item[data-source="openrouter"] {
     color: var(--source-openrouter);
 }
 
-[data-theme="source"] .legend-item[data-source="blog"] {
+[data-theme="source"] .legend-item[data-source="blog"], .source-mode .legend-item[data-source="blog"] {
     color: var(--source-blog);
 }
 
-[data-theme="source"] .legend-item[data-source="monitor"] {
+[data-theme="source"] .legend-item[data-source="monitor"], .source-mode .legend-item[data-source="monitor"] {
     color: var(--source-monitor);
 }
 
@@ -280,7 +292,7 @@ body {
 }
 
 .legend-item[data-source="hype"],
-[data-theme="source"] .legend-item[data-source="hype"] {
+[data-theme="source"] .legend-item[data-source="hype"], .source-mode .legend-item[data-source="hype"] {
     color: var(--source-hype);
 }
 
@@ -1097,91 +1109,91 @@ body {
     border: 1px solid transparent;
 }
 
-[data-theme="source"] .model-card[data-source="aa-llm"] {
+[data-theme="source"] .model-card[data-source="aa-llm"], .source-mode .model-card[data-source="aa-llm"] {
     border-top-color: var(--source-llm);
 }
 
-[data-theme="source"] .model-card[data-source="aa-llm"] .source-badge {
+[data-theme="source"] .model-card[data-source="aa-llm"] .source-badge, .source-mode .model-card[data-source="aa-llm"] .source-badge {
     background: rgba(37, 99, 235, 0.12);
     color: var(--source-llm);
     border-color: rgba(37, 99, 235, 0.2);
 }
 
-[data-theme="source"] .model-card[data-source="aa-media"] {
+[data-theme="source"] .model-card[data-source="aa-media"], .source-mode .model-card[data-source="aa-media"] {
     border-top-color: var(--source-media);
 }
 
-[data-theme="source"] .model-card[data-source="aa-media"] .source-badge {
+[data-theme="source"] .model-card[data-source="aa-media"] .source-badge, .source-mode .model-card[data-source="aa-media"] .source-badge {
     background: rgba(14, 165, 233, 0.12);
     color: var(--source-media);
     border-color: rgba(14, 165, 233, 0.2);
 }
 
-[data-theme="source"] .model-card[data-source="fal"] {
+[data-theme="source"] .model-card[data-source="fal"], .source-mode .model-card[data-source="fal"] {
     border-top-color: var(--source-fal);
 }
 
-[data-theme="source"] .model-card[data-source="fal"] .source-badge {
+[data-theme="source"] .model-card[data-source="fal"] .source-badge, .source-mode .model-card[data-source="fal"] .source-badge {
     background: rgba(245, 158, 11, 0.12);
     color: var(--source-fal);
     border-color: rgba(245, 158, 11, 0.2);
 }
 
-[data-theme="source"] .model-card[data-source="replicate"] {
+[data-theme="source"] .model-card[data-source="replicate"], .source-mode .model-card[data-source="replicate"] {
     border-top-color: var(--source-replicate);
 }
 
-[data-theme="source"] .model-card[data-source="replicate"] .source-badge {
+[data-theme="source"] .model-card[data-source="replicate"] .source-badge, .source-mode .model-card[data-source="replicate"] .source-badge {
     background: rgba(16, 185, 129, 0.12);
     color: var(--source-replicate);
     border-color: rgba(16, 185, 129, 0.2);
 }
 
-[data-theme="source"] .model-card[data-source="openrouter"] {
+[data-theme="source"] .model-card[data-source="openrouter"], .source-mode .model-card[data-source="openrouter"] {
     border-top-color: var(--source-openrouter);
 }
 
-[data-theme="source"] .model-card[data-source="openrouter"] .source-badge {
+[data-theme="source"] .model-card[data-source="openrouter"] .source-badge, .source-mode .model-card[data-source="openrouter"] .source-badge {
     background: rgba(124, 58, 237, 0.12);
     color: var(--source-openrouter);
     border-color: rgba(124, 58, 237, 0.2);
 }
 
-[data-theme="source"] .model-card[data-source="hype"] {
+[data-theme="source"] .model-card[data-source="hype"], .source-mode .model-card[data-source="hype"] {
     border-top-color: var(--source-hype);
 }
 
-[data-theme="source"] .model-card[data-source="hype"] .source-badge {
+[data-theme="source"] .model-card[data-source="hype"] .source-badge, .source-mode .model-card[data-source="hype"] .source-badge {
     background: rgba(236, 72, 153, 0.12);
     color: var(--source-hype);
     border-color: rgba(236, 72, 153, 0.2);
 }
 
-[data-theme="source"] .model-card[data-source="blog"] {
+[data-theme="source"] .model-card[data-source="blog"], .source-mode .model-card[data-source="blog"] {
     border-top-color: var(--source-blog);
 }
 
-[data-theme="source"] .model-card[data-source="blog"] .source-badge {
+[data-theme="source"] .model-card[data-source="blog"] .source-badge, .source-mode .model-card[data-source="blog"] .source-badge {
     background: rgba(249, 115, 22, 0.12);
     color: var(--source-blog);
     border-color: rgba(249, 115, 22, 0.2);
 }
 
-[data-theme="source"] .model-card[data-source="monitor"] {
+[data-theme="source"] .model-card[data-source="monitor"], .source-mode .model-card[data-source="monitor"] {
     border-top-color: var(--source-monitor);
 }
 
-[data-theme="source"] .model-card[data-source="monitor"] .source-badge {
+[data-theme="source"] .model-card[data-source="monitor"] .source-badge, .source-mode .model-card[data-source="monitor"] .source-badge {
     background: rgba(220, 38, 38, 0.12);
     color: var(--source-monitor);
     border-color: rgba(220, 38, 38, 0.2);
 }
 
-[data-theme="source"] .model-card[data-source="testingcatalog"] {
+[data-theme="source"] .model-card[data-source="testingcatalog"], .source-mode .model-card[data-source="testingcatalog"] {
     border-top-color: var(--source-testingcatalog);
 }
 
-[data-theme="source"] .model-card[data-source="testingcatalog"] .source-badge {
+[data-theme="source"] .model-card[data-source="testingcatalog"] .source-badge, .source-mode .model-card[data-source="testingcatalog"] .source-badge {
     background: rgba(4, 120, 87, 0.12);
     color: var(--source-testingcatalog);
     border-color: rgba(4, 120, 87, 0.2);
@@ -3367,13 +3379,13 @@ body {
     margin-bottom: 10px;
 }
 
-[data-theme="source"] .source-badge {
+[data-theme="source"] .source-badge, .source-mode .source-badge {
     display: inline-flex;
     align-items: center;
     gap: 6px;
 }
 
-[data-theme="source"] .source-badge::before {
+[data-theme="source"] .source-badge::before, .source-mode .source-badge::before {
     content: '';
     width: 8px;
     height: 8px;
