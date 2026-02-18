@@ -1,0 +1,62 @@
+[
+  {
+    "id": "intro",
+    "path": "./public/audio/intro.wav",
+    "duration": 5.92
+  },
+  {
+    "id": "landscape",
+    "path": "./public/audio/landscape.wav",
+    "duration": 18.08
+  },
+  {
+    "id": "anthropic",
+    "path": "./public/audio/anthropic.wav",
+    "duration": 13.16
+  },
+  {
+    "id": "google",
+    "path": "./public/audio/google.wav",
+    "duration": 9.6
+  },
+  {
+    "id": "openai",
+    "path": "./public/audio/openai.wav",
+    "duration": 8.68
+  },
+  {
+    "id": "xai",
+    "path": "./public/audio/xai.wav",
+    "duration": 8.24
+  },
+  {
+    "id": "chinese",
+    "path": "./public/audio/chinese.wav",
+    "duration": 12.04
+  },
+  {
+    "id": "meta",
+    "path": "./public/audio/meta.wav",
+    "duration": 3.36
+  },
+  {
+    "id": "tiers",
+    "path": "./public/audio/tiers.wav",
+    "duration": 26.56
+  },
+  {
+    "id": "top-models",
+    "path": "./public/audio/top-models.wav",
+    "duration": 29.32
+  },
+  {
+    "id": "overview",
+    "path": "./public/audio/overview.wav",
+    "duration": 4.36
+  },
+  {
+    "id": "cta",
+    "path": "./public/audio/cta.wav",
+    "duration": 6.72
+  }
+]

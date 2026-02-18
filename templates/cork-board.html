@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Codebase Evidence Board</title>
+    <link rel="stylesheet" href="/static/styles.css?v=1766074500">
+    <link rel="stylesheet" href="/static/cork-board.css?v=1">
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+</head>
+
+<body>
+    <div class="container">
+        <header class="header cork-header">
+            <div class="header-main">
+                <h1>Evidence Board: Codebase Casefile</h1>
+                <p>Pin the modules, trace the data, and solve how the system responds.</p>
+                <div class="cork-actions">
+                    <a class="refresh-btn" href="/">Back to Dashboard</a>
+                    <button class="refresh-btn" id="reset-board">Reset Board</button>
+                </div>
+            </div>
+        </header>
+
+        <main class="cork-board-layout">
+            <section class="cork-board-panel">
+                <h2>Case Brief</h2>
+                <p class="section-note">Arrange evidence to reconstruct the request journey. Connect clues to show flow.</p>
+                <div class="cork-brief">
+                    <div class="brief-item">
+                        <span>Case:</span>
+                        <strong>Dashboard Data Flow</strong>
+                    </div>
+                    <div class="brief-item">
+                        <span>Objective:</span>
+                        <strong>Trace how UI updates from live APIs</strong>
+                    </div>
+                    <div class="brief-item">
+                        <span>Status:</span>
+                        <strong id="case-status">Collecting evidence</strong>
+                    </div>
+                </div>
+                <div class="cork-controls">
+                    <button class="refresh-btn" id="add-evidence">Pin Evidence</button>
+                    <button class="refresh-btn" id="connect-evidence">Connect Selected</button>
+                </div>
+                <div class="cork-log" id="cork-log"></div>
+            </section>
+
+            <section class="cork-board-panel cork-board-surface">
+                <div class="board-header">
+                    <h2>Evidence Wall</h2>
+                    <div class="status-chip">Pins: <span id="pin-count">0</span></div>
+                </div>
+                <div class="cork-surface" id="cork-surface">
+                    <svg class="cork-lines" id="cork-lines"></svg>
+                </div>
+            </section>
+
+            <section class="cork-board-panel">
+                <h2>Evidence Drawer</h2>
+                <p class="section-note">Pick a clue to pin on the wall. Each clue maps to a codebase module.</p>
+                <div class="cork-drawer" id="cork-drawer"></div>
+            </section>
+        </main>
+    </div>
+
+    <script src="/static/cork-board.js?v=1"></script>
+</body>
+
+</html>

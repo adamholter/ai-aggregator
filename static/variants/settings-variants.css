@@ -1,0 +1,149 @@
+/* ============================================================
+   Settings Modal — tabbed layout with smart API key state
+   ============================================================ */
+
+/* Flex column so footer sticks to bottom */
+.settings-modal-inner {
+    display: flex !important;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.settings-modal-inner .modal-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    max-height: none !important;
+}
+
+/* ---- Tab navigation ---------------------------------------- */
+.settings-tab-nav {
+    display: flex;
+    padding: 0 24px;
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+.settings-tab {
+    position: relative;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 12px 14px;
+    margin-bottom: -1px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--info-text);
+    cursor: pointer;
+    transition: color 0.15s;
+}
+
+.settings-tab:hover {
+    color: var(--text-color);
+}
+
+.settings-tab.active {
+    color: var(--text-color);
+    border-bottom-color: var(--button-bg);
+}
+
+/* Dot indicator for missing API key */
+.settings-tab-dot {
+    display: none;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #f59e0b;
+    position: absolute;
+    top: 9px;
+    right: 2px;
+}
+
+/* ---- Tab content visibility -------------------------------- */
+.settings-section[data-tab] {
+    display: none;
+}
+
+.settings-section[data-tab].tab-active {
+    display: block;
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+/* ---- Sticky footer ----------------------------------------- */
+.settings-footer {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    padding: 14px 24px;
+    border-top: 1px solid var(--border-color);
+    background: var(--card-bg);
+    flex-shrink: 0;
+}
+
+/* ---- API key callout (shown when key is missing) ----------- */
+.api-key-callout {
+    display: none;
+}
+
+.settings-modal-inner[data-api-state="missing"] .api-key-callout {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-bottom: 18px;
+    font-size: 13px;
+    color: #78350f;
+}
+
+[data-theme="dark"] .settings-modal-inner[data-api-state="missing"] .api-key-callout {
+    background: rgba(245, 158, 11, 0.08);
+    border-color: rgba(245, 158, 11, 0.3);
+    color: #d97706;
+}
+
+.api-key-callout strong {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 2px;
+    color: #92400e;
+}
+
+[data-theme="dark"] .api-key-callout strong {
+    color: #fbbf24;
+}
+
+.api-key-callout p {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+/* Show dot on API tab when key is missing */
+.settings-modal-inner[data-api-state="missing"] #api-tab-dot {
+    display: inline-block;
+}
+
+/* ---- API tab: de-emphasize when key is already set --------- */
+.settings-modal-inner[data-api-state="set"] .settings-tab[data-target="api"] {
+    font-size: 12px;
+    opacity: 0.7;
+}
+
+.settings-modal-inner[data-api-state="set"] .settings-tab[data-target="api"]::after {
+    content: " \2713";
+    color: #10b981;
+    font-size: 11px;
+    opacity: 1;
+}
+
+.settings-modal-inner[data-api-state="set"] .api-section-heading {
+    font-size: 13px;
+    color: var(--info-text);
+    font-weight: 500;
+}

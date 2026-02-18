@@ -1,0 +1,327 @@
+{
+  "llms:GPT-5.2 (xhigh)": {
+    "model_name": "GPT-5.2 Pro",
+    "source": "llms",
+    "summary": "GPT-5.2 Pro is identified as the 'xhigh' variant due to its description as OpenAI's most advanced model specifically optimized for complex tasks and agentic coding. Artificial Analysis corroborates this with 'GPT-5.2 (xhigh)' having the highest intelligence index, implying a top-tier performance akin to a 'Pro' version.",
+    "key_facts": [
+      "OpenAI's most advanced model in the 5.2 family",
+      "Optimized for complex tasks requiring step-by-step reasoning",
+      "Offers major improvements in agentic coding and long context performance over GPT-5 Pro",
+      "Highest intelligence_index among GPT-5.2 models in Artificial Analysis (51.2)"
+    ],
+    "or_id": "openai/gpt-5.2-pro",
+    "aa_slug": "gpt-5-2",
+    "or_link": "https://openrouter.ai/openai/gpt-5.2-pro",
+    "aa_link": "https://artificialanalysis.ai/models/gpt-5-2",
+    "or_data": {
+      "id": "openai/gpt-5.2-pro",
+      "slug": "openai/gpt-5.2-pro-20251211",
+      "name": "OpenAI: GPT-5.2 Pro",
+      "vendor": "OpenAI",
+      "base_name": "GPT-5.2 Pro",
+      "created": 1765389780,
+      "created_at": "2025-12-10T18:03:00Z",
+      "description": "GPT-5.2 Pro is OpenAI\u2019s most advanced model, offering major improvements in agentic coding and long context performance over GPT-5 Pro. It is optimized for complex tasks that require step-by-step reasoning, instruction following, and accuracy in high-stakes use cases. It supports test-time routing features and advanced prompt understanding, including user-specified intent like \"think hard about this.\" Improvements include reductions in hallucination, sycophancy, and better performance in coding, writing, and health-related tasks.",
+      "context_length": 400000,
+      "hugging_face_id": "",
+      "architecture": {
+        "modality": "text+image+file->text",
+        "input_modalities": [
+          "image",
+          "text",
+          "file"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "tokenizer": "GPT",
+        "instruct_type": null
+      },
+      "pricing": {
+        "prompt": "0.000021",
+        "completion": "0.000168",
+        "web_search": "0.01"
+      },
+      "top_provider": {
+        "context_length": 400000,
+        "max_completion_tokens": 128000,
+        "is_moderated": true
+      },
+      "per_request_limits": null,
+      "supported_parameters": [
+        "include_reasoning",
+        "max_tokens",
+        "reasoning",
+        "response_format",
+        "seed",
+        "structured_outputs",
+        "tool_choice",
+        "tools"
+      ],
+      "default_parameters": {
+        "temperature": null,
+        "top_p": null,
+        "frequency_penalty": null
+      },
+      "tags": [],
+      "display_url": "https://openrouter.ai/models/openai/gpt-5.2-pro-20251211"
+    },
+    "aa_data": {
+      "id": "498862c3-f9ac-49d2-852f-16a02bb0c38f",
+      "name": "GPT-5.2 (xhigh)",
+      "slug": "gpt-5-2",
+      "release_date": "2025-12-11",
+      "model_creator": {
+        "id": "e67e56e3-15cd-43db-b679-da4660a69f41",
+        "name": "OpenAI",
+        "slug": "openai"
+      },
+      "evaluations": {
+        "artificial_analysis_intelligence_index": 51.2,
+        "artificial_analysis_coding_index": 48.7,
+        "artificial_analysis_math_index": 99,
+        "mmlu_pro": 0.874,
+        "gpqa": 0.903,
+        "hle": 0.354,
+        "livecodebench": 0.889,
+        "scicode": 0.521,
+        "math_500": null,
+        "aime": null,
+        "aime_25": 0.99,
+        "ifbench": 0.754,
+        "lcr": 0.727,
+        "terminalbench_hard": 0.47,
+        "tau2": 0.848
+      },
+      "pricing": {
+        "price_1m_blended_3_to_1": 4.813,
+        "price_1m_input_tokens": 1.75,
+        "price_1m_output_tokens": 14
+      },
+      "median_output_tokens_per_second": 94.108,
+      "median_time_to_first_token_seconds": 42.108,
+      "median_time_to_first_answer_token": 42.108
+    },
+    "monitor_hits": [
+      {
+        "title": "OpenAI GPT-5.3 'Garlic' Spotted in GitHub Pull Requests",
+        "url": "",
+        "source_label": "Monitor Feed"
+      },
+      {
+        "title": "GPT-5.2 Thinking Model Context Limited to 58K in ChatGPT",
+        "url": "",
+        "source_label": "Monitor Feed"
+      },
+      {
+        "title": "OpenAI GPT-5.2 Derives Novel Theoretical Physics Result",
+        "url": "",
+        "source_label": "Monitor Feed"
+      },
+      {
+        "title": "Kimi K2.5 and StepFun-Flash-3.5 Surge in Usage",
+        "url": "https://matharena.ai/models/stepfun_3_5_flash",
+        "source_label": "Monitor Feed"
+      }
+    ],
+    "generated_at": "2026-02-17T21:23:55.123217",
+    "cached": false
+  },
+  "llms:GLM\u20115\u202f(Reasoning)": {
+    "model_name": "GLM\u20115\u202f(Reasoning)",
+    "source": "llms",
+    "summary": "",
+    "key_facts": [],
+    "or_id": null,
+    "aa_slug": null,
+    "or_link": null,
+    "aa_link": null,
+    "or_data": null,
+    "aa_data": null,
+    "monitor_hits": [],
+    "generated_at": "2026-02-18T07:59:37.025924",
+    "cached": false
+  },
+  "llms:Grok\u202f4": {
+    "model_name": "Grok 4",
+    "source": "llms",
+    "summary": "Grok 4 is xAI's latest reasoning model, offering advanced capabilities like parallel tool calling and structured outputs. It features a 256k context window and handles both image and text inputs.",
+    "key_facts": [
+      "xAI's latest reasoning model",
+      "256k context window",
+      "Supports parallel tool calling",
+      "Supports structured outputs",
+      "Supports image and text inputs"
+    ],
+    "or_id": "x-ai/grok-4",
+    "aa_slug": "grok-4",
+    "or_link": "https://openrouter.ai/x-ai/grok-4",
+    "aa_link": "https://artificialanalysis.ai/models/grok-4",
+    "or_data": {
+      "id": "x-ai/grok-4",
+      "slug": "x-ai/grok-4-07-09",
+      "name": "xAI: Grok 4",
+      "vendor": "xAI",
+      "base_name": "Grok 4",
+      "created": 1752087689,
+      "created_at": "2025-07-09T19:01:29Z",
+      "description": "Grok 4 is xAI's latest reasoning model with a 256k context window. It supports parallel tool calling, structured outputs, and both image and text inputs. Note that reasoning is not exposed, reasoning cannot be disabled, and the reasoning effort cannot be specified. Pricing increases once the total tokens in a given request is greater than 128k tokens. See more details on the [xAI docs](https://docs.x.ai/docs/models/grok-4-0709)",
+      "context_length": 256000,
+      "hugging_face_id": "",
+      "architecture": {
+        "modality": "text+image->text",
+        "input_modalities": [
+          "image",
+          "text"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "tokenizer": "Grok",
+        "instruct_type": null
+      },
+      "pricing": {
+        "prompt": "0.000003",
+        "completion": "0.000015",
+        "web_search": "0.005",
+        "input_cache_read": "0.00000075"
+      },
+      "top_provider": {
+        "context_length": 256000,
+        "max_completion_tokens": null,
+        "is_moderated": false
+      },
+      "per_request_limits": null,
+      "supported_parameters": [
+        "include_reasoning",
+        "logprobs",
+        "max_tokens",
+        "reasoning",
+        "response_format",
+        "seed",
+        "structured_outputs",
+        "temperature",
+        "tool_choice",
+        "tools",
+        "top_logprobs",
+        "top_p"
+      ],
+      "default_parameters": {},
+      "tags": [],
+      "display_url": "https://openrouter.ai/models/x-ai/grok-4-07-09"
+    },
+    "aa_data": {
+      "id": "5ea94a4a-55ac-4ea1-8898-2b3971e94af6",
+      "name": "Grok 4",
+      "slug": "grok-4",
+      "release_date": "2025-07-10",
+      "model_creator": {
+        "id": "a1e3ddcf-d3e4-44a5-9e8f-029a69850875",
+        "name": "xAI",
+        "slug": "xai"
+      },
+      "evaluations": {
+        "artificial_analysis_intelligence_index": 41.4,
+        "artificial_analysis_coding_index": 40.5,
+        "artificial_analysis_math_index": 92.7,
+        "mmlu_pro": 0.866,
+        "gpqa": 0.877,
+        "hle": 0.239,
+        "livecodebench": 0.819,
+        "scicode": 0.457,
+        "math_500": 0.99,
+        "aime": 0.943,
+        "aime_25": 0.927,
+        "ifbench": 0.537,
+        "lcr": 0.68,
+        "terminalbench_hard": 0.379,
+        "tau2": 0.749
+      },
+      "pricing": {
+        "price_1m_blended_3_to_1": 6,
+        "price_1m_input_tokens": 3,
+        "price_1m_output_tokens": 15
+      },
+      "median_output_tokens_per_second": 39.889,
+      "median_time_to_first_token_seconds": 13.757,
+      "median_time_to_first_answer_token": 13.757
+    },
+    "monitor_hits": [
+      {
+        "title": "xAI Launches Grok 4.20 Beta with 4 Experts Multi-Agent Architecture",
+        "url": "",
+        "source_label": "Monitor Feed"
+      },
+      {
+        "title": "OpenClaw Adds Grok Integration via Clawhub for Real-Time X Search",
+        "url": "https://clawdhub.com/mvanhorn/search-x",
+        "source_label": "Monitor Feed"
+      },
+      {
+        "title": "xAI Grok Gains Android Dictation and Multi-Image Imagine",
+        "url": "",
+        "source_label": "Monitor Feed"
+      },
+      {
+        "title": "xAI to Launch Grok Build This Month",
+        "url": "",
+        "source_label": "Monitor Feed"
+      }
+    ],
+    "generated_at": "2026-02-18T07:59:38.370660",
+    "cached": false
+  },
+  "llms:Magistral\u202fMedium\u202f1.2": {
+    "model_name": "Magistral Medium 1.2",
+    "source": "llms",
+    "summary": "Magistral Medium 1.2 is noted in Artificial Analysis with an intelligence index of 27 and a speed of 34 tokens/second. Despite its name similarity to Mistral models, it is not present in the OpenRouter candidates provided.",
+    "key_facts": [
+      "Artificial Analysis intelligence index: 27",
+      "Artificial Analysis speed: 34 tok/s"
+    ],
+    "or_id": null,
+    "aa_slug": "magistral-medium-2509",
+    "or_link": null,
+    "aa_link": "https://artificialanalysis.ai/models/magistral-medium-2509",
+    "or_data": null,
+    "aa_data": {
+      "id": "864da2a5-156c-45fd-873c-8923be91914f",
+      "name": "Magistral Medium 1.2",
+      "slug": "magistral-medium-2509",
+      "release_date": "2025-09-18",
+      "model_creator": {
+        "id": "b5c0639a-cc9c-443b-a07e-bae6b7088933",
+        "name": "Mistral",
+        "slug": "mistral"
+      },
+      "evaluations": {
+        "artificial_analysis_intelligence_index": 27,
+        "artificial_analysis_coding_index": 21.7,
+        "artificial_analysis_math_index": 82,
+        "mmlu_pro": 0.815,
+        "gpqa": 0.739,
+        "hle": 0.096,
+        "livecodebench": 0.75,
+        "scicode": 0.392,
+        "math_500": null,
+        "aime": null,
+        "aime_25": 0.82,
+        "ifbench": 0.43,
+        "lcr": 0.513,
+        "terminalbench_hard": 0.129,
+        "tau2": 0.52
+      },
+      "pricing": {
+        "price_1m_blended_3_to_1": 2.75,
+        "price_1m_input_tokens": 2,
+        "price_1m_output_tokens": 5
+      },
+      "median_output_tokens_per_second": 33.627,
+      "median_time_to_first_token_seconds": 0.524,
+      "median_time_to_first_answer_token": 59.999
+    },
+    "monitor_hits": [],
+    "generated_at": "2026-02-18T07:59:39.825998",
+    "cached": false
+  }
+}

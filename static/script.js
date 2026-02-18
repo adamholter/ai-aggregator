@@ -758,34 +758,34 @@ const TOUR_COMPLETED_KEY = 'dashboard-tour-completed';
 
 const tourSteps = [
     {
-        selector: '.nav-tabs',
-        title: 'Welcome to AI Dashboard! 👋',
-        content: 'Browse AI models from multiple sources: benchmarks, OpenRouter, fal.ai, Replicate, and more. Use these tabs to explore different categories.',
-        position: 'bottom'
-    },
-    {
-        selector: '#globalSearch, .search-input, [type="search"]',
-        title: 'Global Search',
-        content: 'Press Cmd+K (or Ctrl+K) to search across all models and sources. Find any model instantly.',
-        position: 'bottom'
-    },
-    {
-        selector: '.model-card, .llm-card',
-        title: 'Model Cards',
-        content: 'Click cards to view details. Use the pin button to save favorites, or add to Compare for side-by-side analysis.',
+        selector: '.navigation',
+        title: 'Welcome to AI Model Dashboard',
+        content: 'This sidebar gives you instant access to 17 sections covering LLMs, image models, video, audio, fal.ai, Replicate, OpenRouter, news, and more. Hover to expand it and see labels.',
         position: 'right'
     },
     {
-        selector: '[data-tab="agent"], .nav-tabs button:contains("Agent")',
-        title: 'AI Agent',
-        content: 'Ask questions about models, get recommendations, and explore data with our AI assistant. Requires an OpenRouter API key.',
+        selector: '.global-search',
+        title: 'Search Everything',
+        content: 'Press Cmd+K (or Ctrl+K) to search across all models and categories at once. You can also type directly in this bar to filter whatever section you\'re in.',
         position: 'bottom'
     },
     {
-        selector: '.settings-btn, #settingsBtn, [aria-label*="Settings"]',
+        selector: '.model-card',
+        title: 'Model Cards',
+        content: 'Each card shows live benchmark scores, pricing, and speed. Click for details, double-click for an AI-powered deep analysis, or pin a card to save it to your Pinned section.',
+        position: 'right'
+    },
+    {
+        selector: '.nav-btn[data-section="agent-exp"]',
+        title: 'AI Agent',
+        content: 'Ask anything about AI models in plain English — best models for coding, cost comparisons, what\'s trending. The agent pulls live benchmarks and searches the web. Add your OpenRouter API key in Settings to use it.',
+        position: 'right'
+    },
+    {
+        selector: '#settings-btn',
         title: 'Settings',
-        content: 'Configure your API keys, theme preferences, and more. Your settings are saved locally.',
-        position: 'left'
+        content: 'Add your OpenRouter API key to unlock AI analysis and the agent. Choose which models appear in the agent dropdown, pick a sidebar style, and more. Everything is stored only in your browser.',
+        position: 'bottom'
     }
 ];
 
@@ -802,22 +802,16 @@ function markTourCompleted() {
 }
 
 function findTourElement(selector) {
-    // Try multiple strategies to find element
     let el = document.querySelector(selector);
     if (el) return el;
 
-    // Try finding by partial text match for tabs
-    if (selector.includes('Agent')) {
-        el = Array.from(document.querySelectorAll('.nav-tabs button, .nav-tabs a'))
-            .find(btn => btn.textContent.includes('Agent'));
-        if (el) return el;
-    }
-
-    // Try common fallbacks
+    // Fallbacks for each step selector
     const fallbacks = {
-        '.nav-tabs': '.nav-tabs, nav, .tabs',
+        '.navigation': 'nav, .nav-btn',
+        '.global-search': '.header .global-search, #globalSearch, .search-input, input[type="search"]',
         '.model-card': '.model-card, .llm-card, .card',
-        '.settings-btn': '.settings-btn, #settingsBtn, button[aria-label*="Settings"], .gear-icon'
+        '.nav-btn[data-section="agent-exp"]': '.nav-btn[data-section="agent-exp"], #agent-exp',
+        '#settings-btn': '#settings-btn, .settings-btn, button[aria-label*="Settings"]'
     };
 
     if (fallbacks[selector]) {
@@ -1853,6 +1847,14 @@ function toggleTheme() {
     document.documentElement.setAttribute('data-theme', nextTheme);
     localStorage.setItem('theme', nextTheme);
     updateThemeToggleText(nextTheme);
+
+    // Sync theme to embedded agent iframe
+    try {
+        const agentFrame = document.querySelector('#agent-exp iframe');
+        if (agentFrame && agentFrame.contentWindow) {
+            agentFrame.contentWindow.postMessage({ type: 'theme', value: nextTheme }, '*');
+        }
+    } catch(e) {}
 }
 
 function updateThemeToggleText(theme) {
@@ -7903,6 +7905,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
             refreshOpenRouterKeyField();
             attachOpenRouterKeyHandlers();
+            initSettingsVariants();
         });
 
         // Close modal handlers
@@ -7986,6 +7989,44 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 });
+
+// ============================================================
+// Settings Modal — tabs + smart API key state
+// ============================================================
+
+function applySettingsTab(tab) {
+    const inner = document.querySelector('.settings-modal-inner');
+    if (!inner) return;
+    inner.querySelectorAll('.settings-tab').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.target === tab);
+    });
+    inner.querySelectorAll('.settings-section[data-tab]').forEach(section => {
+        section.classList.toggle('tab-active', section.dataset.tab === tab);
+    });
+}
+
+function initSettingsVariants() {
+    const inner = document.querySelector('.settings-modal-inner');
+    if (!inner) return;
+
+    // Attach tab listeners once
+    if (!inner.dataset.tabListeners) {
+        inner.querySelectorAll('.settings-tab').forEach(btn => {
+            btn.addEventListener('click', () => applySettingsTab(btn.dataset.target));
+        });
+        inner.dataset.tabListeners = 'true';
+    }
+
+    // Refresh API key state on every open
+    const hasKey = !!getUserOpenRouterKey();
+    inner.dataset.apiState = hasKey ? 'set' : 'missing';
+
+    // Default to API tab if key is missing, otherwise keep last active or models
+    const hasActive = inner.querySelector('.settings-section[data-tab].tab-active');
+    if (!hasActive || !hasKey) {
+        applySettingsTab(hasKey ? 'models' : 'api');
+    }
+}
 
 // Load saved settings
 function loadSavedSettings() {

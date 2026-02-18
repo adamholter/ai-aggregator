@@ -733,5 +733,81 @@
       "persisted_at": "2025-10-17T09:21:48.081082"
     },
     "saved_at": "2025-10-17T09:21:48.081100"
+  },
+  "artificial-analysis::openrouter::kimi k2.5 (reasoning)::kimi": {
+    "result": {
+      "match": {
+        "id": "moonshotai/kimi-k2.5",
+        "confidence": 1.0,
+        "reason": "Exact match found in the catalogue for Target Model Name 'Kimi K2.5 (Reasoning)' and Provider Hint 'Kimi'.",
+        "target": "openrouter",
+        "metadata": {
+          "id": "moonshotai/kimi-k2.5",
+          "slug": "moonshotai/kimi-k2.5-0127",
+          "name": "MoonshotAI: Kimi K2.5",
+          "vendor": "MoonshotAI",
+          "base_name": "Kimi K2.5",
+          "created": 1769487076,
+          "created_at": "2026-01-27T04:11:16Z",
+          "description": "Kimi K2.5 is Moonshot AI's native multimodal model, delivering state-of-the-art visual coding capability and a self-directed agent swarm paradigm. Built on Kimi K2 with continued pretraining over approximately 15T mixed visual and text tokens, it delivers strong performance in general reasoning, visual coding, and agentic tool-calling.",
+          "context_length": 262144,
+          "hugging_face_id": "moonshotai/Kimi-K2.5",
+          "architecture": {
+            "modality": "text+image->text",
+            "input_modalities": [
+              "text",
+              "image"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "tokenizer": "Other",
+            "instruct_type": null
+          },
+          "pricing": {
+            "prompt": "0.00000023",
+            "completion": "0.000003"
+          },
+          "top_provider": {
+            "context_length": 262144,
+            "max_completion_tokens": 262144,
+            "is_moderated": false
+          },
+          "per_request_limits": null,
+          "supported_parameters": [
+            "frequency_penalty",
+            "include_reasoning",
+            "logit_bias",
+            "logprobs",
+            "max_tokens",
+            "min_p",
+            "parallel_tool_calls",
+            "presence_penalty",
+            "reasoning",
+            "reasoning_effort",
+            "repetition_penalty",
+            "response_format",
+            "seed",
+            "stop",
+            "structured_outputs",
+            "temperature",
+            "tool_choice",
+            "tools",
+            "top_k",
+            "top_logprobs",
+            "top_p"
+          ],
+          "default_parameters": {
+            "temperature": null,
+            "top_p": null,
+            "frequency_penalty": null
+          },
+          "tags": [],
+          "display_url": "https://openrouter.ai/models/moonshotai/kimi-k2.5-0127"
+        }
+      },
+      "persisted_at": "2026-02-17T11:05:19.218248"
+    },
+    "saved_at": "2026-02-17T11:05:19.218271"
   }
 }

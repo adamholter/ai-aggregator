@@ -1,0 +1,207 @@
+.card-game-header {
+    margin-bottom: 24px;
+}
+
+.card-game-header .card-game-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 16px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.card-game {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 24px;
+    align-items: start;
+}
+
+.card-game-panel {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+}
+
+.card-game-rules {
+    padding-left: 18px;
+    color: var(--info-text);
+    margin: 12px 0 20px;
+}
+
+.card-game-status {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+}
+
+.status-chip {
+    border-radius: 999px;
+    border: 1px solid var(--border-color);
+    padding: 6px 12px;
+    font-size: 0.85rem;
+    background: var(--bg-color);
+    color: var(--text-color);
+}
+
+.card-game-controls {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.flow-board {
+    display: grid;
+    gap: 16px;
+}
+
+.flow-stage {
+    border: 1px dashed var(--border-color);
+    border-radius: 14px;
+    padding: 14px;
+    background: linear-gradient(135deg, rgba(17, 24, 39, 0.05), rgba(255, 255, 255, 0));
+}
+
+.flow-stage h3 {
+    font-size: 1rem;
+    margin-bottom: 8px;
+}
+
+.flow-slot {
+    display: grid;
+    gap: 10px;
+}
+
+.flow-token {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    color: var(--info-text);
+}
+
+.flow-token span {
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+    display: inline-block;
+    background: var(--source-openrouter);
+    box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.12);
+}
+
+.hand-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.hand-grid {
+    display: grid;
+    gap: 16px;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.card-item {
+    border-radius: 14px;
+    border: 1px solid var(--border-color);
+    padding: 12px;
+    background: var(--bg-color);
+    cursor: pointer;
+    display: grid;
+    gap: 8px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.card-item:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 12px 22px rgba(15, 23, 42, 0.12);
+}
+
+.card-item.selected {
+    border-color: var(--source-openrouter);
+    box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.2);
+}
+
+.card-tag {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 600;
+    color: var(--info-text);
+}
+
+.card-title {
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+.card-body {
+    font-size: 0.85rem;
+    color: var(--info-text);
+}
+
+.card-file {
+    font-size: 0.75rem;
+    color: var(--info-text);
+    font-family: ui-monospace, SFMono-Regular, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.card-slot {
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    padding: 10px;
+    background: var(--card-bg);
+    display: grid;
+    gap: 6px;
+}
+
+.card-slot .card-tag {
+    color: var(--source-replicate);
+}
+
+.card-slot .card-title {
+    font-size: 0.95rem;
+}
+
+.card-slot .card-body {
+    font-size: 0.8rem;
+}
+
+.card-inspector {
+    display: grid;
+    gap: 12px;
+}
+
+.flow-log {
+    display: grid;
+    gap: 10px;
+    max-height: 260px;
+    overflow-y: auto;
+}
+
+.flow-log-entry {
+    background: var(--bg-color);
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+    padding: 10px 12px;
+    font-size: 0.85rem;
+    color: var(--text-color);
+}
+
+.flow-log-entry span {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--info-text);
+    margin-top: 4px;
+}
+
+@media (max-width: 900px) {
+    .card-game {
+        grid-template-columns: 1fr;
+    }
+}

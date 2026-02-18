@@ -1,0 +1,27 @@
+{
+  "name": "showcase-video",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "remotion studio",
+    "build": "remotion render AIModelDashboardShowcase",
+    "render": "remotion render AIModelDashboardShowcase"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@remotion/bundler": "4.0.407",
+    "@remotion/captions": "4.0.407",
+    "@remotion/cli": "4.0.407",
+    "@remotion/gif": "4.0.408",
+    "@remotion/media": "4.0.407",
+    "@remotion/three": "4.0.407",
+    "@types/react": "19.2.9",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "remotion": "4.0.407",
+    "typescript": "5.9.3"
+  }
+}

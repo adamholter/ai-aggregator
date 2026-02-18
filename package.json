@@ -1,0 +1,12 @@
+{
+  "name": "ai-dashboard-flask-ui-tests",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "build": "echo 'No frontend build step required for Flask static app'",
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.54.2"
+  }
+}

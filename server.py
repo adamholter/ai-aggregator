@@ -33,11 +33,39 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 
+from backend.app.agent import run_agent, stream_agent, build_system_prompt
+from backend.app.agent.tool_executors import AgentToolExecutors, list_skill_frontmatter
+from backend.app.agent.types import AgentSettings
+
  
 
 app = Flask(__name__, static_folder='.', static_url_path='')
 CORS(app)
 app.secret_key = os.environ.get('APP_SECRET_KEY') or 'change-me-in-production'
+
+
+def _load_local_env_files():
+    """Load .env and .env.local without overriding already-set environment variables."""
+    for filename in ('.env', '.env.local'):
+        path = os.path.join(os.path.dirname(__file__), filename)
+        if not os.path.exists(path):
+            continue
+        try:
+            with open(path, 'r', encoding='utf-8') as handle:
+                for line in handle:
+                    stripped = line.strip()
+                    if not stripped or stripped.startswith('#') or '=' not in stripped:
+                        continue
+                    key, value = stripped.split('=', 1)
+                    key = key.strip()
+                    if not key or key in os.environ:
+                        continue
+                    os.environ[key] = value.strip()
+        except Exception as exc:
+            print(f"WARNING: Could not load {filename}: {exc}")
+
+
+_load_local_env_files()
 
 # Session configuration for persistence
 app.config['SESSION_PERMANENT'] = True
@@ -86,8 +114,7 @@ print("Setting up inline experimental agent routes...")
 
 AGENT_TOOLS = [
     # News and Activity
-    {"type": "function", "function": {"name": "fetch_latest_feed", "description": "Get latest AI news, model releases, and industry updates. Returns headlines with links. Use for: current events, announcements, what's new.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Filter by keyword (e.g., 'openai', 'llama')"}, "limit": {"type": "integer", "description": "Max items (default 20)"}}, "required": []}}},
-    {"type": "function", "function": {"name": "fetch_hype_feed", "description": "Get trending AI repos and projects from GitHub, HuggingFace, Reddit. Shows popularity scores and descriptions. Use for: discovering hot projects, viral repos.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Filter by keyword"}, "limit": {"type": "integer", "description": "Max items (default 20)"}}, "required": []}}},
+    {"type": "function", "function": {"name": "fetch_latest_feed", "description": "Get AI news and trending projects. Default: last 24h. Set include_hype=true to add trending GitHub/HuggingFace/Reddit/Replicate repos. Use days_back to look further back. For precise date filtering or processing, use run_python with fetch_news() instead.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Filter results by keyword (e.g. 'openai', 'llama', 'claude')"}, "days_back": {"type": "integer", "description": "Days to look back (default 1 = last 24h; higher values return more items)"}, "include_hype": {"type": "boolean", "description": "Include trending GitHub/HuggingFace/Reddit/Replicate repos (default false)"}, "limit": {"type": "integer", "description": "Max items (default 20)"}}, "required": []}}},
     {"type": "function", "function": {"name": "fetch_blog_posts", "description": "Get AI research blog posts and articles. Use for: in-depth technical content, research papers, tutorials.", "parameters": {"type": "object", "properties": {"limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
     
     # LLM Benchmarks - Primary data source for model comparisons
@@ -110,10 +137,29 @@ AGENT_TOOLS = [
     {"type": "function", "function": {"name": "fetch_replicate_models", "description": "REPLICATE PLATFORM: Run open-source models via API. Shows run counts and pricing.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Filter by model name"}, "limit": {"type": "integer", "description": "Max items"}}, "required": []}}},
     
     # Web Search
-    {"type": "function", "function": {"name": "ask_perplexity", "description": "LIVE WEB SEARCH via Perplexity. Use ONLY when other tools don't have the answer. Slower and more expensive.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Natural language search question"}}, "required": ["query"]}}}
+    {"type": "function", "function": {"name": "ask_perplexity", "description": "LIVE WEB SEARCH via Perplexity. Use proactively for subjective questions, community opinions, recent news, and anything where user experience matters more than raw benchmarks.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Natural language search question"}}, "required": ["query"]}}},
+
+    # Code execution
+    {"type": "function", "function": {"name": "run_python", "description": "Execute a Python snippet. Helpers return Python objects (lists of dicts) for programmatic filtering/processing: fetch_benchmarks(query,limit), fetch_news(days_back,include_hype,query,limit,since,until), fetch_openrouter(query,limit), fetch_image_models(limit), fetch_video_models(limit). Use for date-range filtering, cross-tool joins, computed metrics. Print compact summaries — avoid printing raw full lists.", "parameters": {"type": "object", "properties": {"code": {"type": "string", "description": "Python code. Use print() for output. Helpers and json/re/math/datetime/collections are pre-imported."}}, "required": ["code"]}}}
 ]
 
-AGENT_SYSTEM_PROMPT = """You are an expert AI analyst with access to real-time benchmark data from Artificial Analysis and model catalogs. Your job is to analyze data, extract insights, and present findings clearly.
+def get_agent_system_prompt(deeper_mode=False):
+    from datetime import datetime
+    today = datetime.now().strftime('%B %d, %Y')
+    deeper_section = """
+## DEEP RESEARCH MODE
+You have up to 20 iterations. Use this capacity fully:
+- Call ask_perplexity multiple times with different angles (broad overview first, then targeted follow-ups)
+- Cross-reference benchmark numbers against community feedback and real-world reports
+- Don't stop after one tool call if the answer could be improved with more data
+- For model comparisons: get benchmarks AND community sentiment AND recent news
+""" if deeper_mode else ""
+    return f"""You are an expert AI analyst with access to real-time benchmark data from Artificial Analysis and model catalogs. Your job is to analyze data, extract insights, and present findings clearly.
+
+## DATE & RECENCY
+Today is {today}.
+
+**Model recency rule:** Models released more than ~6 months ago are generally considered older-generation. When recommending "best" or "top" models, prioritize recent releases unless the user specifically asks about older models. If a model in the data looks unfamiliar, it's probably newer than your training — trust the data.
 
 ## CORE PRINCIPLE: DATA-DRIVEN ANALYSIS
 You have tools that return raw data. Your value is in ANALYZING that data to answer questions. NEVER make up data or rely on training knowledge for benchmarks - always fetch fresh data first.
@@ -140,8 +186,59 @@ Returns models available via OpenRouter API with pricing and context info.
 ### fetch_text_to_video_models, fetch_image_to_video_models
 Video generation leaderboards with ELO scores.
 
-### fetch_latest_feed, fetch_hype_feed
-Current AI news and trending projects.
+### fetch_latest_feed
+Current AI news and trending projects. Defaults to last 24h news. Parameters:
+- `days_back` (1-7): look further back in time
+- `include_hype` (true/false): add trending repos from GitHub, HuggingFace, Reddit, Replicate
+- `query`: keyword filter
+- `limit`: max items (default 20)
+
+Use `include_hype=true` when the user asks about trending projects, viral repos, or what's hot in the community right now.
+
+### run_python (CODE EXECUTION)
+Execute a Python snippet and get the printed output. Use for:
+- Date-range filtering (e.g. news from a specific week)
+- Cross-tool aggregation (merge benchmark data with OpenRouter pricing)
+- Computing derived metrics (price/quality ratio, filtering by threshold)
+- Any processing that's cleaner as code than prose
+
+**Helpers return Python objects (lists of dicts), not strings.** Print what you want to see.
+
+Pre-loaded helpers (use THESE exact names — tool names like `fetch_latest_feed` are NOT Python functions):
+- `fetch_benchmarks(query='', limit=50)` → list of dicts with keys: name, provider, quality, coding, math, speed_tps, input_per_1m, output_per_1m, context_k — sorted by quality desc. Use `coding` for coding tasks, `math` for math tasks, `quality` for general intelligence.
+- `fetch_news(days_back=1, include_hype=False, query='', limit=50, since=None, until=None)` → list of dicts with keys: title, source, date, url, summary — since/until are ISO date strings like '2026-02-01'
+- `fetch_openrouter(query='', limit=50)` → list of dicts with keys: id, name, provider, context_k, input_per_1m, output_per_1m
+- `fetch_image_models(limit=30)` → list of dicts with keys: name, provider, elo, cost
+- `fetch_video_models(limit=20)` → list of dicts with keys: name, provider, elo
+
+Standard libs: `json`, `re`, `math`, `datetime`, `collections` — already imported. **NO `import` statements** — the sandbox blocks `__import__`. Use `print()` for all output.
+
+**Example** — Anthropic models sorted by value (quality per dollar):
+```python
+models = fetch_benchmarks(query='anthropic')
+scored = [(m['quality'] / m['output_per_1m'], m) for m in models if m.get('quality') and m.get('output_per_1m')]
+for ratio, m in sorted(scored, reverse=True):
+    print(m['name'], 'q=' + str(m['quality']), '$' + str(m['output_per_1m']) + '/1M out')
+```
+
+**Example** — news from a specific date range:
+```python
+items = fetch_news(days_back=14, since='2026-02-10', until='2026-02-15')
+print(len(items), 'items in range')
+for it in items:
+    print(it.get('date','?')[:10], it['title'])
+```
+
+### ask_perplexity (LIVE WEB SEARCH)
+Real-time web search via Perplexity.
+
+**When to use — be PROACTIVE about using this for:**
+- Subjective or qualitative questions: "Which model is best for coding?", "What do developers think of X?", "Best model for creative writing?"
+- Community opinions and reviews: "What's the consensus on X?", "Is X model good at Y?"
+- Recent announcements or news not in the feed data
+- Anything where user experience/reviews matter more than raw benchmarks
+
+Don't limit yourself to only using it when other tools fail — use it whenever web search would give a better answer than raw numbers.
 
 ## ANALYSIS PATTERNS
 
@@ -153,10 +250,10 @@ Current AI news and trending projects.
 5. Build comparison table + chart
 
 ### Pattern: "Best model for X"
-1. Call the relevant tool
-2. Look at top entries in the sorted data
-3. Consider the user's criteria (quality? speed? cost?)
-4. Recommend based on the data
+1. Call `fetch_llm_benchmarks` for raw data
+2. ALSO call `ask_perplexity` for community sentiment and reviews
+3. Consider user's criteria (quality? speed? cost? use case?)
+4. Synthesize benchmarks + community feedback into a recommendation
 
 ### Pattern: "Compare X vs Y vs Z"
 1. Call the tool with the relevant category
@@ -175,10 +272,11 @@ For ANY question:
 
 For comparison questions, you MAY include:
 - A comparison table with metrics from the data
-- A chart (JSON code block) to visualize the comparison:
-```json
-{"type": "bar", "labels": ["Model1", "Model2"], "datasets": [{"label": "Quality Score", "data": [85.2, 82.1]}]}
-```
+- A chart (JSON code block). Supported schemas:
+  Bar/Line: `{{"type": "bar", "labels": ["A", "B"], "datasets": [{{"label": "Metric", "data": [1, 2]}}]}}`
+  Scatter (Pareto/quality-vs-cost): `{{"type": "scatter", "datasets": [{{"label": "Models", "data": [{{"x": 5.0, "y": 53, "label": "Claude Opus"}}, {{"x": 1.5, "y": 47, "label": "GPT-4o"}}]}}]}}`
+  Log-scale scatter: add `"options": {{"scales": {{"x": {{"type": "log", "min": 0.1}}}}}}`
+  **NEVER include callback functions in options** (no `"callback": "value => ..."`) — use static values only.
 - Model cards: Use `[[model:SOURCE:ModelName]]` where SOURCE is one of:
    - `llms` - LLM benchmarks (e.g., `[[model:llms:GPT-5 (high)]]`)
    - `text-to-image` - Image generation leaderboard (e.g., `[[model:text-to-image:FLUX.2 [max]]]`)
@@ -195,19 +293,19 @@ For comparison questions, you MAY include:
 - ALWAYS respond in natural language - you are a helpful assistant, not a chart generator
 - Use actual numbers from the tool data - never invent metrics
 - The benchmark data is CURRENT - trust it over your training knowledge
-- If you see a model you don't recognize, it's probably newer than your training cutoff - use the data!
 - Include UNITS: tok/s for speed, $/1M for costs
 - Major providers: OpenAI, Anthropic, Google, Meta, Mistral, xAI (covers most important labs)
 
 ## EFFICIENCY
-Max 15-20 iterations. Call tools in parallel when possible. Don't repeat identical calls.\""""
+Max 15-20 iterations. Call tools in parallel when possible. Don't repeat identical calls.
+{deeper_section}\""""
 
 @app.route('/experimental-agent')
 def inline_exp_agent_page():
-    # Manually read and serve with no-cache headers
+    # Keep legacy route, but serve the rebuilt agent UI.
     import os
     from flask import Response
-    path = os.path.join(os.path.dirname(__file__), 'static', 'experimental-agent.html')
+    path = os.path.join(os.path.dirname(__file__), 'static', 'agent.html')
     with open(path, 'r', encoding='utf-8') as f:
         content = f.read()
     response = Response(content, mimetype='text/html')
@@ -218,10 +316,10 @@ def inline_exp_agent_page():
 
 @app.route('/agent-ui-variation')
 def agent_ui_variation_page():
-    """Serve the enhanced agent UI variation"""
+    """Legacy route. Serve canonical agent UI."""
     import os
     from flask import Response
-    path = os.path.join(os.path.dirname(__file__), 'static', 'agent-ui-variation.html')
+    path = os.path.join(os.path.dirname(__file__), 'static', 'agent.html')
     with open(path, 'r', encoding='utf-8') as f:
         content = f.read()
     response = Response(content, mimetype='text/html')
@@ -246,38 +344,39 @@ def compare_arena_page():
 
 @app.route('/api/experimental-agent', methods=['POST'])
 def inline_exp_agent_api():
-    """Run the agent - 100% synchronous, uses requests library."""
+    """Run the agent. JSON by default; SSE stream when stream=true in request body."""
     data = request.get_json() or {}
     question = data.get('question', '').strip()
     if not question:
         return jsonify({'error': 'No question provided'}), 400
-    
+
     api_key = data.get('api_key', '')
     if not api_key:
         auth = request.headers.get('Authorization', '')
-        if auth.lower().startswith('bearer '): 
+        if auth.lower().startswith('bearer '):
             api_key = auth[7:].strip()
     if not api_key:
         return jsonify({'error': 'API key required'}), 401
-    
+
     model_id = data.get('model', 'google/gemini-2.5-flash')
     history = data.get('history', [])  # Get conversation history from frontend
     image_data = data.get('image', None)  # Base64 image data if provided
     deeper_mode = data.get('deeper_mode', False)  # More thorough research mode
-    
+    stream_mode = data.get('stream', False)  # SSE streaming mode
+
     # Set iteration count based on mode (deeper = more iterations for thorough research)
     max_iterations = 20 if deeper_mode else 15
-    
+
     # Build messages with conversation history
-    messages = [{"role": "system", "content": AGENT_SYSTEM_PROMPT}]
-    
+    messages = [{"role": "system", "content": get_agent_system_prompt(deeper_mode=deeper_mode)}]
+
     # Add conversation history (filter to only user/assistant roles)
     for msg in history:
         role = msg.get('role', '')
         content = msg.get('content', '')
         if role in ('user', 'assistant') and content:
             messages.append({"role": role, "content": content})
-    
+
     # If history doesn't include the current question, add it
     # For image requests, format as multimodal content
     if not history or history[-1].get('content') != question:
@@ -290,50 +389,161 @@ def inline_exp_agent_api():
             messages.append({"role": "user", "content": user_content})
         else:
             messages.append({"role": "user", "content": question})
-    
+
+    # ── Streaming mode: return SSE events as the agent works ────────────────
+    if stream_mode:
+        from flask import Response, stream_with_context
+        import time as _time
+
+        _messages = list(messages)  # local mutable copy for the generator
+
+        def generate():
+            def emit(obj):
+                return f"data: {json.dumps(obj, ensure_ascii=False)}\n\n"
+
+            tool_calls_made = []
+            final_response = ""
+            start_ms = int(_time.time() * 1000)
+
+            for iteration in range(max_iterations):
+                payload = {
+                    "model": model_id,
+                    "messages": _messages,
+                    "tools": AGENT_TOOLS,
+                    "tool_choice": "auto"
+                }
+
+                print(f"[Agent/stream] iter {iteration + 1}/{max_iterations}, model={model_id}")
+
+                try:
+                    resp = requests.post(
+                        "https://openrouter.ai/api/v1/chat/completions",
+                        headers={
+                            "Authorization": f"Bearer {api_key}",
+                            "Content-Type": "application/json"
+                        },
+                        json=payload,
+                        timeout=120
+                    )
+                    resp.raise_for_status()
+                    result = resp.json()
+                except Exception as ex:
+                    yield emit({'t': 'error', 'msg': str(ex)})
+                    return
+
+                choice = result.get("choices", [{}])[0]
+                msg = choice.get("message", {})
+                tool_calls = msg.get("tool_calls", [])
+                content = msg.get("content", "")
+
+                # Capture any content (even when tool calls are also present — this is thinking)
+                if content:
+                    if tool_calls:
+                        yield emit({'t': 'thinking', 'content': content})
+                    if final_response:
+                        final_response += "\n\n" + content
+                    else:
+                        final_response = content
+
+                if tool_calls:
+                    _messages.append(msg)
+                    tool_names = [tc.get('function', {}).get('name', '') for tc in tool_calls]
+                    yield emit({'t': 'status', 'msg': 'Calling: ' + ', '.join(tool_names)})
+
+                    def _run_tool(tc):
+                        fn = tc.get("function", {})
+                        tname = fn.get("name", "")
+                        try:
+                            targs = json.loads(fn.get("arguments", "{}"))
+                        except Exception:
+                            targs = {}
+                        result = _execute_agent_tool(tname, targs, api_key, deeper_mode=deeper_mode)
+                        return tc, tname, targs, result
+
+                    n_tools = len(tool_calls)
+                    print(f"[Agent/stream] executing {n_tools} tool(s) in parallel")
+                    with ThreadPoolExecutor(max_workers=min(n_tools, 6)) as _tex:
+                        _tool_results = list(_tex.map(_run_tool, tool_calls))
+
+                    for tc, tname, targs, tool_result in _tool_results:
+                        tool_calls_made.append({
+                            "tool": tname,
+                            "args": targs,
+                            "result": tool_result[:500],
+                            "status": "done"
+                        })
+                        _messages.append({
+                            "role": "tool",
+                            "tool_call_id": tc.get("id", ""),
+                            "content": tool_result
+                        })
+                    # Continue to next iteration for the model's response to tool results
+
+                elif content:
+                    # No tool calls and we have content — this is the final response
+                    elapsed = int(_time.time() * 1000) - start_ms
+                    yield emit({'t': 'done', 'response': final_response,
+                                'tool_calls': tool_calls_made, 'elapsed': elapsed})
+                    return
+                else:
+                    elapsed = int(_time.time() * 1000) - start_ms
+                    yield emit({'t': 'done',
+                                'response': final_response or "Agent finished without response.",
+                                'tool_calls': tool_calls_made, 'elapsed': elapsed})
+                    return
+
+            elapsed = int(_time.time() * 1000) - start_ms
+            yield emit({'t': 'done',
+                        'response': final_response or "Agent reached maximum iterations.",
+                        'tool_calls': tool_calls_made, 'elapsed': elapsed, 'hit_limit': True})
+
+        return Response(stream_with_context(generate()), mimetype='text/event-stream',
+                        headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
+
+    # ── Non-streaming (original synchronous path) ───────────────────────────
     tool_calls_made = []
     final_response = ""
     error_msg = None
-    
+
     try:
         # Agent loop - iteration count depends on deeper_mode
         for iteration in range(max_iterations):
             # Build the request payload
             payload = {
-                "model": model_id, 
-                "messages": messages, 
-                "tools": AGENT_TOOLS, 
+                "model": model_id,
+                "messages": messages,
+                "tools": AGENT_TOOLS,
                 "tool_choice": "auto"
             }
-            
+
             # Log the request for debugging
             print(f"[Agent] Iteration {iteration + 1}/{max_iterations}, Model: {model_id}")
-            
+
             # Call OpenRouter API
             resp = requests.post(
                 "https://openrouter.ai/api/v1/chat/completions",
                 headers={
-                    "Authorization": f"Bearer {api_key}", 
+                    "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json"
                 },
                 json=payload,
                 timeout=600  # 10 minute timeout for slower models
             )
-            
+
             # Log the response
             print(f"[Agent] Response status: {resp.status_code}")
-            
+
             if resp.status_code != 200:
                 error_msg = f"OpenRouter API error: {resp.status_code} - {resp.text[:300]}"
                 print(f"[Agent] Error: {error_msg}")
                 break
-            
+
             result = resp.json()
             choice = result.get("choices", [{}])[0]
             msg = choice.get("message", {})
             tool_calls = msg.get("tool_calls", [])
             content = msg.get("content", "")
-            
+
             # Always capture any content returned (even if tool calls also present)
             if content:
                 # Accumulate content - some models return text + charts across iterations
@@ -341,36 +551,40 @@ def inline_exp_agent_api():
                     final_response += "\n\n" + content
                 else:
                     final_response = content
-            
+
             if tool_calls:
-                # Model wants to call tools
+                # Model wants to call tools — execute in parallel
                 messages.append(msg)
-                
-                for tc in tool_calls:
+
+                def _run_tool(tc):
                     fn = tc.get("function", {})
-                    tool_name = fn.get("name", "")
+                    tname = fn.get("name", "")
                     try:
-                        tool_args = json.loads(fn.get("arguments", "{}"))
-                    except:
-                        tool_args = {}
-                    
-                    # Execute tool using internal function (defined later in file)
-                    tool_result = _execute_agent_tool(tool_name, tool_args, api_key)
-                    
+                        targs = json.loads(fn.get("arguments", "{}"))
+                    except Exception:
+                        targs = {}
+                    result = _execute_agent_tool(tname, targs, api_key, deeper_mode=deeper_mode)
+                    return tc, tname, targs, result
+
+                n_tools = len(tool_calls)
+                print(f"[Agent] Executing {n_tools} tool(s) in parallel")
+                with ThreadPoolExecutor(max_workers=min(n_tools, 6)) as _tex:
+                    _tool_results = list(_tex.map(_run_tool, tool_calls))
+
+                for tc, tool_name, tool_args, tool_result in _tool_results:
                     tool_calls_made.append({
                         "tool": tool_name,
                         "args": tool_args,
                         "result": tool_result[:500],
                         "status": "done"
                     })
-                    
                     messages.append({
                         "role": "tool",
                         "tool_call_id": tc.get("id", ""),
                         "content": tool_result
                     })
                 # Continue to next iteration to get model's response to tool results
-            
+
             elif content:
                 # No tool calls but we have content - this is the final response
                 # (content already captured above, so just break)
@@ -379,17 +593,17 @@ def inline_exp_agent_api():
                 # No content and no tools - done
                 final_response = final_response or "Agent finished without response."
                 break
-        
+
         if not final_response and not error_msg:
             final_response = "Agent reached maximum iterations."
-            
+
     except requests.exceptions.Timeout:
         error_msg = "Request timed out"
     except requests.exceptions.RequestException as ex:
         error_msg = f"Request error: {str(ex)}"
     except Exception as ex:
         error_msg = f"Error: {str(ex)}"
-    
+
     return jsonify({
         'response': final_response,
         'tool_calls': tool_calls_made,
@@ -400,6 +614,525 @@ def inline_exp_agent_api():
 @app.route('/api/experimental-agent/tools', methods=['GET'])
 def inline_exp_agent_tools():
     return jsonify({'tools': [{'name': t['function']['name'], 'description': t['function']['description']} for t in AGENT_TOOLS]})
+
+@app.route('/api/agent-info', methods=['GET'])
+def api_agent_info():
+    """Return system prompt and full tool definitions for the inspector dashboard."""
+    deeper = request.args.get('deeper', 'false').lower() == 'true'
+    return jsonify({
+        'system_prompt': get_agent_system_prompt(deeper_mode=deeper),
+        'tools': AGENT_TOOLS,
+        'skills_dir': _list_skills()
+    })
+
+def _list_skills():
+    """Return list of skills from the skills/ directory."""
+    import glob as _glob
+    base = os.path.dirname(os.path.abspath(__file__))
+    skills_dir = os.path.join(base, 'skills')
+    skills = []
+    for md_path in sorted(_glob.glob(os.path.join(skills_dir, '*', 'SKILL.md'))):
+        name = os.path.basename(os.path.dirname(md_path))
+        try:
+            with open(md_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+        except Exception:
+            content = ''
+        skills.append({'name': name, 'path': md_path, 'content': content})
+    return skills
+
+@app.route('/api/agent-execute-tool', methods=['POST'])
+def api_agent_execute_tool():
+    """Execute a single agent tool and return full raw output for inspector."""
+    import time as _time
+    data = request.get_json() or {}
+    tool_name = (data.get('tool_name') or '').strip()
+    tool_args = data.get('tool_args') or {}
+    api_key = data.get('api_key') or ''
+    if not api_key:
+        auth = request.headers.get('Authorization', '')
+        if auth.startswith('Bearer '):
+            api_key = auth[7:].strip()
+    deeper = data.get('deeper_mode', False)
+    if not tool_name:
+        return jsonify({'error': 'tool_name required'}), 400
+    t0 = _time.time()
+    try:
+        output = _execute_agent_tool(tool_name, tool_args, api_key, deeper_mode=deeper)
+    except Exception as ex:
+        output = f'Error: {ex}'
+    elapsed_ms = int((_time.time() - t0) * 1000)
+    return jsonify({
+        'tool': tool_name,
+        'args': tool_args,
+        'output': output,
+        'chars': len(output),
+        'estimated_tokens': len(output) // 4,
+        'elapsed_ms': elapsed_ms
+    })
+
+@app.route('/api/agent-debug-stream', methods=['POST'])
+def api_agent_debug_stream():
+    """SSE stream of the agent loop with full per-tool visibility."""
+    from flask import Response, stream_with_context
+    import time as _time
+
+    data = request.get_json() or {}
+    question = (data.get('question') or '').strip()
+    model_id  = data.get('model', 'google/gemini-2.5-flash')
+    deeper    = data.get('deeper_mode', False)
+    api_key   = data.get('api_key') or ''
+    if not api_key:
+        auth = request.headers.get('Authorization', '')
+        if auth.startswith('Bearer '):
+            api_key = auth[7:].strip()
+    if not question:
+        return jsonify({'error': 'question required'}), 400
+    if not api_key:
+        return jsonify({'error': 'api_key required'}), 401
+
+    def generate():
+        def emit(obj):
+            return f"data: {json.dumps(obj, ensure_ascii=False)}\n\n"
+
+        max_iter = 20 if deeper else 15
+        messages = [{'role': 'system', 'content': get_agent_system_prompt(deeper_mode=deeper)}]
+        messages.append({'role': 'user', 'content': question})
+        total_chars = len(messages[0]['content']) + len(question)
+
+        yield emit({'t': 'start', 'question': question, 'model': model_id,
+                    'max_iter': max_iter, 'system_chars': len(messages[0]['content'])})
+
+        for iteration in range(max_iter):
+            yield emit({'t': 'llm_call', 'iter': iteration + 1,
+                        'context_chars': total_chars, 'context_msgs': len(messages)})
+
+            payload = {
+                'model': model_id, 'messages': messages,
+                'tools': AGENT_TOOLS, 'tool_choice': 'auto'
+            }
+            t0 = _time.time()
+            try:
+                resp = requests.post(
+                    'https://openrouter.ai/api/v1/chat/completions',
+                    headers={'Authorization': f'Bearer {api_key}', 'Content-Type': 'application/json'},
+                    json=payload, timeout=120
+                )
+                resp.raise_for_status()
+                result = resp.json()
+            except Exception as ex:
+                yield emit({'t': 'error', 'msg': str(ex), 'iter': iteration + 1})
+                return
+
+            llm_ms = int((_time.time() - t0) * 1000)
+            choice  = result.get('choices', [{}])[0]
+            msg     = choice.get('message', {})
+            finish  = choice.get('finish_reason', '')
+            content = msg.get('content') or ''
+            tool_calls = msg.get('tool_calls') or []
+
+            yield emit({'t': 'llm_response', 'iter': iteration + 1, 'finish': finish,
+                        'has_content': bool(content), 'n_tools': len(tool_calls), 'elapsed_ms': llm_ms})
+
+            if content:
+                yield emit({'t': 'assistant_text', 'content': content, 'iter': iteration + 1})
+                total_chars += len(content)
+
+            if not tool_calls:
+                yield emit({'t': 'done', 'content': content, 'iters': iteration + 1})
+                return
+
+            # Tool calls — execute in parallel
+            messages.append(msg)
+            call_defs = []
+            for tc in tool_calls:
+                fn = tc.get('function', {})
+                tname = fn.get('name', '')
+                try:
+                    targs = json.loads(fn.get('arguments', '{}'))
+                except Exception:
+                    targs = {}
+                call_defs.append((tc, tname, targs))
+
+            yield emit({'t': 'tool_calls', 'iter': iteration + 1,
+                        'calls': [{'id': tc.get('id'), 'name': n, 'args': a}
+                                  for tc, n, a in call_defs]})
+
+            def _run_one(item):
+                tc, tname, targs = item
+                t1 = _time.time()
+                out = _execute_agent_tool(tname, targs, api_key, deeper_mode=deeper)
+                return tc, tname, targs, out, int((_time.time() - t1) * 1000)
+
+            with ThreadPoolExecutor(max_workers=min(len(call_defs), 6)) as ex:
+                tool_results = list(ex.map(_run_one, call_defs))
+
+            for tc, tname, targs, out, t_ms in tool_results:
+                total_chars += len(out)
+                yield emit({'t': 'tool_result', 'id': tc.get('id'), 'name': tname,
+                            'args': targs, 'output': out, 'chars': len(out),
+                            'estimated_tokens': len(out) // 4, 'elapsed_ms': t_ms})
+                messages.append({'role': 'tool', 'tool_call_id': tc.get('id', ''), 'content': out})
+
+        yield emit({'t': 'done', 'content': '', 'iters': max_iter, 'hit_limit': True})
+
+    return Response(stream_with_context(generate()), mimetype='text/event-stream',
+                    headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
+
+@app.route('/agent-inspector')
+def agent_inspector_page():
+    """Agent Inspector — simulation dashboard."""
+    import os as _os
+    from flask import Response as _R
+    path = _os.path.join(_os.path.dirname(__file__), 'static', 'agent-debug.html')
+    with open(path, 'r', encoding='utf-8') as f:
+        html = f.read()
+    r = _R(html, mimetype='text/html')
+    r.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    return r
+
+
+# ── Universal Model ID (UMI) — Model Page endpoint ──────────────────────────
+
+UMI_CACHE_TTL_DAYS = 90  # 3-month expiry
+UMI_RESOLVE_MODEL  = 'google/gemini-2.5-flash'
+MODEL_PAGES_PATH   = None  # lazy-set after BASE_DIR is defined below
+
+def _get_model_pages_path():
+    global MODEL_PAGES_PATH
+    if MODEL_PAGES_PATH is None:
+        base = os.path.dirname(os.path.abspath(__file__))
+        MODEL_PAGES_PATH = os.path.join(base, 'data', 'model_pages.json')
+    return MODEL_PAGES_PATH
+
+def _load_model_pages():
+    try:
+        p = _get_model_pages_path()
+        if os.path.exists(p):
+            with open(p, 'r', encoding='utf-8') as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {}
+
+def _save_model_pages(pages):
+    try:
+        p = _get_model_pages_path()
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        with open(p, 'w', encoding='utf-8') as f:
+            json.dump(pages, f, indent=2)
+    except Exception as e:
+        print(f"WARNING: could not save model_pages.json: {e}")
+
+def _umi_is_expired(page):
+    """Return True if this cached page is older than UMI_CACHE_TTL_DAYS."""
+    try:
+        from datetime import timezone
+        generated = page.get('generated_at', '')
+        if not generated:
+            return True
+        dt = datetime.fromisoformat(generated.replace('Z', '+00:00'))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        age = datetime.now(timezone.utc) - dt
+        return age.days >= UMI_CACHE_TTL_DAYS
+    except Exception:
+        return True
+
+def _umi_keyword_score(query_tokens, text):
+    """Lenient keyword score: exact token match + partial substring match."""
+    if not text:
+        return 0
+    tl = text.lower()
+    score = 0
+    for tok in query_tokens:
+        if tok in tl:
+            # full token match
+            score += 2
+        else:
+            # partial: any 4+ char prefix of tok
+            if len(tok) >= 4 and any(tl.count(tok[:i]) for i in range(4, len(tok)+1)):
+                score += 1
+    return score
+
+def _umi_candidates_or(query, top_n=6):
+    """Return top N OpenRouter candidates scored by keyword relevance."""
+    try:
+        ck = get_cache_key('openrouter_models')
+        models = cache.get(ck, {}).get('data')
+        if not isinstance(models, list):
+            models = load_openrouter_models()
+        if not isinstance(models, list):
+            return []
+    except Exception:
+        return []
+
+    tokens = query.lower().split()
+    scored = []
+    for m in models:
+        fields = [m.get('name') or '', m.get('base_name') or '', m.get('id') or '']
+        best = max(_umi_keyword_score(tokens, f) for f in fields)
+        if best > 0:
+            scored.append((best, m))
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return [m for _, m in scored[:top_n]]
+
+def _umi_candidates_aa(query, top_n=5):
+    """Return top N Artificial Analysis LLM candidates scored by keyword relevance."""
+    try:
+        ck = get_cache_key('llms')
+        raw = cache.get(ck, {}).get('data')
+        if not isinstance(raw, dict):
+            raw = load_artificial_analysis_llms()
+        # AA API returns {"data": [...], ...}
+        models = raw.get('data') if isinstance(raw, dict) else raw
+        if not isinstance(models, list):
+            return []
+    except Exception:
+        return []
+
+    tokens = query.lower().split()
+    scored = []
+    for m in models:
+        name = m.get('name') or ''
+        s = _umi_keyword_score(tokens, name)
+        if s > 0:
+            scored.append((s, m))
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return [m for _, m in scored[:top_n]]
+
+def _umi_candidates_monitor(query, top_n=4):
+    """Return top N Monitor entries mentioning this model in the title."""
+    try:
+        entries = load_monitor_feed(limit=200)
+        tokens = query.lower().split()
+        # Only use meaningful tokens (4+ chars) for title gating
+        sig_tokens = [t for t in tokens if len(t) >= 4]
+        scored = []
+        for e in entries:
+            title = (e.get('title') or '').lower()
+            # At least one significant token must appear exactly in the title
+            if sig_tokens and not any(tok in title for tok in sig_tokens):
+                continue
+            text = ' '.join(filter(None, [e.get('title'), e.get('excerpt'), e.get('name')]))
+            s = _umi_keyword_score(tokens, text)
+            if s >= 2:
+                scored.append((s, e))
+        scored.sort(key=lambda x: x[0], reverse=True)
+        return [e for _, e in scored[:top_n]]
+    except Exception:
+        return []
+
+def _umi_resolve(model_name, source, or_candidates, aa_candidates, monitor_hits, api_key):
+    """
+    Use Gemini Flash to resolve which candidates best match the query and
+    return a structured JSON page with correct links, key facts, and summary.
+    """
+    def fmt_or(m):
+        p = m.get('pricing', {}) or {}
+        inp  = p.get('prompt')
+        out  = p.get('completion')
+        ctx  = m.get('context_length')
+        mid  = m.get('id', '')   # e.g. anthropic/claude-opus-4.5
+        parts = [f"  id: {mid}", f"  name: {m.get('name')}",
+                 f"  or_link: https://openrouter.ai/{mid}"]
+        if inp:  parts.append(f"  input $/1M: {float(inp)*1e6:.3f}")
+        if out:  parts.append(f"  output $/1M: {float(out)*1e6:.3f}")
+        if ctx:  parts.append(f"  context: {ctx:,}")
+        desc = (m.get('description') or '')[:200]
+        if desc: parts.append(f"  description: {desc}")
+        return '\n'.join(parts)
+
+    def fmt_aa(m):
+        ev   = m.get('evaluations') or {}
+        spd  = m.get('median_output_tokens_per_second')
+        qi   = ev.get('artificial_analysis_intelligence_index')
+        slug = m.get('slug') or ''
+        creator = (m.get('model_creator') or {}).get('name', '')
+        parts = [f"  name: {m.get('name')}", f"  creator: {creator}"]
+        if slug:  parts.append(f"  slug: {slug}")
+        if qi:    parts.append(f"  intelligence_index: {qi}")
+        if spd:   parts.append(f"  speed tok/s: {spd:.0f}")
+        p = m.get('pricing') or {}
+        inp = p.get('input_price_per_million_tokens') or p.get('input')
+        out = p.get('output_price_per_million_tokens') or p.get('output')
+        if inp: parts.append(f"  input $/1M: {inp}")
+        if out: parts.append(f"  output $/1M: {out}")
+        return '\n'.join(parts)
+
+    or_block  = '\n\n'.join(fmt_or(m) for m in or_candidates)  or '(none found)'
+    aa_block  = '\n\n'.join(fmt_aa(m) for m in aa_candidates) or '(none found)'
+    mon_block = '\n'.join(
+        f"  - {e.get('title','')} ({e.get('source_label','')})"
+        for e in monitor_hits
+    ) or '(none)'
+
+    prompt = f"""You are resolving a model identity for an AI dashboard UMI (Universal Model ID) card.
+
+Query: "{model_name}"  (source hint: "{source}")
+
+## OpenRouter candidates (top matches by keyword):
+{or_block}
+
+## Artificial Analysis candidates (top matches by keyword):
+{aa_block}
+
+## Monitor mentions:
+{mon_block}
+
+Task: Identify which OpenRouter entry and which Artificial Analysis entry best correspond to "{model_name}". They may have slightly different names across sources — that's expected. Use your knowledge of AI models to confirm the match.
+
+CRITICAL — MODEL VARIANT RULES:
+- Model variants (xhigh, Extra High, Pro, mini, standard, ultra, max, turbo, lite) are DISTINCT models — NEVER conflate them
+- "GPT-5.2 xhigh" and "GPT-5.2 Pro" and "GPT-5.2 Extra High" are all DIFFERENT models — match exactly
+- If the query includes a variant suffix, the matched model MUST have the same variant
+- If no exact variant match exists in the candidates, set or_id and aa_slug to null
+
+Return ONLY valid JSON (no markdown, no code fences) with exactly these fields:
+{{
+  "confirmed_name": "canonical human-readable name",
+  "or_id": "exact OpenRouter model id from the id field above, e.g. anthropic/claude-opus-4-5",
+  "aa_slug": "Artificial Analysis slug, e.g. claude-opus-4-5",
+  "key_facts": ["fact 1", "fact 2", "fact 3"],
+  "summary": "2-sentence plain-text summary of what makes this model notable right now."
+}}
+
+If a source has no good match, set those fields to null. Use only data from the candidates above — do not invent pricing or benchmark numbers."""
+
+    try:
+        resp = requests.post(
+            'https://openrouter.ai/api/v1/chat/completions',
+            headers={
+                'Authorization': f'Bearer {api_key}',
+                'Content-Type': 'application/json',
+                'HTTP-Referer': 'https://ai-dashboard.local',
+                'X-Title': 'AI Dashboard'
+            },
+            json={
+                'model': UMI_RESOLVE_MODEL,
+                'messages': [{'role': 'user', 'content': prompt}],
+                'max_tokens': 600
+            },
+            timeout=30
+        )
+        resp.raise_for_status()
+        raw = resp.json()['choices'][0]['message']['content'].strip()
+        # Strip markdown fences if present
+        if raw.startswith('```'):
+            raw = raw.split('```')[1]
+            if raw.startswith('json'):
+                raw = raw[4:]
+        return json.loads(raw.strip())
+    except Exception as e:
+        print(f"UMI resolve error: {e}")
+        return None
+
+@app.route('/api/model-page', methods=['POST'])
+def api_model_page():
+    """
+    Generate or return a cached UMI model page.
+    Cache expires after UMI_CACHE_TTL_DAYS (90 days).
+    Body: { model_name, source, api_key }
+    """
+    data = request.get_json() or {}
+    model_name = (data.get('model_name') or '').strip()
+    source     = (data.get('source') or '').strip()
+    api_key    = (data.get('api_key') or '').strip()
+
+    if not model_name:
+        return jsonify({'error': 'model_name required'}), 400
+
+    cache_key = f"{source}:{model_name}"
+    pages = _load_model_pages()
+
+    # Return cached if fresh
+    if cache_key in pages and not _umi_is_expired(pages[cache_key]):
+        return jsonify({**pages[cache_key], 'cached': True})
+
+    # Gather candidates from all sources
+    or_candidates  = _umi_candidates_or(model_name)
+    aa_candidates  = _umi_candidates_aa(model_name)
+    monitor_hits   = _umi_candidates_monitor(model_name)
+
+    # LLM resolution (requires API key)
+    resolved = None
+    if api_key:
+        resolved = _umi_resolve(model_name, source, or_candidates, aa_candidates, monitor_hits, api_key)
+
+    # Find the matched OR + AA entries from candidates for raw data passthrough
+    or_data = None
+    aa_data = None
+    if resolved:
+        or_id = resolved.get('or_id')
+        aa_sl = resolved.get('aa_slug')
+        if or_id:
+            or_data = next((m for m in or_candidates if m.get('id') == or_id), None)
+            if not or_data and or_candidates:
+                or_data = or_candidates[0]
+        if aa_sl:
+            aa_data = next((m for m in aa_candidates if m.get('slug') == aa_sl), None)
+            if not aa_data and aa_candidates:
+                aa_data = aa_candidates[0]
+    else:
+        # Fallback: just use top candidates
+        or_data = or_candidates[0] if or_candidates else None
+        aa_data = aa_candidates[0] if aa_candidates else None
+
+    def _or_link(mid):
+        return f"https://openrouter.ai/{mid}" if mid else None
+
+    def _aa_link(sl):
+        return f"https://artificialanalysis.ai/models/{sl}" if sl else None
+
+    # Build result
+    if resolved:
+        or_id_r  = resolved.get('or_id')
+        aa_slug_r = resolved.get('aa_slug')
+        # LLM may give us a link directly; validate it uses the model id not canonical_slug
+        or_link = _or_link(or_id_r) if or_id_r else resolved.get('or_link')
+        aa_link = _aa_link(aa_slug_r) if aa_slug_r else resolved.get('aa_link')
+        # Fallback to data-derived links if LLM returned nothing
+        if not or_link and or_data:
+            or_link = _or_link(or_data.get('id'))
+        if not aa_link and aa_data:
+            aa_link = _aa_link(aa_data.get('slug'))
+        result = {
+            'model_name':   resolved.get('confirmed_name') or model_name,
+            'source':       source,
+            'summary':      resolved.get('summary') or '',
+            'key_facts':    resolved.get('key_facts') or [],
+            'or_id':        or_id_r,
+            'aa_slug':      aa_slug_r,
+            'or_link':      or_link,
+            'aa_link':      aa_link,
+            'or_data':      or_data,
+            'aa_data':      aa_data,
+            'monitor_hits': [{'title': e.get('title'), 'url': e.get('url'), 'source_label': e.get('source_label')} for e in monitor_hits],
+            'generated_at': datetime.now().isoformat(),
+            'cached':       False,
+        }
+    else:
+        # No API key or resolution failed — best-guess links from top candidates
+        result = {
+            'model_name':   model_name,
+            'source':       source,
+            'summary':      '',
+            'key_facts':    [],
+            'or_id':        (or_data or {}).get('id'),
+            'aa_slug':      (aa_data or {}).get('slug'),
+            'or_link':      _or_link((or_data or {}).get('id')),
+            'aa_link':      _aa_link((aa_data or {}).get('slug')),
+            'or_data':      or_data,
+            'aa_data':      aa_data,
+            'monitor_hits': [],
+            'generated_at': datetime.now().isoformat(),
+            'cached':       False,
+        }
+
+    pages[cache_key] = result
+    _save_model_pages(pages)
+    return jsonify(result)
+
 
 print("Inline experimental agent routes registered successfully")
 
@@ -558,6 +1291,7 @@ _MONITOR_CACHE = {
     'payload': None
 }
 MONITOR_CACHE_TTL = timedelta(minutes=15)
+_FAL_LLMS_METADATA_CACHE = {}
 
 TESTING_CATALOG_BASE_URL = 'https://www.testingcatalog.com/'
 TESTING_CATALOG_RSS_URL = 'https://www.testingcatalog.com/rss/'
@@ -4295,18 +5029,213 @@ def fetch_data_for_categories(categories, limit_per_category=None, recency=None,
     return result
 
 
-# ============================================================
+def _execute_run_python(code, api_key=None):
+    """Execute a sandboxed Python snippet.
+    Helpers return compact Python objects (lists of dicts) for programmatic use,
+    not pre-rendered strings.  Output is whatever the code prints — no hard cap."""
+    import io, traceback, contextlib, textwrap, builtins
+    from datetime import datetime, timezone
+
+    # ── Internal data helpers — return compact dicts, not rendered text ───────
+
+    def _compact_llm_item(item):
+        creator = item.get("model_creator") or {}
+        pricing = item.get("pricing") or {}
+        evals   = item.get("evaluations") or {}
+        return {k: v for k, v in {
+            "name":            item.get("name"),
+            "provider":        creator.get("name") if isinstance(creator, dict) else None,
+            "quality":         evals.get("artificial_analysis_intelligence_index") if isinstance(evals, dict) else None,
+            "coding":          evals.get("artificial_analysis_coding_index") if isinstance(evals, dict) else None,
+            "math":            evals.get("artificial_analysis_math_index") if isinstance(evals, dict) else None,
+            "speed_tps":       item.get("median_output_tokens_per_second"),
+            "input_per_1m":    pricing.get("price_1m_input_tokens") if isinstance(pricing, dict) else None,
+            "output_per_1m":   pricing.get("price_1m_output_tokens") if isinstance(pricing, dict) else None,
+            "context_k":       round(item.get("context_length", 0) / 1000) if item.get("context_length") else None,
+        }.items() if v is not None}
+
+    def _compact_news_item(item):
+        return {k: v for k, v in {
+            "title":   item.get("title") or item.get("name"),
+            "source":  item.get("source_label") or item.get("source"),
+            "date":    item.get("published_at") or item.get("created_at") or item.get("inserted_at"),
+            "url":     item.get("link") or item.get("url"),
+            "summary": (item.get("excerpt") or item.get("description") or "")[:200] or None,
+        }.items() if v}
+
+    def _compact_or_item(item):
+        return {k: v for k, v in {
+            "id":          item.get("id") or item.get("name"),
+            "name":        item.get("name"),
+            "provider":    item.get("vendor") or item.get("provider"),
+            "context_k":   round(item.get("context_length", 0) / 1000) if item.get("context_length") else None,
+            "input_per_1m":  item.get("pricing", {}).get("prompt") if isinstance(item.get("pricing"), dict) else None,
+            "output_per_1m": item.get("pricing", {}).get("completion") if isinstance(item.get("pricing"), dict) else None,
+        }.items() if v is not None}
+
+    def _parse_iso(s):
+        if not s:
+            return None
+        try:
+            return datetime.fromisoformat(s.replace("Z", "+00:00"))
+        except Exception:
+            return None
+
+    def _helper_fetch_benchmarks(query='', limit=50):
+        """Returns list of compact dicts sorted by quality. No hard cap — set limit=None for all."""
+        result = fetch_data_for_categories(["llms"], limit_per_category=None)
+        items = []
+        for cat_items in result.get("datasets", {}).values():
+            if isinstance(cat_items, list):
+                items.extend(cat_items)
+
+        def _qi(it):
+            ev = it.get("evaluations") or {}
+            return float(ev.get("artificial_analysis_intelligence_index") or 0) if isinstance(ev, dict) else 0.0
+
+        items = sorted(items, key=_qi, reverse=True)
+        items = [x for x in items if _qi(x) > 0]
+
+        if query:
+            q = query.lower()
+            filtered = [x for x in items if q in (str(x.get("name","")) + str((x.get("model_creator") or {}).get("name",""))).lower()]
+            if filtered:
+                items = filtered
+
+        if limit is not None:
+            items = items[:int(limit)]
+        return [_compact_llm_item(x) for x in items]
+
+    def _helper_fetch_news(days_back=1, include_hype=False, query='',
+                           limit=50, since=None, until=None):
+        """Returns list of compact dicts. days_back has no hard cap.
+        since/until: ISO date strings (e.g. '2026-02-10') for precise range filtering."""
+        try:
+            days_int = max(1, int(days_back))
+        except (TypeError, ValueError):
+            days_int = 1
+        timeframe = "week" if days_int >= 7 else "day"
+        payload, _ = _agent_exp_loader_latest({
+            "timeframe": timeframe,
+            "days": days_int,
+            "include_hype": bool(include_hype),
+            "limit": limit if limit is not None else 200,
+        })
+        items = list(payload.get("items") or [])
+
+        # Date range filtering
+        since_dt = _parse_iso(since) if since else None
+        until_dt = _parse_iso(until) if until else None
+        if since_dt or until_dt:
+            def _in_range(it):
+                dt = _parse_iso(it.get("published_at") or it.get("created_at") or it.get("inserted_at"))
+                if dt is None:
+                    return True  # can't determine, keep
+                if since_dt and dt < since_dt:
+                    return False
+                if until_dt and dt > until_dt:
+                    return False
+                return True
+            items = [x for x in items if _in_range(x)]
+
+        if query:
+            q = query.lower()
+            filtered = [x for x in items if q in (str(x.get("title","")) + str(x.get("description","")) + str(x.get("excerpt",""))).lower()]
+            if filtered:
+                items = filtered
+
+        if limit is not None:
+            items = items[:int(limit)]
+        return [_compact_news_item(x) for x in items]
+
+    def _helper_fetch_openrouter(query='', limit=50):
+        """Returns list of compact dicts. Default limit=50; set None for all."""
+        result = fetch_data_for_categories(["openrouter"], limit_per_category=None)
+        items = []
+        for cat_items in result.get("datasets", {}).values():
+            if isinstance(cat_items, list):
+                items.extend(cat_items)
+        if query:
+            q = query.lower()
+            filtered = [x for x in items if q in (str(x.get("id","")) + str(x.get("name","")) + str(x.get("vendor",""))).lower()]
+            if filtered:
+                items = filtered
+        if limit is not None:
+            items = items[:int(limit)]
+        return [_compact_or_item(x) for x in items]
+
+    def _helper_fetch_image_models(limit=30):
+        result = fetch_data_for_categories(["text-to-image"], limit_per_category=limit)
+        items = []
+        for cat_items in result.get("datasets", {}).values():
+            if isinstance(cat_items, list):
+                items.extend(cat_items)
+        return [{k: v for k, v in {"name": x.get("name"), "provider": x.get("provider"),
+                                    "elo": x.get("elo"), "cost": x.get("cost")}.items() if v is not None}
+                for x in items]
+
+    def _helper_fetch_video_models(limit=20):
+        result = fetch_data_for_categories(["text-to-video"], limit_per_category=limit)
+        items = []
+        for cat_items in result.get("datasets", {}).values():
+            if isinstance(cat_items, list):
+                items.extend(cat_items)
+        return [{k: v for k, v in {"name": x.get("name"), "provider": x.get("provider"),
+                                    "elo": x.get("elo")}.items() if v is not None}
+                for x in items]
+
+    # Capture only the snippet's print() calls — don't redirect sys.stdout globally,
+    # since that would swallow server-internal debug logs from the helper functions.
+    stdout_buf = io.StringIO()
+
+    def _captured_print(*args, **kwargs):
+        kwargs['file'] = stdout_buf
+        builtins.print(*args, **kwargs)
+
+    sandbox_globals = {
+        "__builtins__": {
+            "print": _captured_print,   # snippet print → buffer
+            "len": len, "range": range, "enumerate": enumerate,
+            "zip": zip, "map": map, "filter": filter, "sorted": sorted,
+            "reversed": reversed, "list": list, "dict": dict, "set": set,
+            "tuple": tuple, "str": str, "int": int, "float": float,
+            "bool": bool, "repr": repr, "round": round, "abs": abs,
+            "min": min, "max": max, "sum": sum, "any": any, "all": all,
+            "isinstance": isinstance, "type": type,
+        },
+        "json":        __import__("json"),
+        "re":          __import__("re"),
+        "math":        __import__("math"),
+        "datetime":    __import__("datetime"),
+        "collections": __import__("collections"),
+        # Tool helpers — return Python objects for programmatic use
+        "fetch_benchmarks":  _helper_fetch_benchmarks,
+        "fetch_news":        _helper_fetch_news,
+        "fetch_openrouter":  _helper_fetch_openrouter,
+        "fetch_image_models": _helper_fetch_image_models,
+        "fetch_video_models": _helper_fetch_video_models,
+    }
+
+    try:
+        compiled = compile(textwrap.dedent(code), "<agent_script>", "exec")
+        builtins.exec(compiled, sandbox_globals)
+        output = stdout_buf.getvalue()
+        return output if output.strip() else "(code ran successfully but produced no output)"
+    except Exception:
+        tb = traceback.format_exc(limit=6)
+        return f"Error:\n{tb[:2000]}"
+
+
 # AGENT TOOL EXECUTION - Defined here after fetch_data_for_categories
 # This is called by the inline experimental agent routes above
 # ============================================================
-def _execute_agent_tool(tool_name, tool_args, api_key=None):
+def _execute_agent_tool(tool_name, tool_args, api_key=None, deeper_mode=False):
     """Execute an agent tool by calling internal data functions directly."""
     try:
         # Map tool names to category IDs (matches FETCH_DATA_CATEGORY_CONFIG)
         tool_to_category = {
             # News and Activity
             "fetch_latest_feed": "latest",
-            "fetch_hype_feed": "hype",
             "fetch_blog_posts": "blog",
             
             # LLM Data
@@ -4331,35 +5260,157 @@ def _execute_agent_tool(tool_name, tool_args, api_key=None):
         
         category = tool_to_category.get(tool_name)
         
+        # Handle run_python — sandboxed code execution with tool helpers
+        if tool_name == "run_python":
+            code = tool_args.get("code", "")
+            if not code.strip():
+                return "Error: run_python requires a non-empty 'code' argument"
+            return _execute_run_python(code, api_key=api_key)
+
         # Handle ask_perplexity separately - uses OpenRouter API
         if tool_name == "ask_perplexity":
             query = tool_args.get("query", "")
             if not query:
                 return "Error: ask_perplexity requires a query parameter"
             try:
-                # Use the existing perplexity execution function with user's API key
-                result, _ = _agent_exp_execute_perplexity(tool_args, api_key)
-                return result.get("content", str(result))
+                result_str, _ = _agent_exp_execute_perplexity(tool_args, api_key, deeper_mode=deeper_mode)
+                result_json = json.loads(result_str)
+                return result_json.get('response', result_str)
             except Exception as e:
                 return f"Web search failed: {str(e)}"
         
         if not category:
             return f"Unknown tool: {tool_name}"
-        
-        # Call the internal function directly
-        limit = tool_args.get("limit") or 20
-        result = fetch_data_for_categories([category], limit_per_category=limit)
-        
+
+        # ── fetch_latest_feed: unified latest + optional hype ──────────────────
+        if tool_name == "fetch_latest_feed":
+            try:
+                days_back = max(1, int(tool_args.get("days_back") or 1))
+            except (TypeError, ValueError):
+                days_back = 1
+            include_hype = bool(tool_args.get("include_hype", False))
+            try:
+                limit_arg = max(1, min(int(tool_args.get("limit") or 20), 50))
+            except (TypeError, ValueError):
+                limit_arg = 20
+            timeframe = "week" if days_back >= 7 else "day"
+
+            result_payload, _ = _agent_exp_loader_latest({
+                "timeframe": timeframe,
+                "days": days_back,
+                "include_hype": include_hype,
+                "limit": limit_arg,
+            })
+            items = list(result_payload.get("items") or [])
+
+            # Optional keyword filter
+            query = str(tool_args.get("query", "")).lower()
+            if query:
+                items = [
+                    it for it in items
+                    if query in (str(it.get("title", "")) + str(it.get("name", "")) +
+                                 str(it.get("description", "")) + str(it.get("summary", ""))).lower()
+                ] or items
+
+            hype_note = " + hype signals" if include_hype else ""
+            header = f"## Latest Feed — last {days_back}d{hype_note} ({len(items)} items)\n"
+            lines = [header]
+            for it in items:
+                title = it.get("title") or it.get("name") or "Untitled"
+                link  = it.get("link") or it.get("url") or ""
+                src   = it.get("source_label") or it.get("source") or ""
+                line  = f"- **{title}**"
+                if src:
+                    line += f" ({src})"
+                if link:
+                    line += f" — {link}"
+                desc = it.get("excerpt") or it.get("description") or ""
+                if desc:
+                    desc = desc[:120] + ("…" if len(desc) > 120 else "")
+                    line += f"\n  {desc}"
+                lines.append(line)
+            return "\n".join(lines)
+
+        # For LLM benchmarks, fetch ALL data first so we can sort by quality before limiting.
+        # Other tools use a reasonable default limit at fetch time.
+        if tool_name == "fetch_llm_benchmarks":
+            result = fetch_data_for_categories([category], limit_per_category=None)
+        else:
+            limit = tool_args.get("limit") or 20
+            result = fetch_data_for_categories([category], limit_per_category=limit)
+
         datasets = result.get("datasets", {})
         items = []
         for cat_id, cat_items in datasets.items():
             if isinstance(cat_items, list):
                 items.extend(cat_items)
-        
+
         if not items:
             return f"No data found for {tool_name}"
-        
-        # Filter by query if provided
+
+        # Special handling for LLM benchmarks: sort by quality first, then filter/limit
+        if tool_name == "fetch_llm_benchmarks":
+            def get_quality(item):
+                evals = item.get("evaluations", {})
+                if isinstance(evals, dict):
+                    return evals.get("artificial_analysis_intelligence_index")
+                return None
+
+            def get_provider(item):
+                creator = item.get("model_creator", {})
+                if isinstance(creator, dict):
+                    return creator.get("name", "")
+                return ""
+
+            def get_pricing(item):
+                pricing = item.get("pricing", {})
+                if isinstance(pricing, dict):
+                    return pricing.get("price_1m_input_tokens"), pricing.get("price_1m_output_tokens")
+                return None, None
+
+            # Sort all models by quality descending before any filtering
+            scored = [(float(get_quality(item) or 0), item) for item in items]
+            scored.sort(key=lambda x: x[0], reverse=True)
+            # Only keep models with a real quality score
+            scored = [(q, item) for q, item in scored if q > 0]
+
+            # Filter by query (lab/model name) if provided — applied after sort
+            query = str(tool_args.get("query", "")).lower()
+            if query:
+                filtered = []
+                for q, item in scored:
+                    haystack = " ".join([
+                        str(item.get("name", "")),
+                        get_provider(item),
+                        str(item.get("id", ""))
+                    ]).lower()
+                    if query in haystack:
+                        filtered.append((q, item))
+                if filtered:
+                    scored = filtered
+
+            display_limit = int(tool_args.get("limit") or 30)
+            scored = scored[:display_limit]
+
+            lines = [f"## LLM Benchmarks (Artificial Analysis) — top {len(scored)} by Intelligence Index\n"]
+            lines.append("| # | Model | Provider | Quality | Speed (tok/s) | Input $/1M | Output $/1M |")
+            lines.append("|---|-------|----------|---------|---------------|------------|-------------|")
+
+            for rank, (quality_val, item) in enumerate(scored, 1):
+                name = item.get("name") or "Unknown"
+                provider = get_provider(item)
+                quality_str = f"{quality_val:.1f}"
+                speed = item.get("median_output_tokens_per_second")
+                speed_str = f"{speed:.0f}" if isinstance(speed, (int, float)) else "N/A"
+                input_cost, output_cost = get_pricing(item)
+                input_cost_str = f"${input_cost:.2f}" if isinstance(input_cost, (int, float)) else "N/A"
+                output_cost_str = f"${output_cost:.2f}" if isinstance(output_cost, (int, float)) else "N/A"
+                lines.append(f"| {rank} | {name} | {provider} | {quality_str} | {speed_str} | {input_cost_str} | {output_cost_str} |")
+
+            lines.append("\n**Note:** Ranked by Artificial Analysis Intelligence Index. First entry per provider is their best current model.")
+            return "\n".join(lines)
+
+        # Filter by query if provided (for non-LLM tools)
         query = str(tool_args.get("query", "")).lower()
         if query:
             filtered = []
@@ -4375,67 +5426,6 @@ def _execute_agent_tool(tool_name, tool_args, api_key=None):
                 if query in haystack:
                     filtered.append(item)
             items = filtered if filtered else items
-        
-        # Special handling for LLM benchmarks - return structured data for analysis
-        if tool_name == "fetch_llm_benchmarks":
-            # Extract quality from evaluations.artificial_analysis_intelligence_index
-            def get_quality(item):
-                evals = item.get("evaluations", {})
-                if isinstance(evals, dict):
-                    return evals.get("artificial_analysis_intelligence_index")
-                return None
-            
-            def get_provider(item):
-                creator = item.get("model_creator", {})
-                if isinstance(creator, dict):
-                    return creator.get("name", "")
-                return ""
-            
-            def get_pricing(item):
-                pricing = item.get("pricing", {})
-                if isinstance(pricing, dict):
-                    return pricing.get("price_1m_input_tokens"), pricing.get("price_1m_output_tokens")
-                return None, None
-            
-            # Filter to only models with valid quality score
-            valid_items = []
-            for item in items:
-                qi = get_quality(item)
-                if qi is not None and isinstance(qi, (int, float)) and qi > 0:
-                    valid_items.append(item)
-            
-            if not valid_items:
-                valid_items = items  # Fallback
-            
-            lines = [f"## LLM Benchmarks (Artificial Analysis) - {len(valid_items)} models\n"]
-            lines.append("**Sorted by Intelligence Index (higher = better)**\n")
-            lines.append("| # | Model | Provider | Quality | Speed (tok/s) | Input $/1M | Output $/1M |")
-            lines.append("|---|-------|----------|---------|---------------|------------|-------------|")
-            
-            # Sort by quality descending
-            sorted_items = sorted(valid_items, key=lambda x: float(get_quality(x) or 0), reverse=True)
-            
-            for rank, item in enumerate(sorted_items[:30], 1):  # Show top 30
-                name = item.get("name") or "Unknown"
-                provider = get_provider(item)
-                
-                quality = get_quality(item)
-                quality_str = f"{quality:.1f}" if isinstance(quality, (int, float)) else "N/A"
-                
-                speed = item.get("median_output_tokens_per_second")
-                speed_str = f"{speed:.0f}" if isinstance(speed, (int, float)) else "N/A"
-                
-                input_cost, output_cost = get_pricing(item)
-                input_cost_str = f"${input_cost:.2f}" if isinstance(input_cost, (int, float)) else "N/A"
-                output_cost_str = f"${output_cost:.2f}" if isinstance(output_cost, (int, float)) else "N/A"
-                
-                lines.append(f"| {rank} | {name} | {provider} | {quality_str} | {speed_str} | {input_cost_str} | {output_cost_str} |")
-            
-            lines.append("\n**Analysis tips:**")
-            lines.append("- Top model per provider: find first occurrence of each provider in the list")
-            lines.append("- Major providers: OpenAI, Anthropic, Google, Meta, Mistral, xAI")
-            
-            return "\n".join(lines)
         
         # Default formatting for other tools
         lines = [f"## {tool_name.replace('_', ' ').title()} ({len(items)} items found)"]
@@ -5972,8 +6962,8 @@ Return a concise markdown report that cites sources inline when available."""
 def index():
     """Serve the main dashboard page using Jinja2 templates."""
     from flask import render_template, Response
-    # Use render_template for modular template includes
-    html_content = render_template('index.html')
+    # Sidebar is now the canonical layout
+    html_content = render_template('index.html', variant='sidebar')
     response = Response(html_content, mimetype='text/html')
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
     response.headers['Pragma'] = 'no-cache'
@@ -5993,6 +6983,46 @@ def about_page():
 def docs_page():
     """Serve the API/LLM documentation page."""
     return app.send_static_file('docs.html')
+
+@app.route('/card-game')
+def card_game_page():
+    """Serve the codebase flow card game page."""
+    from flask import render_template, Response
+    html_content = render_template('card-game.html')
+    response = Response(html_content, mimetype='text/html')
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    response.headers['Surrogate-Control'] = 'no-store'
+    return response
+
+@app.route('/cork-board')
+def cork_board_page():
+    """Serve the codebase evidence board page."""
+    from flask import render_template, Response
+    html_content = render_template('cork-board.html')
+    response = Response(html_content, mimetype='text/html')
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    response.headers['Surrogate-Control'] = 'no-store'
+    return response
+
+
+# ============================================================
+# UI ROUTE (SIDEBAR ONLY)
+# ============================================================
+
+@app.route('/ui/sidebar')
+def ui_sidebar():
+    """Serve sidebar layout."""
+    from flask import render_template, Response
+    html_content = render_template('index.html', variant='sidebar')
+    response = Response(html_content, mimetype='text/html')
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
 
 
 @app.route('/api/model-config', methods=['GET'])
@@ -6382,6 +7412,81 @@ def get_fal_models():
     except Exception as e:
         print(f"Error processing fal.ai models data: {e}")
         return jsonify({'error': 'Error processing fal.ai models data', 'details': str(e)}), 500
+
+
+def _fetch_fal_llms_txt(model_url):
+    """Fetch llms.txt metadata for a single fal model URL."""
+    if not model_url:
+        return None
+    normalized = normalize_fal_model_url(model_url).rstrip('/')
+    llms_url = f"{normalized}/llms.txt"
+    response = requests.get(llms_url, timeout=12)
+    if response.status_code != 200:
+        return None
+    text = (response.text or '').strip()
+    if not text:
+        return None
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    return {
+        'url': llms_url,
+        'line_count': len(lines),
+        'preview': lines[:30],
+        'raw': text[:6000]
+    }
+
+
+@app.route('/api/fal-llms-metadata', methods=['GET'])
+def get_fal_llms_metadata():
+    """
+    Lazy fal llms.txt loader.
+    - Initial load: top 10 models (offset=0, limit defaults to 10)
+    - Lazy load: pass offset/limit to fetch additional slices.
+    """
+    try:
+        offset = int(request.args.get('offset', '0') or 0)
+    except (TypeError, ValueError):
+        offset = 0
+    try:
+        limit = int(request.args.get('limit', '10') or 10)
+    except (TypeError, ValueError):
+        limit = 10
+
+    offset = max(0, offset)
+    limit = max(1, min(limit, 50))
+
+    models = load_category_items_simple('fal', force_refresh=False) or []
+    models = sorted(models, key=lambda x: x.get('date') or '', reverse=True)
+    selected = models[offset: offset + limit]
+
+    out = []
+    for model in selected:
+        model_id = model.get('id') or model.get('title') or model.get('modelUrl')
+        if not model_id:
+            continue
+        if model_id in _FAL_LLMS_METADATA_CACHE:
+            metadata = _FAL_LLMS_METADATA_CACHE.get(model_id)
+        else:
+            try:
+                metadata = _fetch_fal_llms_txt(model.get('modelUrl'))
+            except Exception as exc:
+                metadata = {'error': str(exc)}
+            _FAL_LLMS_METADATA_CACHE[model_id] = metadata
+
+        out.append({
+            'id': model.get('id'),
+            'title': model.get('title'),
+            'modelUrl': model.get('modelUrl'),
+            'category': model.get('category'),
+            'llms_metadata': metadata
+        })
+
+    return jsonify({
+        'offset': offset,
+        'limit': limit,
+        'count': len(out),
+        'items': out
+    })
+
 
 @app.route('/api/replicate-models', methods=['GET'])
 def get_replicate_models():
@@ -8916,7 +10021,7 @@ def _agent_exp_execute_fetch(tool_args, experimental_mode):
     return json.dumps(tool_payload, ensure_ascii=False), log_entry
 
 
-def _agent_exp_execute_perplexity(tool_args, auth_token):
+def _agent_exp_execute_perplexity(tool_args, auth_token, deeper_mode=False):
     query = (tool_args.get('query') or '').strip()
     if not query:
         raise ValueError('ask_perplexity requires a `query` string.')
@@ -8928,14 +10033,15 @@ def _agent_exp_execute_perplexity(tool_args, auth_token):
         "Prioritise factual, recent findings and cite sources explicitly."
     )
 
+    perplexity_model = 'perplexity/sonar-pro' if deeper_mode else 'perplexity/sonar'
     payload = {
-        'model': 'perplexity/sonar-pro-search',
+        'model': perplexity_model,
         'messages': [
             {'role': 'system', 'content': system_prompt},
             {'role': 'user', 'content': query}
         ],
         'temperature': 0.2,
-        'max_tokens': 900
+        'max_tokens': 1800 if deeper_mode else 900
     }
 
     response = requests.post(
@@ -8952,7 +10058,7 @@ def _agent_exp_execute_perplexity(tool_args, auth_token):
 
     tool_payload = {
         'query': query,
-        'model': 'perplexity/sonar-pro-search',
+        'model': perplexity_model,
         'response': content
     }
     log_entry = {
@@ -8960,7 +10066,7 @@ def _agent_exp_execute_perplexity(tool_args, auth_token):
         'tool': 'ask_perplexity',
         'status': 'ok',
         'args': {'query': query},
-        'model': 'perplexity/sonar-pro-search'
+        'model': perplexity_model
     }
     return json.dumps(tool_payload, ensure_ascii=False), log_entry
 
@@ -9136,6 +10242,195 @@ def agent_exp_endpoint():
         'X-Accel-Buffering': 'no'
     }
     return Response(stream_with_context(event_stream()), mimetype='text/event-stream', headers=sse_headers)
+
+
+def _build_agent_v2_executor():
+    return AgentToolExecutors(
+        fetch_categories=fetch_data_for_categories,
+        load_openrouter_models=load_openrouter_models,
+        load_monitor_feed=load_monitor_feed,
+        fetch_hype_feed_payload=fetch_hype_feed_payload,
+        fetch_blog_posts=fetch_blog_posts,
+        fetch_testing_catalog_feed=fetch_testing_catalog_feed,
+        load_category_items_simple=load_category_items_simple,
+        openrouter_base_url=OPENROUTER_BASE_URL
+    )
+
+
+@app.route('/api/agent-v2/skills', methods=['GET'])
+def agent_v2_skills():
+    try:
+        skills = list_skill_frontmatter(os.path.join(BASE_DIR, 'skills'))
+        return jsonify({'skills': skills})
+    except Exception as exc:
+        return jsonify({'error': f'Failed to load skills: {exc}'}), 500
+
+
+@app.route('/api/agent-v2/models', methods=['GET'])
+def agent_v2_models():
+    try:
+        models = load_openrouter_models(force_refresh=False)
+        return jsonify({
+            'models': [{'id': m.get('id'), 'name': m.get('name') or m.get('id')} for m in (models or [])]
+        })
+    except Exception as exc:
+        return jsonify({'error': f'Failed to load OpenRouter models: {exc}'}), 500
+
+
+@app.route('/api/agent-v2/chat', methods=['POST'])
+def agent_v2_chat():
+    data = request.get_json(force=True, silent=True) or {}
+    messages = data.get('messages') or []
+    if not isinstance(messages, list):
+        return jsonify({'error': 'messages must be an array'}), 400
+
+    settings_payload = data.get('settings') or {}
+    if not isinstance(settings_payload, dict):
+        settings_payload = {}
+
+    message_list = []
+    for msg in messages:
+        if not isinstance(msg, dict):
+            continue
+        role = str(msg.get('role') or '').strip()
+        content = str(msg.get('content') or '')
+        if role in {'system', 'user', 'assistant'} and content.strip():
+            message_list.append({'role': role, 'content': content})
+
+    if not message_list or message_list[-1].get('role') != 'user':
+        return jsonify({'error': 'Final message must be a user message.'}), 400
+
+    mode = str(settings_payload.get('mode') or 'quick').strip().lower()
+    if mode not in {'quick', 'heavy'}:
+        mode = 'quick'
+
+    try:
+        temperature = float(settings_payload.get('temperature', 0.3))
+    except (TypeError, ValueError):
+        temperature = 0.3
+
+    try:
+        max_iterations = int(settings_payload.get('max_iterations', 20))
+    except (TypeError, ValueError):
+        max_iterations = 20
+
+    model_id = str(settings_payload.get('model') or 'anthropic/claude-sonnet-4').strip()
+    umi_model = str(settings_payload.get('umi_model') or 'google/gemini-2.5-flash').strip()
+    web_search_model = str(settings_payload.get('web_search_model') or 'perplexity/sonar-pro').strip()
+    api_key = (settings_payload.get('api_key') or OPENROUTER_API_KEY or '').strip()
+    system_override = str(settings_payload.get('system_prompt_override') or '').strip()
+
+    settings = AgentSettings(
+        model=model_id,
+        umi_model=umi_model,
+        web_search_model=web_search_model,
+        mode=mode,
+        temperature=max(0.0, min(temperature, 1.5)),
+        max_iterations=max(1, min(max_iterations, 50)),
+        api_key=api_key,
+        system_prompt_override=system_override,
+    )
+
+    skills = list_skill_frontmatter(os.path.join(BASE_DIR, 'skills'))
+    system_prompt = build_system_prompt(mode=settings.mode, skills=skills, custom_append=settings.system_prompt_override)
+
+    result = run_agent(
+        settings=settings,
+        system_prompt=system_prompt,
+        user_messages=message_list,
+        tool_executor=_build_agent_v2_executor(),
+    )
+
+    serialized_logs = json.loads(json.dumps([log.__dict__ for log in (result.logs or [])], default=str))
+    payload = {
+        'response': result.response,
+        'logs': serialized_logs,
+        'error': result.error,
+    }
+    status = 200 if not result.error else 500
+    return jsonify(payload), status
+
+
+@app.route('/api/agent-v2/chat/stream', methods=['POST'])
+def agent_v2_chat_stream():
+    data = request.get_json(force=True, silent=True) or {}
+    messages = data.get('messages') or []
+    if not isinstance(messages, list):
+        return jsonify({'error': 'messages must be an array'}), 400
+
+    settings_payload = data.get('settings') or {}
+    if not isinstance(settings_payload, dict):
+        settings_payload = {}
+
+    message_list = []
+    for msg in messages:
+        if not isinstance(msg, dict):
+            continue
+        role = str(msg.get('role') or '').strip()
+        content = str(msg.get('content') or '')
+        if role in {'system', 'user', 'assistant'} and content.strip():
+            message_list.append({'role': role, 'content': content})
+
+    if not message_list or message_list[-1].get('role') != 'user':
+        return jsonify({'error': 'Final message must be a user message.'}), 400
+
+    mode = str(settings_payload.get('mode') or 'quick').strip().lower()
+    if mode not in {'quick', 'heavy'}:
+        mode = 'quick'
+
+    try:
+        temperature = float(settings_payload.get('temperature', 0.3))
+    except (TypeError, ValueError):
+        temperature = 0.3
+
+    try:
+        max_iterations = int(settings_payload.get('max_iterations', 20))
+    except (TypeError, ValueError):
+        max_iterations = 20
+
+    model_id = str(settings_payload.get('model') or 'anthropic/claude-sonnet-4').strip()
+    umi_model = str(settings_payload.get('umi_model') or 'google/gemini-2.5-flash').strip()
+    web_search_model = str(settings_payload.get('web_search_model') or 'perplexity/sonar-pro').strip()
+    api_key = (settings_payload.get('api_key') or OPENROUTER_API_KEY or '').strip()
+    system_override = str(settings_payload.get('system_prompt_override') or '').strip()
+
+    settings = AgentSettings(
+        model=model_id,
+        umi_model=umi_model,
+        web_search_model=web_search_model,
+        mode=mode,
+        temperature=max(0.0, min(temperature, 1.5)),
+        max_iterations=max(1, min(max_iterations, 50)),
+        api_key=api_key,
+        system_prompt_override=system_override,
+    )
+
+    skills = list_skill_frontmatter(os.path.join(BASE_DIR, 'skills'))
+    system_prompt = build_system_prompt(mode=settings.mode, skills=skills, custom_append=settings.system_prompt_override)
+
+    def event_stream():
+        try:
+            for event in stream_agent(
+                settings=settings,
+                system_prompt=system_prompt,
+                user_messages=message_list,
+                tool_executor=_build_agent_v2_executor(),
+            ):
+                yield f"data: {json.dumps(event, ensure_ascii=False, default=str)}\n\n"
+        except Exception as exc:
+            import traceback
+            payload = {'type': 'error', 'error': f'Stream failed: {exc}', 'stack': traceback.format_exc()}
+            yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+    sse_headers = {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no'
+    }
+    return Response(stream_with_context(event_stream()), mimetype='text/event-stream', headers=sse_headers)
+
+
 @app.route('/api/intelligent-query', methods=['POST'])
 def intelligent_query():
     """Use configured model to intelligently process large datasets."""
