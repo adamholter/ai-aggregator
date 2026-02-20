@@ -215,19 +215,37 @@
 
         const palette = ['#111827', '#6b7280', '#9ca3af', '#4b5563'];
 
+        const isScatter = type === 'scatter';
+
+        const normalizedDatasets = (spec.datasets || []).map((ds, idx) => {
+          // Normalize scatter data: handle [[x,y]] array-of-arrays format
+          const rawData = ds.data || [];
+          const data = isScatter
+            ? rawData.map(pt => (Array.isArray(pt) ? { x: pt[0], y: pt[1] } : pt))
+            : rawData;
+
+          return {
+            ...ds,
+            data,
+            borderWidth: ds.borderWidth != null ? ds.borderWidth : 1.5,
+            borderColor: ds.borderColor || palette[idx % palette.length],
+            backgroundColor: ds.backgroundColor || (palette[idx % palette.length] + '99'),
+            // scatter charts need visible points; set radius unless caller overrides
+            ...(isScatter && ds.pointRadius == null
+              ? { pointRadius: 5, pointHoverRadius: 7 }
+              : {}),
+          };
+        });
+
         const chart = new Chart(canvas.getContext('2d'), {
           type,
           data: {
             labels: spec.labels || [],
-            datasets: (spec.datasets || []).map((ds, idx) => ({
-              ...ds,
-              borderWidth: 1.5,
-              borderColor: ds.borderColor || palette[idx % palette.length],
-              backgroundColor: ds.backgroundColor || (palette[idx % palette.length] + '99'),
-            })),
+            datasets: normalizedDatasets,
           },
           options: {
             responsive: true,
+            // .chart-host has explicit height — maintainAspectRatio:false fills it correctly
             maintainAspectRatio: false,
             plugins: {
               legend: {

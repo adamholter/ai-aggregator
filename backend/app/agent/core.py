@@ -83,8 +83,6 @@ def run_agent(
     messages.extend(user_messages)
 
     max_iterations = max(1, int(settings.max_iterations or 20))
-    if mode == "quick":
-        max_iterations = min(max_iterations, 2)
 
     for iteration in range(1, max_iterations + 1):
         try:
@@ -212,8 +210,6 @@ def stream_agent(
     messages.extend(user_messages)
 
     max_iterations = max(1, int(settings.max_iterations or 20))
-    if mode == "quick":
-        max_iterations = min(max_iterations, 2)
 
     yield {
         "type": "status",

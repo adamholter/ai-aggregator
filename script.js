@@ -266,11 +266,10 @@ const openRouterMatchCache = new Map();
 const USER_OPENROUTER_KEY_STORAGE = 'dashboard-user-openrouter-key';
 const EXPERIMENTAL_MODE_STORAGE_KEY = 'dashboard-experimental-mode';
 
-const THEME_SEQUENCE = ['light', 'dark', 'source'];
+const THEME_SEQUENCE = ['light', 'dark'];
 const THEME_LABELS = {
     light: { label: 'Light Mode', icon: '☀️' },
-    dark: { label: 'Dark Mode', icon: '🌙' },
-    source: { label: 'Source Mode', icon: '🌈' }
+    dark: { label: 'Dark Mode', icon: '🌙' }
 };
 
 const LLM_MAIN_INDEX_KEYS = [
@@ -294,7 +293,80 @@ let latestIncludeHype = false;
 let latestMetadata = null;
 let latestLoadId = 0;
 const LATEST_PREVIEW_LIMIT = 10;
+const LATEST_CACHE_STORAGE_KEY = 'dashboard-latest-cache';
 let latestControlsWired = false;
+
+// Toast notification helper
+function showToast(message, type = 'info', duration = 5000) {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+
+    const toast = document.createElement('div');
+    toast.className = `toast${type !== 'info' ? ` toast-${type}` : ''}`;
+
+    const content = document.createElement('div');
+    content.style.flex = '1';
+    content.innerHTML = message;
+
+    const closeBtn = document.createElement('button');
+    closeBtn.innerHTML = '×';
+    closeBtn.onclick = () => dismissToast(toast);
+
+    toast.appendChild(content);
+    toast.appendChild(closeBtn);
+    container.appendChild(toast);
+
+    if (duration > 0) {
+        setTimeout(() => dismissToast(toast), duration);
+    }
+
+    return toast;
+}
+
+function dismissToast(toast) {
+    if (!toast || !toast.parentElement) return;
+    toast.classList.add('fade-out');
+    setTimeout(() => toast.remove(), 200);
+}
+
+// Check for new items in latest feed and show toast
+function checkForNewLatestItems(currentItems) {
+    if (!Array.isArray(currentItems) || currentItems.length === 0) return;
+
+    try {
+        const cachedJson = localStorage.getItem(LATEST_CACHE_STORAGE_KEY);
+        const cached = cachedJson ? JSON.parse(cachedJson) : { ids: [], timestamp: 0 };
+
+        // Create unique ID for each item (use link or title+source combo)
+        const getItemId = (item) => item.link || `${item.title || ''}-${item.source || ''}`;
+
+        const currentIds = new Set(currentItems.map(getItemId));
+        const cachedIds = new Set(cached.ids || []);
+
+        // Find new items (in current but not in cached)
+        const newItems = currentItems.filter(item => !cachedIds.has(getItemId(item)));
+
+        if (cachedIds.size > 0 && newItems.length > 0) {
+            // Only show notification if we had previous cache (not first visit)
+            if (newItems.length === 1) {
+                const item = newItems[0];
+                const preview = `<strong>${escapeHtml(item.title || 'New item')}</strong>` +
+                    (item.source ? ` <span style="opacity:0.7">from ${escapeHtml(item.source)}</span>` : '');
+                showToast(`🔔 New in Latest: ${preview}`, 'info', 8000);
+            } else {
+                showToast(`🔔 ${newItems.length} new appearances in the Latest tab since your last visit.`, 'info', 6000);
+            }
+        }
+
+        // Update cache with current items
+        localStorage.setItem(LATEST_CACHE_STORAGE_KEY, JSON.stringify({
+            ids: Array.from(currentIds),
+            timestamp: Date.now()
+        }));
+    } catch (e) {
+        console.warn('Failed to check for new latest items:', e);
+    }
+}
 
 function getLatestControls() {
     const section = document.getElementById('latest');
@@ -472,6 +544,449 @@ function showToast(message, type = 'error', duration = 5000) {
         window.setTimeout(dismiss, duration);
     }
 }
+
+// ============ What's New Change Detection ============
+
+const SNAPSHOT_KEY = 'dashboard-whatsnew-snapshot';
+
+/**
+ * Create a minimal snapshot of current data for change tracking
+ */
+function createDataSnapshot() {
+    const snapshot = {
+        timestamp: Date.now(),
+        openrouter: {},
+        llms: [],
+        falModels: []
+    };
+
+    // OpenRouter: track model IDs, pricing, context_length
+    const orModels = cachedData.openRouterModels || [];
+    orModels.forEach(m => {
+        if (m.id) {
+            snapshot.openrouter[m.id] = {
+                prompt: m.pricing?.prompt || 0,
+                completion: m.pricing?.completion || 0,
+                context: m.context_length || 0
+            };
+        }
+    });
+
+    // LLMs: just track names for new model detection
+    const llms = cachedData.llms || [];
+    snapshot.llms = llms.map(m => m.name).filter(Boolean);
+
+    // Fal: track model IDs
+    const fal = cachedData.falModels || [];
+    snapshot.falModels = fal.map(m => m.id || m.title).filter(Boolean);
+
+    return snapshot;
+}
+
+/**
+ * Save current data snapshot to localStorage
+ */
+function saveDataSnapshot() {
+    try {
+        const snapshot = createDataSnapshot();
+        localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(snapshot));
+    } catch (e) {
+        console.warn('Failed to save data snapshot:', e);
+    }
+}
+
+/**
+ * Load previous snapshot from localStorage
+ */
+function loadPreviousSnapshot() {
+    try {
+        const stored = localStorage.getItem(SNAPSHOT_KEY);
+        return stored ? JSON.parse(stored) : null;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Detect changes between old snapshot and current data
+ */
+function detectChanges(oldSnapshot) {
+    if (!oldSnapshot) return null;
+
+    const changes = {
+        newModels: [],
+        priceUp: [],
+        priceDown: [],
+        contextChanges: []
+    };
+
+    // Check OpenRouter for new models and price/context changes
+    const orModels = cachedData.openRouterModels || [];
+    orModels.forEach(m => {
+        if (!m.id) return;
+        const old = oldSnapshot.openrouter?.[m.id];
+
+        if (!old) {
+            // New model
+            changes.newModels.push({ source: 'OpenRouter', name: m.name || m.id });
+        } else {
+            // Check pricing changes (>5% threshold)
+            const newPrompt = parseFloat(m.pricing?.prompt) || 0;
+            const oldPrompt = parseFloat(old.prompt) || 0;
+            if (oldPrompt > 0 && newPrompt > 0) {
+                const pctChange = ((newPrompt - oldPrompt) / oldPrompt) * 100;
+                if (pctChange > 5) {
+                    changes.priceUp.push({ name: m.name || m.id, pct: pctChange.toFixed(0) });
+                } else if (pctChange < -5) {
+                    changes.priceDown.push({ name: m.name || m.id, pct: Math.abs(pctChange).toFixed(0) });
+                }
+            }
+
+            // Check context length changes
+            const newCtx = m.context_length || 0;
+            const oldCtx = old.context || 0;
+            if (oldCtx > 0 && newCtx !== oldCtx && Math.abs(newCtx - oldCtx) > 1000) {
+                changes.contextChanges.push({
+                    name: m.name || m.id,
+                    old: oldCtx,
+                    new: newCtx
+                });
+            }
+        }
+    });
+
+    // Check for new LLMs
+    const llms = cachedData.llms || [];
+    const oldLlms = new Set(oldSnapshot.llms || []);
+    llms.forEach(m => {
+        if (m.name && !oldLlms.has(m.name)) {
+            changes.newModels.push({ source: 'AA Benchmark', name: m.name });
+        }
+    });
+
+    // Check for new fal.ai models
+    const fal = cachedData.falModels || [];
+    const oldFal = new Set(oldSnapshot.falModels || []);
+    fal.forEach(m => {
+        const id = m.id || m.title;
+        if (id && !oldFal.has(id)) {
+            changes.newModels.push({ source: 'fal.ai', name: m.title || id });
+        }
+    });
+
+    // Only return if there are actual changes
+    const hasChanges = changes.newModels.length > 0 ||
+        changes.priceUp.length > 0 ||
+        changes.priceDown.length > 0 ||
+        changes.contextChanges.length > 0;
+
+    return hasChanges ? changes : null;
+}
+
+/**
+ * Show What's New toast notification
+ */
+function showWhatsNewToast(changes) {
+    if (!changes) return;
+
+    const parts = [];
+    if (changes.newModels.length > 0) {
+        parts.push(`${changes.newModels.length} new model${changes.newModels.length > 1 ? 's' : ''}`);
+    }
+    if (changes.priceDown.length > 0) {
+        parts.push(`${changes.priceDown.length} price drop${changes.priceDown.length > 1 ? 's' : ''}`);
+    }
+    if (changes.priceUp.length > 0) {
+        parts.push(`${changes.priceUp.length} price increase${changes.priceUp.length > 1 ? 's' : ''}`);
+    }
+    if (changes.contextChanges.length > 0) {
+        parts.push(`${changes.contextChanges.length} context update${changes.contextChanges.length > 1 ? 's' : ''}`);
+    }
+
+    if (parts.length === 0) return;
+
+    const message = `✨ What's New: ${parts.join(', ')} since your last visit`;
+    showToast(message, 'info', 10000);
+
+    // Log details to console for debugging
+    console.log('What\'s New details:', changes);
+}
+
+/**
+ * Check for changes after data loads
+ */
+async function checkWhatsNew() {
+    // Wait a bit for data to load
+    await new Promise(r => setTimeout(r, 3000));
+
+    const oldSnapshot = loadPreviousSnapshot();
+
+    // If no previous snapshot, just save current and don't show toast
+    if (!oldSnapshot) {
+        saveDataSnapshot();
+        return;
+    }
+
+    // Only check if snapshot is at least 1 hour old (avoid spamming on page refresh)
+    const hoursSinceSnapshot = (Date.now() - oldSnapshot.timestamp) / (1000 * 60 * 60);
+    if (hoursSinceSnapshot < 1) {
+        return;
+    }
+
+    const changes = detectChanges(oldSnapshot);
+    if (changes) {
+        showWhatsNewToast(changes);
+    }
+
+    // Save new snapshot for next visit
+    saveDataSnapshot();
+}
+
+// Start checking when page loads
+document.addEventListener('DOMContentLoaded', () => {
+    // Delay to let data load first
+    setTimeout(checkWhatsNew, 5000);
+});
+
+// Also save snapshot before user leaves
+window.addEventListener('beforeunload', saveDataSnapshot);
+
+// ============ Onboarding Tour ============
+
+const TOUR_COMPLETED_KEY = 'dashboard-tour-completed';
+
+const tourSteps = [
+    {
+        selector: '.navigation',
+        title: 'Welcome to AI Model Dashboard',
+        content: 'This sidebar gives you instant access to 17 sections covering LLMs, image models, video, audio, fal.ai, Replicate, OpenRouter, news, and more. Hover to expand it and see labels.',
+        position: 'right'
+    },
+    {
+        selector: '.global-search',
+        title: 'Search Everything',
+        content: 'Press Cmd+K (or Ctrl+K) to search across all models and categories at once. You can also type directly in this bar to filter whatever section you\'re in.',
+        position: 'bottom'
+    },
+    {
+        selector: '.model-card',
+        title: 'Model Cards',
+        content: 'Each card shows live benchmark scores, pricing, and speed. Click for details, double-click for an AI-powered deep analysis, or pin a card to save it to your Pinned section.',
+        position: 'right'
+    },
+    {
+        selector: '.nav-btn[data-section="agent-exp"]',
+        title: 'AI Agent',
+        content: 'Ask anything about AI models in plain English — best models for coding, cost comparisons, what\'s trending. The agent pulls live benchmarks and searches the web. Add your OpenRouter API key in Settings to use it.',
+        position: 'right'
+    },
+    {
+        selector: '#settings-btn',
+        title: 'Settings',
+        content: 'Add your OpenRouter API key to unlock AI analysis and the agent. Choose which models appear in the agent dropdown, pick a sidebar style, and more. Everything is stored only in your browser.',
+        position: 'bottom'
+    }
+];
+
+let currentTourStep = 0;
+let tourOverlay = null;
+let tourTooltip = null;
+
+function isTourCompleted() {
+    return localStorage.getItem(TOUR_COMPLETED_KEY) === 'true';
+}
+
+function markTourCompleted() {
+    localStorage.setItem(TOUR_COMPLETED_KEY, 'true');
+}
+
+function findTourElement(selector) {
+    let el = document.querySelector(selector);
+    if (el) return el;
+
+    // Fallbacks for each step selector
+    const fallbacks = {
+        '.navigation': 'nav, .nav-btn',
+        '.global-search': '.header .global-search, #globalSearch, .search-input, input[type="search"]',
+        '.model-card': '.model-card, .llm-card, .card',
+        '.nav-btn[data-section="agent-exp"]': '.nav-btn[data-section="agent-exp"], #agent-exp',
+        '#settings-btn': '#settings-btn, .settings-btn, button[aria-label*="Settings"]'
+    };
+
+    if (fallbacks[selector]) {
+        el = document.querySelector(fallbacks[selector]);
+    }
+
+    return el;
+}
+
+function positionTooltip(targetEl, position) {
+    const rect = targetEl.getBoundingClientRect();
+    const tooltip = tourTooltip;
+    const padding = 12;
+
+    // Remove existing arrow classes
+    tooltip.classList.remove('arrow-top', 'arrow-bottom', 'arrow-left', 'arrow-right');
+
+    let top, left;
+
+    switch (position) {
+        case 'bottom':
+            top = rect.bottom + padding;
+            left = rect.left;
+            tooltip.classList.add('arrow-top');
+            break;
+        case 'top':
+            top = rect.top - tooltip.offsetHeight - padding;
+            left = rect.left;
+            tooltip.classList.add('arrow-bottom');
+            break;
+        case 'left':
+            top = rect.top;
+            left = rect.left - tooltip.offsetWidth - padding;
+            tooltip.classList.add('arrow-right');
+            break;
+        case 'right':
+            top = rect.top;
+            left = rect.right + padding;
+            tooltip.classList.add('arrow-left');
+            break;
+        default:
+            top = rect.bottom + padding;
+            left = rect.left;
+            tooltip.classList.add('arrow-top');
+    }
+
+    // Keep tooltip in viewport
+    const maxLeft = window.innerWidth - tooltip.offsetWidth - 20;
+    const maxTop = window.innerHeight - tooltip.offsetHeight - 20;
+    left = Math.max(20, Math.min(left, maxLeft));
+    top = Math.max(20, Math.min(top, maxTop));
+
+    tooltip.style.top = `${top}px`;
+    tooltip.style.left = `${left}px`;
+}
+
+function renderTourStep(stepIndex) {
+    const step = tourSteps[stepIndex];
+    if (!step) return;
+
+    const targetEl = findTourElement(step.selector);
+
+    // Update spotlight position
+    if (targetEl) {
+        const rect = targetEl.getBoundingClientRect();
+        const spotlight = document.querySelector('.tour-spotlight');
+        if (spotlight) {
+            spotlight.style.top = `${rect.top - 8}px`;
+            spotlight.style.left = `${rect.left - 8}px`;
+            spotlight.style.width = `${rect.width + 16}px`;
+            spotlight.style.height = `${rect.height + 16}px`;
+        }
+    }
+
+    // Update tooltip content
+    tourTooltip.innerHTML = `
+        <h3>${step.title}</h3>
+        <p>${step.content}</p>
+        <div class="tour-progress">
+            ${tourSteps.map((_, i) => `
+                <div class="tour-progress-dot ${i < stepIndex ? 'completed' : ''} ${i === stepIndex ? 'active' : ''}"></div>
+            `).join('')}
+        </div>
+        <div class="tour-actions">
+            <button class="tour-skip" onclick="endTour()">Skip tour</button>
+            <div class="tour-nav">
+                ${stepIndex > 0 ? '<button class="tour-prev" onclick="prevTourStep()">Previous</button>' : ''}
+                <button class="tour-next" onclick="nextTourStep()">
+                    ${stepIndex === tourSteps.length - 1 ? 'Finish' : 'Next'}
+                </button>
+            </div>
+        </div>
+    `;
+
+    // Position tooltip
+    if (targetEl) {
+        // Small delay to let DOM update
+        requestAnimationFrame(() => {
+            positionTooltip(targetEl, step.position);
+        });
+    }
+}
+
+function startTour() {
+    currentTourStep = 0;
+
+    // Create overlay
+    tourOverlay = document.createElement('div');
+    tourOverlay.className = 'tour-overlay';
+    tourOverlay.innerHTML = '<div class="tour-spotlight"></div>';
+    document.body.appendChild(tourOverlay);
+
+    // Create tooltip
+    tourTooltip = document.createElement('div');
+    tourTooltip.className = 'tour-tooltip';
+    document.body.appendChild(tourTooltip);
+
+    // Render first step
+    renderTourStep(0);
+
+    // Handle escape key
+    document.addEventListener('keydown', handleTourKeydown);
+}
+
+function handleTourKeydown(e) {
+    if (e.key === 'Escape') {
+        endTour();
+    } else if (e.key === 'ArrowRight' || e.key === 'Enter') {
+        nextTourStep();
+    } else if (e.key === 'ArrowLeft') {
+        prevTourStep();
+    }
+}
+
+window.nextTourStep = function () {
+    currentTourStep++;
+    if (currentTourStep >= tourSteps.length) {
+        endTour();
+        markTourCompleted();
+    } else {
+        renderTourStep(currentTourStep);
+    }
+};
+
+window.prevTourStep = function () {
+    if (currentTourStep > 0) {
+        currentTourStep--;
+        renderTourStep(currentTourStep);
+    }
+};
+
+window.endTour = function () {
+    if (tourOverlay) {
+        tourOverlay.remove();
+        tourOverlay = null;
+    }
+    if (tourTooltip) {
+        tourTooltip.remove();
+        tourTooltip = null;
+    }
+    document.removeEventListener('keydown', handleTourKeydown);
+    markTourCompleted();
+};
+
+// Expose startTour globally for "Start tour" links
+window.startTour = startTour;
+
+// Auto-start tour for first-time visitors
+document.addEventListener('DOMContentLoaded', () => {
+    // Delay to let page render
+    setTimeout(() => {
+        if (!isTourCompleted()) {
+            startTour();
+        }
+    }, 2000);
+});
 
 function clearAgentLoadingState() {
     const chatMessages = document.getElementById('chat-messages');
@@ -935,15 +1450,391 @@ document.addEventListener('DOMContentLoaded', async function () {
             }
         });
     }
+
+    // Setup global search
+    setupGlobalSearch();
+
+    // Background load all data sources for global search
+    // Staggered loading to avoid overwhelming the server
+    setTimeout(async () => {
+        console.log('Background loading data for global search...');
+        try {
+            // Load OpenRouter models first (most searched)
+            if (!cachedData.openRouterModels) {
+                await loadOpenRouterModels();
+            }
+        } catch (e) { console.warn('Background load OpenRouter failed:', e); }
+
+        // Stagger remaining loads
+        setTimeout(async () => {
+            try {
+                if (!cachedData.falModels) {
+                    await loadFalModelsData();
+                }
+            } catch (e) { console.warn('Background load Fal failed:', e); }
+        }, 1000);
+
+        setTimeout(async () => {
+            try {
+                if (!cachedData.replicateModels) {
+                    await loadReplicateModelsData();
+                }
+            } catch (e) { console.warn('Background load Replicate failed:', e); }
+        }, 2000);
+
+        setTimeout(async () => {
+            try {
+                if (!cachedData.textToImage) {
+                    await loadTextToImageData();
+                }
+                if (!cachedData.textToVideo) {
+                    await loadTextToVideoData();
+                }
+            } catch (e) { console.warn('Background load media failed:', e); }
+        }, 3000);
+
+        console.log('Background data loading complete');
+    }, 2000); // Start after 2s to allow page to render
 });
+
+// Global Search Implementation
+function setupGlobalSearch() {
+    const input = document.getElementById('global-search-input');
+    const resultsContainer = document.getElementById('global-search-results');
+    if (!input || !resultsContainer) return;
+
+    let debounceTimer = null;
+
+    input.addEventListener('input', () => {
+        clearTimeout(debounceTimer);
+        const query = input.value.trim().toLowerCase();
+
+        if (query.length < 2) {
+            resultsContainer.style.display = 'none';
+            resultsContainer.innerHTML = '';
+            return;
+        }
+
+        debounceTimer = setTimeout(() => {
+            const results = searchAllData(query);
+            displayGlobalSearchResults(results, resultsContainer, query);
+        }, 200);
+    });
+
+    // Close on click outside
+    document.addEventListener('click', (e) => {
+        if (!input.contains(e.target) && !resultsContainer.contains(e.target)) {
+            resultsContainer.style.display = 'none';
+        }
+    });
+
+    // Close on escape
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            resultsContainer.style.display = 'none';
+            input.blur();
+        }
+    });
+}
+
+function searchAllData(query) {
+    const results = [];
+    const maxPerCategory = 4;
+
+    // Helper to get data - tries rawData first, then cachedData
+    const getData = (key) => rawData[key] || cachedData[key] || [];
+
+    // Search LLMs
+    const llms = getData('llms');
+    if (llms && llms.length) {
+        const matches = llms.filter(m =>
+            (m.name || '').toLowerCase().includes(query) ||
+            (m.model_creator?.name || '').toLowerCase().includes(query)
+        ).slice(0, maxPerCategory);
+        matches.forEach(m => results.push({
+            type: 'llms',
+            name: m.name,
+            subtitle: m.model_creator?.name || 'LLM',
+            data: m
+        }));
+    }
+
+    // Search OpenRouter models
+    const openRouter = getData('openRouterModels');
+    if (openRouter && openRouter.length) {
+        const matches = openRouter.filter(m =>
+            (m.name || m.id || '').toLowerCase().includes(query)
+        ).slice(0, maxPerCategory);
+        matches.forEach(m => results.push({
+            type: 'openrouter-models',
+            name: m.name || m.id,
+            subtitle: 'OpenRouter',
+            data: m
+        }));
+    }
+
+    // Search Fal models
+    const falModels = getData('falModels');
+    if (falModels && falModels.length) {
+        const matches = falModels.filter(m =>
+            (m.name || m.title || '').toLowerCase().includes(query) ||
+            (m.category || '').toLowerCase().includes(query)
+        ).slice(0, maxPerCategory);
+        matches.forEach(m => results.push({
+            type: 'fal-models',
+            name: m.name || m.title,
+            subtitle: m.category || 'fal.ai',
+            data: m
+        }));
+    }
+
+    // Search Replicate models
+    const replicateModels = getData('replicateModels');
+    if (replicateModels && replicateModels.length) {
+        const matches = replicateModels.filter(m =>
+            (m.name || m.model || '').toLowerCase().includes(query) ||
+            (m.owner || '').toLowerCase().includes(query)
+        ).slice(0, maxPerCategory);
+        matches.forEach(m => results.push({
+            type: 'replicate-models',
+            name: m.name || m.model,
+            subtitle: m.owner || 'Replicate',
+            data: m
+        }));
+    }
+
+    // Search Text-to-Image models (Artificial Analysis)
+    const textToImage = getData('textToImage');
+    if (textToImage && textToImage.length) {
+        const matches = textToImage.filter(m =>
+            (m.name || '').toLowerCase().includes(query) ||
+            (m.model_creator?.name || '').toLowerCase().includes(query)
+        ).slice(0, maxPerCategory);
+        matches.forEach(m => results.push({
+            type: 'text-to-image',
+            name: m.name,
+            subtitle: m.model_creator?.name || 'Text-to-Image',
+            data: m
+        }));
+    }
+
+    // Search Image Editing models
+    const imageEditing = getData('imageEditing');
+    if (imageEditing && imageEditing.length) {
+        const matches = imageEditing.filter(m =>
+            (m.name || '').toLowerCase().includes(query) ||
+            (m.model_creator?.name || '').toLowerCase().includes(query)
+        ).slice(0, maxPerCategory);
+        matches.forEach(m => results.push({
+            type: 'image-editing',
+            name: m.name,
+            subtitle: m.model_creator?.name || 'Image Editing',
+            data: m
+        }));
+    }
+
+    // Search Text-to-Video models
+    const textToVideo = getData('textToVideo');
+    if (textToVideo && textToVideo.length) {
+        const matches = textToVideo.filter(m =>
+            (m.name || '').toLowerCase().includes(query) ||
+            (m.model_creator?.name || '').toLowerCase().includes(query)
+        ).slice(0, maxPerCategory);
+        matches.forEach(m => results.push({
+            type: 'text-to-video',
+            name: m.name,
+            subtitle: m.model_creator?.name || 'Text-to-Video',
+            data: m
+        }));
+    }
+
+    // Search Image-to-Video models
+    const imageToVideo = getData('imageToVideo');
+    if (imageToVideo && imageToVideo.length) {
+        const matches = imageToVideo.filter(m =>
+            (m.name || '').toLowerCase().includes(query) ||
+            (m.model_creator?.name || '').toLowerCase().includes(query)
+        ).slice(0, maxPerCategory);
+        matches.forEach(m => results.push({
+            type: 'image-to-video',
+            name: m.name,
+            subtitle: m.model_creator?.name || 'Image-to-Video',
+            data: m
+        }));
+    }
+
+    // Search Text-to-Speech models
+    const textToSpeech = getData('textToSpeech');
+    if (textToSpeech && textToSpeech.length) {
+        const matches = textToSpeech.filter(m =>
+            (m.name || '').toLowerCase().includes(query) ||
+            (m.model_creator?.name || '').toLowerCase().includes(query)
+        ).slice(0, maxPerCategory);
+        matches.forEach(m => results.push({
+            type: 'text-to-speech',
+            name: m.name,
+            subtitle: m.model_creator?.name || 'Text-to-Speech',
+            data: m
+        }));
+    }
+
+    return results.slice(0, 20); // Max 20 total results
+}
+
+function displayGlobalSearchResults(results, container, query) {
+    let html = '';
+
+    if (results.length) {
+        html = results.map((r, i) => `
+            <div class="global-search-item" data-index="${i}" style="
+                padding:10px 14px;
+                cursor:pointer;
+                border-bottom:1px solid var(--border-color);
+                transition:background 0.15s;
+            " onmouseover="this.style.background='var(--info-bg)'" onmouseout="this.style.background='transparent'">
+                <div style="font-weight:500;font-size:0.9rem;color:var(--text-color);">${escapeHtml(r.name)}</div>
+                <div style="font-size:0.75rem;color:var(--info-text);">${escapeHtml(r.subtitle)} · ${r.type}</div>
+            </div>
+        `).join('');
+    } else {
+        html = '<div style="padding:12px;color:var(--info-text);font-size:0.85rem;">No results found</div>';
+    }
+
+    // Always show Ask Agent option
+    html += `
+        <div class="global-search-item ask-agent-item" style="
+            padding:12px 14px;
+            cursor:pointer;
+            background:var(--info-bg);
+            border-top:1px solid var(--border-color);
+            transition:background 0.15s;
+        " onmouseover="this.style.background='var(--button-bg)';this.style.color='var(--button-text)'" 
+           onmouseout="this.style.background='var(--info-bg)';this.style.color='var(--text-color)'">
+            <div style="font-weight:600;font-size:0.9rem;display:flex;align-items:center;gap:6px;">
+                🤖 Ask Agent: "${escapeHtml(query.length > 40 ? query.slice(0, 40) + '...' : query)}"
+            </div>
+            <div style="font-size:0.75rem;color:var(--info-text);">Open Agent tab with this query</div>
+        </div>
+    `;
+
+    container.innerHTML = html;
+    container.style.display = 'block';
+
+    // Add click handlers for results
+    container.querySelectorAll('.global-search-item:not(.ask-agent-item)').forEach((item, i) => {
+        item.addEventListener('click', () => {
+            const result = results[i];
+            navigateToResult(result);
+            container.style.display = 'none';
+            document.getElementById('global-search-input').value = '';
+        });
+    });
+
+    // Add click handler for Ask Agent
+    const askAgentItem = container.querySelector('.ask-agent-item');
+    if (askAgentItem) {
+        askAgentItem.addEventListener('click', () => {
+            askAgentWithQuery(query);
+            container.style.display = 'none';
+            document.getElementById('global-search-input').value = '';
+        });
+    }
+}
+
+function askAgentWithQuery(query) {
+    // Navigate to Agent tab
+    const navBtn = document.querySelector('.nav-btn[data-section="agent-exp"]');
+    if (navBtn) {
+        navBtn.click();
+    }
+
+    // Wait for the agent iframe to be ready, then send the query
+    setTimeout(() => {
+        const iframe = document.querySelector('#agent-exp iframe');
+        if (iframe && iframe.contentWindow) {
+            // Try to set the input in the iframe
+            try {
+                const agentInput = iframe.contentDocument?.getElementById('agent-input') ||
+                    iframe.contentDocument?.querySelector('textarea');
+                if (agentInput) {
+                    agentInput.value = query;
+                    agentInput.focus();
+                    // Trigger input event
+                    agentInput.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+            } catch (e) {
+                // Cross-origin issues - try postMessage
+                iframe.contentWindow.postMessage({ type: 'set-agent-query', query }, '*');
+            }
+        }
+    }, 500);
+}
+
+function navigateToResult(result) {
+    // Navigate to the appropriate section
+    const navBtn = document.querySelector(`.nav-btn[data-section="${result.type}"]`);
+    if (navBtn) {
+        navBtn.click();
+    }
+
+    // Try to scroll to and highlight the card after a short delay
+    setTimeout(() => {
+        const data = result.data || {};
+        const searchName = (result.name || '').toLowerCase();
+
+        // Build multiple possible selectors to find the card
+        const possibleKeys = [
+            data.id,
+            data.name,
+            data.model,
+            data.slug,
+            result.name
+        ].filter(Boolean);
+
+        let card = null;
+
+        // Try data-item-key first
+        for (const key of possibleKeys) {
+            card = document.querySelector(`[data-item-key="${key}"]`);
+            if (card) break;
+        }
+
+        // Fallback: search by card title text content
+        if (!card) {
+            const section = document.getElementById(result.type);
+            if (section) {
+                const cards = section.querySelectorAll('.model-card');
+                for (const c of cards) {
+                    const title = c.querySelector('h3, .card-title');
+                    if (title && title.textContent.toLowerCase().includes(searchName)) {
+                        card = c;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (card) {
+            card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            card.style.outline = '3px solid var(--button-bg)';
+            card.style.outlineOffset = '2px';
+            setTimeout(() => {
+                card.style.outline = '';
+                card.style.outlineOffset = '';
+            }, 3000);
+        }
+    }, 400);
+}
 
 // Theme management
 function initializeTheme() {
     const stored = localStorage.getItem('theme');
-    const preferredDefault = 'source';
-    const initialTheme = THEME_SEQUENCE.includes(stored) ? stored : preferredDefault;
+    const preferredDefault = 'light';
+    const normalizedStored = stored === 'source' ? 'light' : stored;
+    const initialTheme = THEME_SEQUENCE.includes(normalizedStored) ? normalizedStored : preferredDefault;
+    document.documentElement.classList.add('source-mode');
     document.documentElement.setAttribute('data-theme', initialTheme);
-    if (!THEME_SEQUENCE.includes(stored)) {
+    if (!THEME_SEQUENCE.includes(normalizedStored)) {
         localStorage.setItem('theme', initialTheme);
     }
     updateThemeToggleText(initialTheme);
@@ -957,6 +1848,14 @@ function toggleTheme() {
     document.documentElement.setAttribute('data-theme', nextTheme);
     localStorage.setItem('theme', nextTheme);
     updateThemeToggleText(nextTheme);
+
+    // Sync theme to embedded agent iframe
+    try {
+        const agentFrame = document.querySelector('#agent-exp iframe');
+        if (agentFrame && agentFrame.contentWindow) {
+            agentFrame.contentWindow.postMessage({ type: 'theme', value: nextTheme }, '*');
+        }
+    } catch(e) {}
 }
 
 function updateThemeToggleText(theme) {
@@ -1041,16 +1940,21 @@ function setAuthMode(mode) {
     const modalTitle = document.getElementById('auth-modal-title');
     const submitButton = document.getElementById('auth-submit');
     const modeToggle = document.getElementById('auth-mode-toggle');
+    const requirements = document.getElementById('auth-requirements');
+
     if (modalTitle) {
-        modalTitle.textContent = mode === 'register' ? 'Create Account' : 'Log In';
+        modalTitle.textContent = mode === 'register' ? 'Create account' : 'Sign in';
     }
     if (submitButton) {
-        submitButton.textContent = mode === 'register' ? 'Register' : 'Log In';
+        submitButton.textContent = mode === 'register' ? 'Create account' : 'Sign in';
     }
     if (modeToggle) {
         modeToggle.textContent = mode === 'register'
-            ? 'Already have an account? Log In'
-            : 'Need an account? Register';
+            ? 'Sign in instead'
+            : 'Create account';
+    }
+    if (requirements) {
+        requirements.style.display = mode === 'register' ? 'block' : 'none';
     }
     const passwordInput = document.getElementById('auth-password');
     if (passwordInput) {
@@ -1085,6 +1989,31 @@ function showAuthError(message) {
     }
 }
 
+/**
+ * Merge local pins to server after login/register
+ * This transfers any pins a user had before logging in to their server account
+ */
+async function mergeLocalPinsToServer() {
+    const localPins = loadLocalPins();
+    if (!localPins.length) return;
+
+    let merged = 0;
+    for (const pin of localPins) {
+        try {
+            await addRemotePin(pin.category, pin.item, pin.key);
+            merged++;
+        } catch (error) {
+            console.warn('Failed to merge pin:', pin.key, error);
+        }
+    }
+
+    if (merged > 0) {
+        // Clear local storage after successful merge
+        saveLocalPins([]);
+        showToast(`Transferred ${merged} pin${merged > 1 ? 's' : ''} to your account`, 'success');
+    }
+}
+
 async function handleAuthSubmit(event) {
     event.preventDefault();
     const emailInput = document.getElementById('auth-email');
@@ -1112,6 +2041,11 @@ async function handleAuthSubmit(event) {
         currentUser = payload.user || null;
         closeAuthModal();
         updateAuthButton();
+
+        // Merge local pins to server account
+        await mergeLocalPinsToServer();
+
+        // Refresh pins from server
         await refreshPinnedItems();
     } catch (error) {
         console.error('Auth request failed:', error);
@@ -2050,7 +2984,6 @@ function createLLMCard(model) {
     const pricing = model.pricing || {};
 
     card.innerHTML = `
-        <div class="source-badge">Artificial Analysis</div>
         <h3>${model.name}</h3>
         <div class="model-creator">${model.model_creator.name}</div>
         
@@ -2606,7 +3539,6 @@ function createHypeCard(item, index, fetchedAt) {
     card.innerHTML = `
         <div class="card-header">
             <div class="card-header-content">
-                <div class="source-badge">Hype Signals</div>
                 <div class="card-title">
                     <a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${name}</a>
                 </div>
@@ -3165,7 +4097,6 @@ function createBlogCard(post) {
     card.innerHTML = `
         <div class="card-header">
             <div class="card-header-content">
-                <div class="source-badge">Blog</div>
                 <div class="card-title">
                     <a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(titleText)}</a>
                 </div>
@@ -3243,6 +4174,8 @@ async function loadLatestFeed(forceRefresh = false) {
                 }
                 ensureLatestControlListeners();
                 displayLatestFeed(items);
+                // Check for new items and show toast notification
+                checkForNewLatestItems(items);
                 errorElement.style.display = 'none';
             } catch (error) {
                 if (loadId !== latestLoadId) {
@@ -3409,7 +4342,6 @@ function createLatestCard(item) {
     card.innerHTML = `
         <div class="card-header">
             <div class="card-header-content">
-                <div class="source-badge">${escapeHtml(badgeLabel)}</div>
                 <div class="card-title">
                     ${item.url ? `<a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">${titleText}</a>` : `<span class="title-text">${titleText}</span>`}
                 </div>
@@ -3517,7 +4449,6 @@ function createMonitorCard(item) {
     card.innerHTML = `
         <div class="card-header">
             <div class="card-header-content">
-                <div class="source-badge">Monitor</div>
                 <div class="card-title">
                     ${url ? `<a href="${url}" target="_blank" rel="noopener noreferrer">${title}</a>` : title}
                 </div>
@@ -3634,6 +4565,7 @@ function createOpenRouterCard(model) {
     const card = document.createElement('div');
     card.className = 'model-card clickable';
     card.dataset.source = 'openrouter';
+    card.dataset.itemKey = model.id || model.name;
     card.onclick = () => openModelModal(model, 'openrouter');
 
     const title = getOpenRouterCardTitle(model);
@@ -3648,7 +4580,6 @@ function createOpenRouterCard(model) {
     const modalities = inputModalities.length ? inputModalities.join(', ') : 'Text';
 
     card.innerHTML = `
-        <div class="source-badge">OpenRouter Catalog</div>
         <h3>${title}</h3>
         <div class="model-creator">${provider}</div>
         
@@ -3786,7 +4717,6 @@ function createMediaCard(model, mediaCategory = '') {
     card.onclick = () => openModelModal(decoratedModel, 'media');
 
     card.innerHTML = `
-        <div class="source-badge">Artificial Analysis</div>
         <h3>${model.name}</h3>
         <div class="model-creator">${model.model_creator.name}</div>
         
@@ -4192,12 +5122,6 @@ async function sendAgentExpMessage(event) {
         const errorMessage = error && error.message ? error.message : 'Agent request failed.';
         setAgentExpStatus(errorMessage, true);
         showToast(errorMessage, 'error');
-    }
-}
-
-if (submitButton) {
-    submitButton.disabled = false;
-}
     }
 }
 
@@ -4898,10 +5822,243 @@ function displayFalModelsData(models) {
 
     const displayModels = getFilteredItems('fal', models);
     recordDisplayedItems('fal', displayModels);
-    displayModels.forEach(model => {
-        const modelCard = createFalModelCard(model);
-        container.appendChild(modelCard);
+    displayFalModelsDataWithGroups(displayModels, container);
+}
+
+/**
+ * Extract a grouping key from a Fal model.
+ * Groups models by their base family, ignoring version suffixes.
+ * 
+ * Examples:
+ * - "fal-ai/flux-pro/v1.1" -> "fal-ai/flux-pro"
+ * - "fal-ai/flux/dev" -> "fal-ai/flux"
+ * - "fal-ai/kling-video/v1.5" -> "fal-ai/kling-video"
+ * 
+ * IMPORTANT: Only extracts from slash-separated paths, not from titles.
+ * This avoids false matches like "GPT Image 1.5" matching "Hanyuan V1.5".
+ */
+function getFalGroupKey(model) {
+    // Primary source: model ID (e.g., "fal-ai/flux-pro/v1.1")
+    let pathSource = model.id || '';
+
+    // Fallback: extract from modelUrl
+    if (!pathSource && model.modelUrl) {
+        // Extract path after fal.ai/models/ or just use last segments
+        const urlMatch = model.modelUrl.match(/fal\.ai\/models\/(.+)/i) ||
+            model.modelUrl.match(/fal\.ai\/(.+)/i);
+        if (urlMatch) {
+            pathSource = urlMatch[1];
+        }
+    }
+
+    if (!pathSource) return null;
+
+    // Normalize: lowercase, trim
+    pathSource = pathSource.toLowerCase().trim();
+
+    // Split by slash
+    const segments = pathSource.split('/').filter(s => s);
+    if (segments.length < 2) return null;
+
+    // Version patterns to strip from the LAST segment only
+    // These patterns identify version suffixes that should be removed
+    const versionPatterns = [
+        /^v\d+(\.\d+)*$/i,           // v1, v1.0, v1.5.2
+        /^v\d+-\d+$/i,               // v1-5
+        /^\d+\.\d+(\.\d+)?$/,        // 1.0, 1.5, 1.5.2
+        /^(dev|pro|standard|ultra|turbo|fast|schnell)$/i,  // Common variant names
+        /^(hd|sd|xl|xxl|mini|lite|max|redux)$/i,  // Size/quality variants
+        /^(image|text|video|audio)$/i,  // Modality suffixes
+        /^(checkpoint|lora|controlnet)$/i,  // Technical variants
+    ];
+
+    // Check if last segment looks like a version
+    const lastSegment = segments[segments.length - 1];
+    const isVersionSuffix = versionPatterns.some(p => p.test(lastSegment));
+
+    if (isVersionSuffix && segments.length >= 2) {
+        // Remove version suffix, return parent path
+        return segments.slice(0, -1).join('/');
+    }
+
+    // For 3+ segments, also check if it's a deeply nested version
+    // e.g., "fal-ai/flux/dev/v1.5" -> "fal-ai/flux"
+    if (segments.length >= 3) {
+        const secondLast = segments[segments.length - 2];
+        const isSecondLastVariant = versionPatterns.some(p => p.test(secondLast));
+        if (isVersionSuffix && isSecondLastVariant) {
+            return segments.slice(0, -2).join('/');
+        }
+    }
+
+    // Return full path (no grouping if no version pattern found)
+    return segments.join('/');
+}
+
+/**
+ * Group Fal models by their family key.
+ * Returns an array of groups, each with:
+ * - key: the group key
+ * - primary: the "main" model (most recent or highest version)
+ * - variants: array of related model variants
+ */
+function groupFalModels(models) {
+    const groupMap = new Map();
+    const ungrouped = [];
+
+    for (const model of models) {
+        const key = getFalGroupKey(model);
+        if (!key) {
+            ungrouped.push(model);
+            continue;
+        }
+
+        if (!groupMap.has(key)) {
+            groupMap.set(key, []);
+        }
+        groupMap.get(key).push(model);
+    }
+
+    const result = [];
+
+    // Process groups
+    for (const [key, members] of groupMap) {
+        if (members.length === 1) {
+            // Single model, treat as ungrouped
+            ungrouped.push(members[0]);
+        } else {
+            // Sort by date (newest first), then by title
+            members.sort((a, b) => {
+                const dateA = new Date(a.date || 0);
+                const dateB = new Date(b.date || 0);
+                if (dateB - dateA !== 0) return dateB - dateA;
+                return (a.title || '').localeCompare(b.title || '');
+            });
+
+            result.push({
+                key,
+                primary: members[0],
+                variants: members.slice(1),
+                count: members.length
+            });
+        }
+    }
+
+    // Add ungrouped models as single-member groups
+    for (const model of ungrouped) {
+        result.push({
+            key: model.id || model.title,
+            primary: model,
+            variants: [],
+            count: 1
+        });
+    }
+
+    // Sort groups by primary model date
+    result.sort((a, b) => {
+        const dateA = new Date(a.primary.date || 0);
+        const dateB = new Date(b.primary.date || 0);
+        return dateB - dateA;
     });
+
+    return result;
+}
+
+/**
+ * Display Fal models with grouping - stacked cards for model families
+ */
+function displayFalModelsDataWithGroups(models, container) {
+    if (!container) {
+        container = document.getElementById('fal-models-data');
+    }
+    container.innerHTML = '';
+
+    const groups = groupFalModels(models);
+
+    for (const group of groups) {
+        if (group.variants.length === 0) {
+            // Single model - render normally
+            const card = createFalModelCard(group.primary);
+            container.appendChild(card);
+        } else {
+            // Grouped models - render stacked
+            const stackWrapper = createFalModelStack(group);
+            container.appendChild(stackWrapper);
+        }
+    }
+}
+
+/**
+ * Create a stacked card display for a group of related Fal models
+ */
+function createFalModelStack(group) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'fal-model-stack';
+    wrapper.dataset.groupKey = group.key;
+
+    // Stack configuration
+    const shiftX = 4;  // Horizontal offset per card
+    const liftY = -3;  // Vertical offset per card (negative = up)
+    const maxVisible = 3;  // Max cards to show in collapsed state
+
+    // Create cards for all variants (limited for performance)
+    const allModels = [group.primary, ...group.variants];
+    const visibleModels = allModels.slice(0, maxVisible + 1);
+
+    visibleModels.forEach((model, idx) => {
+        const card = createFalModelCard(model);
+        card.classList.add('fal-stack-card');
+        card.style.setProperty('--stack-index', idx);
+        card.style.transform = `translate(${idx * shiftX}px, ${idx * liftY}px)`;
+        card.style.zIndex = 10 + idx;
+
+        if (idx === visibleModels.length - 1) {
+            card.classList.add('fal-stack-top');
+        }
+
+        wrapper.appendChild(card);
+    });
+
+    // Add badge showing variant count
+    if (group.count > 1) {
+        const badge = document.createElement('div');
+        badge.className = 'fal-stack-badge';
+        badge.textContent = `+${group.count - 1} variant${group.count > 2 ? 's' : ''}`;
+        badge.title = `${group.count} versions of this model`;
+        wrapper.appendChild(badge);
+    }
+
+    // Expand on hover
+    let hoverTimer = null;
+    const expandDelay = 400;
+
+    wrapper.addEventListener('mouseenter', () => {
+        hoverTimer = setTimeout(() => {
+            wrapper.classList.add('fal-stack-expanded');
+            // Rearrange cards horizontally
+            const cards = wrapper.querySelectorAll('.fal-stack-card');
+            cards.forEach((card, idx) => {
+                card.style.transform = '';
+                card.style.zIndex = 100 + idx;
+            });
+        }, expandDelay);
+    });
+
+    wrapper.addEventListener('mouseleave', () => {
+        if (hoverTimer) {
+            clearTimeout(hoverTimer);
+            hoverTimer = null;
+        }
+        wrapper.classList.remove('fal-stack-expanded');
+        // Restore stacked layout
+        const cards = wrapper.querySelectorAll('.fal-stack-card');
+        cards.forEach((card, idx) => {
+            card.style.transform = `translate(${idx * shiftX}px, ${idx * liftY}px)`;
+            card.style.zIndex = 10 + idx;
+        });
+    });
+
+    return wrapper;
 }
 
 // Create Fal.ai model card
@@ -4909,6 +6066,7 @@ function createFalModelCard(model) {
     const card = document.createElement('div');
     card.className = 'model-card clickable';
     card.dataset.source = 'fal';
+    card.dataset.itemKey = model.title || model.name || model.id;
     card.onclick = () => openModelModal(model, 'fal-models');
 
     // Format date
@@ -4923,7 +6081,6 @@ function createFalModelCard(model) {
     const pricing = model.pricing || 'Pricing details available on platform';
 
     card.innerHTML = `
-        <div class="source-badge">fal.ai</div>
         <h3>${model.title}</h3>
         <div class="model-creator">fal.ai</div>
         
@@ -4979,6 +6136,7 @@ function createReplicateModelCard(model) {
     const card = document.createElement('div');
     card.className = 'model-card clickable';
     card.dataset.source = 'replicate';
+    card.dataset.itemKey = model.name || model.model || model.id;
     card.onclick = () => openModelModal(model, 'replicate-models');
 
     // Format date
@@ -4988,7 +6146,6 @@ function createReplicateModelCard(model) {
     const runCount = model.run_count ? model.run_count.toLocaleString() : 'N/A';
 
     card.innerHTML = `
-        <div class="source-badge">Replicate</div>
         <h3>${model.name}</h3>
         <div class="model-creator">${model.owner} (Replicate)</div>
         
@@ -6749,6 +7906,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
             refreshOpenRouterKeyField();
             attachOpenRouterKeyHandlers();
+            initSettingsVariants();
         });
 
         // Close modal handlers
@@ -6832,6 +7990,44 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 });
+
+// ============================================================
+// Settings Modal — tabs + smart API key state
+// ============================================================
+
+function applySettingsTab(tab) {
+    const inner = document.querySelector('.settings-modal-inner');
+    if (!inner) return;
+    inner.querySelectorAll('.settings-tab').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.target === tab);
+    });
+    inner.querySelectorAll('.settings-section[data-tab]').forEach(section => {
+        section.classList.toggle('tab-active', section.dataset.tab === tab);
+    });
+}
+
+function initSettingsVariants() {
+    const inner = document.querySelector('.settings-modal-inner');
+    if (!inner) return;
+
+    // Attach tab listeners once
+    if (!inner.dataset.tabListeners) {
+        inner.querySelectorAll('.settings-tab').forEach(btn => {
+            btn.addEventListener('click', () => applySettingsTab(btn.dataset.target));
+        });
+        inner.dataset.tabListeners = 'true';
+    }
+
+    // Refresh API key state on every open
+    const hasKey = !!getUserOpenRouterKey();
+    inner.dataset.apiState = hasKey ? 'set' : 'missing';
+
+    // Default to API tab if key is missing, otherwise keep last active or models
+    const hasActive = inner.querySelector('.settings-section[data-tab].tab-active');
+    if (!hasActive || !hasKey) {
+        applySettingsTab(hasKey ? 'models' : 'api');
+    }
+}
 
 // Load saved settings
 function loadSavedSettings() {
@@ -7178,3 +8374,268 @@ window.removeFromComparison = removeFromComparison;
 window.clearComparison = clearComparison;
 window.openChartModal = openChartModal;
 window.closeChartModal = closeChartModal;
+
+// ====== Shareable View Snapshots ======
+
+/**
+ * Get the category ID for a given section ID
+ */
+function sectionToCategoryId(sectionId) {
+    // Check FILTERABLE_SECTIONS for matching sectionId
+    for (const [category, config] of Object.entries(FILTERABLE_SECTIONS)) {
+        if (config.sectionId === sectionId) {
+            return category;
+        }
+    }
+    // Fallback: section ID might be same as category
+    return sectionId;
+}
+
+/**
+ * Copy a shareable link to clipboard.
+ * If AI filter or search is active, saves a view snapshot to the server.
+ * Otherwise, generates a simple section link.
+ */
+async function copyShareableLink() {
+    try {
+        const activeBtn = document.querySelector('.nav-btn.active');
+        const section = activeBtn?.dataset?.section || 'llms';
+        const category = sectionToCategoryId(section);
+
+        // Check if filter is active for this category
+        const fs = filterState[category];
+        const hasFilter = fs && fs.enabled && Array.isArray(fs.items) && fs.items.length > 0;
+
+        // Check if search is active
+        const searchInput = document.getElementById(`${section}-search`);
+        const searchTerm = searchInput ? searchInput.value.trim() : '';
+        const hasSearch = searchTerm.length > 0;
+
+        if (hasFilter || hasSearch) {
+            // Save snapshot to server
+            const items = getDisplayedItems(category) || fs?.items || [];
+            if (!items.length) {
+                showToast('No items to share in current view.', 'warning');
+                return;
+            }
+
+            const response = await fetch('/api/shared-views', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    state: {
+                        section,
+                        search: searchTerm,
+                        filterEnabled: hasFilter
+                    },
+                    snapshot: {
+                        category,
+                        items: items.slice(0, 200) // Limit items to avoid huge payloads
+                    }
+                })
+            });
+
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error || 'Failed to create shareable link');
+            }
+
+            const data = await response.json();
+            const url = `${location.origin}/?view=${data.id}`;
+            await navigator.clipboard.writeText(url);
+            showToast('Filtered view link copied! Expires in 7 days.', 'success');
+        } else {
+            // Simple tab link - no server save needed
+            const url = `${location.origin}/?section=${section}`;
+            await navigator.clipboard.writeText(url);
+            showToast('Link copied!', 'success');
+        }
+    } catch (error) {
+        console.error('Failed to copy shareable link:', error);
+        showToast('Failed to create link: ' + error.message, 'error');
+    }
+}
+
+/**
+ * Apply a shared view from the server
+ */
+async function applySharedView(viewId) {
+    try {
+        const response = await fetch(`/api/shared-views/${viewId}`);
+        if (!response.ok) {
+            if (response.status === 404) {
+                showToast('Shared view not found or expired.', 'warning');
+            } else {
+                showToast('Failed to load shared view.', 'error');
+            }
+            return false;
+        }
+
+        const view = await response.json();
+        const state = view.state || {};
+        const snapshot = view.snapshot || {};
+
+        // Navigate to the section
+        const section = state.section || 'llms';
+        const navBtn = document.querySelector(`.nav-btn[data-section="${section}"]`);
+        if (navBtn) {
+            navBtn.click();
+        }
+
+        // Apply search term if present
+        if (state.search) {
+            const searchInput = document.getElementById(`${section}-search`);
+            if (searchInput) {
+                searchInput.value = state.search;
+                // Trigger input event to filter
+                searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+        }
+
+        // Apply snapshot items if present
+        if (snapshot.category && Array.isArray(snapshot.items) && snapshot.items.length > 0) {
+            const category = snapshot.category;
+            // Store as filter result so it displays
+            filterState[category] = {
+                enabled: true,
+                items: snapshot.items
+            };
+            // Refresh the view
+            refreshCategoryView(category);
+            showToast(`Loaded shared view with ${snapshot.items.length} items`, 'success');
+        }
+
+        return true;
+    } catch (error) {
+        console.error('Failed to apply shared view:', error);
+        showToast('Failed to load shared view.', 'error');
+        return false;
+    }
+}
+
+/**
+ * Check URL for shared view parameter on page load
+ */
+function checkForSharedView() {
+    const params = new URLSearchParams(window.location.search);
+    const viewId = params.get('view');
+    const section = params.get('section');
+
+    if (viewId) {
+        // Load shared view after a short delay to let page initialize
+        setTimeout(() => applySharedView(viewId), 500);
+    } else if (section) {
+        // Just navigate to section after a short delay to ensure initialization
+        setTimeout(() => {
+            const navBtn = document.querySelector(`.nav-btn[data-section="${section}"]`);
+            if (navBtn) {
+                navBtn.click();
+            }
+        }, 500);
+    }
+}
+
+// Run on page load
+document.addEventListener('DOMContentLoaded', checkForSharedView);
+
+// ====== Export Dropdown Functions ======
+
+function toggleExportDropdown() {
+    const dropdown = document.getElementById('export-dropdown');
+    if (dropdown) {
+        dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+    }
+}
+
+function closeExportDropdown() {
+    const dropdown = document.getElementById('export-dropdown');
+    if (dropdown) {
+        dropdown.style.display = 'none';
+    }
+}
+
+function exportCurrentTab(format) {
+    const activeBtn = document.querySelector('.nav-btn.active');
+    const section = activeBtn?.dataset?.section || 'llms';
+    const category = sectionToCategoryId(section);
+    const items = getDisplayedItems(category) || [];
+
+    if (!items.length) {
+        showToast('No data to export.', 'warning');
+        return;
+    }
+
+    let content, filename, type;
+    if (format === 'json') {
+        content = JSON.stringify(items, null, 2);
+        filename = `${section}-export.json`;
+        type = 'application/json';
+    } else {
+        // CSV format
+        const headers = Object.keys(items[0] || {});
+        const rows = items.map(item =>
+            headers.map(h => JSON.stringify(item[h] ?? '')).join(',')
+        );
+        content = [headers.join(','), ...rows].join('\n');
+        filename = `${section}-export.csv`;
+        type = 'text/csv';
+    }
+
+    const blob = new Blob([content], { type });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast(`Exported ${items.length} items as ${format.toUpperCase()}`, 'success');
+}
+
+function exportPinnedItems() {
+    if (!pinnedItems.length) {
+        showToast('No pinned items to export.', 'warning');
+        return;
+    }
+    const content = JSON.stringify(pinnedItems, null, 2);
+    const blob = new Blob([content], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'pinned-items.json';
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast(`Exported ${pinnedItems.length} pinned items`, 'success');
+}
+
+function exportCompareItems() {
+    if (!chartComparisonModels.length) {
+        showToast('No items in comparison.', 'warning');
+        return;
+    }
+    const content = JSON.stringify(chartComparisonModels, null, 2);
+    const blob = new Blob([content], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'comparison-items.json';
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast(`Exported ${chartComparisonModels.length} comparison items`, 'success');
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', (e) => {
+    const container = document.querySelector('.export-dropdown-container');
+    if (container && !container.contains(e.target)) {
+        closeExportDropdown();
+    }
+});
+
+// Export globally
+window.copyShareableLink = copyShareableLink;
+window.applySharedView = applySharedView;
+window.toggleExportDropdown = toggleExportDropdown;
+window.closeExportDropdown = closeExportDropdown;
+window.exportCurrentTab = exportCurrentTab;
+window.exportPinnedItems = exportPinnedItems;
+window.exportCompareItems = exportCompareItems;

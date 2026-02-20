@@ -268,17 +268,18 @@ body {
 }
 
 .chart-host {
+  position: relative;
   margin-top: 12px;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   padding: 12px;
   background: var(--panel);
-  min-height: 260px;
+  /* explicit height required for Chart.js maintainAspectRatio:false */
+  height: 280px;
 }
 
 .chart-host canvas {
-  width: 100% !important;
-  height: 230px !important;
+  display: block;
 }
 
 .umi-card {

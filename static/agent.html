@@ -78,14 +78,14 @@ html, body {
 }
 #model-select:focus { border-color: var(--accent); }
 
-.icon-btn {
+button.icon-btn, a.icon-btn {
   width: 30px; height: 30px;
   display: flex; align-items: center; justify-content: center;
   border: 1px solid var(--border); border-radius: 6px; background: var(--bg);
-  cursor: pointer; color: var(--text-2); flex-shrink: 0;
+  cursor: pointer; color: var(--text-2); flex-shrink: 0; text-decoration: none;
   transition: background 0.12s, border-color 0.12s, color 0.12s;
 }
-.icon-btn:hover { background: var(--surface); border-color: var(--border-strong); color: var(--text); }
+button.icon-btn:hover, a.icon-btn:hover { background: var(--surface); border-color: var(--border-strong); color: var(--text); }
 .icon-btn svg { width: 15px; height: 15px; }
 
 #settings-bar {
@@ -188,6 +188,7 @@ html, body {
   font-size: 11px; color: var(--green); background: var(--green-bg);
   padding: 1px 7px; border-radius: 10px; flex-shrink: 0;
 }
+.trace-row-badge.err { color: var(--red); background: var(--red-bg); }
 
 .trace-expand { padding: 2px; color: var(--text-3); flex-shrink: 0; transition: transform 0.15s; display: flex; }
 .trace-expand svg { width: 12px; height: 12px; }
@@ -236,8 +237,130 @@ html, body {
 .agent-response td { padding: 7px 12px; border: 1px solid var(--border); }
 .agent-response tr:nth-child(even) td { background: var(--surface); }
 
-.chart-wrap { margin: 12px 0; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
-.chart-wrap canvas { max-height: 260px; }
+.chart-wrap { position: relative; margin: 12px 0; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; height: 300px; }
+.chart-wrap canvas { display: block; }
+/* ── Trace Sidebar ─────────────────────────────────────────────── */
+.trace-sidebar-backdrop {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(0,0,0,0.18);
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.22s ease;
+}
+.trace-sidebar-backdrop.open { opacity: 1; pointer-events: auto; }
+
+.trace-sidebar {
+  position: fixed; top: 0; right: 0; bottom: 0; z-index: 201;
+  width: 400px; max-width: calc(100vw - 40px);
+  background: var(--bg);
+  border-left: 1px solid var(--border-strong);
+  box-shadow: -16px 0 48px rgba(0,0,0,0.07);
+  display: flex; flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 0.26s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.trace-sidebar.open { transform: translateX(0); }
+
+.tsb-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 16px 13px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  background: var(--surface);
+}
+.tsb-head-text { flex: 1; display: flex; align-items: baseline; gap: 7px; }
+.tsb-head-title { font-size: 13px; font-weight: 650; letter-spacing: -0.01em; }
+.tsb-head-meta { font-size: 11px; color: var(--text-3); }
+.tsb-close {
+  width: 26px; height: 26px;
+  border: 1px solid var(--border); border-radius: 6px;
+  background: var(--bg); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-2); flex-shrink: 0; font-size: 14px;
+  font-family: inherit; line-height: 1; transition: background 0.1s, color 0.1s;
+}
+.tsb-close:hover { background: var(--bg-2); color: var(--text); }
+
+.tsb-body {
+  flex: 1; overflow-y: auto;
+  padding: 6px 0;
+}
+.tsb-empty {
+  padding: 24px 20px;
+  font-size: 12px; color: var(--text-3);
+  text-align: center;
+}
+
+.tsb-step {
+  display: flex; align-items: stretch;
+  cursor: pointer;
+  transition: background 0.1s;
+  border-bottom: 1px solid var(--border);
+}
+.tsb-step:last-child { border-bottom: none; }
+.tsb-step:hover { background: var(--surface); }
+
+.tsb-gutter {
+  width: 44px; flex-shrink: 0;
+  display: flex; flex-direction: column;
+  align-items: center;
+  padding-top: 14px;
+  position: relative;
+}
+.tsb-gutter::after {
+  content: ''; position: absolute;
+  left: 50%; top: 26px; bottom: 0;
+  width: 1px; background: var(--border);
+  transform: translateX(-50%);
+}
+.tsb-step:last-child .tsb-gutter::after { display: none; }
+
+.tsb-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--border-strong); flex-shrink: 0;
+  position: relative; z-index: 1;
+  transition: background 0.2s;
+}
+.tsb-dot.done { background: var(--green); }
+.tsb-dot.err  { background: var(--red); }
+
+.tsb-content {
+  flex: 1; padding: 10px 16px 10px 4px; min-width: 0;
+}
+.tsb-row-main {
+  display: flex; align-items: center; gap: 6px;
+}
+.tsb-name {
+  flex: 1; font-size: 12px; font-weight: 500; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.tsb-badge {
+  font-size: 10px; font-weight: 600; color: var(--green);
+  flex-shrink: 0;
+}
+.tsb-badge.err { color: var(--red); }
+.tsb-chevron {
+  width: 12px; height: 12px; color: var(--text-3);
+  transition: transform 0.15s ease; flex-shrink: 0;
+}
+.tsb-step.open .tsb-chevron { transform: rotate(90deg); }
+
+.tsb-sub {
+  font-size: 11px; color: var(--text-3); margin-top: 2px;
+}
+.tsb-detail {
+  margin-top: 8px; padding: 9px 11px;
+  background: var(--bg);
+  border: 1px solid var(--border); border-radius: 7px;
+  font-size: 10.5px; font-family: 'SF Mono','Fira Code','Menlo',monospace;
+  white-space: pre-wrap; word-break: break-word;
+  color: var(--text-2); max-height: 200px; overflow-y: auto;
+  line-height: 1.55; display: none;
+}
+.tsb-step.open .tsb-detail { display: block; }
+
+@media (max-width: 520px) {
+  .trace-sidebar { width: 100%; max-width: 100%; }
+}
 
 .model-badge {
   display: inline-flex; align-items: center; gap: 4px;
@@ -342,29 +465,52 @@ html, body {
 .load-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 
 #input-area {
-  border-top: 1px solid var(--border); padding: 12px 14px;
-  display: flex; gap: 8px; align-items: flex-end;
+  border-top: 1px solid var(--border); padding: 10px 12px;
   background: var(--bg); flex-shrink: 0;
 }
-#input {
-  flex: 1; border: 1px solid var(--border); border-radius: 10px;
-  padding: 10px 14px; font-size: 14px; font-family: inherit;
-  resize: none; outline: none; line-height: 1.45;
-  min-height: 42px; max-height: 140px; overflow-y: auto;
-  background: var(--bg); color: var(--text); transition: border-color 0.12s;
+#input-row {
+  display: flex; gap: 6px; align-items: flex-end;
+  border: 1px solid var(--border); border-radius: 12px;
+  background: var(--bg); padding: 6px 8px;
+  transition: border-color 0.12s;
 }
-#input:focus { border-color: var(--accent); }
-#input::placeholder { color: var(--text-3); }
-
-#send-btn {
-  width: 36px; height: 36px; background: var(--accent); color: #fff;
-  border: none; border-radius: 8px; cursor: pointer;
+#input-row:focus-within { border-color: var(--accent); }
+#attach-btn {
+  width: 30px; height: 30px; border: none; background: transparent;
+  color: var(--text-3); cursor: pointer; border-radius: 6px;
   display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-  transition: background 0.12s;
+  transition: color 0.12s, background 0.12s; align-self: flex-end; margin-bottom: 2px;
+}
+#attach-btn:hover { color: var(--text); background: var(--surface); }
+#attach-btn.has-image { color: var(--accent); }
+#attach-btn svg { width: 16px; height: 16px; }
+#input {
+  flex: 1; border: none; outline: none;
+  padding: 4px 6px; font-size: 14px; font-family: inherit;
+  resize: none; line-height: 1.45;
+  min-height: 28px; max-height: 140px; overflow-y: auto;
+  background: transparent; color: var(--text);
+}
+#input::placeholder { color: var(--text-3); }
+#send-btn {
+  width: 30px; height: 30px; background: var(--accent); color: #fff;
+  border: none; border-radius: 7px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  transition: background 0.12s; align-self: flex-end; margin-bottom: 2px;
 }
 #send-btn:hover:not(:disabled) { background: #333; }
 #send-btn:disabled { background: var(--border-strong); cursor: not-allowed; }
-#send-btn svg { width: 16px; height: 16px; }
+#send-btn svg { width: 15px; height: 15px; }
+#attach-preview {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 8px 0; font-size: 12px; color: var(--text-2);
+}
+#attach-preview span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#attach-preview button {
+  border: none; background: none; color: var(--text-3); cursor: pointer;
+  font-size: 14px; line-height: 1; padding: 0 2px;
+}
+#attach-preview button:hover { color: var(--text); }
 
 ::-webkit-scrollbar { width: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -381,6 +527,9 @@ html, body {
     <button class="icon-btn" id="new-chat-btn" title="New conversation">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
     </button>
+    <a class="icon-btn" href="/agent-inspector" target="_blank" title="Agent Inspector — see system prompt, tools, skills">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    </a>
     <button class="icon-btn" id="settings-toggle" title="Settings">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
@@ -406,14 +555,47 @@ html, body {
   </div>
 
   <div id="input-area">
-    <textarea id="input" rows="1" placeholder="Ask about models, benchmarks, news…"></textarea>
-    <button id="send-btn" disabled>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M12 19V5M5 12l7-7 7 7"/>
+    <div id="input-row">
+      <button id="attach-btn" type="button" title="Attach image">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+        </svg>
+      </button>
+      <textarea id="input" rows="1" placeholder="Ask about models, benchmarks, news…"></textarea>
+      <button id="send-btn" disabled type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="22" y1="2" x2="11" y2="13"/>
+          <polygon points="22 2 15 22 11 13 2 9 22 2" fill="currentColor" stroke="none"/>
+        </svg>
+      </button>
+    </div>
+    <div id="attach-preview" style="display:none">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+      <span id="attach-name"></span>
+      <button id="attach-remove" title="Remove">×</button>
+    </div>
+    <input type="file" id="file-input" accept="image/*" style="display:none">
+  </div>
+
+</div>
+
+<!-- Trace sidebar -->
+<div id="tsb-backdrop" class="trace-sidebar-backdrop"></div>
+<div id="tsb-panel" class="trace-sidebar">
+  <div class="tsb-head">
+    <div class="tsb-head-text">
+      <span class="tsb-head-title">Activity</span>
+      <span id="tsb-meta" class="tsb-head-meta"></span>
+    </div>
+    <button id="tsb-close" class="tsb-close" type="button" aria-label="Close">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+        <path d="M18 6L6 18M6 6l12 12"/>
       </svg>
     </button>
   </div>
-
+  <div id="tsb-body" class="tsb-body">
+    <div class="tsb-empty">No activity to display.</div>
+  </div>
 </div>
 
 <!-- Model page modal -->
@@ -446,7 +628,7 @@ html, body {
   });
 })();
 
-const API_URL  = '/api/experimental-agent';
+const API_URL  = '/api/agent-v2/chat/stream';
 const LS_APIKEY    = 'dashboard-user-openrouter-key';
 const LS_MODEL     = 'agent-model';
 const LS_DEEPER    = 'agent-deeper';
@@ -486,6 +668,32 @@ const $model   = document.getElementById('model-select');
 const $apiKey  = document.getElementById('api-key-input');
 const $deeper  = document.getElementById('deeper-mode');
 const $settBar = document.getElementById('settings-bar');
+const $attachBtn  = document.getElementById('attach-btn');
+const $fileInput  = document.getElementById('file-input');
+const $attachPrev = document.getElementById('attach-preview');
+const $attachName = document.getElementById('attach-name');
+
+let pendingImageDataUrl = null;
+
+$attachBtn.addEventListener('click', () => $fileInput.click());
+$fileInput.addEventListener('change', () => {
+  const file = $fileInput.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    pendingImageDataUrl = e.target.result;
+    $attachName.textContent = file.name;
+    $attachPrev.style.display = 'flex';
+    $attachBtn.classList.add('has-image');
+  };
+  reader.readAsDataURL(file);
+  $fileInput.value = '';
+});
+document.getElementById('attach-remove').addEventListener('click', () => {
+  pendingImageDataUrl = null;
+  $attachPrev.style.display = 'none';
+  $attachBtn.classList.remove('has-image');
+});
 
 // ── Build suggestion buttons via DOM to avoid innerHTML ──
 (function buildSuggestions() {
@@ -594,8 +802,26 @@ async function send() {
   }
 
   $empty.style.display = 'none';
-  history.push({ role: 'user', content: text });
+
+  // Build message content — plain text or image+text array
+  let userContent;
+  if (pendingImageDataUrl) {
+    userContent = [
+      { type: 'image_url', image_url: { url: pendingImageDataUrl } },
+      { type: 'text', text: text }
+    ];
+  } else {
+    userContent = text;
+  }
+  history.push({ role: 'user', content: userContent });
   addUserMsg(text);
+
+  // Clear attachment state
+  if (pendingImageDataUrl) {
+    pendingImageDataUrl = null;
+    $attachPrev.style.display = 'none';
+    $attachBtn.classList.remove('has-image');
+  }
 
   $input.value = '';
   $input.style.height = 'auto';
@@ -614,12 +840,13 @@ async function send() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        question: text,
-        api_key: key,
-        model: $model.value,
-        history: history.slice(0, -1),
-        deeper_mode: $deeper.checked,
-        stream: true
+        settings: {
+          api_key: key,
+          model: $model.value,
+          mode: $deeper.checked ? 'heavy' : 'quick',
+          max_iterations: 200
+        },
+        messages: history
       })
     });
 
@@ -633,6 +860,7 @@ async function send() {
       const decoder = new TextDecoder();
       const labelEl = loadEl.querySelector('.load-label');
       let buf = '';
+      let toolCalls = [];
 
       outer: while (true) {
         const { done, value } = await reader.read();
@@ -646,21 +874,28 @@ async function send() {
           let evt;
           try { evt = JSON.parse(part.slice(6)); } catch (e) { continue; }
 
-          if (evt.t === 'status') {
-            if (labelEl) labelEl.textContent = evt.msg;
-          } else if (evt.t === 'thinking') {
-            if (labelEl) labelEl.textContent = 'Thinking\u2026';
-          } else if (evt.t === 'done') {
+          if (evt.type === 'status') {
+            const stage = evt.stage || '';
+            if (labelEl) labelEl.textContent = stage === 'iteration_start' ? 'Thinking\u2026' : (stage.replace(/_/g, ' ') || 'Working\u2026');
+          } else if (evt.type === 'tool_start') {
+            toolCalls.push({ tool: evt.tool_name, args: evt.args || {}, status: 'running', result: '' });
+            if (labelEl) labelEl.textContent = (evt.tool_name || 'tool').replace(/_/g, ' ');
+          } else if (evt.type === 'tool_result') {
+            const tc = toolCalls.slice().reverse().find(t => t.tool === evt.tool_name && t.status === 'running');
+            if (tc) { tc.status = evt.status || 'done'; tc.result = evt.result_preview || ''; }
+          } else if (evt.type === 'content_chunk') {
+            if (labelEl) labelEl.textContent = 'Writing\u2026';
+          } else if (evt.type === 'done') {
             const elapsed = Date.now() - startMs;
             clearInterval(timerInterval);
             loadEl.remove();
             history.push({ role: 'assistant', content: evt.response || '' });
-            addAgentMsg(evt.response || '', evt.tool_calls || [], elapsed);
+            addAgentMsg(evt.response || '', toolCalls, elapsed);
             break outer;
-          } else if (evt.t === 'error') {
+          } else if (evt.type === 'error') {
             clearInterval(timerInterval);
             loadEl.remove();
-            addError(evt.msg || 'Unknown error');
+            addError(evt.error || 'Unknown error');
             break outer;
           }
         }
@@ -756,16 +991,11 @@ function addAgentMsg(responseText, toolCalls, elapsed) {
       pill.appendChild(s);
     });
 
-    const items = mk('div', 'trace-items');
-    toolCalls.forEach(tc => items.appendChild(buildTraceRow(tc)));
-
-    pill.addEventListener('click', () => {
-      pill.classList.toggle('open');
-      items.classList.toggle('visible');
-    });
+    const capturedCalls = toolCalls.slice();
+    const capturedElapsed = elapsed;
+    pill.addEventListener('click', () => openTraceSidebar(capturedCalls, capturedElapsed));
 
     row.appendChild(pill);
-    row.appendChild(items);
   }
 
   // Response — sanitize markdown output before inserting
@@ -1095,8 +1325,8 @@ function buildTraceRow(tc) {
   }
   hdr.appendChild(labelWrap);
 
-  const badge = mk('span', 'trace-row-badge');
-  badge.textContent = 'done';
+  const badge = mk('span', 'trace-row-badge' + (tc.status === 'error' ? ' err' : ''));
+  badge.textContent = tc.status === 'error' ? 'error' : 'done';
   hdr.appendChild(badge);
 
   const expand = mk('span', 'trace-expand');
@@ -1137,7 +1367,8 @@ function toolInfo(name, args) {
     fetch_image_to_video_models:{ iconName: 'video', iconColor: '#10b981', label: 'Image-to-video leaderboard',       sub: '' },
     fetch_text_to_speech_models:{ iconName: 'speaker',iconColor:'#6b7280', label: 'Text-to-speech models',           sub: '' },
     fetch_fal_models:         { iconName: 'bolt',    iconColor: '#f59e0b', label: q ? 'Fal.ai · '+q : 'Fal.ai catalog',       sub: '' },
-    fetch_replicate_models:   { iconName: 'refresh', iconColor: '#6b7280', label: q ? 'Replicate · '+q : 'Replicate catalog',  sub: '' },
+    fetch_replicate_models:   { iconName: 'refresh', iconColor: '#6b7280', label: q ? 'Replicate · ' + q : 'Replicate catalog', sub: '' },
+    send_final_response:      { iconName: 'doc',     iconColor: '#10b981', label: 'Compose response', sub: '' },
   };
   return map[name] || { iconName: 'dot', iconColor: '#9ca3af', label: name.replace(/_/g,' '), sub: '' };
 }
@@ -1296,9 +1527,14 @@ function renderCharts(container) {
         data: {
           labels: cfg.labels || [],
           datasets: (cfg.datasets || []).map((ds, i) => {
+            const rawData = ds.data || [];
+            // Normalize scatter data: [[x,y]] array-of-arrays -> {x,y} objects
+            const data = isScatter
+              ? rawData.map(pt => Array.isArray(pt) ? { x: pt[0], y: pt[1] } : pt)
+              : rawData;
             const d = {
               label: ds.label || '',
-              data: ds.data || [],
+              data,
               backgroundColor: ds.backgroundColor || palette(i, isScatter ? 0.8 : 0.7),
               borderColor: ds.borderColor || palette(i, 1),
               borderWidth: ds.borderWidth != null ? ds.borderWidth : 1,
@@ -1308,7 +1544,7 @@ function renderCharts(container) {
           })
         },
         options: {
-          responsive: true, maintainAspectRatio: true,
+          responsive: true, maintainAspectRatio: false,
           plugins: {
             legend: { labels: { font: { size: 11, family: 'system-ui' }, color: '#374151' } },
             tooltip: isScatter ? {
@@ -1335,6 +1571,102 @@ function palette(i, a) {
   ];
   if (typeof i === 'number') return c[i % c.length];
   return (i || []).map((_,idx) => c[idx % c.length]);
+}
+
+// ── Trace Sidebar ───────────────────────────────────────────────────────────
+const $tsbPanel    = document.getElementById('tsb-panel');
+const $tsbBackdrop = document.getElementById('tsb-backdrop');
+const $tsbBody     = document.getElementById('tsb-body');
+const $tsbMeta     = document.getElementById('tsb-meta');
+
+document.getElementById('tsb-close').addEventListener('click', closeTraceSidebar);
+$tsbBackdrop.addEventListener('click', closeTraceSidebar);
+
+function openTraceSidebar(toolCalls, elapsed) {
+  while ($tsbBody.firstChild) $tsbBody.removeChild($tsbBody.firstChild);
+  $tsbMeta.textContent = toolCalls.length + ' step' + (toolCalls.length !== 1 ? 's' : '') + ' \u00b7 ' + fmtDur(elapsed);
+  if (toolCalls.length === 0) {
+    const empty = mk('div', 'tsb-empty');
+    empty.textContent = 'No activity recorded.';
+    $tsbBody.appendChild(empty);
+  } else {
+    toolCalls.forEach(tc => $tsbBody.appendChild(buildSidebarStep(tc)));
+  }
+  $tsbPanel.classList.add('open');
+  $tsbBackdrop.classList.add('open');
+}
+
+function closeTraceSidebar() {
+  $tsbPanel.classList.remove('open');
+  $tsbBackdrop.classList.remove('open');
+}
+
+function buildSidebarStep(tc) {
+  const info = toolInfo(tc.tool, tc.args);
+  const div = mk('div', 'tsb-step');
+
+  // Gutter + dot
+  const gutter = mk('div', 'tsb-gutter');
+  const dotCls = tc.status === 'error' ? 'tsb-dot err' : tc.status === 'done' ? 'tsb-dot done' : 'tsb-dot';
+  const dot = mk('div', dotCls);
+  gutter.appendChild(dot);
+
+  // Content
+  const content = mk('div', 'tsb-content');
+
+  const rowMain = mk('div', 'tsb-row-main');
+  const name = mk('span', 'tsb-name');
+  name.textContent = info.label;
+
+  if (tc.status && tc.status !== 'running') {
+    const badge = mk('span', tc.status === 'error' ? 'tsb-badge err' : 'tsb-badge');
+    badge.textContent = tc.status;
+    rowMain.appendChild(name);
+    rowMain.appendChild(badge);
+  } else {
+    rowMain.appendChild(name);
+  }
+
+  // Chevron
+  const ns = 'http://www.w3.org/2000/svg';
+  const chSvg = document.createElementNS(ns, 'svg');
+  chSvg.setAttribute('viewBox', '0 0 24 24');
+  chSvg.setAttribute('fill', 'none');
+  chSvg.setAttribute('stroke', 'currentColor');
+  chSvg.setAttribute('stroke-width', '2');
+  chSvg.setAttribute('stroke-linecap', 'round');
+  chSvg.setAttribute('stroke-linejoin', 'round');
+  chSvg.classList.add('tsb-chevron');
+  const chPoly = document.createElementNS(ns, 'polyline');
+  chPoly.setAttribute('points', '9 18 15 12 9 6');
+  chSvg.appendChild(chPoly);
+  rowMain.appendChild(chSvg);
+
+  content.appendChild(rowMain);
+
+  if (info.sub) {
+    const sub = mk('div', 'tsb-sub');
+    sub.textContent = info.sub;
+    content.appendChild(sub);
+  }
+
+  // Detail
+  const detail = mk('div', 'tsb-detail');
+  const parts = [];
+  if (tc.args && Object.keys(tc.args).length > 0) {
+    parts.push('Args: ' + JSON.stringify(tc.args, null, 2));
+  }
+  if (tc.result) {
+    parts.push(tc.result);
+  }
+  detail.textContent = parts.join('\n\n') || 'No detail available.';
+  content.appendChild(detail);
+
+  div.appendChild(gutter);
+  div.appendChild(content);
+
+  div.addEventListener('click', () => div.classList.toggle('open'));
+  return div;
 }
 
 function fmtDur(ms) {

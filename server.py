@@ -33,7 +33,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 
-from backend.app.agent import run_agent, stream_agent, build_system_prompt
+from backend.app.agent import run_agent, stream_agent, build_system_prompt, get_tool_definitions
 from backend.app.agent.tool_executors import AgentToolExecutors, list_skill_frontmatter
 from backend.app.agent.types import AgentSettings
 
@@ -342,6 +342,130 @@ def compare_arena_page():
     response.headers['Expires'] = '0'
     return response
 
+# ── File attachment helpers ─────────────────────────────────────────────────
+
+# Models whose architecture.modality contains "image" in the OR cache
+_VISION_PATTERNS = (
+    'claude', 'gemini', 'gpt-4o', 'gpt-4v', 'llava', 'pixtral',
+    'qwen-vl', 'qwen2-vl', 'vision', 'cogvlm', 'minicpm-v', 'internvl',
+    'phi-4-multimodal', 'mistral-small-3.1',
+)
+
+def _is_vision_model(model_id):
+    """Return True if the model supports image inputs."""
+    mid_lower = model_id.lower()
+    # Check OR cache for authoritative modality
+    cache_key = get_cache_key('openrouter_models')
+    cached_models = cache.get(cache_key, {}).get('data') or []
+    for entry in cached_models:
+        if entry.get('id') == model_id:
+            modality = entry.get('architecture', {}).get('modality', '')
+            return 'image' in modality.lower()
+    # Fallback: pattern matching on model ID
+    return any(p in mid_lower for p in _VISION_PATTERNS)
+
+
+def _describe_image_with_gemini(image_data_url, prompt_hint, api_key):
+    """
+    Ask Gemini 2.5 Flash Preview to describe an image for text-only models.
+    Returns a plain-text description string.
+    """
+    description_model = 'google/gemini-2.5-flash-preview'
+    user_content = [
+        {"type": "text", "text": (
+            f"Please describe this image thoroughly and accurately so that a language model "
+            f"that cannot see images can understand it. The user's question is: {prompt_hint!r}. "
+            f"Focus on details that are most relevant to answering the user's question."
+        )},
+        {"type": "image_url", "image_url": {"url": image_data_url}}
+    ]
+    payload = {
+        "model": description_model,
+        "messages": [{"role": "user", "content": user_content}],
+        "max_tokens": 1024,
+    }
+    try:
+        resp = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json=payload, timeout=30
+        )
+        resp.raise_for_status()
+        return resp.json()["choices"][0]["message"]["content"] or ""
+    except Exception as exc:
+        print(f"WARNING: Gemini image description failed: {exc}")
+        return "[Image could not be described]"
+
+
+def _extract_pdf_text(pdf_bytes):
+    """Extract plain text from PDF bytes using pypdf. Returns string."""
+    try:
+        import io
+        import pypdf
+        reader = pypdf.PdfReader(io.BytesIO(pdf_bytes))
+        parts = []
+        for page in reader.pages:
+            t = page.extract_text()
+            if t:
+                parts.append(t)
+        return '\n\n'.join(parts) or '[PDF contained no extractable text]'
+    except Exception as exc:
+        return f'[PDF extraction failed: {exc}]'
+
+
+def _build_user_message_with_attachment(question, file_data_b64, file_type, file_name, model_id, api_key):
+    """
+    Build the user message content, handling file attachments:
+    - Images: inline for vision models, described via Gemini for text-only models
+    - CSV/JSON: parsed and injected as text
+    - PDF: text extracted and injected
+    Returns content (str or list) for the user message.
+    """
+    import base64 as _b64
+    if not file_data_b64:
+        return question
+
+    raw_bytes = _b64.b64decode(file_data_b64)
+    mime = (file_type or '').lower()
+    name = file_name or 'attachment'
+
+    # ── Image ────────────────────────────────────────────────────────────────
+    if mime.startswith('image/'):
+        data_url = f"data:{mime};base64,{file_data_b64}"
+        if _is_vision_model(model_id):
+            return [
+                {"type": "text", "text": question},
+                {"type": "image_url", "image_url": {"url": data_url}}
+            ]
+        else:
+            desc = _describe_image_with_gemini(data_url, question, api_key)
+            return f"{question}\n\n[Attached image — {name}]\n{desc}"
+
+    # ── PDF ──────────────────────────────────────────────────────────────────
+    if mime == 'application/pdf':
+        text = _extract_pdf_text(raw_bytes)
+        truncated = text[:12000] + ('\n…[truncated]' if len(text) > 12000 else '')
+        return f"{question}\n\n[Attached PDF — {name}]\n```\n{truncated}\n```"
+
+    # ── CSV / JSON / plain text ───────────────────────────────────────────────
+    try:
+        decoded = raw_bytes.decode('utf-8', errors='replace')
+    except Exception:
+        return question
+
+    if mime in ('text/csv', 'application/csv') or name.lower().endswith('.csv'):
+        truncated = decoded[:8000] + ('\n…[truncated]' if len(decoded) > 8000 else '')
+        return f"{question}\n\n[Attached CSV — {name}]\n```csv\n{truncated}\n```"
+
+    if mime in ('application/json', 'text/json') or name.lower().endswith('.json'):
+        truncated = decoded[:8000] + ('\n…[truncated]' if len(decoded) > 8000 else '')
+        return f"{question}\n\n[Attached JSON — {name}]\n```json\n{truncated}\n```"
+
+    # Fallback: plain text
+    truncated = decoded[:8000] + ('\n…[truncated]' if len(decoded) > 8000 else '')
+    return f"{question}\n\n[Attached file — {name}]\n```\n{truncated}\n```"
+
+
 @app.route('/api/experimental-agent', methods=['POST'])
 def inline_exp_agent_api():
     """Run the agent. JSON by default; SSE stream when stream=true in request body."""
@@ -360,9 +484,13 @@ def inline_exp_agent_api():
 
     model_id = data.get('model', 'google/gemini-2.5-flash')
     history = data.get('history', [])  # Get conversation history from frontend
-    image_data = data.get('image', None)  # Base64 image data if provided
     deeper_mode = data.get('deeper_mode', False)  # More thorough research mode
     stream_mode = data.get('stream', False)  # SSE streaming mode
+
+    # File attachment (replaces old image_data field; also accepts image_data for back-compat)
+    file_data_b64 = data.get('file_data') or data.get('image')
+    file_type     = data.get('file_type') or ('image/png' if data.get('image') else None)
+    file_name     = data.get('file_name', '')
 
     # Set iteration count based on mode (deeper = more iterations for thorough research)
     max_iterations = 20 if deeper_mode else 15
@@ -377,18 +505,12 @@ def inline_exp_agent_api():
         if role in ('user', 'assistant') and content:
             messages.append({"role": role, "content": content})
 
-    # If history doesn't include the current question, add it
-    # For image requests, format as multimodal content
+    # Add current user message, incorporating any file attachment
     if not history or history[-1].get('content') != question:
-        if image_data:
-            # Format as multimodal message for vision models
-            user_content = [
-                {"type": "text", "text": question},
-                {"type": "image_url", "image_url": {"url": image_data}}
-            ]
-            messages.append({"role": "user", "content": user_content})
-        else:
-            messages.append({"role": "user", "content": question})
+        user_content = _build_user_message_with_attachment(
+            question, file_data_b64, file_type, file_name, model_id, api_key
+        )
+        messages.append({"role": "user", "content": user_content})
 
     # ── Streaming mode: return SSE events as the agent works ────────────────
     if stream_mode:
@@ -434,7 +556,7 @@ def inline_exp_agent_api():
                 choice = result.get("choices", [{}])[0]
                 msg = choice.get("message", {})
                 tool_calls = msg.get("tool_calls", [])
-                content = msg.get("content", "")
+                content = msg.get("content") or ""  # handle None from some models
 
                 # Capture any content (even when tool calls are also present — this is thinking)
                 if content:
@@ -447,8 +569,17 @@ def inline_exp_agent_api():
 
                 if tool_calls:
                     _messages.append(msg)
-                    tool_names = [tc.get('function', {}).get('name', '') for tc in tool_calls]
-                    yield emit({'t': 'status', 'msg': 'Calling: ' + ', '.join(tool_names)})
+
+                    # Emit tool_start for each call so the frontend can show live steps
+                    for tc in tool_calls:
+                        fn = tc.get("function", {})
+                        tname = fn.get("name", "")
+                        try:
+                            targs = json.loads(fn.get("arguments", "{}"))
+                        except Exception:
+                            targs = {}
+                        yield emit({'t': 'tool_start', 'tool': tname, 'args': targs,
+                                    'tc_id': tc.get("id", "")})
 
                     def _run_tool(tc):
                         fn = tc.get("function", {})
@@ -457,8 +588,8 @@ def inline_exp_agent_api():
                             targs = json.loads(fn.get("arguments", "{}"))
                         except Exception:
                             targs = {}
-                        result = _execute_agent_tool(tname, targs, api_key, deeper_mode=deeper_mode)
-                        return tc, tname, targs, result
+                        tool_result = _execute_agent_tool(tname, targs, api_key, deeper_mode=deeper_mode)
+                        return tc, tname, targs, tool_result
 
                     n_tools = len(tool_calls)
                     print(f"[Agent/stream] executing {n_tools} tool(s) in parallel")
@@ -477,6 +608,9 @@ def inline_exp_agent_api():
                             "tool_call_id": tc.get("id", ""),
                             "content": tool_result
                         })
+                        yield emit({'t': 'tool_done', 'tool': tname,
+                                    'tc_id': tc.get("id", ""),
+                                    'preview': tool_result[:300]})
                     # Continue to next iteration for the model's response to tool results
 
                 elif content:
@@ -486,9 +620,11 @@ def inline_exp_agent_api():
                                 'tool_calls': tool_calls_made, 'elapsed': elapsed})
                     return
                 else:
+                    # Empty response (model returned nothing) — if we have accumulated
+                    # content from prior iterations, use that; otherwise report the issue
                     elapsed = int(_time.time() * 1000) - start_ms
                     yield emit({'t': 'done',
-                                'response': final_response or "Agent finished without response.",
+                                'response': final_response or "The model returned an empty response.",
                                 'tool_calls': tool_calls_made, 'elapsed': elapsed})
                     return
 
@@ -781,15 +917,16 @@ def api_agent_debug_stream():
 
 @app.route('/agent-inspector')
 def agent_inspector_page():
-    """Agent Inspector — simulation dashboard."""
-    import os as _os
-    from flask import Response as _R
-    path = _os.path.join(_os.path.dirname(__file__), 'static', 'agent-debug.html')
-    with open(path, 'r', encoding='utf-8') as f:
-        html = f.read()
-    r = _R(html, mimetype='text/html')
-    r.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-    return r
+    """Agent Inspector / Command Center — see system prompt, tools, skills, and test tools."""
+    path = os.path.join(os.path.dirname(__file__), 'static', 'agent-inspector.html')
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            html = f.read()
+        r = Response(html, mimetype='text/html')
+        r.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        return r
+    except FileNotFoundError:
+        return 'Agent inspector not found', 404
 
 
 # ── Universal Model ID (UMI) — Model Page endpoint ──────────────────────────
@@ -2149,6 +2286,33 @@ def ensure_data_dir():
     if not os.path.exists(DATA_DIR):
         os.makedirs(DATA_DIR, exist_ok=True)
 
+
+def _aa_disk_cache_path(key):
+    safe_key = key.replace('/', '_').replace('-', '_')
+    return os.path.join(DATA_DIR, f'aa_{safe_key}.json')
+
+
+def _load_aa_disk_cache(key):
+    path = _aa_disk_cache_path(key)
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception as exc:
+        print(f'WARN: Failed to read AA disk cache {path}: {exc}')
+        return None
+
+
+def _save_aa_disk_cache(key, data):
+    ensure_data_dir()
+    path = _aa_disk_cache_path(key)
+    try:
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False)
+    except Exception as exc:
+        print(f'WARN: Failed to write AA disk cache {path}: {exc}')
+
 def sanitize_for_filename(value):
     value = value or 'model'
     sanitized = re.sub(r'[^A-Za-z0-9_-]+', '_', value).strip('_')
@@ -2498,18 +2662,26 @@ def load_artificial_analysis_llms(force_refresh=False):
 
     headers = {
         'x-api-key': ARTIFICIAL_ANALYSIS_API_KEY,
-        'Content-Type': 'application/json'
     }
 
-    response = requests.get(
-        f'{ARTIFICIAL_ANALYSIS_BASE_URL}/data/llms/models',
-        headers=headers,
-        timeout=20
-    )
-    response.raise_for_status()
-    data = response.json()
-    cache[cache_key] = build_cache_entry(data)
-    return data
+    try:
+        response = requests.get(
+            f'{ARTIFICIAL_ANALYSIS_BASE_URL}/data/llms/models',
+            headers=headers,
+            timeout=20
+        )
+        response.raise_for_status()
+        data = response.json()
+        cache[cache_key] = build_cache_entry(data)
+        _save_aa_disk_cache('llms', data)
+        return data
+    except Exception as exc:
+        disk_data = _load_aa_disk_cache('llms')
+        if disk_data is not None:
+            print(f'WARN: AA LLMs API failed ({exc}), serving from disk cache')
+            cache[cache_key] = build_cache_entry(disk_data)
+            return disk_data
+        raise
 
 def load_cached_analysis_payload(model_name, model_type):
     if not model_name:
@@ -7066,7 +7238,6 @@ def get_text_to_image():
     try:
         headers = {
             'x-api-key': ARTIFICIAL_ANALYSIS_API_KEY,
-            'Content-Type': 'application/json'
         }
         
         params = {}
@@ -7085,6 +7256,7 @@ def get_text_to_image():
                 'data': data,
                 'timestamp': datetime.now()
             }
+            _save_aa_disk_cache('text_to_image', data)
             return jsonify(data), 200, {
                 'Access-Control-Allow-Origin': '*',
                 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -7095,8 +7267,13 @@ def get_text_to_image():
                 'error': f'API request failed with status {response.status_code}',
                 'details': response.text
             }), response.status_code
-            
+
     except Exception as e:
+        disk_data = _load_aa_disk_cache('text_to_image')
+        if disk_data is not None:
+            print(f'WARN: AA text-to-image API failed ({e}), serving from disk cache')
+            cache[cache_key] = {'data': disk_data, 'timestamp': datetime.now()}
+            return jsonify(disk_data), 200
         return jsonify({
             'error': 'Failed to fetch Text-to-Image data',
             'details': str(e)
@@ -7113,7 +7290,6 @@ def get_image_editing():
     try:
         headers = {
             'x-api-key': ARTIFICIAL_ANALYSIS_API_KEY,
-            'Content-Type': 'application/json'
         }
         
         response = requests.get(
@@ -7127,6 +7303,7 @@ def get_image_editing():
                 'data': data,
                 'timestamp': datetime.now()
             }
+            _save_aa_disk_cache('image_editing', data)
             return jsonify(data), 200, {
                 'Access-Control-Allow-Origin': '*',
                 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -7137,8 +7314,13 @@ def get_image_editing():
                 'error': f'API request failed with status {response.status_code}',
                 'details': response.text
             }), response.status_code
-            
+
     except Exception as e:
+        disk_data = _load_aa_disk_cache('image_editing')
+        if disk_data is not None:
+            print(f'WARN: AA image-editing API failed ({e}), serving from disk cache')
+            cache[cache_key] = {'data': disk_data, 'timestamp': datetime.now()}
+            return jsonify(disk_data), 200
         return jsonify({
             'error': 'Failed to fetch Image Editing data',
             'details': str(e)
@@ -7155,7 +7337,6 @@ def get_text_to_speech():
     try:
         headers = {
             'x-api-key': ARTIFICIAL_ANALYSIS_API_KEY,
-            'Content-Type': 'application/json'
         }
         
         response = requests.get(
@@ -7169,6 +7350,7 @@ def get_text_to_speech():
                 'data': data,
                 'timestamp': datetime.now()
             }
+            _save_aa_disk_cache('text_to_speech', data)
             return jsonify(data), 200, {
                 'Access-Control-Allow-Origin': '*',
                 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -7179,8 +7361,13 @@ def get_text_to_speech():
                 'error': f'API request failed with status {response.status_code}',
                 'details': response.text
             }), response.status_code
-            
+
     except Exception as e:
+        disk_data = _load_aa_disk_cache('text_to_speech')
+        if disk_data is not None:
+            print(f'WARN: AA text-to-speech API failed ({e}), serving from disk cache')
+            cache[cache_key] = {'data': disk_data, 'timestamp': datetime.now()}
+            return jsonify(disk_data), 200
         return jsonify({
             'error': 'Failed to fetch Text-to-Speech data',
             'details': str(e)
@@ -7197,7 +7384,6 @@ def get_text_to_video():
     try:
         headers = {
             'x-api-key': ARTIFICIAL_ANALYSIS_API_KEY,
-            'Content-Type': 'application/json'
         }
         
         response = requests.get(
@@ -7211,6 +7397,7 @@ def get_text_to_video():
                 'data': data,
                 'timestamp': datetime.now()
             }
+            _save_aa_disk_cache('text_to_video', data)
             return jsonify(data), 200, {
                 'Access-Control-Allow-Origin': '*',
                 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -7221,8 +7408,13 @@ def get_text_to_video():
                 'error': f'API request failed with status {response.status_code}',
                 'details': response.text
             }), response.status_code
-            
+
     except Exception as e:
+        disk_data = _load_aa_disk_cache('text_to_video')
+        if disk_data is not None:
+            print(f'WARN: AA text-to-video API failed ({e}), serving from disk cache')
+            cache[cache_key] = {'data': disk_data, 'timestamp': datetime.now()}
+            return jsonify(disk_data), 200
         return jsonify({
             'error': 'Failed to fetch Text-to-Video data',
             'details': str(e)
@@ -7239,7 +7431,6 @@ def get_image_to_video():
     try:
         headers = {
             'x-api-key': ARTIFICIAL_ANALYSIS_API_KEY,
-            'Content-Type': 'application/json'
         }
         
         response = requests.get(
@@ -7253,6 +7444,7 @@ def get_image_to_video():
                 'data': data,
                 'timestamp': datetime.now()
             }
+            _save_aa_disk_cache('image_to_video', data)
             return jsonify(data), 200, {
                 'Access-Control-Allow-Origin': '*',
                 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -7263,8 +7455,13 @@ def get_image_to_video():
                 'error': f'API request failed with status {response.status_code}',
                 'details': response.text
             }), response.status_code
-            
+
     except Exception as e:
+        disk_data = _load_aa_disk_cache('image_to_video')
+        if disk_data is not None:
+            print(f'WARN: AA image-to-video API failed ({e}), serving from disk cache')
+            cache[cache_key] = {'data': disk_data, 'timestamp': datetime.now()}
+            return jsonify(disk_data), 200
         return jsonify({
             'error': 'Failed to fetch Image-to-Video data',
             'details': str(e)
@@ -8745,7 +8942,6 @@ def _load_models_for_source(source):
         try:
             headers = {
                 'x-api-key': ARTIFICIAL_ANALYSIS_API_KEY,
-                'Content-Type': 'application/json'
             }
             response = requests.get(
                 f'{ARTIFICIAL_ANALYSIS_BASE_URL}/data/media/text-to-image',
@@ -10326,7 +10522,7 @@ def agent_v2_chat():
         web_search_model=web_search_model,
         mode=mode,
         temperature=max(0.0, min(temperature, 1.5)),
-        max_iterations=max(1, min(max_iterations, 50)),
+        max_iterations=max(1, min(max_iterations, 300)),
         api_key=api_key,
         system_prompt_override=system_override,
     )
@@ -10367,8 +10563,15 @@ def agent_v2_chat_stream():
         if not isinstance(msg, dict):
             continue
         role = str(msg.get('role') or '').strip()
-        content = str(msg.get('content') or '')
-        if role in {'system', 'user', 'assistant'} and content.strip():
+        raw_content = msg.get('content')
+        # Support array content (e.g. image_url + text) as well as plain strings
+        if isinstance(raw_content, list):
+            content = raw_content
+            has_content = len(content) > 0
+        else:
+            content = str(raw_content or '')
+            has_content = bool(content.strip())
+        if role in {'system', 'user', 'assistant'} and has_content:
             message_list.append({'role': role, 'content': content})
 
     if not message_list or message_list[-1].get('role') != 'user':
@@ -10400,7 +10603,7 @@ def agent_v2_chat_stream():
         web_search_model=web_search_model,
         mode=mode,
         temperature=max(0.0, min(temperature, 1.5)),
-        max_iterations=max(1, min(max_iterations, 50)),
+        max_iterations=max(1, min(max_iterations, 300)),
         api_key=api_key,
         system_prompt_override=system_override,
     )
@@ -10429,6 +10632,75 @@ def agent_v2_chat_stream():
         'X-Accel-Buffering': 'no'
     }
     return Response(stream_with_context(event_stream()), mimetype='text/event-stream', headers=sse_headers)
+
+
+@app.route('/api/agent-v2/inspector/config', methods=['GET'])
+def agent_v2_inspector_config():
+    """Return everything the agent sees: system prompts, tool schemas, skill bodies."""
+    skills_dir = os.path.join(BASE_DIR, 'skills')
+    skills = list_skill_frontmatter(skills_dir)
+
+    quick_prompt = build_system_prompt(mode='quick', skills=skills)
+    heavy_prompt = build_system_prompt(mode='heavy', skills=skills)
+    quick_tools = get_tool_definitions(mode='quick')
+    heavy_tools = get_tool_definitions(mode='heavy')
+
+    # Read full SKILL.md body for each skill
+    skill_details = []
+    if os.path.isdir(skills_dir):
+        skill_dirs = sorted(d for d in os.listdir(skills_dir)
+                            if os.path.isfile(os.path.join(skills_dir, d, 'SKILL.md')))
+        for skill_dirname in skill_dirs:
+            skill_md_path = os.path.join(skills_dir, skill_dirname, 'SKILL.md')
+            with open(skill_md_path, 'r', encoding='utf-8') as _sf:
+                text = _sf.read()
+            name = skill_dirname
+            description = ''
+            body = text
+            if text.startswith('---'):
+                parts = text.split('---', 2)
+                if len(parts) >= 3:
+                    frontmatter = parts[1]
+                    body = parts[2].strip()
+                    for line in frontmatter.splitlines():
+                        stripped = line.strip()
+                        if stripped.startswith('name:'):
+                            name = stripped.split(':', 1)[1].strip().strip('"')
+                        elif stripped.startswith('description:'):
+                            description = stripped.split(':', 1)[1].strip().strip('"')
+            skill_details.append({'name': name, 'description': description, 'body': body})
+
+    return jsonify({
+        'system_prompt': {'quick': quick_prompt, 'heavy': heavy_prompt},
+        'tools': {'quick': quick_tools, 'heavy': heavy_tools},
+        'skills': skill_details,
+    })
+
+
+@app.route('/api/agent-v2/inspector/test-tool', methods=['POST'])
+def agent_v2_inspector_test_tool():
+    """Execute a single agent tool and return the raw result."""
+    data = request.get_json(force=True, silent=True) or {}
+    tool_name = str(data.get('tool_name') or '').strip()
+    args = data.get('args') or {}
+    if not isinstance(args, dict):
+        args = {}
+    api_key = (data.get('api_key') or OPENROUTER_API_KEY or '').strip()
+
+    if not tool_name:
+        return jsonify({'ok': False, 'error': {'message': 'tool_name is required'}}), 400
+
+    executor = _build_agent_v2_executor()
+    try:
+        result = executor.execute(tool_name, args, {
+            'api_key': api_key,
+            'web_search_model': 'perplexity/sonar-pro',
+            'umi_model': 'google/gemini-2.5-flash',
+        })
+        return jsonify(result)
+    except Exception as exc:
+        import traceback
+        return jsonify({'ok': False, 'error': {'message': str(exc)}, 'stack': traceback.format_exc()}), 500
 
 
 @app.route('/api/intelligent-query', methods=['POST'])
@@ -11979,39 +12251,7 @@ def debug_utf8():
             'Content-Type': 'application/json; charset=utf-8'
         }
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='AI Model Analysis Dashboard Server')
-    parser.add_argument('--port', type=int, help='Port to bind the server')
-    parser.add_argument('--host', type=str, help='Host/IP to bind (default 0.0.0.0)')
-    parser.add_argument('--debug', action='store_true', help='Enable Flask debug mode')
-    args = parser.parse_args()
 
-    # Create static directory if it doesn't exist
-    static_dir = os.path.join(os.path.dirname(__file__), 'static')
-    if not os.path.exists(static_dir):
-        os.makedirs(static_dir)
-    
-    # Copy HTML, CSS, and JS files to static directory
-    import shutil
-    for file in ['index.html', 'styles.css', 'script.js']:
-        if os.path.exists(file):
-            shutil.copy2(file, os.path.join(static_dir, file))
-    
-    # Determine host/port/debug precedence: CLI > env > defaults
-    host = args.host or os.environ.get('HOST', '0.0.0.0')
-
-    port = args.port
-    if port is None:
-        port_str = os.environ.get('PORT', '8765')
-        try:
-            port = int(port_str)
-        except ValueError:
-            print(f"Invalid PORT value '{port_str}', falling back to 8765")
-            port = 8765
-
-    debug_mode = args.debug or os.environ.get('FLASK_DEBUG', 'false').lower() in ('1', 'true', 'yes')
-    print(f"Starting server on {host}:{port} (debug={debug_mode})")
-    app.run(debug=debug_mode, host=host, port=port)
 def _build_monitor_entry(row):
     if not isinstance(row, list) or len(row) < 2:
         return None
@@ -12126,3 +12366,37 @@ def load_monitor_feed(force_refresh=False, limit=None, sanitize=False):
         return sanitized
 
     return result
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='AI Model Analysis Dashboard Server')
+    parser.add_argument('--port', type=int, help='Port to bind the server')
+    parser.add_argument('--host', type=str, help='Host/IP to bind (default 0.0.0.0)')
+    parser.add_argument('--debug', action='store_true', help='Enable Flask debug mode')
+    args = parser.parse_args()
+
+    # Create static directory if it doesn't exist
+    static_dir = os.path.join(os.path.dirname(__file__), 'static')
+    if not os.path.exists(static_dir):
+        os.makedirs(static_dir)
+    
+    # Copy HTML, CSS, and JS files to static directory
+    import shutil
+    for file in ['index.html', 'styles.css', 'script.js']:
+        if os.path.exists(file):
+            shutil.copy2(file, os.path.join(static_dir, file))
+    
+    # Determine host/port/debug precedence: CLI > env > defaults
+    host = args.host or os.environ.get('HOST', '0.0.0.0')
+
+    port = args.port
+    if port is None:
+        port_str = os.environ.get('PORT', '8765')
+        try:
+            port = int(port_str)
+        except ValueError:
+            print(f"Invalid PORT value '{port_str}', falling back to 8765")
+            port = 8765
+
+    debug_mode = args.debug or os.environ.get('FLASK_DEBUG', 'false').lower() in ('1', 'true', 'yes')
+    print(f"Starting server on {host}:{port} (debug={debug_mode})")
+    app.run(debug=debug_mode, host=host, port=port)

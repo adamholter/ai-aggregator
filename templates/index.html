@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="/static/variants/sidebar.css?v=1766079000">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
     <link rel="stylesheet" href="/static/variants/overhaul.css">
@@ -519,6 +520,316 @@
             }
         });
     </script>
+
+<!-- dashboard-overrides -->
+<style>
+/* Compact LLM modal layout */
+.compact-stats-row { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+.compact-stat-pill { display:flex; flex-direction:column; align-items:center; gap:1px; padding:8px 14px; background:var(--surface-color,var(--bg-color)); border:1px solid var(--border-color); border-radius:10px; min-width:72px; }
+.csp-label { font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-secondary); font-weight:600; }
+.csp-value { font-size:15px; font-weight:700; color:var(--text-color); line-height:1.2; }
+.csp-unit { font-size:10px; color:var(--text-secondary); }
+.compact-bench-wrap { margin-bottom:12px; }
+.compact-bench-heading { font-size:12px; text-transform:uppercase; letter-spacing:.07em; font-weight:600; color:var(--text-secondary); margin-bottom:8px; }
+.compact-bench-row { display:flex; align-items:center; gap:8px; padding:5px 0; border-bottom:1px solid var(--border-color); }
+.compact-bench-row:last-child { border-bottom:none; }
+.cbr-label { font-size:12px; color:var(--text-color); flex:0 0 140px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.cbr-score { font-size:12px; font-weight:600; color:var(--text-color); flex:0 0 44px; text-align:right; }
+.cbr-bar-wrap { flex:1; height:6px; background:var(--border-color); border-radius:3px; overflow:hidden; }
+.cbr-bar { display:block; height:100%; background:var(--accent-color,#2563eb); border-radius:3px; min-width:2px; transition:width .3s ease; }
+/* Analysis chart wrapper */
+.chart-wrap { position:relative; margin:16px 0; background:var(--surface-color,var(--bg-color)); border:1px solid var(--border-color); border-radius:10px; padding:16px; height:300px; }
+.chart-wrap canvas { display:block; width:100%!important; height:100%!important; }
+</style>
+<script>
+(function() {
+// ── Compact LLM modal layout ──────────────────────────────────────────────────
+var EVAL_DISPLAY_NAMES = {
+    artificial_analysis_intelligence_index: 'Intelligence',
+    artificial_analysis_coding_index: 'Coding',
+    artificial_analysis_math_index: 'Math',
+    gpqa: 'GPQA', hle: 'HLE', ifbench: 'IFBench', lcr: 'LCR',
+    livecodebench: 'LiveCodeBench', math_500: 'MATH 500', mmlu_pro: 'MMLU Pro',
+    scicode: 'SciCode', tau2: 'TAU2', terminalbench_hard: 'TerminalBench Hard',
+    aime: 'AIME', aime_25: 'AIME 25'
+};
+window.getEvalDisplayName = function(key) {
+    return EVAL_DISPLAY_NAMES[key] || key.split('_').map(function(w){return w.charAt(0).toUpperCase()+w.slice(1);}).join(' ');
+};
+window.makeEl = function(tag, cls, text) {
+    var el = document.createElement(tag);
+    if (cls) el.className = cls;
+    if (text !== undefined) el.textContent = text;
+    return el;
+};
+window.renderLLMOverview = function(container, model) {
+    container.classList.add('llm-overview-compact');
+    var speed = model.median_output_tokens_per_second;
+    var ttft = model.median_time_to_first_token_seconds;
+    var fmtIn = formatPricePerMillion(model.pricing && model.pricing.price_1m_input_tokens);
+    var fmtOut = formatPricePerMillion(model.pricing && model.pricing.price_1m_output_tokens);
+    var statDefs = [
+        speed ? { label: 'Speed', value: String(speed), unit: 'tok/s' } : null,
+        ttft ? { label: 'Latency', value: String(ttft), unit: 's TTFT' } : null,
+        (fmtIn && fmtIn !== 'Not provided') ? { label: 'Input', value: fmtIn, unit: '/1M' } : null,
+        (fmtOut && fmtOut !== 'Not provided') ? { label: 'Output', value: fmtOut, unit: '/1M' } : null
+    ].filter(Boolean);
+    if (statDefs.length) {
+        var statsRow = makeEl('div', 'compact-stats-row');
+        statDefs.forEach(function(s) {
+            var pill = makeEl('div', 'compact-stat-pill');
+            pill.appendChild(makeEl('span', 'csp-label', s.label));
+            pill.appendChild(makeEl('span', 'csp-value', s.value));
+            pill.appendChild(makeEl('span', 'csp-unit', s.unit));
+            statsRow.appendChild(pill);
+        });
+        container.appendChild(statsRow);
+    }
+    var evaluations = model.evaluations || {};
+    var validEvals = Object.entries(evaluations)
+        .filter(function(r){ return r[1] !== null && r[1] !== undefined; })
+        .sort(function(a, b) {
+            var aAA = a[0].startsWith('artificial_analysis');
+            var bAA = b[0].startsWith('artificial_analysis');
+            if (aAA !== bAA) return aAA ? -1 : 1;
+            return Number(b[1]) - Number(a[1]);
+        });
+    if (validEvals.length) {
+        var wrap = makeEl('div', 'compact-bench-wrap');
+        wrap.appendChild(makeEl('div', 'compact-bench-heading', 'Benchmarks'));
+        validEvals.forEach(function(entry) {
+            var key = entry[0], value = entry[1];
+            var n = Number(value);
+            var pct = Number.isFinite(n) ? (n > 1 ? Math.min(n, 100) : n * 100) : 0;
+            var display = Number.isFinite(n) ? (n > 1 ? n.toFixed(1) : n.toFixed(3)) : String(value);
+            var row = makeEl('div', 'compact-bench-row');
+            row.appendChild(makeEl('span', 'cbr-label', getEvalDisplayName(key)));
+            row.appendChild(makeEl('span', 'cbr-score', display));
+            var barWrap = makeEl('span', 'cbr-bar-wrap');
+            var bar = makeEl('span', 'cbr-bar');
+            bar.style.width = pct.toFixed(1) + '%';
+            barWrap.appendChild(bar);
+            row.appendChild(barWrap);
+            wrap.appendChild(row);
+        });
+        container.appendChild(wrap);
+    }
+    var orSection = createSection('OpenRouter');
+    orSection.appendChild(makeEl('div', 'inline-loading', 'Matching against OpenRouter catalogue...'));
+    container.appendChild(orSection);
+    populateOpenRouterComparison(orSection, model);
+};
+
+// ── Agent-powered model analysis ──────────────────────────────────────────────
+var _analysisChartId = 0;
+
+function _analysisStripFnStrings(obj) {
+    if (typeof obj === 'string') return /=>/.test(obj) ? undefined : obj;
+    if (Array.isArray(obj)) { var r = obj.map(_analysisStripFnStrings).filter(function(v){return v!==undefined;}); return r.length?r:undefined; }
+    if (obj && typeof obj === 'object') {
+        var res = {};
+        Object.entries(obj).forEach(function(kv){ var c=_analysisStripFnStrings(kv[1]); if(c!==undefined) res[kv[0]]=c; });
+        return Object.keys(res).length?res:undefined;
+    }
+    return obj;
+}
+
+function _analysisPalette(i, a) {
+    var c = ['rgba(37,99,235,'+a+')','rgba(16,185,129,'+a+')','rgba(245,158,11,'+a+')','rgba(239,68,68,'+a+')','rgba(139,92,246,'+a+')','rgba(236,72,153,'+a+')'];
+    if (typeof i === 'number') return c[i % c.length];
+    return (i||[]).map(function(_,idx){return c[idx%c.length];});
+}
+
+function _analysisRenderMd(text) {
+    if (!text) return '';
+    var html;
+    try { html = marked.parse(text, { breaks: true, gfm: true }); }
+    catch(_) { html = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    html = html.replace(/<pre><code[^>]*>([\s\S]*?)<\/code><\/pre>/g, function(match, inner) {
+        var decoded = inner.replace(/&quot;/g,'"').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&#39;/g,"'").trim();
+        try {
+            var obj = JSON.parse(decoded);
+            var datasets = obj.datasets || (obj.data && obj.data.datasets);
+            if (obj && obj.type && datasets) {
+                var id = 'analysis-chart-'+(++_analysisChartId);
+                var flat = { type:obj.type, labels:obj.labels||(obj.data&&obj.data.labels)||[], datasets:datasets, scales:(obj.options&&obj.options.scales)||null };
+                var safe = JSON.stringify(flat).replace(/"/g,'&quot;');
+                return '<div class="chart-wrap"><canvas id="'+id+'" data-cfg="'+safe+'"></canvas></div>';
+            }
+        } catch(_) {}
+        return match;
+    });
+    html = html.replace(/\[\[model:([^:\]]+):([^\]]+)\]\]/g, function(_m, src, name) {
+        function esc(s){return s.replace(/[<>"'&]/g,function(c){return({'<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','&':'&amp;'}[c]);});}
+        return '<span class="model-badge" data-model-name="'+esc(name)+'" data-model-source="'+esc(src)+'">'+esc(name)+'</span>';
+    });
+    return html;
+}
+
+function _analysisRenderCharts(container) {
+    if (typeof Chart === 'undefined') return;
+    container.querySelectorAll('canvas[data-cfg]').forEach(function(cv) {
+        try {
+            var cfg = JSON.parse(cv.getAttribute('data-cfg').replace(/&quot;/g,'"'));
+            var isScatter = cfg.type==='scatter', isPie = cfg.type==='pie'||cfg.type==='doughnut';
+            var scales;
+            if (isPie) { scales={}; }
+            else if (cfg.scales) {
+                var cleaned = _analysisStripFnStrings(cfg.scales)||{};
+                ['x','y'].forEach(function(axis){ if(cleaned[axis]){cleaned[axis].ticks=Object.assign({font:{size:11},color:'#6b7280'},cleaned[axis].ticks||{});cleaned[axis].grid=cleaned[axis].grid||{color:'#f3f4f6'};}});
+                scales = cleaned;
+            } else {
+                scales={x:{ticks:{font:{size:11},color:'#6b7280',maxRotation:30},grid:{color:'#f3f4f6'}},y:{ticks:{font:{size:11},color:'#6b7280'},grid:{color:'#f3f4f6'}}};
+            }
+            new Chart(cv, {
+                type: cfg.type||'bar',
+                data: {
+                    labels: cfg.labels||[],
+                    datasets: (cfg.datasets||[]).map(function(ds,i){
+                        var rawData=ds.data||[];
+                        var data=isScatter?rawData.map(function(pt){return Array.isArray(pt)?{x:pt[0],y:pt[1]}:pt;}):rawData;
+                        var d={label:ds.label||'',data:data,backgroundColor:ds.backgroundColor||_analysisPalette(i,isPie?0.8:0.7),borderColor:ds.borderColor||_analysisPalette(i,1),borderWidth:ds.borderWidth!=null?ds.borderWidth:1};
+                        if(isScatter){d.pointRadius=5;d.pointHoverRadius=7;}
+                        return d;
+                    })
+                },
+                options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{font:{size:11,family:'system-ui'},color:'#374151'}},tooltip:isScatter?{callbacks:{label:function(ctx){var r=ctx.raw;var n=r.label||r.name||'';return n?n+' ('+r.x+', '+r.y+')':'('+r.x+', '+r.y+')';}}}:{}},scales:scales}
+            });
+        } catch(e){ console.warn('Analysis chart error', e); }
+    });
+}
+
+window.buildAnalysisUserMessage = function(model, type) {
+    var name = model.name || model.id || 'Unknown';
+    var provider = (model.model_creator && model.model_creator.name) || model.vendor || '';
+    var lines = ['Please provide a comprehensive analysis of **' + name + '**' + (provider ? ' by ' + provider : '') + '.'];
+    lines.push('\nHere is the available structured data for this model:');
+    lines.push('```json');
+    lines.push(JSON.stringify(model, null, 2));
+    lines.push('```');
+    lines.push('\nUse your tools to:');
+    if (type === 'llm') {
+        lines.push('1. Fetch current LLM benchmark rankings to contextualize this model vs peers');
+        lines.push('2. Search OpenRouter for current pricing and availability');
+        lines.push('3. Search Perplexity for recent community feedback, reviews, and notable news');
+        lines.push('4. Use run_python to compare this model against 5-8 similar models with a chart');
+    } else {
+        lines.push('1. Fetch the relevant leaderboard to contextualize this model vs peers');
+        lines.push('2. Search for recent community feedback, use cases, and notable news');
+    }
+    lines.push('\nInclude a Chart.js chart in your response. Reference related models using [[model:openrouter:provider/model-id]] syntax.');
+    return lines.join('\n');
+};
+
+window.streamModelAnalysis = async function(analysisContainer, model, type, options) {
+    options = options || {};
+    var apiKey = getUserOpenRouterKey();
+    if (!apiKey) throw new Error('\u{1F511} OpenRouter API key required. Please add your key in Settings.');
+    var analysisModel = localStorage.getItem('dashboard-analysis-model') || 'anthropic/claude-sonnet-4-6';
+    var systemOverride = '## MODEL ANALYSIS MODE\nYou are producing a deep-dive analysis of a specific AI model for a user browsing an AI leaderboard dashboard.\n\nStructure your response with ## sections: Overview, Performance (with a benchmark comparison chart), Speed & Cost, Strengths & Weaknesses, Best Use Cases, Recent News.\n\nChart syntax — JSON code block:\n```json\n{"type":"bar","labels":["Model A","Model B"],"datasets":[{"label":"Score","data":[72,85]}]}\n```\nReference related models with [[model:openrouter:provider/model-id]] for clickable cards.';
+    var response = await fetch('/api/agent-v2/chat/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            settings: { api_key: apiKey, model: analysisModel, mode: 'heavy', max_iterations: 15, system_prompt_override: systemOverride },
+            messages: [{ role: 'user', content: buildAnalysisUserMessage(model, type) }]
+        })
+    });
+    if (!response.ok) {
+        var msg = 'HTTP error ' + response.status;
+        try { var p = await response.json(); msg = p.error || p.message || msg; } catch(_) {}
+        throw new Error(msg);
+    }
+    var reader = response.body && response.body.getReader();
+    if (!reader) throw new Error('Response body is not readable');
+    var decoder = new TextDecoder('utf-8');
+    var buffer = '';
+    var toolCalls = [];
+    function setStatus(text) { var el = analysisContainer.querySelector('.loading-text'); if(el) el.textContent = text; }
+    try {
+        while (true) {
+            var chunk = await reader.read();
+            if (chunk.done) break;
+            buffer += decoder.decode(chunk.value, { stream: true });
+            var nl;
+            while ((nl = buffer.indexOf('\n')) !== -1) {
+                var line = buffer.slice(0, nl).trim();
+                buffer = buffer.slice(nl + 1);
+                if (!line.startsWith('data: ')) continue;
+                var payload = line.slice(6);
+                if (payload === '[DONE]') return;
+                var parsed;
+                try { parsed = JSON.parse(payload); } catch(_) { continue; }
+                if (parsed.type === 'status') { setStatus(parsed.label || 'Analyzing...'); }
+                else if (parsed.type === 'tool_start') {
+                    setStatus('Using ' + (parsed.tool_name||'tool').replace(/_/g,' ') + '\u2026');
+                    toolCalls.push({ name: parsed.tool_name, args: parsed.args, status: 'running' });
+                } else if (parsed.type === 'tool_result') {
+                    setStatus('Processing results\u2026');
+                    var tc = toolCalls.find(function(t){return t.name===parsed.tool_name&&t.status==='running';});
+                    if (tc) { tc.status = parsed.status||'done'; tc.preview = parsed.result_preview; }
+                } else if (parsed.type === 'done') {
+                    var finalContent = fixEncodingArtifacts(parsed.response || '');
+                    finalizeModalAnalysis(analysisContainer, finalContent, toolCalls, { model: model, type: type });
+                    saveAnalysisToCache(model, type, { analysis: finalContent, traces: toolCalls, saved_at: new Date().toISOString() });
+                    return;
+                } else if (parsed.type === 'error') { throw new Error(parsed.error); }
+            }
+        }
+    } finally { reader.cancel(); }
+};
+
+window.renderAnalysisPayload = function(analysisContainer, result, options) {
+    options = options || {};
+    if (!analysisContainer || !result) return;
+    var rawAnalysis = (typeof fixEncodingArtifacts === 'function') ? fixEncodingArtifacts(result.analysis || '') : (result.analysis || '');
+    analysisContainer.innerHTML = '';
+    var analysisContent = document.createElement('div');
+    analysisContent.className = 'analysis-content';
+    if (result.saved_at) {
+        var meta = document.createElement('div');
+        meta.className = 'analysis-meta';
+        var d = new Date(result.saved_at);
+        if (!isNaN(d)) { meta.textContent = 'Generated ' + d.toLocaleString(); analysisContent.appendChild(meta); }
+    }
+    var textBlock = document.createElement('div');
+    textBlock.className = 'analysis-text';
+    textBlock.innerHTML = _analysisRenderMd(rawAnalysis);
+    analysisContent.appendChild(textBlock);
+    _analysisRenderCharts(textBlock);
+    var actions = document.createElement('div');
+    actions.className = 'analysis-actions';
+    var regenBtn = document.createElement('button');
+    regenBtn.type = 'button'; regenBtn.className = 'primary-btn secondary'; regenBtn.textContent = 'Regenerate Analysis';
+    regenBtn.addEventListener('click', function(){ startModelAnalysis(analysisContainer, options.model, options.type, {force:true}); });
+    actions.appendChild(regenBtn);
+    analysisContent.appendChild(actions);
+    var traces = result.traces || [];
+    if (traces.length) {
+        var tracesContainer = document.createElement('details');
+        tracesContainer.className = 'analysis-trace';
+        var summary = document.createElement('summary');
+        summary.textContent = 'Research steps (' + traces.length + ')';
+        tracesContainer.appendChild(summary);
+        var traceContent = document.createElement('div');
+        traceContent.className = 'trace-content';
+        traces.forEach(function(tc, i) {
+            var item = document.createElement('div'); item.className = 'trace-item';
+            var step = document.createElement('div'); step.className = 'trace-step';
+            step.textContent = (i+1) + '. ' + (tc.name||tc.tool||tc.step||'Step').replace(/_/g,' ');
+            item.appendChild(step);
+            if (tc.preview||tc.description) { var desc=document.createElement('div'); desc.className='trace-description'; desc.textContent=tc.preview||tc.description; item.appendChild(desc); }
+            if (tc.status) { var st=document.createElement('div'); st.className='trace-status status-'+tc.status; st.textContent=tc.status; item.appendChild(st); }
+            traceContent.appendChild(item);
+        });
+        tracesContainer.appendChild(traceContent);
+        analysisContent.appendChild(tracesContainer);
+    }
+    analysisContainer.appendChild(analysisContent);
+};
+})();
+</script>
+<!-- /dashboard-overrides -->
 </body>
 
 </html>

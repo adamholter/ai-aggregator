@@ -323,5 +323,353 @@
     "monitor_hits": [],
     "generated_at": "2026-02-18T07:59:39.825998",
     "cached": false
+  },
+  "llms:Grok 4.1 Fast (Reasoning)": {
+    "model_name": "Grok 4.1 Fast (Reasoning)",
+    "source": "llms",
+    "summary": "Grok 4.1 Fast (Reasoning) is xAI's latest and most capable agentic tool-calling model, featuring a large 2M context window. It offers strong performance in real-world applications for deep research and customer support, with reasoning capabilities that can be explicitly controlled.",
+    "key_facts": [
+      "xAI's best agentic tool calling model",
+      "2M context window",
+      "Input $/1M: 0.200, Output $/1M: 0.500 (OpenRouter)",
+      "Can be enabled/disabled for reasoning",
+      "Intelligence Index: 38.5, Speed tok/s: 199 (Artificial Analysis)"
+    ],
+    "or_id": "x-ai/grok-4.1-fast",
+    "aa_slug": "grok-4-1-fast-reasoning",
+    "or_link": "https://openrouter.ai/x-ai/grok-4.1-fast",
+    "aa_link": "https://artificialanalysis.ai/models/grok-4-1-fast-reasoning",
+    "or_data": {
+      "id": "x-ai/grok-4.1-fast",
+      "slug": "x-ai/grok-4.1-fast",
+      "name": "xAI: Grok 4.1 Fast",
+      "vendor": "xAI",
+      "base_name": "Grok 4.1 Fast",
+      "created": 1763587502,
+      "created_at": "2025-11-19T21:25:02Z",
+      "description": "Grok 4.1 Fast is xAI's best agentic tool calling model that shines in real-world use cases like customer support and deep research. 2M context window.\n\nReasoning can be enabled/disabled using the `reasoning` `enabled` parameter in the API. [Learn more in our docs](https://openrouter.ai/docs/use-cases/reasoning-tokens#controlling-reasoning-tokens)",
+      "context_length": 2000000,
+      "hugging_face_id": "",
+      "architecture": {
+        "modality": "text+image->text",
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "tokenizer": "Grok",
+        "instruct_type": null
+      },
+      "pricing": {
+        "prompt": "0.0000002",
+        "completion": "0.0000005",
+        "web_search": "0.005",
+        "input_cache_read": "0.00000005"
+      },
+      "top_provider": {
+        "context_length": 2000000,
+        "max_completion_tokens": 30000,
+        "is_moderated": false
+      },
+      "per_request_limits": null,
+      "supported_parameters": [
+        "include_reasoning",
+        "logprobs",
+        "max_tokens",
+        "reasoning",
+        "response_format",
+        "seed",
+        "structured_outputs",
+        "temperature",
+        "tool_choice",
+        "tools",
+        "top_logprobs",
+        "top_p"
+      ],
+      "default_parameters": {
+        "temperature": 0.7,
+        "top_p": 0.95,
+        "frequency_penalty": null
+      },
+      "tags": [],
+      "display_url": "https://openrouter.ai/models/x-ai/grok-4.1-fast"
+    },
+    "aa_data": {
+      "id": "23149f9b-c904-43e2-9ec4-afa2bf843941",
+      "name": "Grok 4.1 Fast (Reasoning)",
+      "slug": "grok-4-1-fast-reasoning",
+      "release_date": "2025-11-19",
+      "model_creator": {
+        "id": "a1e3ddcf-d3e4-44a5-9e8f-029a69850875",
+        "name": "xAI",
+        "slug": "xai"
+      },
+      "evaluations": {
+        "artificial_analysis_intelligence_index": 38.5,
+        "artificial_analysis_coding_index": 30.9,
+        "artificial_analysis_math_index": 89.3,
+        "mmlu_pro": 0.854,
+        "gpqa": 0.853,
+        "hle": 0.176,
+        "livecodebench": 0.822,
+        "scicode": 0.442,
+        "math_500": null,
+        "aime": null,
+        "aime_25": 0.893,
+        "ifbench": 0.527,
+        "lcr": 0.68,
+        "terminalbench_hard": 0.242,
+        "tau2": 0.933
+      },
+      "pricing": {
+        "price_1m_blended_3_to_1": 0.275,
+        "price_1m_input_tokens": 0.2,
+        "price_1m_output_tokens": 0.5
+      },
+      "median_output_tokens_per_second": 198.854,
+      "median_time_to_first_token_seconds": 10.242,
+      "median_time_to_first_answer_token": 10.242
+    },
+    "monitor_hits": [],
+    "generated_at": "2026-02-18T12:18:35.744945",
+    "cached": false
+  },
+  "openrouter:qwen/qwen3.5-397b-a17b": {
+    "model_name": "Qwen3.5 397B A17B",
+    "source": "openrouter",
+    "summary": "This model is distinguished by its unique hybrid architecture that combines linear attention and sparse mixture-of-experts. It is noted for its high intelligence index on Artificial Analysis, suggesting strong reasoning capabilities.",
+    "key_facts": [
+      "Built on a hybrid architecture integrating linear attention with sparse mixture-of-experts",
+      "OpenRouter input $/1M: 0.150, output $/1M: 1.000",
+      "OpenRouter context: 262,144",
+      "Artificial Analysis intelligence_index: 45",
+      "Artificial Analysis speed tok/s: 79"
+    ],
+    "or_id": "qwen/qwen3.5-397b-a17b",
+    "aa_slug": "qwen3-5-397b-a17b",
+    "or_link": "https://openrouter.ai/qwen/qwen3.5-397b-a17b",
+    "aa_link": "https://artificialanalysis.ai/models/qwen3-5-397b-a17b",
+    "or_data": {
+      "id": "qwen/qwen3.5-397b-a17b",
+      "slug": "qwen/qwen3.5-397b-a17b-20260216",
+      "name": "Qwen: Qwen3.5 397B A17B",
+      "vendor": "Qwen",
+      "base_name": "Qwen3.5 397B A17B",
+      "created": 1771223018,
+      "created_at": "2026-02-16T06:23:38Z",
+      "description": "The Qwen3.5 series 397B-A17B native vision-language model is built on a hybrid architecture that integrates a linear attention mechanism with a sparse mixture-of-experts model, achieving higher inference efficiency. It delivers state-of-the-art performance comparable to leading-edge models across a wide range of tasks, including language understanding, logical reasoning, code generation, agent-based tasks, image understanding, video understanding, and graphical user interface (GUI) interactions. With its robust code-generation and agent capabilities, the model exhibits strong generalization across diverse agent.",
+      "context_length": 262144,
+      "hugging_face_id": "Qwen/Qwen3.5-397B-A17B",
+      "architecture": {
+        "modality": "text+image+video->text",
+        "input_modalities": [
+          "text",
+          "image",
+          "video"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "tokenizer": "Qwen3",
+        "instruct_type": null
+      },
+      "pricing": {
+        "prompt": "0.00000015",
+        "completion": "0.000001",
+        "input_cache_read": "0.00000015"
+      },
+      "top_provider": {
+        "context_length": 262144,
+        "max_completion_tokens": 65536,
+        "is_moderated": false
+      },
+      "per_request_limits": null,
+      "supported_parameters": [
+        "frequency_penalty",
+        "include_reasoning",
+        "logit_bias",
+        "max_tokens",
+        "min_p",
+        "presence_penalty",
+        "reasoning",
+        "repetition_penalty",
+        "response_format",
+        "seed",
+        "stop",
+        "structured_outputs",
+        "temperature",
+        "tool_choice",
+        "tools",
+        "top_k",
+        "top_p"
+      ],
+      "default_parameters": {
+        "temperature": 0.6,
+        "top_p": 0.95,
+        "frequency_penalty": null
+      },
+      "tags": [],
+      "display_url": "https://openrouter.ai/models/qwen/qwen3.5-397b-a17b-20260216"
+    },
+    "aa_data": {
+      "id": "0e66bae9-41f1-42fc-9276-ce8cb6f72919",
+      "name": "Qwen3.5 397B A17B (Reasoning)",
+      "slug": "qwen3-5-397b-a17b",
+      "release_date": "2026-02-16",
+      "model_creator": {
+        "id": "d874d370-74d3-4fa0-ba00-5272f92f946b",
+        "name": "Alibaba",
+        "slug": "alibaba"
+      },
+      "evaluations": {
+        "artificial_analysis_intelligence_index": 45,
+        "artificial_analysis_coding_index": 41.3,
+        "artificial_analysis_math_index": null,
+        "mmlu_pro": null,
+        "gpqa": 0.893,
+        "hle": 0.273,
+        "livecodebench": null,
+        "scicode": 0.42,
+        "math_500": null,
+        "aime": null,
+        "aime_25": null,
+        "ifbench": 0.788,
+        "lcr": 0.657,
+        "terminalbench_hard": 0.409,
+        "tau2": 0.956
+      },
+      "pricing": {
+        "price_1m_blended_3_to_1": 1.35,
+        "price_1m_input_tokens": 0.6,
+        "price_1m_output_tokens": 3.6
+      },
+      "median_output_tokens_per_second": 78.718,
+      "median_time_to_first_token_seconds": 1.311,
+      "median_time_to_first_answer_token": 26.719
+    },
+    "monitor_hits": [],
+    "generated_at": "2026-02-18T12:23:16.938600",
+    "cached": false
+  },
+  "llms:MiMo-V2-Flash (Feb\u202f2026)": {
+    "model_name": "Xiaomi MiMo-V2-Flash (Feb 2026)",
+    "source": "llms",
+    "summary": "This is Xiaomi's MiMo-V2-Flash model, an open-source Mixture-of-Experts LLM known for its 309B total parameters and hybrid attention architecture. The '(Feb 2026)' in the query likely refers to a specific version or release date of this foundational model.",
+    "key_facts": [
+      "Open-source foundation language model developed by Xiaomi",
+      "Mixture-of-Experts (MoE) model",
+      "309B total parameters, 15B active parameters",
+      "Hybrid attention architecture",
+      "Associated with Feb 2026 release/version"
+    ],
+    "or_id": "xiaomi/mimo-v2-flash",
+    "aa_slug": "mimo-v2-0206",
+    "or_link": "https://openrouter.ai/xiaomi/mimo-v2-flash",
+    "aa_link": "https://artificialanalysis.ai/models/mimo-v2-0206",
+    "or_data": {
+      "id": "xiaomi/mimo-v2-flash",
+      "slug": "xiaomi/mimo-v2-flash-20251210",
+      "name": "Xiaomi: MiMo-V2-Flash",
+      "vendor": "Xiaomi",
+      "base_name": "MiMo-V2-Flash",
+      "created": 1765731308,
+      "created_at": "2025-12-14T16:55:08Z",
+      "description": "MiMo-V2-Flash is an open-source foundation language model developed by Xiaomi. It is a Mixture-of-Experts model with 309B total parameters and 15B active parameters, adopting hybrid attention architecture. MiMo-V2-Flash supports a hybrid-thinking toggle and a 256K context window, and excels at reasoning, coding, and agent scenarios. On SWE-bench Verified and SWE-bench Multilingual, MiMo-V2-Flash ranks as the top #1 open-source model globally, delivering performance comparable to Claude Sonnet 4.5 while costing only about 3.5% as much.\n\nUsers can control the reasoning behaviour with the `reasoning` `enabled` boolean. [Learn more in our docs](https://openrouter.ai/docs/use-cases/reasoning-tokens#enable-reasoning-with-default-config).",
+      "context_length": 262144,
+      "hugging_face_id": "XiaomiMiMo/MiMo-V2-Flash",
+      "architecture": {
+        "modality": "text->text",
+        "input_modalities": [
+          "text"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "tokenizer": "Other",
+        "instruct_type": null
+      },
+      "pricing": {
+        "prompt": "0.00000009",
+        "completion": "0.00000029",
+        "input_cache_read": "0.000000045"
+      },
+      "top_provider": {
+        "context_length": 262144,
+        "max_completion_tokens": null,
+        "is_moderated": false
+      },
+      "per_request_limits": null,
+      "supported_parameters": [
+        "frequency_penalty",
+        "include_reasoning",
+        "max_tokens",
+        "presence_penalty",
+        "reasoning",
+        "repetition_penalty",
+        "response_format",
+        "seed",
+        "stop",
+        "structured_outputs",
+        "temperature",
+        "tool_choice",
+        "tools",
+        "top_k",
+        "top_p"
+      ],
+      "default_parameters": {
+        "temperature": null,
+        "top_p": 0.95,
+        "frequency_penalty": null
+      },
+      "tags": [],
+      "display_url": "https://openrouter.ai/models/xiaomi/mimo-v2-flash-20251210"
+    },
+    "aa_data": {
+      "id": "1479f50b-d37f-4b55-bb8b-4212a15042eb",
+      "name": "MiMo-V2-Flash (Feb 2026)",
+      "slug": "mimo-v2-0206",
+      "release_date": "2025-12-16",
+      "model_creator": {
+        "id": "5147c8b4-61d5-4070-9324-8adf8aa144c2",
+        "name": "Xiaomi",
+        "slug": "xiaomi"
+      },
+      "evaluations": {
+        "artificial_analysis_intelligence_index": 41.4,
+        "artificial_analysis_coding_index": 33.5,
+        "artificial_analysis_math_index": null,
+        "mmlu_pro": null,
+        "gpqa": 0.835,
+        "hle": 0.2,
+        "livecodebench": null,
+        "scicode": 0.383,
+        "math_500": null,
+        "aime": null,
+        "aime_25": null,
+        "ifbench": 0.718,
+        "lcr": 0.643,
+        "terminalbench_hard": 0.311,
+        "tau2": 0.933
+      },
+      "pricing": {
+        "price_1m_blended_3_to_1": 0.15,
+        "price_1m_input_tokens": 0.1,
+        "price_1m_output_tokens": 0.3
+      },
+      "median_output_tokens_per_second": 179.569,
+      "median_time_to_first_token_seconds": 1.293,
+      "median_time_to_first_answer_token": 12.431
+    },
+    "monitor_hits": [
+      {
+        "title": "iPad 12th Gen (2026) Leaked with A18 Chip and 8GB RAM for Apple Intelligence",
+        "url": "https://www.macotakara.jp/rumor/entry-50451.html",
+        "source_label": "Monitor Feed"
+      }
+    ],
+    "generated_at": "2026-02-18T17:44:22.423580",
+    "cached": false
   }
 }
