@@ -538,8 +538,24 @@
 .cbr-bar-wrap { flex:1; height:6px; background:var(--border-color); border-radius:3px; overflow:hidden; }
 .cbr-bar { display:block; height:100%; background:var(--accent-color,#2563eb); border-radius:3px; min-width:2px; transition:width .3s ease; }
 /* Analysis chart wrapper */
-.chart-wrap { position:relative; margin:16px 0; background:var(--surface-color,var(--bg-color)); border:1px solid var(--border-color); border-radius:10px; padding:16px; height:300px; }
-.chart-wrap canvas { display:block; width:100%!important; height:100%!important; }
+.chart-wrap { position:relative; margin:16px 0; background:var(--surface-color,#f8f9fa); border:1px solid var(--border-color); border-radius:10px; padding:16px; }
+.chart-wrap canvas { display:block !important; width:100% !important; height:260px !important; }
+/* Analysis code blocks with copy button */
+.analysis-code-block { position:relative; margin:12px 0; }
+.analysis-code-block pre { margin:0; padding:12px 40px 12px 16px; background:var(--surface-color,#f5f5f5); border:1px solid var(--border-color,#e5e7eb); border-radius:8px; overflow-x:auto; font-size:12px; line-height:1.6; white-space:pre-wrap; word-break:break-all; }
+.analysis-code-block code { font-family:ui-monospace,monospace; color:var(--text-color); }
+.analysis-copy-btn { position:absolute; top:7px; right:8px; padding:2px 8px; font-size:11px; font-family:system-ui,sans-serif; background:var(--bg-color,#fff); border:1px solid var(--border-color,#d1d5db); border-radius:4px; cursor:pointer; color:var(--text-secondary,#6b7280); line-height:1.6; transition:color .15s,border-color .15s; }
+.analysis-copy-btn:hover { color:var(--text-color); border-color:var(--text-secondary,#9ca3af); }
+.analysis-copy-btn.copied { color:#16a34a; border-color:#16a34a; }
+.streaming-text { opacity: 0.9; }
+.streaming-text p:last-child::after { content: '▋'; animation: blink .7s step-end infinite; display:inline-block; }
+@keyframes blink { 50% { opacity:0; } }
+/* Analysis markdown tables */
+.analysis-text table { width:100%; border-collapse:collapse; margin:16px 0; font-size:13px; }
+.analysis-text th { background:var(--surface-color,#f8f9fa); font-weight:600; text-align:left; padding:8px 12px; border:1px solid var(--border-color,#e5e7eb); color:var(--text-color); white-space:nowrap; }
+.analysis-text td { padding:7px 12px; border:1px solid var(--border-color,#e5e7eb); color:var(--text-color); vertical-align:top; line-height:1.45; }
+.analysis-text tr:nth-child(even) td { background:var(--surface-color,#fafafa); }
+.analysis-text tr:hover td { background:var(--hover-color,#f3f4f6); }
 </style>
 <script>
 (function() {
@@ -657,7 +673,9 @@ function _analysisRenderMd(text) {
                 return '<div class="chart-wrap"><canvas id="'+id+'" data-cfg="'+safe+'"></canvas></div>';
             }
         } catch(_) {}
-        return match;
+        // Non-chart code block: add copy button
+        var escapedForAttr = decoded.replace(/"/g,'&quot;').replace(/\n/g,'&#10;');
+        return '<div class="analysis-code-block"><button class="analysis-copy-btn" onclick="(function(btn){var t=btn.closest(\'.analysis-code-block\').querySelector(\'code\').textContent;navigator.clipboard.writeText(t).then(function(){btn.textContent=\'Copied!\';btn.classList.add(\'copied\');setTimeout(function(){btn.textContent=\'Copy\';btn.classList.remove(\'copied\');},1500);});})(this)">Copy</button><pre><code>'+inner+'</code></pre></div>';
     });
     html = html.replace(/\[\[model:([^:\]]+):([^\]]+)\]\]/g, function(_m, src, name) {
         function esc(s){return s.replace(/[<>"'&]/g,function(c){return({'<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','&':'&amp;'}[c]);});}
@@ -702,22 +720,14 @@ function _analysisRenderCharts(container) {
 window.buildAnalysisUserMessage = function(model, type) {
     var name = model.name || model.id || 'Unknown';
     var provider = (model.model_creator && model.model_creator.name) || model.vendor || '';
-    var lines = ['Please provide a comprehensive analysis of **' + name + '**' + (provider ? ' by ' + provider : '') + '.'];
+    var lines = ['Please provide a concise analysis of **' + name + '**' + (provider ? ' by ' + provider : '') + '.'];
     lines.push('\nHere is the available structured data for this model:');
     lines.push('```json');
     lines.push(JSON.stringify(model, null, 2));
     lines.push('```');
-    lines.push('\nUse your tools to:');
-    if (type === 'llm') {
-        lines.push('1. Fetch current LLM benchmark rankings to contextualize this model vs peers');
-        lines.push('2. Search OpenRouter for current pricing and availability');
-        lines.push('3. Search Perplexity for recent community feedback, reviews, and notable news');
-        lines.push('4. Use run_python to compare this model against 5-8 similar models with a chart');
-    } else {
-        lines.push('1. Fetch the relevant leaderboard to contextualize this model vs peers');
-        lines.push('2. Search for recent community feedback, use cases, and notable news');
-    }
-    lines.push('\nInclude a Chart.js chart in your response. Reference related models using [[model:openrouter:provider/model-id]] syntax.');
+    lines.push('\nThe structured data above already contains benchmarks, pricing, and performance. Use it as your primary source.');
+    lines.push('Call fetch_llm_benchmarks once to get peer rankings for context. That should be sufficient — only use ask_perplexity if this model is so new that the structured data above is mostly empty.');
+    lines.push('\nInclude a Chart.js chart comparing this model to 4-6 peers. Reference related models using [[model:openrouter:provider/model-id]] syntax.');
     return lines.join('\n');
 };
 
@@ -725,13 +735,13 @@ window.streamModelAnalysis = async function(analysisContainer, model, type, opti
     options = options || {};
     var apiKey = getUserOpenRouterKey();
     if (!apiKey) throw new Error('\u{1F511} OpenRouter API key required. Please add your key in Settings.');
-    var analysisModel = localStorage.getItem('dashboard-analysis-model') || 'anthropic/claude-sonnet-4-6';
-    var systemOverride = '## MODEL ANALYSIS MODE\nYou are producing a deep-dive analysis of a specific AI model for a user browsing an AI leaderboard dashboard.\n\nStructure your response with ## sections: Overview, Performance (with a benchmark comparison chart), Speed & Cost, Strengths & Weaknesses, Best Use Cases, Recent News.\n\nChart syntax — JSON code block:\n```json\n{"type":"bar","labels":["Model A","Model B"],"datasets":[{"label":"Score","data":[72,85]}]}\n```\nReference related models with [[model:openrouter:provider/model-id]] for clickable cards.';
+    var analysisModel = localStorage.getItem('dashboard-analysis-model') || 'openai/gpt-oss-120b';
+    var systemOverride = '## MODEL ANALYSIS MODE\nYou are producing a concise analysis of a specific AI model for a user browsing an AI leaderboard dashboard.\n\nTOOL USAGE RULES:\n- The user message already includes full structured data (benchmarks, pricing, speed) for the model. Use it.\n- Call fetch_llm_benchmarks ONCE to get peer context. That is usually all you need.\n- Do NOT call ask_perplexity unless the model is brand-new and the structured data is mostly empty/null. Perplexity is slow and unnecessary when benchmark data is already available.\n- Never call the same tool twice. All results are in your context.\n- After at most 2 tool calls, write your analysis immediately.\n\nStructure your response with ## sections: Overview, Performance (with a benchmark comparison chart), Speed & Cost, Strengths & Weaknesses, Best Use Cases.\n\nChart syntax — JSON code block:\n```json\n{"type":"bar","labels":["Model A","Model B"],"datasets":[{"label":"Score","data":[72,85]}]}\n```\nReference related models with [[model:openrouter:provider/model-id]] for clickable cards.\n\nBe concise. Synthesize from available data — do not wait for web search results you don\'t need.';
     var response = await fetch('/api/agent-v2/chat/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            settings: { api_key: apiKey, model: analysisModel, mode: 'heavy', max_iterations: 15, system_prompt_override: systemOverride },
+            settings: { api_key: apiKey, model: analysisModel, mode: 'quick', system_prompt_override: systemOverride },
             messages: [{ role: 'user', content: buildAnalysisUserMessage(model, type) }]
         })
     });
@@ -745,7 +755,29 @@ window.streamModelAnalysis = async function(analysisContainer, model, type, opti
     var decoder = new TextDecoder('utf-8');
     var buffer = '';
     var toolCalls = [];
+    var streamingContent = '';
+    var streamingEl = null;
+
     function setStatus(text) { var el = analysisContainer.querySelector('.loading-text'); if(el) el.textContent = text; }
+
+    function showStreamingChunk(text) {
+        // Remove spinner on first content
+        var spinner = analysisContainer.querySelector('.initial-loading');
+        if (spinner) spinner.remove();
+        if (!streamingEl) {
+            streamingEl = document.createElement('div');
+            streamingEl.className = 'analysis-content streaming';
+            var inner = document.createElement('div');
+            inner.className = 'analysis-text streaming-text';
+            streamingEl.appendChild(inner);
+            analysisContainer.appendChild(streamingEl);
+        }
+        streamingContent += text;
+        var inner = streamingEl.querySelector('.streaming-text');
+        try { inner.innerHTML = marked.parse(streamingContent, { breaks: true, gfm: true }); }
+        catch(_) { inner.textContent = streamingContent; }
+    }
+
     try {
         while (true) {
             var chunk = await reader.read();
@@ -765,11 +797,13 @@ window.streamModelAnalysis = async function(analysisContainer, model, type, opti
                     setStatus('Using ' + (parsed.tool_name||'tool').replace(/_/g,' ') + '\u2026');
                     toolCalls.push({ name: parsed.tool_name, args: parsed.args, status: 'running' });
                 } else if (parsed.type === 'tool_result') {
-                    setStatus('Processing results\u2026');
+                    setStatus('Writing analysis\u2026');
                     var tc = toolCalls.find(function(t){return t.name===parsed.tool_name&&t.status==='running';});
                     if (tc) { tc.status = parsed.status||'done'; tc.preview = parsed.result_preview; }
+                } else if (parsed.type === 'content_chunk' && parsed.delta) {
+                    showStreamingChunk(parsed.delta);
                 } else if (parsed.type === 'done') {
-                    var finalContent = fixEncodingArtifacts(parsed.response || '');
+                    var finalContent = fixEncodingArtifacts(parsed.response || streamingContent);
                     finalizeModalAnalysis(analysisContainer, finalContent, toolCalls, { model: model, type: type });
                     saveAnalysisToCache(model, type, { analysis: finalContent, traces: toolCalls, saved_at: new Date().toISOString() });
                     return;

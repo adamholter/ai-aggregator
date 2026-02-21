@@ -128,6 +128,21 @@ def get_tool_definitions(mode: str = "quick") -> List[Dict]:
             {"query": {"type": "string", "description": "Search query"}},
             ["query"],
         ),
+        _fn(
+            "create_artifact",
+            "Display a self-contained artifact in a side panel. Use sparingly — only when the user explicitly asks for an artifact, OR when the output is clearly a full standalone document (e.g. a complete HTML app, an SVG diagram, a multi-section report). Charts and code belong inline in the response by default — do NOT use this for charts unless the user specifically asked for a chart artifact or a standalone chart to export. Do NOT use this to execute code or fetch data (use run_python for that).",
+            {
+                "type": {
+                    "type": "string",
+                    "enum": ["html", "markdown", "svg", "code", "chart"],
+                    "description": "html=rendered iframe (supports Tailwind CDN and other CDN imports), markdown=rich rendered document, svg=vector graphic, code=syntax-highlighted snippet (only when user asked to see the code), chart=Chart.js config (only when user asked for a standalone exportable chart)"
+                },
+                "title": {"type": "string", "description": "Short descriptive title shown in the panel header."},
+                "content": {"type": "string", "description": "Full artifact content. html: complete HTML doc. chart: JSON config with type/labels/datasets. code: raw code."},
+                "language": {"type": "string", "description": "Language hint for code artifacts (e.g. python, javascript, sql). Optional."},
+            },
+            ["type", "title", "content"],
+        ),
     ]
 
     if (mode or "quick").lower() == "heavy":

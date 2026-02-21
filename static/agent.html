@@ -362,6 +362,108 @@ button.icon-btn:hover, a.icon-btn:hover { background: var(--surface); border-col
   .trace-sidebar { width: 100%; max-width: 100%; }
 }
 
+/* ── Live Trace enhancements ─────────────────────────────────── */
+.loading-row { cursor: pointer; }
+.live-hint { font-size: 12px; color: var(--text-3); margin-left: 8px; text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 2px; }
+.loading-row:hover .live-hint { color: var(--text-2); }
+.tsb-dot.running { background: var(--blue); animation: dotpulse 1s ease-in-out infinite; }
+.tsb-head-live { display: inline-block; font-size: 10px; font-weight: 700; color: var(--blue); text-transform: uppercase; letter-spacing: .06em; background: var(--blue-bg); border: 1px solid var(--blue-border); padding: 1px 5px; border-radius: 4px; }
+
+/* ── Artifact Panel ──────────────────────────────────────────── */
+.artifact-backdrop {
+  position: fixed; inset: 0; z-index: 202;
+  background: rgba(0,0,0,0.2);
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.22s ease;
+}
+.artifact-backdrop.open { opacity: 1; pointer-events: auto; }
+
+.artifact-panel {
+  position: fixed; top: 0; right: 0; bottom: 0; z-index: 203;
+  width: 580px; max-width: calc(100vw - 48px);
+  background: var(--bg);
+  border-left: 1px solid var(--border-strong);
+  box-shadow: -20px 0 60px rgba(0,0,0,0.1);
+  display: flex; flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.artifact-panel.open { transform: translateX(0); }
+
+.artifact-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface); flex-shrink: 0;
+}
+.artifact-head-left { flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.artifact-type-badge {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .07em; padding: 2px 6px; border-radius: 4px;
+  background: var(--blue-bg); color: var(--blue); border: 1px solid var(--blue-border);
+  flex-shrink: 0;
+}
+.artifact-title { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.artifact-head-actions { display: flex; align-items: center; gap: 4px; }
+.artifact-btn {
+  padding: 4px 10px; font-size: 11px; font-weight: 500;
+  border: 1px solid var(--border); border-radius: 5px;
+  background: var(--bg); color: var(--text-2); cursor: pointer;
+  line-height: 1.5; transition: background 0.12s, color 0.12s, border-color 0.12s;
+  font-family: inherit;
+}
+.artifact-btn:hover { background: var(--bg-2); color: var(--text); }
+.artifact-btn.active { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+.artifact-btn.success { color: var(--green); border-color: var(--green); }
+.artifact-close {
+  width: 26px; height: 26px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--bg); cursor: pointer; display: flex; align-items: center;
+  justify-content: center; color: var(--text-2); flex-shrink: 0;
+  transition: background 0.1s, color 0.1s; margin-left: 4px;
+}
+.artifact-close:hover { background: var(--bg-2); color: var(--text); }
+.artifact-body { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+.artifact-iframe { width: 100%; height: 100%; border: none; flex: 1; display: block; }
+.artifact-source-view {
+  flex: 1; overflow-y: auto; padding: 16px 20px;
+  font-family: 'SF Mono','Fira Code','Menlo',monospace;
+  font-size: 12px; line-height: 1.65; color: var(--text);
+  white-space: pre-wrap; word-break: break-word;
+  background: var(--surface);
+}
+.artifact-markdown-view { flex: 1; overflow-y: auto; padding: 20px 24px; }
+.artifact-svg-view {
+  flex: 1; overflow: auto; display: flex; align-items: center;
+  justify-content: center; padding: 20px; background: var(--surface);
+}
+.artifact-svg-view svg { max-width: 100%; max-height: 100%; height: auto; }
+.artifact-chart-wrap { flex: 1; padding: 20px; position: relative; }
+.artifact-chart-wrap canvas { position: absolute; inset: 20px; }
+
+/* Inline artifact reference — subtle text link in message stream */
+.artifact-card {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin: 6px 0; cursor: pointer;
+  background: none; border: none; padding: 0;
+  color: var(--text); font-family: inherit; font-size: 13px;
+  max-width: 400px;
+}
+.artifact-card:hover .artifact-card-title { text-decoration-style: solid; }
+.artifact-card-icon { color: var(--text-2); flex-shrink: 0; transition: color 0.12s; }
+.artifact-card:hover .artifact-card-icon { color: var(--text); }
+.artifact-card-type {
+  font-size: 10px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--text-3); flex-shrink: 0;
+}
+.artifact-card-title {
+  color: var(--text); font-weight: 500;
+  text-decoration: underline; text-decoration-style: dotted;
+  text-underline-offset: 3px; text-decoration-color: var(--border-strong);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  transition: text-decoration-color 0.12s;
+}
+.artifact-card:hover .artifact-card-title { text-decoration-color: var(--text); }
+
 .model-badge {
   display: inline-flex; align-items: center; gap: 4px;
   background: var(--blue-bg); border: 1px solid var(--blue-border);
@@ -596,6 +698,26 @@ button.icon-btn:hover, a.icon-btn:hover { background: var(--surface); border-col
   <div id="tsb-body" class="tsb-body">
     <div class="tsb-empty">No activity to display.</div>
   </div>
+</div>
+
+<!-- Artifact panel -->
+<div id="artifact-backdrop" class="artifact-backdrop"></div>
+<div id="artifact-panel" class="artifact-panel">
+  <div class="artifact-head">
+    <div class="artifact-head-left">
+      <span id="artifact-type-badge" class="artifact-type-badge">html</span>
+      <span id="artifact-title-el" class="artifact-title">Artifact</span>
+    </div>
+    <div class="artifact-head-actions">
+      <button id="artifact-source-btn" class="artifact-btn" type="button" title="Toggle source/preview">Source</button>
+      <button id="artifact-copy-btn" class="artifact-btn" type="button" title="Copy content">Copy</button>
+      <button id="artifact-download-btn" class="artifact-btn" type="button" title="Download">Download</button>
+      <button id="artifact-close" class="artifact-close" type="button" aria-label="Close">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+  </div>
+  <div id="artifact-body" class="artifact-body"></div>
 </div>
 
 <!-- Model page modal -->
@@ -861,6 +983,7 @@ async function send() {
       const labelEl = loadEl.querySelector('.load-label');
       let buf = '';
       let toolCalls = [];
+      loadEl.querySelector('.loading-row').addEventListener('click', () => openLiveTrace(toolCalls));
 
       outer: while (true) {
         const { done, value } = await reader.read();
@@ -878,23 +1001,48 @@ async function send() {
             const stage = evt.stage || '';
             if (labelEl) labelEl.textContent = stage === 'iteration_start' ? 'Thinking\u2026' : (stage.replace(/_/g, ' ') || 'Working\u2026');
           } else if (evt.type === 'tool_start') {
-            toolCalls.push({ tool: evt.tool_name, args: evt.args || {}, status: 'running', result: '' });
+            const tc = { tool: evt.tool_name, args: evt.args || {}, status: 'running', result: '' };
+            toolCalls.push(tc);
             if (labelEl) labelEl.textContent = (evt.tool_name || 'tool').replace(/_/g, ' ');
+            if (isLiveTrace) {
+              const el = buildSidebarStep(tc);
+              $tsbBody.appendChild(el);
+              liveTraceEls.push(el);
+              $tsbBody.scrollTop = $tsbBody.scrollHeight;
+            }
           } else if (evt.type === 'tool_result') {
-            const tc = toolCalls.slice().reverse().find(t => t.tool === evt.tool_name && t.status === 'running');
-            if (tc) { tc.status = evt.status || 'done'; tc.result = evt.result_preview || ''; }
+            const revIdx = toolCalls.slice().reverse().findIndex(t => t.tool === evt.tool_name && t.status === 'running');
+            const realIdx = revIdx >= 0 ? toolCalls.length - 1 - revIdx : -1;
+            if (realIdx >= 0) {
+              toolCalls[realIdx].status = evt.status || 'done';
+              toolCalls[realIdx].result = evt.result_preview || '';
+              if (isLiveTrace && liveTraceEls[realIdx]) {
+                updateLiveStep(liveTraceEls[realIdx], toolCalls[realIdx]);
+              }
+            }
+          } else if (evt.type === 'artifact') {
+            if (evt.artifact) {
+              openArtifactPanel(evt.artifact);
+              addArtifactCard(evt.artifact);
+            }
           } else if (evt.type === 'content_chunk') {
             if (labelEl) labelEl.textContent = 'Writing\u2026';
           } else if (evt.type === 'done') {
             const elapsed = Date.now() - startMs;
             clearInterval(timerInterval);
             loadEl.remove();
+            if (isLiveTrace) {
+              isLiveTrace = false;
+              liveTraceEls = [];
+              $tsbMeta.textContent = toolCalls.length + ' step' + (toolCalls.length !== 1 ? 's' : '') + ' \u00b7 ' + fmtDur(elapsed);
+            }
             history.push({ role: 'assistant', content: evt.response || '' });
             addAgentMsg(evt.response || '', toolCalls, elapsed);
             break outer;
           } else if (evt.type === 'error') {
             clearInterval(timerInterval);
             loadEl.remove();
+            isLiveTrace = false; liveTraceEls = [];
             addError(evt.error || 'Unknown error');
             break outer;
           }
@@ -942,9 +1090,13 @@ function addLoading() {
   const elapsed = mk('span', 'elapsed');
   elapsed.textContent = '0s';
 
+  const hint = mk('span', 'live-hint');
+  hint.textContent = 'View activity';
+
   inner.appendChild(dots);
   inner.appendChild(label);
   inner.appendChild(elapsed);
+  inner.appendChild(hint);
   row.appendChild(inner);
   $msgs.appendChild(row);
   scrollBot();
@@ -1024,6 +1176,15 @@ function addAgentMsg(responseText, toolCalls, elapsed) {
 // ── UMI — Universal Model ID system ──────────────────────────────────────────
 
 const modelPageCache = {};  // key: "source:name" → page data
+
+// ── Artifact state ────────────────────────────────────────────────────────────
+let currentArtifact = null;
+let artifactShowSource = false;
+let artifactBlobUrl = null;
+
+// ── Live trace state ──────────────────────────────────────────────────────────
+let isLiveTrace = false;
+let liveTraceEls = [];  // parallel array of DOM step elements
 
 function extractModelRefs(text) {
   const refs = [];
@@ -1599,6 +1760,225 @@ function openTraceSidebar(toolCalls, elapsed) {
 function closeTraceSidebar() {
   $tsbPanel.classList.remove('open');
   $tsbBackdrop.classList.remove('open');
+  isLiveTrace = false;
+  liveTraceEls = [];
+}
+
+// Open trace sidebar in live mode during streaming
+function openLiveTrace(toolCallsRef) {
+  while ($tsbBody.firstChild) $tsbBody.removeChild($tsbBody.firstChild);
+  while ($tsbMeta.firstChild) $tsbMeta.removeChild($tsbMeta.firstChild);
+  const liveTag = mk('span', 'tsb-head-live');
+  liveTag.textContent = 'Live';
+  $tsbMeta.appendChild(liveTag);
+  liveTraceEls = [];
+  toolCallsRef.forEach(tc => {
+    const el = buildSidebarStep(tc);
+    $tsbBody.appendChild(el);
+    liveTraceEls.push(el);
+  });
+  isLiveTrace = true;
+  $tsbPanel.classList.add('open');
+  $tsbBackdrop.classList.add('open');
+}
+
+// Update a live step element's dot/badge/detail when tool_result arrives
+function updateLiveStep(el, tc) {
+  const dot = el.querySelector('.tsb-dot');
+  if (dot) dot.className = tc.status === 'error' ? 'tsb-dot err' : 'tsb-dot done';
+  const rowMain = el.querySelector('.tsb-row-main');
+  if (rowMain) {
+    let badge = rowMain.querySelector('.tsb-badge');
+    if (!badge) {
+      badge = mk('span', tc.status === 'error' ? 'tsb-badge err' : 'tsb-badge');
+      const chev = rowMain.querySelector('.tsb-chevron');
+      if (chev) rowMain.insertBefore(badge, chev); else rowMain.appendChild(badge);
+    } else {
+      badge.className = tc.status === 'error' ? 'tsb-badge err' : 'tsb-badge';
+    }
+    badge.textContent = tc.status;
+  }
+  const detail = el.querySelector('.tsb-detail');
+  if (detail && tc.result) {
+    const parts = [];
+    if (tc.args && Object.keys(tc.args).length > 0) parts.push('Args: ' + JSON.stringify(tc.args, null, 2));
+    if (tc.result) parts.push(tc.result);
+    detail.textContent = parts.join('\n\n') || 'No detail available.';
+  }
+}
+
+// ── Artifact Panel ────────────────────────────────────────────────────────────
+const $artifactBackdrop  = document.getElementById('artifact-backdrop');
+const $artifactPanel     = document.getElementById('artifact-panel');
+const $artifactBody      = document.getElementById('artifact-body');
+const $artifactTypeBadge = document.getElementById('artifact-type-badge');
+const $artifactTitleEl   = document.getElementById('artifact-title-el');
+const $artifactSourceBtn = document.getElementById('artifact-source-btn');
+const $artifactCopyBtn   = document.getElementById('artifact-copy-btn');
+const $artifactDownloadBtn = document.getElementById('artifact-download-btn');
+
+document.getElementById('artifact-close').addEventListener('click', closeArtifactPanel);
+$artifactBackdrop.addEventListener('click', closeArtifactPanel);
+
+function closeArtifactPanel() {
+  $artifactPanel.classList.remove('open');
+  $artifactBackdrop.classList.remove('open');
+}
+
+function openArtifactPanel(artifactData) {
+  currentArtifact = artifactData;
+  artifactShowSource = false;
+  $artifactTypeBadge.textContent = artifactData.artifact_type || 'code';
+  $artifactTitleEl.textContent = artifactData.title || 'Artifact';
+  renderArtifactContent();
+  $artifactPanel.classList.add('open');
+  $artifactBackdrop.classList.add('open');
+}
+
+function renderArtifactContent() {
+  while ($artifactBody.firstChild) $artifactBody.removeChild($artifactBody.firstChild);
+  if (!currentArtifact) return;
+  const type = currentArtifact.artifact_type || 'code';
+  const content = currentArtifact.content || '';
+  $artifactSourceBtn.classList.toggle('active', artifactShowSource);
+
+  if (artifactShowSource) {
+    const pre = mk('div', 'artifact-source-view');
+    pre.textContent = content;
+    $artifactBody.appendChild(pre);
+    return;
+  }
+
+  if (type === 'html') {
+    const iframe = document.createElement('iframe');
+    iframe.className = 'artifact-iframe';
+    iframe.sandbox = 'allow-scripts allow-forms allow-downloads allow-modals';
+    if (artifactBlobUrl) URL.revokeObjectURL(artifactBlobUrl);
+    artifactBlobUrl = URL.createObjectURL(new Blob([content], { type: 'text/html' }));
+    iframe.src = artifactBlobUrl;
+    $artifactBody.appendChild(iframe);
+  } else if (type === 'markdown') {
+    const div = mk('div', 'artifact-markdown-view agent-response');
+    const rawHtml = renderMd(content);
+    div.innerHTML = (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(rawHtml, { ADD_ATTR: ['data-cfg'] }) : rawHtml;
+    $artifactBody.appendChild(div);
+    renderCharts(div);
+  } else if (type === 'svg') {
+    const div = mk('div', 'artifact-svg-view');
+    const safeSvg = (typeof DOMPurify !== 'undefined')
+      ? DOMPurify.sanitize(content, { USE_PROFILES: { svg: true, svgFilters: true } }) : '';
+    div.innerHTML = safeSvg;
+    $artifactBody.appendChild(div);
+  } else if (type === 'chart') {
+    const wrap = mk('div', 'artifact-chart-wrap');
+    const canvas = document.createElement('canvas');
+    wrap.appendChild(canvas);
+    $artifactBody.appendChild(wrap);
+    try {
+      const cfg = JSON.parse(content);
+      const pal = (i, a) => ['rgba(37,99,235,','rgba(16,185,129,','rgba(245,158,11,','rgba(239,68,68,','rgba(139,92,246,'][i % 5] + a + ')';
+      new Chart(canvas, {
+        type: cfg.type || 'bar',
+        data: {
+          labels: cfg.labels || [],
+          datasets: (cfg.datasets || []).map((ds, i) => ({
+            label: ds.label || '', data: ds.data || [],
+            backgroundColor: ds.backgroundColor || pal(i, 0.7),
+            borderColor: ds.borderColor || pal(i, 1), borderWidth: 1
+          }))
+        },
+        options: { responsive: true, maintainAspectRatio: false }
+      });
+    } catch(e) { wrap.textContent = 'Invalid chart config: ' + e.message; }
+  } else {
+    const pre = mk('div', 'artifact-source-view');
+    pre.textContent = content;
+    $artifactBody.appendChild(pre);
+  }
+}
+
+$artifactSourceBtn.addEventListener('click', () => {
+  if (!currentArtifact) return;
+  artifactShowSource = !artifactShowSource;
+  renderArtifactContent();
+});
+
+$artifactCopyBtn.addEventListener('click', () => {
+  if (!currentArtifact) return;
+  navigator.clipboard.writeText(currentArtifact.content || '').then(() => {
+    $artifactCopyBtn.textContent = 'Copied!';
+    $artifactCopyBtn.classList.add('success');
+    setTimeout(() => { $artifactCopyBtn.textContent = 'Copy'; $artifactCopyBtn.classList.remove('success'); }, 1500);
+  }).catch(() => {});
+});
+
+$artifactDownloadBtn.addEventListener('click', () => {
+  if (!currentArtifact) return;
+  const type = currentArtifact.artifact_type || 'code';
+  const safeName = (currentArtifact.title || 'artifact').replace(/[^a-z0-9\-_]/gi, '_').toLowerCase();
+
+  if (type === 'chart' && !artifactShowSource) {
+    // Export rendered chart as PNG from canvas
+    const canvas = $artifactBody.querySelector('canvas');
+    if (canvas) {
+      const a = document.createElement('a');
+      a.href = canvas.toDataURL('image/png');
+      a.download = safeName + '.png';
+      a.click();
+      return;
+    }
+  }
+
+  const extMap = { html: 'html', markdown: 'md', svg: 'svg', chart: 'json', code: currentArtifact.language || 'txt' };
+  const ext = extMap[type] || 'txt';
+  const url = URL.createObjectURL(new Blob([currentArtifact.content || ''], { type: 'text/plain' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = safeName + '.' + ext; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+});
+
+// Inline artifact reference — subtle text link, whole card is clickable
+function addArtifactCard(artifact) {
+  const row = mk('div', 'msg-agent');
+  const card = mk('button', 'artifact-card');
+  card.type = 'button';
+
+  // Document icon
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('width', '13'); svg.setAttribute('height', '13');
+  svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor'); svg.setAttribute('stroke-width', '2');
+  svg.setAttribute('stroke-linecap', 'round'); svg.setAttribute('stroke-linejoin', 'round');
+  svg.classList.add('artifact-card-icon');
+  const p1 = document.createElementNS(ns, 'path');
+  p1.setAttribute('d', 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z');
+  const p2 = document.createElementNS(ns, 'polyline'); p2.setAttribute('points', '14 2 14 8 20 8');
+  svg.appendChild(p1); svg.appendChild(p2);
+
+  const typeEl = mk('span', 'artifact-card-type');
+  typeEl.textContent = artifact.artifact_type || 'code';
+
+  const titleEl = mk('span', 'artifact-card-title');
+  titleEl.textContent = artifact.title || 'Artifact';
+
+  card.appendChild(svg);
+  card.appendChild(typeEl);
+  card.appendChild(titleEl);
+
+  card.addEventListener('click', () => {
+    currentArtifact = artifact;
+    artifactShowSource = false;
+    $artifactTypeBadge.textContent = artifact.artifact_type || 'code';
+    $artifactTitleEl.textContent = artifact.title || 'Artifact';
+    renderArtifactContent();
+    $artifactPanel.classList.add('open');
+    $artifactBackdrop.classList.add('open');
+  });
+
+  row.appendChild(card);
+  $msgs.appendChild(row);
+  scrollBot();
 }
 
 function buildSidebarStep(tc) {
@@ -1607,7 +1987,7 @@ function buildSidebarStep(tc) {
 
   // Gutter + dot
   const gutter = mk('div', 'tsb-gutter');
-  const dotCls = tc.status === 'error' ? 'tsb-dot err' : tc.status === 'done' ? 'tsb-dot done' : 'tsb-dot';
+  const dotCls = tc.status === 'error' ? 'tsb-dot err' : tc.status === 'done' ? 'tsb-dot done' : 'tsb-dot running';
   const dot = mk('div', dotCls);
   gutter.appendChild(dot);
 

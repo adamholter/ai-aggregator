@@ -275,6 +275,32 @@ def stream_agent(
                 "args": args,
             }
 
+            # create_artifact is handled client-side — emit event, skip executor
+            if name == "create_artifact":
+                artifact_data = {
+                    "artifact_type": args.get("type", "code"),
+                    "title": args.get("title", "Artifact"),
+                    "content": args.get("content", ""),
+                    "language": args.get("language", ""),
+                }
+                yield {"type": "artifact", "iteration": iteration, "artifact": artifact_data}
+                log.status = "done"
+                log.result_preview = f"Artifact '{artifact_data['title']}' shown to user"
+                yield {
+                    "type": "tool_result",
+                    "iteration": iteration,
+                    "tool_name": name,
+                    "status": "done",
+                    "result_preview": log.result_preview,
+                }
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tool_call_id,
+                    "name": name,
+                    "content": _safe_json_text({"ok": True, "message": f"Artifact '{artifact_data['title']}' ({artifact_data['artifact_type']}) created and displayed to the user."}),
+                })
+                continue
+
             tool_result = tool_executor.execute(name, args, {
                 "api_key": api_key,
                 "web_search_model": settings.web_search_model,

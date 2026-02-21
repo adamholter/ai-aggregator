@@ -493,7 +493,7 @@ def inline_exp_agent_api():
     file_name     = data.get('file_name', '')
 
     # Set iteration count based on mode (deeper = more iterations for thorough research)
-    max_iterations = 20 if deeper_mode else 15
+    max_iterations = 100 if deeper_mode else 100
 
     # Build messages with conversation history
     messages = [{"role": "system", "content": get_agent_system_prompt(deeper_mode=deeper_mode)}]
@@ -6359,7 +6359,7 @@ def agent_tool_loop_generator(
     auth_token,
     theme='light',
     mode='standard',
-    max_iterations=6,
+    max_iterations=100,
     default_recency=None
 ):
     print(f"🔧 [AGENT] Starting tool loop generator")
@@ -8215,7 +8215,7 @@ Respond concisely and cite the sources (Conversation History, Database, Web Sear
                         user_openrouter_token,
                         theme=current_theme,
                         mode='deep-research' if deep_research else 'standard',
-                        max_iterations=8 if deep_research else 6,
+                        max_iterations=100 if deep_research else 100,
                         default_recency=recency_filter
                     )
                     print(f"✅ [SERVER] Generator created successfully")
@@ -8388,7 +8388,7 @@ Respond concisely and cite the sources (Conversation History, Database, Web Sear
             user_openrouter_token,
             theme=current_theme,
             mode='deep-research' if deep_research else 'standard',
-            max_iterations=8 if deep_research else 6
+            max_iterations=100 if deep_research else 100
         )
 
         for event in local_generator:
@@ -10273,7 +10273,7 @@ def agent_exp_session(auth_token, user_message, conversation_history, model_id, 
     messages = build_agent_exp_messages(system_prompt, conversation_history, user_message)
     model_label = get_model_display_name(model_id)
 
-    max_iterations = 6
+    max_iterations = 100
     iteration = 0
     while iteration < max_iterations:
         iteration += 1
@@ -10508,7 +10508,7 @@ def agent_v2_chat():
     try:
         max_iterations = int(settings_payload.get('max_iterations', 20))
     except (TypeError, ValueError):
-        max_iterations = 20
+        max_iterations = 100
 
     model_id = str(settings_payload.get('model') or 'anthropic/claude-sonnet-4').strip()
     umi_model = str(settings_payload.get('umi_model') or 'google/gemini-2.5-flash').strip()
@@ -10589,7 +10589,7 @@ def agent_v2_chat_stream():
     try:
         max_iterations = int(settings_payload.get('max_iterations', 20))
     except (TypeError, ValueError):
-        max_iterations = 20
+        max_iterations = 100
 
     model_id = str(settings_payload.get('model') or 'anthropic/claude-sonnet-4').strip()
     umi_model = str(settings_payload.get('umi_model') or 'google/gemini-2.5-flash').strip()

@@ -42,6 +42,11 @@ Tool reliability rules:
 - Keep reasoning concise and user-facing answer clear.
 - Include units for speed/pricing where possible.
 {heavy_mode_note}
+Artifact rules (create_artifact tool):
+- Use create_artifact ONLY when the user explicitly asks for an artifact, or when producing a standalone deliverable like a complete HTML app or an SVG diagram.
+- NEVER create a code artifact automatically. If you wrote Python to compute something, run it with run_python — do not wrap it in create_artifact.
+- Charts belong inline in the response as fenced chart blocks (see above). Only use a chart artifact if the user explicitly asks for one.
+- Producing unnecessary artifacts wastes iterations. When in doubt, respond inline.
 """
 
     if custom_append and custom_append.strip():
