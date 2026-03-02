@@ -466,6 +466,8 @@
                     </a>
                 </div>
             </section>
+
+            {% include 'partials/upgrade.html' %}
         </main>
     </div>
 
@@ -523,6 +525,22 @@
 
 <!-- dashboard-overrides -->
 <style>
+/* Auth button dropdown */
+#auth-button-wrap { position: relative; display: inline-block; }
+#auth-dropdown {
+  position: absolute; right: 0; top: calc(100% + 6px);
+  background: var(--bg-color); border: 1px solid var(--border-color);
+  border-radius: 6px; box-shadow: 0 4px 16px rgba(0,0,0,.12);
+  min-width: 170px; z-index: 9999; display: none; flex-direction: column; overflow: hidden;
+}
+#auth-dropdown.open { display: flex; }
+.auth-drop-item {
+  padding: 9px 16px; font-size: 0.85rem; cursor: pointer;
+  color: var(--text-color); border: none; background: none;
+  text-align: left; width: 100%; transition: background .12s;
+}
+.auth-drop-item:hover { background: var(--hover-color, #f3f4f6); }
+.auth-drop-item.danger { color: #dc2626; }
 /* Match Log In button styling to the other header buttons */
 .auth-button {
   background: var(--button-bg) !important;
@@ -1051,17 +1069,57 @@ window.renderAnalysisPayload = function(analysisContainer, result, options) {
     }
   }
 
+  function _ensureAuthWrap() {
+    var btn = document.getElementById('auth-button');
+    if (!btn || document.getElementById('auth-button-wrap')) return;
+    var wrap = document.createElement('div');
+    wrap.id = 'auth-button-wrap';
+    btn.parentNode.insertBefore(wrap, btn);
+    wrap.appendChild(btn);
+    var drop = document.createElement('div');
+    drop.id = 'auth-dropdown';
+    var items = [
+      { text: 'Upgrade', cls: '', action: function() { _closeDropdown(); var nb = document.querySelector('[data-section="upgrade"]'); if (nb) nb.click(); } },
+      { text: 'Manage Account', cls: '', action: function() { _closeDropdown(); if (clerkInstance && clerkInstance.openUserProfile) clerkInstance.openUserProfile(); } },
+      { text: 'Log Out', cls: 'danger', action: function() { _closeDropdown(); clerkSignOut(); } },
+    ];
+    items.forEach(function(item) {
+      var b = document.createElement('button');
+      b.className = 'auth-drop-item' + (item.cls ? ' ' + item.cls : '');
+      b.textContent = item.text;
+      b.addEventListener('click', item.action);
+      drop.appendChild(b);
+    });
+    wrap.appendChild(drop);
+    document.addEventListener('click', function(e) {
+      if (!wrap.contains(e.target)) _closeDropdown();
+    });
+  }
+
+  function _closeDropdown() {
+    var d = document.getElementById('auth-dropdown');
+    if (d) d.classList.remove('open');
+  }
+
   function refreshAuthUI() {
     var isSignedIn = !!(clerkInstance && clerkInstance.session);
-    if (isSignedIn) hideClerkSignIn();
+    if (isSignedIn) { hideClerkSignIn(); _ensureAuthWrap(); }
     var btn = document.getElementById('auth-button');
     if (!btn) return;
     if (isSignedIn) {
       var email = (clerkInstance.user && clerkInstance.user.primaryEmailAddress)
         ? clerkInstance.user.primaryEmailAddress.emailAddress : '';
       var name = (clerkInstance.user && clerkInstance.user.firstName) || email.split('@')[0] || 'Account';
-      btn.textContent = name + ' \u2022 Sign Out';
+      btn.textContent = name;
+      // Toggle dropdown on click (capture phase handles nav, but button is inside wrap)
+      btn._clerkDropHandler = btn._clerkDropHandler || function(e) {
+        if (!clerkInstance || !clerkInstance.session) return;
+        e.stopImmediatePropagation();
+        var d = document.getElementById('auth-dropdown');
+        if (d) d.classList.toggle('open');
+      };
     } else {
+      _closeDropdown();
       btn.textContent = 'Log In';
     }
   }
@@ -1096,8 +1154,13 @@ window.renderAnalysisPayload = function(analysisContainer, result, options) {
     var btn = e.target.closest && e.target.closest('#auth-button');
     if (!btn) return;
     e.stopImmediatePropagation();
-    if (clerkInstance && clerkInstance.session) { clerkSignOut(); }
-    else { showClerkSignIn(); }
+    if (clerkInstance && clerkInstance.session) {
+      // Toggle dropdown
+      var d = document.getElementById('auth-dropdown');
+      if (d) d.classList.toggle('open');
+    } else {
+      showClerkSignIn();
+    }
   }, true);
 
   document.addEventListener('keydown', function(e) { if (e.key === 'Escape') hideClerkSignIn(); });

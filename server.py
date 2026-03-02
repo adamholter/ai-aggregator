@@ -1,6 +1,8 @@
 from flask import Flask, jsonify, request, Response, stream_with_context, has_request_context, render_template_string, session
 from flask_cors import CORS
 import argparse
+import hmac
+import hashlib
 import requests
 import json
 import csv
@@ -1382,6 +1384,28 @@ GOOGLE_SHEETS_AUTH_URL = (os.environ.get('GOOGLE_SHEETS_AUTH_URL') or '').strip(
 # Clerk authentication
 CLERK_SECRET_KEY = (os.environ.get('CLERK_SECRET_KEY') or '').strip()
 CLERK_PUBLISHABLE_KEY = (os.environ.get('CLERK_PUBLISHABLE_KEY') or '').strip()
+# Stripe
+try:
+    import stripe as _stripe_module
+    _stripe_available = True
+except ImportError:
+    _stripe_module = None
+    _stripe_available = False
+STRIPE_SECRET_KEY = (os.environ.get('STRIPE_SECRET_KEY') or '').strip()
+STRIPE_WEBHOOK_SECRET = (os.environ.get('STRIPE_WEBHOOK_SECRET') or '').strip()
+SERVER_OPENROUTER_KEY = (os.environ.get('SERVER_OPENROUTER_KEY') or '').strip()
+STRIPE_PRICES = {
+    'starter_monthly': (os.environ.get('STRIPE_PRICE_STARTER_MONTHLY') or '').strip(),
+    'pro_monthly':     (os.environ.get('STRIPE_PRICE_PRO_MONTHLY') or '').strip(),
+    'max_monthly':     (os.environ.get('STRIPE_PRICE_MAX_MONTHLY') or '').strip(),
+    'starter_annual':  (os.environ.get('STRIPE_PRICE_STARTER_ANNUAL') or '').strip(),
+    'pro_annual':      (os.environ.get('STRIPE_PRICE_PRO_ANNUAL') or '').strip(),
+    'max_annual':      (os.environ.get('STRIPE_PRICE_MAX_ANNUAL') or '').strip(),
+}
+TIER_CREDITS = {'starter': 3.0, 'pro': 8.0, 'max': 20.0}
+ADMIN_SECRET = (os.environ.get('ADMIN_SECRET') or '').strip()
+if _stripe_available and STRIPE_SECRET_KEY:
+    _stripe_module.api_key = STRIPE_SECRET_KEY
 DEEP_RESEARCH_MODEL_ID = 'openai/o4-mini-deep-research'
 MAX_REPLICATE_MODELS = max(int(os.environ.get('MAX_REPLICATE_MODELS', '60')), 1)
 MAX_REPLICATE_TOTAL = max(int(os.environ.get('MAX_REPLICATE_TOTAL', '250')), MAX_REPLICATE_MODELS)
@@ -1546,6 +1570,10 @@ class MissingOpenRouterKeyError(Exception):
     """Raised when an OpenRouter API key is required but not available."""
 
 
+class CreditExhaustedError(Exception):
+    """Raised when a user's monthly server-key credit limit is exhausted."""
+
+
 def _normalize_email(value):
     if not value:
         return ''
@@ -1634,13 +1662,72 @@ def _call_sheets_auth(action, email, password=None):
         return {'success': False, 'error': f'Request failed: {str(e)}'}
 
 
+def _get_user_subscription(user_id):
+    """Return the latest subscription row for a user, or None."""
+    if not user_id:
+        return None
+    try:
+        from backend.app import db as _db
+        return _db.query_one(
+            'SELECT * FROM subscriptions WHERE user_id=? ORDER BY updated_at DESC LIMIT 1',
+            (user_id,)
+        )
+    except Exception:
+        return None
+
+
+def _get_monthly_usage_cost(user_id):
+    """Return total cost_usd spent this calendar month via server key."""
+    if not user_id:
+        return 0.0
+    try:
+        from backend.app import db as _db
+        now = datetime.utcnow()
+        period_start = int(datetime(now.year, now.month, 1).timestamp())
+        row = _db.query_one(
+            "SELECT COALESCE(SUM(cost_usd),0) as total FROM usage_records WHERE user_id=? AND created_at>=? AND endpoint='server_key'",
+            (user_id, period_start)
+        )
+        return float(row['total']) if row else 0.0
+    except Exception:
+        return 0.0
+
+
+def _record_server_key_usage(user_id, model, cost_usd, tokens_input=0, tokens_output=0):
+    """Record a usage event for server-key inference."""
+    if not user_id or cost_usd <= 0:
+        return
+    try:
+        from backend.app import db as _db
+        _db.execute(
+            'INSERT INTO usage_records (user_id, model, cost_usd, tokens_input, tokens_output, endpoint) VALUES (?,?,?,?,?,?)',
+            (user_id, model or '', cost_usd, tokens_input, tokens_output, 'server_key')
+        )
+    except Exception:
+        pass
+
+
 def _serialize_user(user):
     if not isinstance(user, dict):
         return None
+    user_id = user.get('id', '')
+    sub = _get_user_subscription(user_id)
+    tier = (sub.get('tier') if sub else None) or 'free'
+    credit = TIER_CREDITS.get(tier, 0.0)
+    used = _get_monthly_usage_cost(user_id) if credit > 0 else 0.0
     return {
-        'id': user.get('id'),
+        'id': user_id,
         'email': user.get('email'),
-        'created_at': user.get('created_at')
+        'display_name': user.get('display_name'),
+        'created_at': user.get('created_at'),
+        'subscription': {
+            'tier': tier,
+            'status': (sub.get('status') if sub else None) or 'active',
+            'current_period_end': sub.get('current_period_end') if sub else None,
+            'credit_limit': credit,
+            'credit_used': round(used, 4),
+            'credit_remaining': round(max(0.0, credit - used), 4),
+        }
     }
 
 
@@ -2153,10 +2240,31 @@ def get_request_bearer_token():
 
 
 def require_user_openrouter_token():
-    """Return the user-provided OpenRouter token or raise if missing."""
+    """Return (token, is_server_key, user_id).
+    Prefers user-provided Bearer token. Falls back to server key for paid users.
+    Raises MissingOpenRouterKeyError or CreditExhaustedError as appropriate."""
     token = get_request_bearer_token()
     if token:
-        return token
+        return token, False, None  # User's own key — no cost tracking needed
+
+    # No user key — check if this user has a paid subscription
+    if SERVER_OPENROUTER_KEY:
+        user = get_current_user()
+        if user:
+            user_id = user.get('id', '')
+            sub = _get_user_subscription(user_id)
+            tier = (sub.get('tier') if sub else None) or 'free'
+            credit = TIER_CREDITS.get(tier, 0.0)
+            if credit > 0:
+                used = _get_monthly_usage_cost(user_id)
+                if used < credit:
+                    return SERVER_OPENROUTER_KEY, True, user_id
+                else:
+                    raise CreditExhaustedError(
+                        f'Monthly server credit exhausted (${credit:.2f} limit). '
+                        'Provide your own OpenRouter key or upgrade your plan.'
+                    )
+
     raise MissingOpenRouterKeyError(OPENROUTER_KEY_REQUIRED_MESSAGE)
 
 def _get_rate_limit_key():
@@ -2218,7 +2326,12 @@ def build_openrouter_headers(token):
 
 def openrouter_key_required_response():
     """Standard JSON response when a user OpenRouter key is required."""
-    return jsonify({'error': OPENROUTER_KEY_REQUIRED_MESSAGE}), 402
+    return jsonify({'error': OPENROUTER_KEY_REQUIRED_MESSAGE, 'code': 'key_required'}), 402
+
+
+def credit_exhausted_response(msg=''):
+    """Standard JSON response when monthly server credit is exhausted."""
+    return jsonify({'error': msg or 'Monthly server credit exhausted. Provide your own OpenRouter key or upgrade.', 'code': 'credit_exhausted'}), 402
 
 
 def _format_bearer_token(token):
@@ -8159,7 +8272,9 @@ def ai_agent():
     """Server-side orchestration for the conversational agent with tool looping support."""
     try:
         try:
-            user_openrouter_token = require_user_openrouter_token()
+            user_openrouter_token, _is_server_key_agent, _server_key_uid_agent = require_user_openrouter_token()
+        except CreditExhaustedError as exc:
+            return credit_exhausted_response(str(exc))
         except MissingOpenRouterKeyError:
             return openrouter_key_required_response()
 
@@ -8572,7 +8687,9 @@ def _handle_model_analysis_post():
             return jsonify({'error': 'Model data is required'}), 400
 
         try:
-            user_openrouter_token = require_user_openrouter_token()
+            user_openrouter_token, _is_sk_an, _sk_uid_an = require_user_openrouter_token()
+        except CreditExhaustedError as exc:
+            return credit_exhausted_response(str(exc))
         except MissingOpenRouterKeyError:
             return openrouter_key_required_response()
 
@@ -8985,7 +9102,9 @@ def _handle_model_match_post():
         return jsonify({'error': 'source, target, and model name are required'}), 400
 
     try:
-        auth_token = require_user_openrouter_token()
+        auth_token, _is_sk_mm, _sk_uid_mm = require_user_openrouter_token()
+    except CreditExhaustedError as exc:
+        return credit_exhausted_response(str(exc))
     except MissingOpenRouterKeyError:
         return openrouter_key_required_response()
 
@@ -9192,7 +9311,9 @@ def model_card_lookup_api():
         return jsonify({'error': f'Invalid source. Must be one of: {valid_sources}'}), 400
     
     try:
-        auth_token = require_user_openrouter_token()
+        auth_token, _is_sk_mc2, _sk_uid_mc2 = require_user_openrouter_token()
+    except CreditExhaustedError as exc:
+        return credit_exhausted_response(str(exc))
     except MissingOpenRouterKeyError:
         return openrouter_key_required_response()
     
@@ -9220,8 +9341,8 @@ def get_openrouter_models():
             'Access-Control-Allow-Headers': 'Content-Type, Authorization'
         }
 
-    except MissingOpenRouterKeyError as exc:
-        return jsonify({'error': str(exc)}), 500
+    except (MissingOpenRouterKeyError, CreditExhaustedError) as exc:
+        return jsonify({'error': str(exc), 'code': 'key_required'}), 402
     except requests.exceptions.RequestException as exc:
         return jsonify({'error': f'Failed to fetch OpenRouter models: {exc}'}), 500
     except Exception as exc:
@@ -10496,7 +10617,9 @@ def agent_exp_session(auth_token, user_message, conversation_history, model_id, 
 @app.route('/api/agent-exp', methods=['POST'])
 def agent_exp_endpoint():
     try:
-        auth_token = require_user_openrouter_token()
+        auth_token, _is_sk_ae, _sk_uid_ae = require_user_openrouter_token()
+    except CreditExhaustedError as exc:
+        return credit_exhausted_response(str(exc))
     except MissingOpenRouterKeyError:
         return openrouter_key_required_response()
 
@@ -10832,7 +10955,9 @@ def intelligent_query():
             return jsonify({'error': 'Query is required'}), 400
 
         try:
-            user_openrouter_token = require_user_openrouter_token()
+            user_openrouter_token, _is_sk_px, _sk_uid_px = require_user_openrouter_token()
+        except CreditExhaustedError as exc:
+            return credit_exhausted_response(str(exc))
         except MissingOpenRouterKeyError:
             return openrouter_key_required_response()
 
@@ -12120,6 +12245,156 @@ def auth_clerk_sync():
     return jsonify({'success': True, 'user': user})
 
 
+# ── Stripe / Subscriptions ────────────────────────────────────────────────────
+
+@app.route('/api/create-checkout-session', methods=['POST'])
+def create_checkout_session():
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': 'Login required'}), 401
+    if not _stripe_available or not STRIPE_SECRET_KEY:
+        return jsonify({'error': 'Stripe not configured'}), 503
+    data = request.get_json(silent=True) or {}
+    price_key = (data.get('price_key') or '').strip()
+    price_id = STRIPE_PRICES.get(price_key)
+    if not price_id:
+        return jsonify({'error': f'Invalid price key: {price_key}'}), 400
+    try:
+        checkout = _stripe_module.checkout.Session.create(
+            mode='subscription',
+            line_items=[{'price': price_id, 'quantity': 1}],
+            success_url=request.host_url + '?upgrade=success',
+            cancel_url=request.host_url + '?upgrade=cancelled',
+            client_reference_id=user['id'],
+            customer_email=user.get('email') or None,
+            metadata={'user_id': user['id']},
+        )
+        return jsonify({'url': checkout.url})
+    except Exception as exc:
+        return jsonify({'error': str(exc)}), 500
+
+
+@app.route('/api/billing-portal', methods=['POST'])
+def billing_portal():
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': 'Login required'}), 401
+    if not _stripe_available or not STRIPE_SECRET_KEY:
+        return jsonify({'error': 'Stripe not configured'}), 503
+    sub = _get_user_subscription(user['id'])
+    if not sub or not sub.get('stripe_customer_id'):
+        return jsonify({'error': 'No Stripe subscription found'}), 404
+    try:
+        portal = _stripe_module.billing_portal.Session.create(
+            customer=sub['stripe_customer_id'],
+            return_url=request.host_url,
+        )
+        return jsonify({'url': portal.url})
+    except Exception as exc:
+        return jsonify({'error': str(exc)}), 500
+
+
+@app.route('/webhooks/stripe', methods=['POST'])
+def stripe_webhook():
+    if not _stripe_available or not STRIPE_WEBHOOK_SECRET:
+        return jsonify({'error': 'Stripe not configured'}), 503
+    payload = request.get_data()
+    sig = request.headers.get('Stripe-Signature', '')
+    try:
+        event = _stripe_module.Webhook.construct_event(payload, sig, STRIPE_WEBHOOK_SECRET)
+    except Exception:
+        return jsonify({'error': 'Invalid signature'}), 400
+
+    obj = event['data']['object']
+    etype = event['type']
+
+    if etype in ('customer.subscription.created', 'customer.subscription.updated', 'customer.subscription.deleted'):
+        from backend.app import db as _db
+        user_id = (obj.get('metadata') or {}).get('user_id')
+        if not user_id:
+            row = _db.query_one('SELECT user_id FROM subscriptions WHERE stripe_customer_id=?', (obj.get('customer', ''),))
+            user_id = row['user_id'] if row else None
+        if user_id:
+            price_id = ''
+            items = obj.get('items', {})
+            if items and items.get('data'):
+                price_id = (items['data'][0].get('price') or {}).get('id', '')
+            tier = 'free'
+            if etype != 'customer.subscription.deleted':
+                for k, v in STRIPE_PRICES.items():
+                    if v and v == price_id:
+                        tier = k.split('_')[0]
+                        break
+            _db.execute(
+                '''INSERT INTO subscriptions
+                       (id, user_id, stripe_customer_id, stripe_subscription_id, tier, status,
+                        current_period_start, current_period_end, updated_at)
+                   VALUES (?,?,?,?,?,?,?,?,unixepoch())
+                   ON CONFLICT(stripe_subscription_id) DO UPDATE SET
+                       tier=excluded.tier, status=excluded.status,
+                       current_period_start=excluded.current_period_start,
+                       current_period_end=excluded.current_period_end,
+                       updated_at=unixepoch()''',
+                (obj.get('id', ''), user_id, obj.get('customer', ''), obj.get('id', ''),
+                 tier, obj.get('status', 'active'),
+                 obj.get('current_period_start'), obj.get('current_period_end'))
+            )
+
+    return jsonify({'received': True})
+
+
+@app.route('/api/redeem-promo', methods=['POST'])
+def redeem_promo():
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': 'Login required'}), 401
+    data = request.get_json(silent=True) or {}
+    code = (data.get('code') or '').strip().upper()
+    if not code:
+        return jsonify({'error': 'No code provided'}), 400
+    from backend.app import db as _db
+    promo_secret = (os.environ.get('APP_SECRET_KEY') or 'fallback').encode()
+    code_hash = hmac.new(promo_secret, code.encode(), hashlib.sha256).hexdigest()
+    promo = _db.query_one(
+        'SELECT * FROM promo_codes WHERE code_hash=? AND uses_remaining>0 AND (expires_at IS NULL OR expires_at>unixepoch())',
+        (code_hash,)
+    )
+    if not promo:
+        return jsonify({'error': 'Invalid or expired promo code'}), 404
+    tier = promo['tier']
+    row_id = f'promo_{user["id"]}'
+    _db.execute(
+        '''INSERT INTO subscriptions (id, user_id, tier, status, updated_at)
+           VALUES (?,?,?,?,unixepoch())
+           ON CONFLICT(id) DO UPDATE SET tier=excluded.tier, status=excluded.status, updated_at=unixepoch()''',
+        (row_id, user['id'], tier, 'active')
+    )
+    _db.execute('UPDATE promo_codes SET uses_remaining=uses_remaining-1 WHERE code_hash=?', (code_hash,))
+    return jsonify({'success': True, 'tier': tier})
+
+
+@app.route('/admin/create-promo', methods=['POST'])
+def admin_create_promo():
+    if not ADMIN_SECRET or request.headers.get('X-Admin-Secret') != ADMIN_SECRET:
+        return jsonify({'error': 'Forbidden'}), 403
+    data = request.get_json(silent=True) or {}
+    code = (data.get('code') or '').strip().upper()
+    tier = (data.get('tier') or 'pro').strip()
+    max_uses = max(int(data.get('max_uses', 1)), 1)
+    expires_days = data.get('expires_days')
+    if not code:
+        return jsonify({'error': 'code is required'}), 400
+    from backend.app import db as _db
+    promo_secret = (os.environ.get('APP_SECRET_KEY') or 'fallback').encode()
+    code_hash = hmac.new(promo_secret, code.encode(), hashlib.sha256).hexdigest()
+    expires_at = int(time.time()) + int(expires_days) * 86400 if expires_days else None
+    _db.execute(
+        'INSERT OR REPLACE INTO promo_codes (code_hash, tier, max_uses, uses_remaining, expires_at) VALUES (?,?,?,?,?)',
+        (code_hash, tier, max_uses, max_uses, expires_at)
+    )
+    return jsonify({'success': True, 'tier': tier, 'max_uses': max_uses})
+
+
 @app.route('/api/pins', methods=['GET'])
 def list_pins():
     user = get_current_user()
@@ -12199,7 +12474,9 @@ def get_shared_view(view_id):
 @app.route('/api/experimental-filter', methods=['POST'])
 def experimental_filter():
     try:
-        user_token = require_user_openrouter_token()
+        user_token, _is_sk_ef, _sk_uid_ef = require_user_openrouter_token()
+    except CreditExhaustedError as exc:
+        return credit_exhausted_response(str(exc))
     except MissingOpenRouterKeyError:
         return openrouter_key_required_response()
     data = request.get_json(silent=True) or {}
