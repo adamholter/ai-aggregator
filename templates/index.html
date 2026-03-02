@@ -863,6 +863,130 @@ window.renderAnalysisPayload = function(analysisContainer, result, options) {
 };
 })();
 </script>
+<!-- Clerk auth integration -->
+<div id="clerk-auth-overlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.55);backdrop-filter:blur(4px);align-items:center;justify-content:center;">
+  <div id="clerk-sign-in-container" style="background:var(--bg-color,#fff);border-radius:12px;box-shadow:0 8px 40px rgba(0,0,0,.18);overflow:hidden;min-width:320px;"></div>
+</div>
+<script>
+(function() {
+  'use strict';
+
+  var clerkInstance = null;
+  var _origFetch = window.fetch.bind(window);
+
+  async function initClerk(publishableKey) {
+    if (!publishableKey || clerkInstance) return;
+
+    await new Promise(function(resolve, reject) {
+      if (window.Clerk) { resolve(); return; }
+      var s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js';
+      s.crossOrigin = 'anonymous';
+      s.onload = resolve;
+      s.onerror = reject;
+      document.head.appendChild(s);
+    });
+
+    clerkInstance = new window.Clerk(publishableKey);
+    await clerkInstance.load();
+
+    if (clerkInstance.session) await syncClerkSession();
+
+    clerkInstance.addListener(function(state) {
+      if (state.session) {
+        syncClerkSession().then(refreshAuthUI);
+      } else {
+        refreshAuthUI();
+      }
+    });
+  }
+
+  async function syncClerkSession() {
+    if (!clerkInstance || !clerkInstance.session) return null;
+    try {
+      var token = await clerkInstance.session.getToken();
+      var resp = await _origFetch('/auth/clerk-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ token: token }),
+      });
+      return resp.ok ? resp.json() : null;
+    } catch(e) { return null; }
+  }
+
+  function showClerkSignIn() {
+    var overlay = document.getElementById('clerk-auth-overlay');
+    var container = document.getElementById('clerk-sign-in-container');
+    if (!clerkInstance || !overlay) return;
+    overlay.style.display = 'flex';
+    while (container.firstChild) container.removeChild(container.firstChild);
+    clerkInstance.mountSignIn(container, {
+      appearance: { elements: { rootBox: { fontFamily: 'inherit' }, card: { borderRadius: '12px', boxShadow: 'none', border: 'none' } } }
+    });
+    overlay.addEventListener('click', function closeOnBg(e) {
+      if (e.target === overlay) { hideClerkSignIn(); }
+    }, { once: true });
+  }
+
+  function hideClerkSignIn() {
+    var overlay = document.getElementById('clerk-auth-overlay');
+    if (overlay) overlay.style.display = 'none';
+    if (clerkInstance) clerkInstance.unmountSignIn(document.getElementById('clerk-sign-in-container'));
+  }
+
+  function refreshAuthUI() {
+    var isSignedIn = !!(clerkInstance && clerkInstance.session);
+    if (isSignedIn) hideClerkSignIn();
+    document.querySelectorAll('[data-auth-hide-when-authed]').forEach(function(el) { el.style.display = isSignedIn ? 'none' : ''; });
+    document.querySelectorAll('[data-auth-show-when-authed]').forEach(function(el) { el.style.display = isSignedIn ? '' : 'none'; });
+    if (isSignedIn) {
+      var email = (clerkInstance.user && clerkInstance.user.primaryEmailAddress) ? clerkInstance.user.primaryEmailAddress.emailAddress : '';
+      document.querySelectorAll('[data-auth-email]').forEach(function(el) { el.textContent = email; });
+      document.querySelectorAll('[data-auth-name]').forEach(function(el) { el.textContent = (clerkInstance.user && clerkInstance.user.fullName) || email; });
+    }
+  }
+
+  async function clerkSignOut() {
+    await _origFetch('/auth/logout', { method: 'POST' }).catch(function(){});
+    if (clerkInstance) await clerkInstance.signOut();
+    refreshAuthUI();
+  }
+
+  document.addEventListener('keydown', function(e) { if (e.key === 'Escape') hideClerkSignIn(); });
+  document.addEventListener('click', function(e) {
+    if (e.target.closest('#auth-close')) hideClerkSignIn();
+    if (e.target.closest('[data-clerk-sign-in]')) showClerkSignIn();
+    if (e.target.closest('[data-clerk-sign-out]')) clerkSignOut();
+  });
+
+  // Override showAuthModal so existing sign-in triggers use Clerk
+  window.showAuthModal = function() { showClerkSignIn(); };
+  window.clerkSignOut = clerkSignOut;
+
+  // Inject Bearer token into all /api/ and /auth/ requests
+  window.fetch = async function(input, init) {
+    init = init || {};
+    var url = typeof input === 'string' ? input : (input && input.url) || '';
+    if ((url.startsWith('/api/') || url.startsWith('/auth/')) && clerkInstance && clerkInstance.session) {
+      try {
+        var token = await clerkInstance.session.getToken();
+        init.headers = Object.assign({}, init.headers, { 'Authorization': 'Bearer ' + token });
+      } catch(e) {}
+    }
+    return _origFetch(input, init);
+  };
+
+  // Boot
+  _origFetch('/api/me')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.clerk_publishable_key) {
+        initClerk(data.clerk_publishable_key).then(refreshAuthUI);
+      }
+    })
+    .catch(function(){});
+})();
+</script>
 <!-- /dashboard-overrides -->
 </body>
 

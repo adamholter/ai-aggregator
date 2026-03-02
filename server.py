@@ -8,6 +8,7 @@ import io
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 import os
+import secrets
 import subprocess
 import tempfile
 import sys
@@ -36,12 +37,7 @@ from urllib.parse import urljoin
 from backend.app.agent import run_agent, stream_agent, build_system_prompt, get_tool_definitions
 from backend.app.agent.tool_executors import AgentToolExecutors, list_skill_frontmatter
 from backend.app.agent.types import AgentSettings
-
- 
-
-app = Flask(__name__, static_folder='.', static_url_path='')
-CORS(app)
-app.secret_key = os.environ.get('APP_SECRET_KEY') or 'change-me-in-production'
+from backend.app.db import init_schema
 
 
 def _load_local_env_files():
@@ -65,13 +61,26 @@ def _load_local_env_files():
             print(f"WARNING: Could not load {filename}: {exc}")
 
 
+# Load .env before Flask init so all env vars (including APP_SECRET_KEY) are available
 _load_local_env_files()
+
+app = Flask(__name__, static_folder='.', static_url_path='')
+CORS(app)
+# Use env var if set; fall back to a random key (sessions won't persist across restarts, which is fine)
+app.secret_key = os.environ.get('APP_SECRET_KEY') or secrets.token_hex(32)
 
 # Session configuration for persistence
 app.config['SESSION_PERMANENT'] = True
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)  # Stay logged in for 30 days
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+
+# Initialise database schema (idempotent — safe to run on every startup)
+try:
+    init_schema()
+    print("✅ Database ready")
+except Exception as _db_err:
+    print(f"⚠️  Database init failed (continuing without DB): {_db_err}")
 
 # Set proper encoding for Flask responses
 app.config['JSON_AS_ASCII'] = False
@@ -1370,6 +1379,9 @@ REPLICATE_API_KEY = (os.environ.get('REPLICATE_API_KEY') or '').strip()
 REPLICATE_BASE_URL = 'https://api.replicate.com/v1'
 # Google Sheets authentication URL (Apps Script web app)
 GOOGLE_SHEETS_AUTH_URL = (os.environ.get('GOOGLE_SHEETS_AUTH_URL') or '').strip()
+# Clerk authentication
+CLERK_SECRET_KEY = (os.environ.get('CLERK_SECRET_KEY') or '').strip()
+CLERK_PUBLISHABLE_KEY = (os.environ.get('CLERK_PUBLISHABLE_KEY') or '').strip()
 DEEP_RESEARCH_MODEL_ID = 'openai/o4-mini-deep-research'
 MAX_REPLICATE_MODELS = max(int(os.environ.get('MAX_REPLICATE_MODELS', '60')), 1)
 MAX_REPLICATE_TOTAL = max(int(os.environ.get('MAX_REPLICATE_TOTAL', '250')), MAX_REPLICATE_MODELS)
@@ -1632,7 +1644,120 @@ def _serialize_user(user):
     }
 
 
+def _verify_clerk_token(token):
+    """Verify a Clerk session token via the Clerk Backend API.
+    Returns the user payload dict on success, or None on failure."""
+    if not CLERK_SECRET_KEY or not token:
+        return None
+    try:
+        resp = requests.get(
+            'https://api.clerk.com/v1/sessions/verify',
+            headers={
+                'Authorization': f'Bearer {CLERK_SECRET_KEY}',
+                'Content-Type': 'application/json',
+            },
+            params={'_clerk_session_id': ''},
+            timeout=5,
+        )
+        # Clerk's verify endpoint uses POST with token in body
+    except Exception:
+        pass
+
+    try:
+        resp = requests.post(
+            'https://api.clerk.com/v1/sessions/verify',
+            headers={
+                'Authorization': f'Bearer {CLERK_SECRET_KEY}',
+                'Content-Type': 'application/json',
+            },
+            json={'token': token},
+            timeout=5,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            user_id = data.get('user_id') or data.get('id')
+            return {'clerk_id': user_id, '_raw': data}
+    except Exception:
+        pass
+    return None
+
+
+def _get_clerk_user(clerk_id):
+    """Fetch full user object from Clerk by user ID."""
+    if not CLERK_SECRET_KEY or not clerk_id:
+        return None
+    try:
+        resp = requests.get(
+            f'https://api.clerk.com/v1/users/{clerk_id}',
+            headers={'Authorization': f'Bearer {CLERK_SECRET_KEY}'},
+            timeout=5,
+        )
+        if resp.status_code == 200:
+            return resp.json()
+    except Exception:
+        pass
+    return None
+
+
+def _upsert_clerk_user(clerk_user):
+    """Insert or update a Clerk user in the Turso users table. Returns the local user dict."""
+    from backend.app import db as _db
+    if not clerk_user:
+        return None
+    clerk_id = clerk_user.get('id', '')
+    email_addresses = clerk_user.get('email_addresses', [])
+    primary_email_id = clerk_user.get('primary_email_address_id', '')
+    email = ''
+    for ea in email_addresses:
+        if ea.get('id') == primary_email_id:
+            email = ea.get('email_address', '')
+            break
+    if not email and email_addresses:
+        email = email_addresses[0].get('email_address', '')
+
+    display_name = (
+        f"{clerk_user.get('first_name') or ''} {clerk_user.get('last_name') or ''}".strip()
+        or clerk_user.get('username')
+        or email
+    )
+    now = datetime.utcnow().replace(microsecond=0).isoformat() + 'Z'
+
+    existing = _db.query_one('SELECT id FROM users WHERE id = ?', (clerk_id,))
+    if existing:
+        _db.execute(
+            'UPDATE users SET email=?, display_name=?, last_login_at=? WHERE id=?',
+            (email, display_name, now, clerk_id),
+        )
+    else:
+        _db.execute(
+            'INSERT INTO users (id, email, display_name, created_at, last_login_at) VALUES (?,?,?,?,?)',
+            (clerk_id, email, display_name, now, now),
+        )
+    return {'id': clerk_id, 'email': email, 'display_name': display_name}
+
+
 def get_current_user():
+    # 1. Check for Clerk session token in Authorization header or cookie
+    auth_header = request.headers.get('Authorization', '')
+    clerk_token = None
+    if auth_header.startswith('Bearer '):
+        clerk_token = auth_header[7:].strip()
+    if not clerk_token:
+        clerk_token = request.cookies.get('__session') or request.cookies.get('__clerk_session')
+
+    if clerk_token and CLERK_SECRET_KEY:
+        verified = _verify_clerk_token(clerk_token)
+        if verified:
+            clerk_id = verified.get('clerk_id')
+            clerk_user = _get_clerk_user(clerk_id)
+            if clerk_user:
+                return _upsert_clerk_user(clerk_user)
+            # Fallback: return minimal user from verify payload
+            raw = verified.get('_raw', {})
+            email = raw.get('email', '')
+            return {'id': clerk_id, 'email': email}
+
+    # 2. Fall back to legacy session-based auth
     email = session.get('user_email')
     if not email:
         return None
@@ -1641,7 +1766,6 @@ def get_current_user():
     if user:
         return user
     # If using Google Sheets auth, user won't be in local file
-    # Create a virtual user object using email as ID for pins/data storage
     if GOOGLE_SHEETS_AUTH_URL:
         return {'id': email, 'email': email}
     return None
@@ -11881,9 +12005,13 @@ def root_health_check():
 @app.route('/api/me', methods=['GET'])
 def current_user_profile():
     user = get_current_user()
-    if not user:
-        return jsonify({'authenticated': False})
-    return jsonify({'authenticated': True, 'user': _serialize_user(user)})
+    resp = {
+        'authenticated': bool(user),
+        'clerk_publishable_key': CLERK_PUBLISHABLE_KEY or None,
+    }
+    if user:
+        resp['user'] = _serialize_user(user)
+    return jsonify(resp)
 
 
 def _validate_credentials(email, password):
@@ -11974,6 +12102,28 @@ def auth_login():
 def auth_logout():
     session.pop('user_email', None)
     return jsonify({'success': True})
+
+
+@app.route('/auth/clerk-sync', methods=['POST'])
+def auth_clerk_sync():
+    """Called by the frontend after Clerk sign-in to sync the user into Turso
+    and establish a Flask session for legacy-compatible auth."""
+    data = request.get_json(silent=True) or {}
+    token = data.get('token') or request.headers.get('Authorization', '')[7:].strip()
+    if not token:
+        return jsonify({'error': 'No token provided'}), 400
+    verified = _verify_clerk_token(token)
+    if not verified:
+        return jsonify({'error': 'Invalid or expired session token'}), 401
+    clerk_id = verified.get('clerk_id')
+    clerk_user = _get_clerk_user(clerk_id)
+    user = _upsert_clerk_user(clerk_user) if clerk_user else {'id': clerk_id, 'email': ''}
+    # Also set a legacy session so existing session checks keep working
+    if user.get('email'):
+        session.permanent = True
+        session['user_email'] = user['email']
+        session['clerk_id'] = clerk_id
+    return jsonify({'success': True, 'user': user})
 
 
 @app.route('/api/pins', methods=['GET'])

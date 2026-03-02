@@ -5,3 +5,9 @@ __pycache__/
 .DS_Store
 ~/
 sandbox/
+
+# Environment / secrets — never commit these
+.env
+.env.local
+.env.*.local
+*.env
