@@ -972,10 +972,7 @@ window.renderAnalysisPayload = function(analysisContainer, result, options) {
 
   async function initClerk(publishableKey) {
     if (!publishableKey || clerkInstance) return;
-    // Derive Clerk frontend API domain from publishable key
-    // pk_test_BASE64$ -> atob(BASE64) = "domain$" -> strip trailing "$"
     var b64 = publishableKey.split('_')[2] || '';
-    // atob needs proper padding
     while (b64.length % 4) b64 += '=';
     var domain = '';
     try { domain = atob(b64).replace(/\$$/, ''); } catch(e) {}
@@ -992,13 +989,23 @@ window.renderAnalysisPayload = function(analysisContainer, result, options) {
       s.onload = resolve; s.onerror = reject;
       document.head.appendChild(s);
     });
-    // With data-clerk-publishable-key, window.Clerk is an instance, not a class
     clerkInstance = window.Clerk;
     await clerkInstance.load();
-    if (clerkInstance.session) await syncClerkSession();
+    if (clerkInstance.session) {
+      await syncClerkSession();
+      refreshAuthUI();
+    }
     clerkInstance.addListener(function(state) {
-      if (state.session) { syncClerkSession().then(refreshAuthUI); }
-      else { refreshAuthUI(); }
+      if (state.session) {
+        syncClerkSession().then(function() {
+          refreshAuthUI();
+          // Tell script.js to re-fetch /api/me so its currentUser is updated
+          if (typeof window.refreshAuthState === 'function') window.refreshAuthState();
+        });
+      } else {
+        refreshAuthUI();
+        if (typeof window.refreshAuthState === 'function') window.refreshAuthState();
+      }
     });
   }
 
@@ -1019,11 +1026,10 @@ window.renderAnalysisPayload = function(analysisContainer, result, options) {
     var overlay = document.getElementById('clerk-auth-overlay');
     var container = document.getElementById('clerk-sign-in-container');
     if (!overlay) return;
-    // Hide the old auth modal if it opened
     var oldModal = document.getElementById('auth-modal');
     if (oldModal) oldModal.style.display = 'none';
     overlay.style.display = 'flex';
-    if (!clerkInstance) return; // overlay shows loading state until Clerk ready
+    if (!clerkInstance) return;
     while (container.firstChild) container.removeChild(container.firstChild);
     clerkInstance.mountSignIn(container, {
       appearance: {
@@ -1040,22 +1046,23 @@ window.renderAnalysisPayload = function(analysisContainer, result, options) {
     var overlay = document.getElementById('clerk-auth-overlay');
     if (overlay) overlay.style.display = 'none';
     var container = document.getElementById('clerk-sign-in-container');
-    if (clerkInstance && container) clerkInstance.unmountSignIn(container);
+    if (clerkInstance && container) {
+      try { clerkInstance.unmountSignIn(container); } catch(e) {}
+    }
   }
 
   function refreshAuthUI() {
     var isSignedIn = !!(clerkInstance && clerkInstance.session);
     if (isSignedIn) hideClerkSignIn();
     var btn = document.getElementById('auth-button');
-    if (btn) {
-      if (isSignedIn) {
-        var email = (clerkInstance.user && clerkInstance.user.primaryEmailAddress)
-          ? clerkInstance.user.primaryEmailAddress.emailAddress : '';
-        var name = (clerkInstance.user && clerkInstance.user.firstName) || email.split('@')[0];
-        btn.textContent = name + ' \u2022 Sign Out';
-      } else {
-        btn.textContent = 'Log In';
-      }
+    if (!btn) return;
+    if (isSignedIn) {
+      var email = (clerkInstance.user && clerkInstance.user.primaryEmailAddress)
+        ? clerkInstance.user.primaryEmailAddress.emailAddress : '';
+      var name = (clerkInstance.user && clerkInstance.user.firstName) || email.split('@')[0] || 'Account';
+      btn.textContent = name + ' \u2022 Sign Out';
+    } else {
+      btn.textContent = 'Log In';
     }
   }
 
@@ -1063,30 +1070,44 @@ window.renderAnalysisPayload = function(analysisContainer, result, options) {
     await _origFetch('/auth/logout', { method: 'POST' }).catch(function(){});
     if (clerkInstance) await clerkInstance.signOut();
     refreshAuthUI();
+    if (typeof window.refreshAuthState === 'function') window.refreshAuthState();
   }
 
-  // Override openAuthModal (called by script.js addEventListener on #auth-button)
+  // Override updateAuthButton so script.js's version defers to Clerk state
+  var _origUpdateAuthButton = window.updateAuthButton;
+  window.updateAuthButton = function(user) {
+    if (clerkInstance && clerkInstance.session) {
+      // Clerk is authoritative — apply our text but respect script.js for other side effects
+      refreshAuthUI();
+    } else if (typeof _origUpdateAuthButton === 'function') {
+      _origUpdateAuthButton(user);
+    } else {
+      var btn = document.getElementById('auth-button');
+      if (btn) btn.textContent = user ? 'Sign Out' : 'Log In';
+    }
+  };
+
   window.openAuthModal = function() { showClerkSignIn(); };
   window.showAuthModal = function() { showClerkSignIn(); };
   window.clerkSignOut = clerkSignOut;
 
-  // Hijack the auth button after script.js initializes it
-  function hijackAuthButton() {
-    var btn = document.getElementById('auth-button');
+  // Capture-phase listener intercepts #auth-button clicks before script.js fires
+  document.addEventListener('click', function(e) {
+    var btn = e.target.closest && e.target.closest('#auth-button');
     if (!btn) return;
-    // Clone to strip old listeners
-    var clone = btn.cloneNode(true);
-    btn.parentNode.replaceChild(clone, btn);
-    clone.addEventListener('click', function() {
-      if (clerkInstance && clerkInstance.session) { clerkSignOut(); }
-      else { showClerkSignIn(); }
-    });
-  }
+    e.stopImmediatePropagation();
+    if (clerkInstance && clerkInstance.session) { clerkSignOut(); }
+    else { showClerkSignIn(); }
+  }, true);
 
   document.addEventListener('keydown', function(e) { if (e.key === 'Escape') hideClerkSignIn(); });
-  document.getElementById('clerk-auth-close-btn').addEventListener('click', hideClerkSignIn);
-  document.getElementById('clerk-auth-overlay').addEventListener('click', function(e) {
-    if (e.target === document.getElementById('clerk-auth-overlay')) hideClerkSignIn();
+  document.addEventListener('DOMContentLoaded', function() {
+    var closeBtn = document.getElementById('clerk-auth-close-btn');
+    if (closeBtn) closeBtn.addEventListener('click', hideClerkSignIn);
+    var overlay = document.getElementById('clerk-auth-overlay');
+    if (overlay) overlay.addEventListener('click', function(e) {
+      if (e.target === overlay) hideClerkSignIn();
+    });
   });
 
   // Inject Bearer token into /api/ and /auth/ requests
@@ -1102,22 +1123,12 @@ window.renderAnalysisPayload = function(analysisContainer, result, options) {
     return _origFetch(input, init);
   };
 
-  // Boot — hijack button after DOM ready, then load Clerk
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', hijackAuthButton);
-  } else {
-    // script.js runs initializeAuthControls on DOMContentLoaded too; delay slightly
-    setTimeout(hijackAuthButton, 0);
-  }
-
+  // Boot — load Clerk publishable key from /api/me
   _origFetch('/api/me')
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data.clerk_publishable_key) {
-        initClerk(data.clerk_publishable_key).then(function() {
-          refreshAuthUI();
-          hijackAuthButton(); // re-hijack after Clerk loads in case button was re-rendered
-        });
+        initClerk(data.clerk_publishable_key);
       }
     })
     .catch(function(){});
