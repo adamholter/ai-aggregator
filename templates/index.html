@@ -523,6 +523,21 @@
 
 <!-- dashboard-overrides -->
 <style>
+/* Match Log In button styling to the other header buttons */
+.auth-button {
+  background: var(--button-bg) !important;
+  color: var(--button-text) !important;
+  border: 1px solid var(--border-color) !important;
+  padding: 8px 12px !important;
+  border-radius: 4px !important;
+  font-size: 0.8rem !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  transition: all 0.3s ease !important;
+  opacity: 1 !important;
+}
+.auth-button:hover { background: var(--button-hover-bg) !important; opacity: 1 !important; }
+
 /* Compact LLM modal layout */
 .compact-stats-row { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
 .compact-stat-pill { display:flex; flex-direction:column; align-items:center; gap:1px; padding:8px 14px; background:var(--surface-color,var(--bg-color)); border:1px solid var(--border-color); border-radius:10px; min-width:72px; }
