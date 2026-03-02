@@ -5,3 +5,4 @@ numpy==2.1.2
 plotly==5.24.0
 gunicorn==21.2.0
 beautifulsoup4==4.12.3
+libsql-experimental
