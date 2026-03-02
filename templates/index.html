@@ -1012,13 +1012,9 @@ window.renderAnalysisPayload = function(analysisContainer, result, options) {
     while (container.firstChild) container.removeChild(container.firstChild);
     clerkInstance.mountSignIn(container, {
       appearance: {
-        layout: { logoPlacement: 'none', showOptionalFields: false },
         elements: {
           rootBox: { fontFamily: 'inherit', width: '100%' },
-          card: { borderRadius: '0', boxShadow: 'none', border: 'none', background: 'transparent', padding: '8px 24px 16px' },
-          headerTitle: { display: 'none' },
-          headerSubtitle: { display: 'none' },
-          header: { display: 'none' },
+          card: { boxShadow: 'none', border: 'none', borderRadius: '0', margin: '0' },
           footer: { display: 'none' },
         }
       }
