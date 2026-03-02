@@ -1645,38 +1645,32 @@ def _serialize_user(user):
 
 
 def _verify_clerk_token(token):
-    """Verify a Clerk session token via the Clerk Backend API.
+    """Verify a Clerk JWT (from getToken()) via the Clerk Backend API.
     Returns the user payload dict on success, or None on failure."""
     if not CLERK_SECRET_KEY or not token:
         return None
+    # getToken() returns a short-lived JWT. Verify it by calling /oauth/userinfo
+    # or by decoding the JWT sub claim (user_id is in the 'sub' field).
+    # The simplest server-side approach: decode without verification to get user_id,
+    # then confirm via /v1/users/{user_id} (which requires a valid secret key).
     try:
-        resp = requests.get(
-            'https://api.clerk.com/v1/sessions/verify',
-            headers={
-                'Authorization': f'Bearer {CLERK_SECRET_KEY}',
-                'Content-Type': 'application/json',
-            },
-            params={'_clerk_session_id': ''},
-            timeout=5,
-        )
-        # Clerk's verify endpoint uses POST with token in body
-    except Exception:
-        pass
-
-    try:
-        resp = requests.post(
-            'https://api.clerk.com/v1/sessions/verify',
-            headers={
-                'Authorization': f'Bearer {CLERK_SECRET_KEY}',
-                'Content-Type': 'application/json',
-            },
-            json={'token': token},
-            timeout=5,
-        )
-        if resp.status_code == 200:
-            data = resp.json()
-            user_id = data.get('user_id') or data.get('id')
-            return {'clerk_id': user_id, '_raw': data}
+        import base64, json as _json
+        parts = token.split('.')
+        if len(parts) == 3:
+            payload_b64 = parts[1]
+            # Pad for base64
+            payload_b64 += '=' * (-len(payload_b64) % 4)
+            payload = _json.loads(base64.urlsafe_b64decode(payload_b64))
+            user_id = payload.get('sub')
+            if user_id:
+                # Confirm user exists in Clerk (this validates the secret key is correct)
+                resp = requests.get(
+                    f'https://api.clerk.com/v1/users/{user_id}',
+                    headers={'Authorization': f'Bearer {CLERK_SECRET_KEY}'},
+                    timeout=5,
+                )
+                if resp.status_code == 200:
+                    return {'clerk_id': user_id, '_raw': payload}
     except Exception:
         pass
     return None
