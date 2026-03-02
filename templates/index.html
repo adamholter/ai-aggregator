@@ -535,6 +535,8 @@
   cursor: pointer !important;
   transition: all 0.3s ease !important;
   opacity: 1 !important;
+  min-height: 39px !important;
+  line-height: 23px !important;
 }
 .auth-button:hover { background: var(--button-hover-bg) !important; opacity: 1 !important; }
 
@@ -970,15 +972,28 @@ window.renderAnalysisPayload = function(analysisContainer, result, options) {
 
   async function initClerk(publishableKey) {
     if (!publishableKey || clerkInstance) return;
+    // Derive Clerk frontend API domain from publishable key
+    // pk_test_BASE64$ -> atob(BASE64) = "domain$" -> strip trailing "$"
+    var b64 = publishableKey.split('_')[2] || '';
+    // atob needs proper padding
+    while (b64.length % 4) b64 += '=';
+    var domain = '';
+    try { domain = atob(b64).replace(/\$$/, ''); } catch(e) {}
+    var cdnUrl = domain
+      ? 'https://' + domain + '/npm/@clerk/clerk-js@latest/dist/clerk.browser.js'
+      : 'https://cdn.jsdelivr.net/npm/@clerk/clerk-js@5/dist/clerk.browser.js';
+
     await new Promise(function(resolve, reject) {
       if (window.Clerk) { resolve(); return; }
       var s = document.createElement('script');
-      s.src = 'https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js';
+      s.setAttribute('data-clerk-publishable-key', publishableKey);
+      s.src = cdnUrl;
       s.crossOrigin = 'anonymous';
       s.onload = resolve; s.onerror = reject;
       document.head.appendChild(s);
     });
-    clerkInstance = new window.Clerk(publishableKey);
+    // With data-clerk-publishable-key, window.Clerk is an instance, not a class
+    clerkInstance = window.Clerk;
     await clerkInstance.load();
     if (clerkInstance.session) await syncClerkSession();
     clerkInstance.addListener(function(state) {
