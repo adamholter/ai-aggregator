@@ -3,7 +3,8 @@
 # Usage: ./run_server.sh [port]
 # If you pass a port as the first argument it will use that instead of 8910.
 
-PROJECT_DIR="/Users/adam/playground/ai-dashboard"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$SCRIPT_DIR"
 PORT="${1:-8910}"
 export PORT
 # Optional: enable Flask debug by setting FLASK_DEBUG=1 in the environment

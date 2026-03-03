@@ -294,7 +294,123 @@ let latestMetadata = null;
 let latestLoadId = 0;
 const LATEST_PREVIEW_LIMIT = 10;
 const LATEST_CACHE_STORAGE_KEY = 'dashboard-latest-cache';
+const TAB_PREVIEW_CACHE_KEY = 'dashboard-tab-preview-cache-v1';
+const TAB_PREVIEW_LIMIT = 12;
+const TAB_PREVIEW_TTL_MS = 1000 * 60 * 30; // 30 minutes
 let latestControlsWired = false;
+const tabPreviewState = {};
+
+const TAB_PREVIEW_CONFIG = {
+    hype: { containerId: 'hype-data', loadingId: 'hype-loading', render: (items) => displayHypeItems({ items }) },
+    latest: { containerId: 'latest-data', loadingId: 'latest-loading', render: (items) => displayLatestFeed(items) },
+    blog: { containerId: 'blog-data', loadingId: 'blog-loading', render: (items) => displayBlogPosts({ posts: items, meta: { preview: true } }) },
+    monitor: { containerId: 'monitor-data', loadingId: 'monitor-loading', render: (items) => displayMonitorItems(items) },
+    'testing-catalog': { containerId: 'testing-catalog-data', loadingId: 'testing-catalog-loading', render: (items) => displayTestingCatalogItems(items) }
+};
+const TAB_PREVIEW_DATA_KEYS = {
+    hype: { cache: 'hype', raw: 'hype' },
+    latest: { cache: 'latest', raw: 'latest' },
+    blog: { cache: 'blog', raw: 'blog' },
+    monitor: { cache: 'monitor', raw: 'monitor' },
+    'testing-catalog': { cache: 'testingCatalog', raw: 'testingCatalog' }
+};
+
+function readTabPreviewCache() {
+    try {
+        const raw = localStorage.getItem(TAB_PREVIEW_CACHE_KEY);
+        if (!raw) return {};
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+        return {};
+    }
+}
+
+function writeTabPreviewCache(cache) {
+    try {
+        localStorage.setItem(TAB_PREVIEW_CACHE_KEY, JSON.stringify(cache || {}));
+    } catch {
+        // Ignore quota/storage errors
+    }
+}
+
+function setTabPreviewCache(section, items) {
+    if (!section || !Array.isArray(items) || !items.length) return;
+    const cache = readTabPreviewCache();
+    cache[section] = {
+        ts: Date.now(),
+        items: items.slice(0, TAB_PREVIEW_LIMIT)
+    };
+    writeTabPreviewCache(cache);
+}
+
+function getTabPreviewCache(section) {
+    const cache = readTabPreviewCache();
+    const entry = cache[section];
+    if (!entry || !Array.isArray(entry.items) || !entry.items.length) {
+        return null;
+    }
+    if ((Date.now() - Number(entry.ts || 0)) > TAB_PREVIEW_TTL_MS) {
+        delete cache[section];
+        writeTabPreviewCache(cache);
+        return null;
+    }
+    return entry.items.slice(0, TAB_PREVIEW_LIMIT);
+}
+
+function setTabPreviewState(section, active) {
+    if (active) {
+        tabPreviewState[section] = true;
+        return;
+    }
+    delete tabPreviewState[section];
+}
+
+function hasTabPreviewState(section) {
+    return Boolean(tabPreviewState[section]);
+}
+
+function markCardsForStagger(container, maxCards = TAB_PREVIEW_LIMIT) {
+    if (!container) return;
+    const cards = container.querySelectorAll('.model-card');
+    cards.forEach((card, index) => {
+        if (index >= maxCards) return;
+        card.classList.add('card-stagger-enter');
+        card.style.animationDelay = `${Math.min(index, 16) * 26}ms`;
+    });
+}
+
+function renderCachedPreview(section) {
+    const config = TAB_PREVIEW_CONFIG[section];
+    if (!config) return false;
+    const dataKeys = TAB_PREVIEW_DATA_KEYS[section] || {};
+    if ((dataKeys.cache && cachedData[dataKeys.cache]) || (dataKeys.raw && rawData[dataKeys.raw])) return false;
+    const items = getTabPreviewCache(section);
+    if (!items || !items.length) return false;
+
+    try {
+        const loadingElement = document.getElementById(config.loadingId);
+        if (loadingElement) {
+            loadingElement.style.display = 'flex';
+            loadingElement.classList.add('loading-preview');
+            const textEl = loadingElement.querySelector('.loading-subtext');
+            if (!textEl) {
+                const label = document.createElement('div');
+                label.className = 'loading-subtext';
+                label.textContent = `Showing cached preview while loading full ${section} data…`;
+                loadingElement.appendChild(label);
+            }
+        }
+        config.render(items);
+        const container = document.getElementById(config.containerId);
+        markCardsForStagger(container);
+        setTabPreviewState(section, true);
+        return true;
+    } catch (error) {
+        console.warn(`Failed to render cached preview for ${section}:`, error);
+        return false;
+    }
+}
 
 // Toast notification helper
 function showToast(message, type = 'info', duration = 5000) {
@@ -2813,6 +2929,7 @@ function loadSectionData(section) {
             }
             break;
         case 'hype':
+            renderCachedPreview('hype');
             if (!cachedData.hype) {
                 loadHypeData();
             } else {
@@ -2820,6 +2937,7 @@ function loadSectionData(section) {
             }
             break;
         case 'latest':
+            renderCachedPreview('latest');
             if (!cachedData.latest) {
                 loadLatestFeed();
             } else {
@@ -2827,6 +2945,7 @@ function loadSectionData(section) {
             }
             break;
         case 'monitor':
+            renderCachedPreview('monitor');
             if (!cachedData.monitor) {
                 loadMonitorFeed();
             } else {
@@ -2834,6 +2953,7 @@ function loadSectionData(section) {
             }
             break;
         case 'blog':
+            renderCachedPreview('blog');
             if (!cachedData.blog) {
                 loadBlogPosts();
             } else {
@@ -2841,6 +2961,7 @@ function loadSectionData(section) {
             }
             break;
         case 'testing-catalog':
+            renderCachedPreview('testing-catalog');
             if (!cachedData.testingCatalog) {
                 loadTestingCatalogData();
             } else {
@@ -3411,16 +3532,21 @@ async function loadHypeData(forceRefresh = false) {
 
     try {
         loadingElement.style.display = 'flex';
+        loadingElement.classList.toggle('loading-preview', hasTabPreviewState('hype'));
         errorElement.style.display = 'none';
-        dataElement.innerHTML = '';
+        if (!hasTabPreviewState('hype')) {
+            dataElement.innerHTML = '';
+        }
 
         const data = await fetchHypeData(forceRefresh);
         displayHypeItems(data);
+        setTabPreviewState('hype', false);
     } catch (error) {
         errorElement.textContent = `Failed to load hype feed: ${error.message}`;
         errorElement.style.display = 'block';
     } finally {
         loadingElement.style.display = 'none';
+        loadingElement.classList.remove('loading-preview');
     }
 }
 
@@ -3449,7 +3575,9 @@ function displayHypeItems(payload) {
     displayItems.forEach((item, index) => {
         container.appendChild(createHypeCard(item, index, fetchedAt));
     });
+    markCardsForStagger(container);
     recordDisplayedItems('hype', displayItems);
+    setTabPreviewCache('hype', displayItems);
 
     if (resultsInfo) {
         const summary = [`${displayItems.length} trending projects`];
@@ -3646,8 +3774,11 @@ async function loadTestingCatalogData(forceRefresh = false) {
     }
 
     loadingElement.style.display = 'flex';
+    loadingElement.classList.toggle('loading-preview', hasTabPreviewState('testing-catalog'));
     errorElement.style.display = 'none';
-    dataElement.innerHTML = '';
+    if (!hasTabPreviewState('testing-catalog')) {
+        dataElement.innerHTML = '';
+    }
     if (resultsElement) {
         resultsElement.style.display = 'none';
         resultsElement.textContent = '';
@@ -3692,6 +3823,7 @@ async function loadTestingCatalogData(forceRefresh = false) {
                 populateTestingCatalogTags(); // Populate tag filter dropdown
                 renderResultsText(mergedItems, payload, true);
                 errorElement.style.display = 'none';
+                setTabPreviewState('testing-catalog', false);
             } catch (fullError) {
                 if (loadId !== testingCatalogLoadId) {
                     return;
@@ -3725,6 +3857,7 @@ async function loadTestingCatalogData(forceRefresh = false) {
             return;
         }
         loadingElement.style.display = 'none';
+        loadingElement.classList.remove('loading-preview');
         startFullFetch();
     }
 }
@@ -3746,7 +3879,9 @@ function displayTestingCatalogItems(items) {
     displayItems.forEach(item => {
         container.appendChild(createTestingCatalogCard(item));
     });
+    markCardsForStagger(container);
     recordDisplayedItems('testing-catalog', displayItems);
+    setTabPreviewCache('testing-catalog', displayItems);
 }
 
 function createTestingCatalogCard(item) {
@@ -3910,14 +4045,18 @@ async function loadBlogPosts(forceRefresh = false) {
 
     try {
         loadingElement.style.display = 'flex';
+        loadingElement.classList.toggle('loading-preview', hasTabPreviewState('blog'));
         errorElement.style.display = 'none';
-        dataElement.innerHTML = '';
+        if (!hasTabPreviewState('blog')) {
+            dataElement.innerHTML = '';
+        }
 
         const data = await fetchBlogPostsData(forceRefresh, {
             perPage: BLOG_INITIAL_PAGE_SIZE,
             maxPages: 1
         });
         displayBlogPosts(data);
+        setTabPreviewState('blog', false);
         if (!data?.meta?.complete) {
             setTimeout(() => prefetchRemainingBlogPosts(), 250);
         }
@@ -3927,6 +4066,7 @@ async function loadBlogPosts(forceRefresh = false) {
         errorElement.style.display = 'block';
     } finally {
         loadingElement.style.display = 'none';
+        loadingElement.classList.remove('loading-preview');
     }
 }
 
@@ -3982,7 +4122,9 @@ function displayBlogPosts(payload) {
     displayPosts.forEach(post => {
         container.appendChild(createBlogCard(post));
     });
+    markCardsForStagger(container);
     recordDisplayedItems('blog', displayPosts);
+    setTabPreviewCache('blog', displayPosts);
 
     if (resultsInfo) {
         const summaryParts = [];
@@ -4143,8 +4285,11 @@ async function loadLatestFeed(forceRefresh = false) {
     }
 
     loadingElement.style.display = 'flex';
+    loadingElement.classList.toggle('loading-preview', hasTabPreviewState('latest'));
     errorElement.style.display = 'none';
-    dataElement.innerHTML = '';
+    if (!hasTabPreviewState('latest')) {
+        dataElement.innerHTML = '';
+    }
     if (resultsInfo) {
         resultsInfo.style.display = 'none';
         resultsInfo.textContent = '';
@@ -4177,6 +4322,7 @@ async function loadLatestFeed(forceRefresh = false) {
                 // Check for new items and show toast notification
                 checkForNewLatestItems(items);
                 errorElement.style.display = 'none';
+                setTabPreviewState('latest', false);
             } catch (error) {
                 if (loadId !== latestLoadId) {
                     return;
@@ -4218,6 +4364,7 @@ async function loadLatestFeed(forceRefresh = false) {
             return;
         }
         loadingElement.style.display = 'none';
+        loadingElement.classList.remove('loading-preview');
         startFullFetch();
     }
 }
@@ -4251,7 +4398,9 @@ function displayLatestFeed(items) {
     displayItems.forEach(item => {
         container.appendChild(createLatestCard(item));
     });
+    markCardsForStagger(container);
     recordDisplayedItems('latest', displayItems);
+    setTabPreviewCache('latest', displayItems);
 
     if (resultsInfo) {
         const total = displayItems.length;
@@ -4372,8 +4521,11 @@ async function loadMonitorFeed(forceRefresh = false) {
 
     try {
         loadingElement.style.display = 'flex';
+        loadingElement.classList.toggle('loading-preview', hasTabPreviewState('monitor'));
         errorElement.style.display = 'none';
-        dataElement.innerHTML = '';
+        if (!hasTabPreviewState('monitor')) {
+            dataElement.innerHTML = '';
+        }
         if (resultsInfo) {
             resultsInfo.style.display = 'none';
             resultsInfo.textContent = '';
@@ -4387,6 +4539,7 @@ async function loadMonitorFeed(forceRefresh = false) {
         cachedData.monitor = items;
         rawData.monitor = items;
         displayMonitorItems(items);
+        setTabPreviewState('monitor', false);
 
         if (resultsInfo) {
             const summaryParts = [];
@@ -4408,6 +4561,7 @@ async function loadMonitorFeed(forceRefresh = false) {
         errorElement.style.display = 'block';
     } finally {
         loadingElement.style.display = 'none';
+        loadingElement.classList.remove('loading-preview');
     }
 }
 
@@ -4427,7 +4581,9 @@ function displayMonitorItems(items) {
     displayItems.forEach(item => {
         container.appendChild(createMonitorCard(item));
     });
+    markCardsForStagger(container);
     recordDisplayedItems('monitor', displayItems);
+    setTabPreviewCache('monitor', displayItems);
 }
 
 function createMonitorCard(item) {

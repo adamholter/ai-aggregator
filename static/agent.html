@@ -629,7 +629,7 @@ button.icon-btn:hover, a.icon-btn:hover { background: var(--surface); border-col
     <button class="icon-btn" id="new-chat-btn" title="New conversation">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
     </button>
-    <a class="icon-btn" href="/agent-inspector" target="_blank" title="Agent Inspector — see system prompt, tools, skills">
+    <a class="icon-btn" id="agent-inspector-link" href="/agent-inspector" target="_blank" title="Agent Inspector — see system prompt, tools, skills">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
     </a>
     <button class="icon-btn" id="settings-toggle" title="Settings">
@@ -880,6 +880,16 @@ $msgs.addEventListener('click', e => {
 // ── Settings ──
 document.getElementById('settings-toggle').addEventListener('click', () => $settBar.classList.toggle('hidden'));
 document.getElementById('new-chat-btn').addEventListener('click', resetChat);
+
+const inspectorLink = document.getElementById('agent-inspector-link');
+if (inspectorLink) {
+  const host = (window.location && window.location.hostname || '').toLowerCase();
+  const localHosts = new Set(['localhost', '127.0.0.1', '::1']);
+  const isPrivateNetwork = /^10\./.test(host) || /^192\.168\./.test(host) || /^172\.(1[6-9]|2\d|3[01])\./.test(host);
+  if (!localHosts.has(host) && !isPrivateNetwork) {
+    inspectorLink.style.display = 'none';
+  }
+}
 $model.addEventListener('change', () => localStorage.setItem(LS_MODEL, $model.value));
 $deeper.addEventListener('change', () => localStorage.setItem(LS_DEEPER, $deeper.checked));
 $apiKey.addEventListener('input', () => localStorage.setItem(LS_APIKEY, $apiKey.value.trim()));

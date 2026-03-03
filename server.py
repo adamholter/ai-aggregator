@@ -12468,45 +12468,59 @@ def stripe_webhook():
 
 
 # Per-IP rate limiting for promo code attempts
-# Structure: { ip: [timestamp, ...] }
+# Structure: { ip: {'attempts': [timestamp, ...], 'lock_until': epoch_seconds} }
 _promo_attempt_log: dict = {}
 _PROMO_MAX_ATTEMPTS = 5
 _PROMO_WINDOW_SECONDS = 900   # 15 minutes
 _PROMO_LOCKOUT_SECONDS = 3600 # 1 hour after exceeding limit
 
 
-def _check_promo_rate_limit(ip: str) -> bool:
-    """Return True if request is allowed, False if rate-limited."""
+def _is_promo_rate_limited(ip: str) -> bool:
+    """Return True when the client is currently in lockout."""
     import time as _t
     now = _t.time()
-    timestamps = _promo_attempt_log.get(ip, [])
-    # Drop entries outside the window
-    timestamps = [ts for ts in timestamps if now - ts < _PROMO_WINDOW_SECONDS]
-    if len(timestamps) >= _PROMO_MAX_ATTEMPTS:
-        # Check if oldest attempt is within lockout period
-        if now - timestamps[0] < _PROMO_LOCKOUT_SECONDS:
-            return False
-        # Lockout expired — reset
-        timestamps = []
-    timestamps.append(now)
-    _promo_attempt_log[ip] = timestamps
-    return True
+    state = _promo_attempt_log.get(ip) or {}
+    lock_until = float(state.get('lock_until') or 0)
+    if lock_until and now < lock_until:
+        return True
+    # Lockout expired
+    if lock_until and now >= lock_until:
+        _promo_attempt_log.pop(ip, None)
+    return False
+
+
+def _record_promo_failure(ip: str) -> None:
+    import time as _t
+    now = _t.time()
+    state = _promo_attempt_log.get(ip) or {'attempts': [], 'lock_until': 0}
+    attempts = [ts for ts in state.get('attempts', []) if now - ts < _PROMO_WINDOW_SECONDS]
+    attempts.append(now)
+    lock_until = float(state.get('lock_until') or 0)
+    if len(attempts) >= _PROMO_MAX_ATTEMPTS:
+        lock_until = now + _PROMO_LOCKOUT_SECONDS
+    _promo_attempt_log[ip] = {'attempts': attempts, 'lock_until': lock_until}
+
+
+def _clear_promo_failures(ip: str) -> None:
+    _promo_attempt_log.pop(ip, None)
 
 
 @app.route('/api/redeem-promo', methods=['POST'])
 def redeem_promo():
     # Per-IP rate limiting — checked before auth to prevent unauthenticated enumeration
     client_ip = request.headers.get('X-Forwarded-For', request.remote_addr or '').split(',')[0].strip()
-    if not _check_promo_rate_limit(client_ip):
+    if _is_promo_rate_limited(client_ip):
         return jsonify({'error': 'Too many attempts. Please wait before trying again.'}), 429
 
     user = get_current_user()
     if not user:
+        _record_promo_failure(client_ip)
         return jsonify({'error': 'Login required'}), 401
 
     data = request.get_json(silent=True) or {}
     code = (data.get('code') or '').strip().upper()
     if not code:
+        _record_promo_failure(client_ip)
         return jsonify({'error': 'No code provided'}), 400
 
     from backend.app import db as _db
@@ -12519,6 +12533,7 @@ def redeem_promo():
     )
     # Return the same error for invalid and expired codes to avoid enumeration
     if not promo:
+        _record_promo_failure(client_ip)
         return jsonify({'error': 'Invalid or expired promo code'}), 404
 
     user_id = user['id']
@@ -12568,6 +12583,7 @@ def redeem_promo():
             (user_id, code_hash)
         )
         _db.execute('UPDATE promo_codes SET uses_remaining=uses_remaining-1 WHERE code_hash=?', (code_hash,))
+        _clear_promo_failures(client_ip)
         return jsonify({'type': 'checkout', 'url': session.url})
 
     # Free-access path: grant tier directly
@@ -12584,6 +12600,7 @@ def redeem_promo():
         (user_id, code_hash)
     )
     _db.execute('UPDATE promo_codes SET uses_remaining=uses_remaining-1 WHERE code_hash=?', (code_hash,))
+    _clear_promo_failures(client_ip)
     return jsonify({'success': True, 'tier': tier})
 
 
@@ -13071,17 +13088,6 @@ if __name__ == '__main__':
     parser.add_argument('--debug', action='store_true', help='Enable Flask debug mode')
     args = parser.parse_args()
 
-    # Create static directory if it doesn't exist
-    static_dir = os.path.join(os.path.dirname(__file__), 'static')
-    if not os.path.exists(static_dir):
-        os.makedirs(static_dir)
-    
-    # Copy HTML, CSS, and JS files to static directory
-    import shutil
-    for file in ['index.html', 'styles.css', 'script.js']:
-        if os.path.exists(file):
-            shutil.copy2(file, os.path.join(static_dir, file))
-    
     # Determine host/port/debug precedence: CLI > env > defaults
     host = args.host or os.environ.get('HOST', '0.0.0.0')
 

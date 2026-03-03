@@ -566,6 +566,17 @@ body {
     animation: spin 0.75s linear infinite;
 }
 
+.loading.loading-preview {
+    min-height: 88px;
+    padding: 12px 20px 20px;
+}
+
+.loading .loading-subtext {
+    margin-top: 6px;
+    font-size: 0.82rem;
+    color: var(--info-text);
+}
+
 .error {
     background: var(--error-bg);
     color: var(--error-text);
@@ -593,6 +604,23 @@ body {
     padding-top: 22px;
     transition: all 0.2s ease;
     position: relative;
+}
+
+.model-card.card-stagger-enter {
+    opacity: 0;
+    transform: translateY(6px);
+    animation: cardStaggerIn 220ms ease forwards;
+}
+
+@keyframes cardStaggerIn {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .model-card:hover {

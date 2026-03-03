@@ -127,6 +127,7 @@
   'use strict';
   var _billing = 'monthly';
   var _userData = null;
+  var UPGRADE_USER_CACHE_KEY = 'dashboard-upgrade-user-cache-v1';
 
   var PLANS = [
     { key: 'free',    name: 'Free',    monthly: 0,  annual: 0,
@@ -138,6 +139,27 @@
     { key: 'max',     name: 'Max',     monthly: 20, annual: 240,
       desc: '$20/mo of server-side inference credit. For heavy research workloads.' },
   ];
+
+  function _readCachedUser() {
+    try {
+      var raw = localStorage.getItem(UPGRADE_USER_CACHE_KEY);
+      if (!raw) return null;
+      var parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object' || !parsed.user) return null;
+      return parsed.user;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function _writeCachedUser(user) {
+    try {
+      localStorage.setItem(UPGRADE_USER_CACHE_KEY, JSON.stringify({
+        ts: Date.now(),
+        user: user || null
+      }));
+    } catch (e) {}
+  }
 
   window.upgradeSetBilling = function(period) {
     _billing = period;
@@ -260,11 +282,19 @@
   }
 
   window.upgradeLoadTab = function() {
+    if (!_userData) {
+      _userData = _readCachedUser();
+      if (_userData) {
+        _updateBanner(_userData && _userData.subscription);
+      }
+    }
+    _renderCards();
     fetch('/api/me').then(function(r) { return r.json(); }).then(function(data) {
       _userData = data.user || null;
+      _writeCachedUser(_userData);
       _updateBanner(_userData && _userData.subscription);
       _renderCards();
-    }).catch(function() { _renderCards(); });
+    }).catch(function() {});
   };
 
   window.upgradeSubscribe = function(priceKey) {
