@@ -12408,6 +12408,7 @@ def create_checkout_session():
         checkout = _stripe_module.checkout.Session.create(
             mode='subscription',
             line_items=[{'price': price_id, 'quantity': 1}],
+            allow_promotion_codes=True,
             success_url=f'{base_url}/?upgrade=success',
             cancel_url=f'{base_url}/?upgrade=cancelled',
             client_reference_id=user['id'],

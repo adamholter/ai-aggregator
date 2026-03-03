@@ -22,24 +22,6 @@
 .upgrade-usage-bar-fill { height: 100%; border-radius: 4px; background: #2563eb; transition: width .4s ease; }
 .upgrade-usage-bar-fill.warn { background: #f59e0b; }
 .upgrade-usage-bar-fill.danger { background: #ef4444; }
-.upgrade-promo { margin-bottom: 32px; }
-.upgrade-promo h3 { font-size: 14px; font-weight: 600; color: var(--text-color); margin: 0 0 10px; }
-.upgrade-promo-row { display: flex; gap: 8px; align-items: center; }
-.upgrade-promo-input {
-  flex: 1; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 6px;
-  font-size: 13px; background: var(--bg-color); color: var(--text-color);
-  font-family: ui-monospace, monospace; letter-spacing: .08em; text-transform: uppercase;
-}
-.upgrade-promo-input:focus { outline: none; border-color: #2563eb; }
-.upgrade-promo-btn {
-  padding: 8px 16px; background: var(--button-bg); color: var(--button-text);
-  border: 1px solid var(--border-color); border-radius: 6px; font-size: 13px;
-  font-weight: 500; cursor: pointer; transition: background .15s; white-space: nowrap;
-}
-.upgrade-promo-btn:hover { background: var(--button-hover-bg); }
-.upgrade-promo-msg { margin-top: 6px; font-size: 12px; }
-.upgrade-promo-msg.ok { color: #16a34a; }
-.upgrade-promo-msg.err { color: #dc2626; }
 .upgrade-billing-toggle { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; font-size: 13px; color: var(--text-secondary); }
 .upgrade-billing-toggle button {
   padding: 5px 14px; border-radius: 20px; border: 1px solid var(--border-color);
@@ -99,15 +81,6 @@
       <div class="upgrade-usage-bar-bg"><div class="upgrade-usage-bar-fill" id="upgrade-usage-bar" style="width:0%"></div></div>
     </div>
 
-    <div class="upgrade-promo">
-      <h3>Have a promo code?</h3>
-      <div class="upgrade-promo-row">
-        <input class="upgrade-promo-input" id="upgrade-promo-input" placeholder="XXXXXXXXX" maxlength="32" />
-        <button class="upgrade-promo-btn" onclick="window.upgradeRedeemPromo()">Apply</button>
-      </div>
-      <div class="upgrade-promo-msg" id="upgrade-promo-msg"></div>
-    </div>
-
     <div class="upgrade-billing-toggle">
       <button class="active" id="upgrade-toggle-monthly" onclick="window.upgradeSetBilling('monthly')">Monthly</button>
       <button id="upgrade-toggle-annual" onclick="window.upgradeSetBilling('annual')">Annual</button>
@@ -115,6 +88,9 @@
     </div>
 
     <div class="upgrade-pricing-grid" id="upgrade-pricing-grid"></div>
+    <p style="color:var(--text-secondary);font-size:12px;margin:-12px 0 22px;">
+      Promo codes are entered in the Stripe checkout page after you click Subscribe.
+    </p>
 
     <div class="upgrade-manage" id="upgrade-manage-wrap" style="display:none;">
       <a onclick="window.upgradeOpenBillingPortal()">Manage billing &amp; invoices &#8599;</a>
@@ -315,35 +291,6 @@
         if (data.url) { window.location.href = data.url; }
         else { alert(data.error || 'Could not open billing portal'); }
       }).catch(function() { alert('Failed to open billing portal.'); });
-  };
-
-  window.upgradeRedeemPromo = function() {
-    var input = document.getElementById('upgrade-promo-input');
-    var msg = document.getElementById('upgrade-promo-msg');
-    var code = (input ? input.value : '').trim().toUpperCase();
-    if (!code) return;
-    if (msg) { msg.textContent = 'Applying\u2026'; msg.className = 'upgrade-promo-msg'; }
-    fetch('/api/redeem-promo', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code: code })
-    }).then(function(r) { return r.json(); }).then(function(data) {
-      if (data.type === 'checkout' && data.url) {
-        // Stripe coupon path — redirect to checkout
-        if (msg) { msg.textContent = 'Redirecting to checkout\u2026'; msg.className = 'upgrade-promo-msg ok'; }
-        window.location.href = data.url;
-        return;
-      }
-      if (data.success) {
-        if (msg) { msg.textContent = 'Code applied! You now have ' + (data.tier || '') + ' access.'; msg.className = 'upgrade-promo-msg ok'; }
-        if (input) input.value = '';
-        window.upgradeLoadTab();
-      } else {
-        if (msg) { msg.textContent = data.error || 'Invalid code.'; msg.className = 'upgrade-promo-msg err'; }
-      }
-    }).catch(function() {
-      if (msg) { msg.textContent = 'Error applying code.'; msg.className = 'upgrade-promo-msg err'; }
-    });
   };
 
   document.addEventListener('click', function(e) {
