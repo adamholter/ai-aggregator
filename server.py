@@ -1912,12 +1912,16 @@ def get_current_user():
 
 def _run_with_timeout(fn, timeout_seconds=12):
     """Execute blocking calls with an upper bound to prevent hanging requests."""
-    with ThreadPoolExecutor(max_workers=1) as executor:
-        future = executor.submit(fn)
-        try:
-            return future.result(timeout=timeout_seconds)
-        except FuturesTimeout:
-            raise TimeoutError(f'Operation timed out after {timeout_seconds}s')
+    executor = ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(fn)
+    try:
+        return future.result(timeout=timeout_seconds)
+    except FuturesTimeout:
+        future.cancel()
+        raise TimeoutError(f'Operation timed out after {timeout_seconds}s')
+    finally:
+        # Do not wait for a potentially stuck network call.
+        executor.shutdown(wait=False, cancel_futures=True)
 
 
 def _load_pin_store():
