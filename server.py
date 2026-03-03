@@ -66,7 +66,7 @@ def _load_local_env_files():
 # Load .env before Flask init so all env vars (including APP_SECRET_KEY) are available
 _load_local_env_files()
 
-app = Flask(__name__, static_folder='.', static_url_path='')
+app = Flask(__name__, static_folder='static', static_url_path='/static')
 CORS(app)
 # Use env var if set; fall back to a random key (sessions won't persist across restarts, which is fine)
 app.secret_key = os.environ.get('APP_SECRET_KEY') or secrets.token_hex(32)
@@ -765,6 +765,9 @@ def inline_exp_agent_tools():
 @app.route('/api/agent-info', methods=['GET'])
 def api_agent_info():
     """Return system prompt and full tool definitions for the inspector dashboard."""
+    access_error = _require_internal_debug_access()
+    if access_error:
+        return access_error
     deeper = request.args.get('deeper', 'false').lower() == 'true'
     return jsonify({
         'system_prompt': get_agent_system_prompt(deeper_mode=deeper),
@@ -791,6 +794,9 @@ def _list_skills():
 @app.route('/api/agent-execute-tool', methods=['POST'])
 def api_agent_execute_tool():
     """Execute a single agent tool and return full raw output for inspector."""
+    access_error = _require_internal_debug_access()
+    if access_error:
+        return access_error
     import time as _time
     data = request.get_json() or {}
     tool_name = (data.get('tool_name') or '').strip()
@@ -821,6 +827,9 @@ def api_agent_execute_tool():
 @app.route('/api/agent-debug-stream', methods=['POST'])
 def api_agent_debug_stream():
     """SSE stream of the agent loop with full per-tool visibility."""
+    access_error = _require_internal_debug_access()
+    if access_error:
+        return access_error
     from flask import Response, stream_with_context
     import time as _time
 
@@ -929,6 +938,9 @@ def api_agent_debug_stream():
 @app.route('/agent-inspector')
 def agent_inspector_page():
     """Agent Inspector / Command Center — see system prompt, tools, skills, and test tools."""
+    access_error = _require_internal_debug_access()
+    if access_error:
+        return access_error
     path = os.path.join(os.path.dirname(__file__), 'static', 'agent-inspector.html')
     try:
         with open(path, 'r', encoding='utf-8') as f:
@@ -1404,6 +1416,7 @@ STRIPE_PRICES = {
 }
 TIER_CREDITS = {'starter': 3.0, 'pro': 8.0, 'max': 20.0}
 ADMIN_SECRET = (os.environ.get('ADMIN_SECRET') or '').strip()
+APP_BASE_URL = (os.environ.get('APP_BASE_URL') or '').strip().rstrip('/')
 if _stripe_available and STRIPE_SECRET_KEY:
     _stripe_module.api_key = STRIPE_SECRET_KEY
 DEEP_RESEARCH_MODEL_ID = 'openai/o4-mini-deep-research'
@@ -1580,6 +1593,33 @@ def _normalize_email(value):
     return str(value).strip().lower()
 
 
+def _is_local_request() -> bool:
+    remote_addr = (request.remote_addr or '').strip()
+    return remote_addr in {'127.0.0.1', '::1'}
+
+
+def _has_valid_admin_secret() -> bool:
+    if not ADMIN_SECRET:
+        return False
+    header_secret = (request.headers.get('X-Admin-Secret') or '').strip()
+    if not header_secret:
+        return False
+    return secrets.compare_digest(header_secret, ADMIN_SECRET)
+
+
+def _require_internal_debug_access():
+    """Allow debug/inspector endpoints for localhost or admin secret."""
+    if _is_local_request() or _has_valid_admin_secret():
+        return None
+    return jsonify({'error': 'Forbidden'}), 403
+
+
+def _can_use_debug_tools() -> bool:
+    if not has_request_context():
+        return False
+    return _is_local_request() or _has_valid_admin_secret()
+
+
 def _load_users():
     try:
         with open(USERS_DB_PATH, 'r', encoding='utf-8') as handle:
@@ -1693,6 +1733,13 @@ def _get_monthly_usage_cost(user_id):
         return 0.0
 
 
+def _get_app_base_url() -> str:
+    """Return canonical app URL for redirects; prefer configured value over Host header."""
+    if APP_BASE_URL:
+        return APP_BASE_URL
+    return (request.host_url or '').rstrip('/')
+
+
 def _record_server_key_usage(user_id, model, cost_usd, tokens_input=0, tokens_output=0):
     """Record a usage event for server-key inference."""
     if not user_id or cost_usd <= 0:
@@ -1736,10 +1783,8 @@ def _verify_clerk_token(token):
     Returns the user payload dict on success, or None on failure."""
     if not CLERK_SECRET_KEY or not token:
         return None
-    # getToken() returns a short-lived JWT. Verify it by calling /oauth/userinfo
-    # or by decoding the JWT sub claim (user_id is in the 'sub' field).
-    # The simplest server-side approach: decode without verification to get user_id,
-    # then confirm via /v1/users/{user_id} (which requires a valid secret key).
+    # Validate Clerk session by checking JWT claims + corresponding Clerk session record.
+    # This avoids trusting unverified JWT payloads.
     try:
         import base64, json as _json
         parts = token.split('.')
@@ -1749,15 +1794,29 @@ def _verify_clerk_token(token):
             payload_b64 += '=' * (-len(payload_b64) % 4)
             payload = _json.loads(base64.urlsafe_b64decode(payload_b64))
             user_id = payload.get('sub')
-            if user_id:
-                # Confirm user exists in Clerk (this validates the secret key is correct)
+            session_id = payload.get('sid')
+            now = int(time.time())
+            exp = int(payload.get('exp') or 0)
+            nbf = int(payload.get('nbf') or 0)
+            if exp and exp <= now:
+                return None
+            if nbf and nbf > now:
+                return None
+            if user_id and session_id:
+                # Confirm the session exists and belongs to the same user.
                 resp = requests.get(
-                    f'https://api.clerk.com/v1/users/{user_id}',
+                    f'https://api.clerk.com/v1/sessions/{session_id}',
                     headers={'Authorization': f'Bearer {CLERK_SECRET_KEY}'},
                     timeout=5,
                 )
                 if resp.status_code == 200:
-                    return {'clerk_id': user_id, '_raw': payload}
+                    session_payload = resp.json() or {}
+                    if session_payload.get('user_id') != user_id:
+                        return None
+                    status = (session_payload.get('status') or '').lower()
+                    if status not in {'active'}:
+                        return None
+                    return {'clerk_id': user_id, '_raw': payload, 'session_id': session_id}
     except Exception:
         pass
     return None
@@ -5665,6 +5724,8 @@ def _execute_agent_tool(tool_name, tool_args, api_key=None, deeper_mode=False):
         
         # Handle run_python — sandboxed code execution with tool helpers
         if tool_name == "run_python":
+            if not _can_use_debug_tools():
+                return "Error: run_python is restricted to internal debug sessions."
             code = tool_args.get("code", "")
             if not code.strip():
                 return "Error: run_python requires a non-empty 'code' argument"
@@ -7388,14 +7449,16 @@ def index():
 @app.route('/about')
 def about_page():
     """Serve the about page."""
-    return app.send_static_file('about.html')
+    from flask import send_file
+    return send_file(os.path.join(os.path.dirname(__file__), 'about.html'))
 
 
 
 @app.route('/docs')
 def docs_page():
     """Serve the API/LLM documentation page."""
-    return app.send_static_file('docs.html')
+    from flask import send_file
+    return send_file(os.path.join(os.path.dirname(__file__), 'docs.html'))
 
 @app.route('/card-game')
 def card_game_page():
@@ -10719,6 +10782,9 @@ def _build_agent_v2_executor():
 
 @app.route('/api/agent-v2/skills', methods=['GET'])
 def agent_v2_skills():
+    access_error = _require_internal_debug_access()
+    if access_error:
+        return access_error
     try:
         skills = list_skill_frontmatter(os.path.join(BASE_DIR, 'skills'))
         return jsonify({'skills': skills})
@@ -10728,6 +10794,9 @@ def agent_v2_skills():
 
 @app.route('/api/agent-v2/models', methods=['GET'])
 def agent_v2_models():
+    access_error = _require_internal_debug_access()
+    if access_error:
+        return access_error
     try:
         models = load_openrouter_models(force_refresh=False)
         return jsonify({
@@ -10777,7 +10846,14 @@ def agent_v2_chat():
     model_id = str(settings_payload.get('model') or 'anthropic/claude-sonnet-4').strip()
     umi_model = str(settings_payload.get('umi_model') or 'google/gemini-2.5-flash').strip()
     web_search_model = str(settings_payload.get('web_search_model') or 'perplexity/sonar-pro').strip()
-    api_key = (settings_payload.get('api_key') or OPENROUTER_API_KEY or '').strip()
+    api_key = (settings_payload.get('api_key') or '').strip()
+    if not api_key:
+        try:
+            api_key, _is_sk_v2, _sk_uid_v2 = require_user_openrouter_token()
+        except CreditExhaustedError as exc:
+            return credit_exhausted_response(str(exc))
+        except MissingOpenRouterKeyError:
+            return openrouter_key_required_response()
     system_override = str(settings_payload.get('system_prompt_override') or '').strip()
 
     settings = AgentSettings(
@@ -10858,7 +10934,14 @@ def agent_v2_chat_stream():
     model_id = str(settings_payload.get('model') or 'anthropic/claude-sonnet-4').strip()
     umi_model = str(settings_payload.get('umi_model') or 'google/gemini-2.5-flash').strip()
     web_search_model = str(settings_payload.get('web_search_model') or 'perplexity/sonar-pro').strip()
-    api_key = (settings_payload.get('api_key') or OPENROUTER_API_KEY or '').strip()
+    api_key = (settings_payload.get('api_key') or '').strip()
+    if not api_key:
+        try:
+            api_key, _is_sk_v2_stream, _sk_uid_v2_stream = require_user_openrouter_token()
+        except CreditExhaustedError as exc:
+            return credit_exhausted_response(str(exc))
+        except MissingOpenRouterKeyError:
+            return openrouter_key_required_response()
     system_override = str(settings_payload.get('system_prompt_override') or '').strip()
 
     settings = AgentSettings(
@@ -10901,6 +10984,9 @@ def agent_v2_chat_stream():
 @app.route('/api/agent-v2/inspector/config', methods=['GET'])
 def agent_v2_inspector_config():
     """Return everything the agent sees: system prompts, tool schemas, skill bodies."""
+    access_error = _require_internal_debug_access()
+    if access_error:
+        return access_error
     skills_dir = os.path.join(BASE_DIR, 'skills')
     skills = list_skill_frontmatter(skills_dir)
 
@@ -10944,12 +11030,22 @@ def agent_v2_inspector_config():
 @app.route('/api/agent-v2/inspector/test-tool', methods=['POST'])
 def agent_v2_inspector_test_tool():
     """Execute a single agent tool and return the raw result."""
+    access_error = _require_internal_debug_access()
+    if access_error:
+        return access_error
     data = request.get_json(force=True, silent=True) or {}
     tool_name = str(data.get('tool_name') or '').strip()
     args = data.get('args') or {}
     if not isinstance(args, dict):
         args = {}
-    api_key = (data.get('api_key') or OPENROUTER_API_KEY or '').strip()
+    api_key = (data.get('api_key') or '').strip()
+    if not api_key:
+        try:
+            api_key, _is_sk_v2_test, _sk_uid_v2_test = require_user_openrouter_token()
+        except CreditExhaustedError as exc:
+            return credit_exhausted_response(str(exc))
+        except MissingOpenRouterKeyError:
+            return openrouter_key_required_response()
 
     if not tool_name:
         return jsonify({'ok': False, 'error': {'message': 'tool_name is required'}}), 400
@@ -12251,7 +12347,10 @@ def auth_clerk_sync():
     """Called by the frontend after Clerk sign-in to sync the user into Turso
     and establish a Flask session for legacy-compatible auth."""
     data = request.get_json(silent=True) or {}
-    token = data.get('token') or request.headers.get('Authorization', '')[7:].strip()
+    auth_header = request.headers.get('Authorization', '')
+    token = data.get('token')
+    if not token and isinstance(auth_header, str) and auth_header.startswith('Bearer '):
+        token = auth_header[7:].strip()
     if not token:
         return jsonify({'error': 'No token provided'}), 400
     verified = _verify_clerk_token(token)
@@ -12282,12 +12381,13 @@ def create_checkout_session():
     price_id = STRIPE_PRICES.get(price_key)
     if not price_id:
         return jsonify({'error': f'Invalid price key: {price_key}'}), 400
+    base_url = _get_app_base_url()
     try:
         checkout = _stripe_module.checkout.Session.create(
             mode='subscription',
             line_items=[{'price': price_id, 'quantity': 1}],
-            success_url=request.host_url + '?upgrade=success',
-            cancel_url=request.host_url + '?upgrade=cancelled',
+            success_url=f'{base_url}/?upgrade=success',
+            cancel_url=f'{base_url}/?upgrade=cancelled',
             client_reference_id=user['id'],
             customer_email=user.get('email') or None,
             metadata={'user_id': user['id']},
@@ -12307,10 +12407,11 @@ def billing_portal():
     sub = _get_user_subscription(user['id'])
     if not sub or not sub.get('stripe_customer_id'):
         return jsonify({'error': 'No Stripe subscription found'}), 404
+    base_url = _get_app_base_url()
     try:
         portal = _stripe_module.billing_portal.Session.create(
             customer=sub['stripe_customer_id'],
-            return_url=request.host_url,
+            return_url=f'{base_url}/',
         )
         return jsonify({'url': portal.url})
     except Exception as exc:
@@ -12448,12 +12549,13 @@ def redeem_promo():
         if not price_id:
             return jsonify({'error': 'Invalid price configuration'}), 500
         try:
+            base_url = _get_app_base_url()
             session = _stripe_module.checkout.Session.create(
                 mode='subscription',
                 line_items=[{'price': price_id, 'quantity': 1}],
                 discounts=[{'coupon': stripe_coupon_id}],
-                success_url=request.host_url + '?upgrade=success',
-                cancel_url=request.host_url + '?upgrade=cancelled',
+                success_url=f'{base_url}/?upgrade=success',
+                cancel_url=f'{base_url}/?upgrade=cancelled',
                 client_reference_id=user_id,
                 customer_email=user.get('email'),
                 metadata={'user_id': user_id},
