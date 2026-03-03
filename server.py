@@ -1876,7 +1876,17 @@ def _upsert_clerk_user(clerk_user):
 
 
 def get_current_user():
-    # 1. Check for Clerk session token in Authorization header or cookie
+    # 1. Fast-path legacy session auth first to avoid unnecessary Clerk API latency
+    email = session.get('user_email')
+    if email:
+        user = _find_user_by_email(email)
+        if user:
+            return user
+        # If using Google Sheets auth, user may not exist in local file storage.
+        if GOOGLE_SHEETS_AUTH_URL:
+            return {'id': email, 'email': email}
+
+    # 2. Check for Clerk session token in Authorization header or cookie
     auth_header = request.headers.get('Authorization', '')
     clerk_token = None
     if auth_header.startswith('Bearer '):
@@ -1896,18 +1906,18 @@ def get_current_user():
             email = raw.get('email', '')
             return {'id': clerk_id, 'email': email}
 
-    # 2. Fall back to legacy session-based auth
-    email = session.get('user_email')
-    if not email:
-        return None
-    # Try local file lookup first
-    user = _find_user_by_email(email)
-    if user:
-        return user
-    # If using Google Sheets auth, user won't be in local file
-    if GOOGLE_SHEETS_AUTH_URL:
-        return {'id': email, 'email': email}
+    # 3. No valid auth context found
     return None
+
+
+def _run_with_timeout(fn, timeout_seconds=12):
+    """Execute blocking calls with an upper bound to prevent hanging requests."""
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(fn)
+        try:
+            return future.result(timeout=timeout_seconds)
+        except FuturesTimeout:
+            raise TimeoutError(f'Operation timed out after {timeout_seconds}s')
 
 
 def _load_pin_store():
@@ -12405,15 +12415,18 @@ def create_checkout_session():
         return jsonify({'error': f'Invalid price key: {price_key}'}), 400
     base_url = _get_app_base_url()
     try:
-        checkout = _stripe_module.checkout.Session.create(
-            mode='subscription',
-            line_items=[{'price': price_id, 'quantity': 1}],
-            allow_promotion_codes=True,
-            success_url=f'{base_url}/?upgrade=success',
-            cancel_url=f'{base_url}/?upgrade=cancelled',
-            client_reference_id=user['id'],
-            customer_email=user.get('email') or None,
-            metadata={'user_id': user['id']},
+        checkout = _run_with_timeout(
+            lambda: _stripe_module.checkout.Session.create(
+                mode='subscription',
+                line_items=[{'price': price_id, 'quantity': 1}],
+                allow_promotion_codes=True,
+                success_url=f'{base_url}/?upgrade=success',
+                cancel_url=f'{base_url}/?upgrade=cancelled',
+                client_reference_id=user['id'],
+                customer_email=user.get('email') or None,
+                metadata={'user_id': user['id']},
+            ),
+            timeout_seconds=12
         )
         return jsonify({'url': checkout.url})
     except Exception as exc:
@@ -12432,9 +12445,12 @@ def billing_portal():
         return jsonify({'error': 'No Stripe subscription found'}), 404
     base_url = _get_app_base_url()
     try:
-        portal = _stripe_module.billing_portal.Session.create(
-            customer=sub['stripe_customer_id'],
-            return_url=f'{base_url}/',
+        portal = _run_with_timeout(
+            lambda: _stripe_module.billing_portal.Session.create(
+                customer=sub['stripe_customer_id'],
+                return_url=f'{base_url}/',
+            ),
+            timeout_seconds=12
         )
         return jsonify({'url': portal.url})
     except Exception as exc:

@@ -280,9 +280,17 @@
       btn.dataset.originalText = btn.textContent || 'Subscribe';
       btn.textContent = 'Starting…';
     }
+    var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var timeoutId = null;
+    if (controller) {
+      timeoutId = setTimeout(function() {
+        try { controller.abort(); } catch (e) {}
+      }, 12000);
+    }
     fetch('/api/create-checkout-session', {
       method: 'POST',
       credentials: 'same-origin',
+      signal: controller ? controller.signal : undefined,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ price_key: priceKey })
     }).then(function(r) {
@@ -298,8 +306,15 @@
       } else {
         alert(data.error || 'Checkout failed');
       }
-    }).catch(function() { alert('Checkout failed. Please try again.'); })
+    }).catch(function(err) {
+      if (err && err.name === 'AbortError') {
+        alert('Checkout is taking longer than expected. Please try again.');
+      } else {
+        alert('Checkout failed. Please try again.');
+      }
+    })
       .finally(function() {
+        if (timeoutId) clearTimeout(timeoutId);
         if (btn && btn.classList && btn.classList.contains('upgrade-cta-btn')) {
           btn.disabled = false;
           btn.textContent = btn.dataset.originalText || 'Subscribe';
