@@ -1043,21 +1043,36 @@ window.renderAnalysisPayload = function(analysisContainer, result, options) {
   function showClerkSignIn() {
     var overlay = document.getElementById('clerk-auth-overlay');
     var container = document.getElementById('clerk-sign-in-container');
-    if (!overlay) return;
     var oldModal = document.getElementById('auth-modal');
+    if (!overlay) {
+      if (oldModal) oldModal.style.display = 'flex';
+      return;
+    }
+
+    // If Clerk hasn't loaded yet, fall back to the legacy modal instead of showing a blank shell.
+    if (!clerkInstance || !clerkInstance.mountSignIn) {
+      overlay.style.display = 'none';
+      if (oldModal) oldModal.style.display = 'flex';
+      return;
+    }
+
     if (oldModal) oldModal.style.display = 'none';
     overlay.style.display = 'flex';
-    if (!clerkInstance) return;
     while (container.firstChild) container.removeChild(container.firstChild);
-    clerkInstance.mountSignIn(container, {
-      appearance: {
-        elements: {
-          rootBox: { fontFamily: 'inherit', width: '100%' },
-          card: { boxShadow: 'none', border: 'none', borderRadius: '0', margin: '0' },
-          footer: { display: 'none' },
+    try {
+      clerkInstance.mountSignIn(container, {
+        appearance: {
+          elements: {
+            rootBox: { fontFamily: 'inherit', width: '100%' },
+            card: { boxShadow: 'none', border: 'none', borderRadius: '0', margin: '0' },
+            footer: { display: 'none' },
+          }
         }
-      }
-    });
+      });
+    } catch (e) {
+      overlay.style.display = 'none';
+      if (oldModal) oldModal.style.display = 'flex';
+    }
   }
 
   function hideClerkSignIn() {
