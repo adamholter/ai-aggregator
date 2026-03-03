@@ -18,7 +18,6 @@ import shutil
 import json
 import signal
 import time
-import numpy as np
 import math
 import re
 import ast
@@ -11961,7 +11960,9 @@ def analyze_data_correlations(model_data, metrics=None):
                 if len(aligned_values1) >= 3 and len(aligned_values2) >= 3:
                     try:
                         # Calculate Pearson correlation coefficient
-                        correlation = np.corrcoef(aligned_values1, aligned_values2)[0, 1]
+                        correlation = _pearson_correlation(aligned_values1, aligned_values2)
+                        if correlation is None:
+                            continue
                         correlations[f"{metric1}_vs_{metric2}"] = {
                             'correlation': correlation,
                             'strength': get_correlation_strength(correlation),
@@ -11997,7 +11998,7 @@ def safe_float(value):
 
 def get_correlation_strength(correlation):
     """Determine correlation strength category"""
-    if correlation is None or np.isnan(correlation):
+    if correlation is None or (isinstance(correlation, float) and math.isnan(correlation)):
         return "No Correlation"
     
     abs_corr = abs(correlation)
@@ -12029,6 +12030,27 @@ def generate_correlation_insights(correlations):
         insights.append("No strong correlations found between the analyzed metrics.")
     
     return insights
+
+
+def _pearson_correlation(values1, values2):
+    """Compute Pearson correlation without numpy to avoid native-extension dependency."""
+    n = min(len(values1), len(values2))
+    if n < 3:
+        return None
+
+    x = [float(v) for v in values1[:n]]
+    y = [float(v) for v in values2[:n]]
+
+    mean_x = sum(x) / n
+    mean_y = sum(y) / n
+
+    num = sum((a - mean_x) * (b - mean_y) for a, b in zip(x, y))
+    den_x = math.sqrt(sum((a - mean_x) ** 2 for a in x))
+    den_y = math.sqrt(sum((b - mean_y) ** 2 for b in y))
+    den = den_x * den_y
+    if den == 0:
+        return None
+    return num / den
 
 def create_smart_query_response(user_message, model_data, relevant_data, web_data):
     """Create intelligent response with data integration and correlation analysis"""
