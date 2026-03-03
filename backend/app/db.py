@@ -109,12 +109,22 @@ def init_schema() -> None:
 
         -- Promo codes (stored as HMAC hashes — plaintext never saved)
         CREATE TABLE IF NOT EXISTS promo_codes (
-            code_hash      TEXT PRIMARY KEY,
-            tier           TEXT NOT NULL,
-            max_uses       INTEGER NOT NULL DEFAULT 1,
-            uses_remaining INTEGER NOT NULL DEFAULT 1,
-            expires_at     INTEGER,
-            created_at     INTEGER NOT NULL DEFAULT (unixepoch())
+            code_hash        TEXT PRIMARY KEY,
+            tier             TEXT NOT NULL,
+            max_uses         INTEGER NOT NULL DEFAULT 1,
+            uses_remaining   INTEGER NOT NULL DEFAULT 1,
+            expires_at       INTEGER,
+            stripe_coupon_id TEXT,
+            allowed_price_key TEXT,
+            created_at       INTEGER NOT NULL DEFAULT (unixepoch())
+        );
+
+        -- Per-user promo redemption tracking (prevents stacking / re-redemption)
+        CREATE TABLE IF NOT EXISTS promo_redemptions (
+            user_id    TEXT NOT NULL,
+            code_hash  TEXT NOT NULL,
+            redeemed_at INTEGER NOT NULL DEFAULT (unixepoch()),
+            PRIMARY KEY (user_id, code_hash)
         );
 
         -- Indexes for hot query paths
@@ -125,3 +135,14 @@ def init_schema() -> None:
     """)
 
     db.commit()
+
+    # Migrations: add columns that didn't exist in earlier schema versions
+    for migration_sql in [
+        "ALTER TABLE promo_codes ADD COLUMN stripe_coupon_id TEXT",
+        "ALTER TABLE promo_codes ADD COLUMN allowed_price_key TEXT",
+    ]:
+        try:
+            db.execute(migration_sql)
+            db.commit()
+        except Exception:
+            pass  # Column already exists — safe to ignore

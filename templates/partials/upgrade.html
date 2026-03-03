@@ -298,6 +298,12 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code: code })
     }).then(function(r) { return r.json(); }).then(function(data) {
+      if (data.type === 'checkout' && data.url) {
+        // Stripe coupon path — redirect to checkout
+        if (msg) { msg.textContent = 'Redirecting to checkout\u2026'; msg.className = 'upgrade-promo-msg ok'; }
+        window.location.href = data.url;
+        return;
+      }
       if (data.success) {
         if (msg) { msg.textContent = 'Code applied! You now have ' + (data.tier || '') + ' access.'; msg.className = 'upgrade-promo-msg ok'; }
         if (input) input.value = '';

@@ -12343,31 +12343,120 @@ def stripe_webhook():
     return jsonify({'received': True})
 
 
+# Per-IP rate limiting for promo code attempts
+# Structure: { ip: [timestamp, ...] }
+_promo_attempt_log: dict = {}
+_PROMO_MAX_ATTEMPTS = 5
+_PROMO_WINDOW_SECONDS = 900   # 15 minutes
+_PROMO_LOCKOUT_SECONDS = 3600 # 1 hour after exceeding limit
+
+
+def _check_promo_rate_limit(ip: str) -> bool:
+    """Return True if request is allowed, False if rate-limited."""
+    import time as _t
+    now = _t.time()
+    timestamps = _promo_attempt_log.get(ip, [])
+    # Drop entries outside the window
+    timestamps = [ts for ts in timestamps if now - ts < _PROMO_WINDOW_SECONDS]
+    if len(timestamps) >= _PROMO_MAX_ATTEMPTS:
+        # Check if oldest attempt is within lockout period
+        if now - timestamps[0] < _PROMO_LOCKOUT_SECONDS:
+            return False
+        # Lockout expired — reset
+        timestamps = []
+    timestamps.append(now)
+    _promo_attempt_log[ip] = timestamps
+    return True
+
+
 @app.route('/api/redeem-promo', methods=['POST'])
 def redeem_promo():
+    # Per-IP rate limiting — checked before auth to prevent unauthenticated enumeration
+    client_ip = request.headers.get('X-Forwarded-For', request.remote_addr or '').split(',')[0].strip()
+    if not _check_promo_rate_limit(client_ip):
+        return jsonify({'error': 'Too many attempts. Please wait before trying again.'}), 429
+
     user = get_current_user()
     if not user:
         return jsonify({'error': 'Login required'}), 401
+
     data = request.get_json(silent=True) or {}
     code = (data.get('code') or '').strip().upper()
     if not code:
         return jsonify({'error': 'No code provided'}), 400
+
     from backend.app import db as _db
     promo_secret = (os.environ.get('APP_SECRET_KEY') or 'fallback').encode()
     code_hash = hmac.new(promo_secret, code.encode(), hashlib.sha256).hexdigest()
+
     promo = _db.query_one(
         'SELECT * FROM promo_codes WHERE code_hash=? AND uses_remaining>0 AND (expires_at IS NULL OR expires_at>unixepoch())',
         (code_hash,)
     )
+    # Return the same error for invalid and expired codes to avoid enumeration
     if not promo:
         return jsonify({'error': 'Invalid or expired promo code'}), 404
+
+    user_id = user['id']
+
+    # Prevent re-redemption of the same code by the same user
+    already = _db.query_one(
+        'SELECT 1 FROM promo_redemptions WHERE user_id=? AND code_hash=?',
+        (user_id, code_hash)
+    )
+    if already:
+        return jsonify({'error': 'You have already redeemed this code'}), 409
+
+    # Prevent stacking: block if user already has an active non-free subscription
+    existing_sub = _get_user_subscription(user_id)
+    if existing_sub:
+        existing_tier = (existing_sub.get('tier') or 'free').lower()
+        existing_status = (existing_sub.get('status') or '').lower()
+        if existing_tier != 'free' and existing_status == 'active':
+            return jsonify({'error': 'You already have an active subscription. Cancel it before redeeming a promo code.'}), 409
+
+    # Stripe-coupon path: redirect to checkout with coupon applied
+    stripe_coupon_id = promo.get('stripe_coupon_id')
+    allowed_price_key = promo.get('allowed_price_key')
+    if stripe_coupon_id and allowed_price_key:
+        if not (_stripe_available and STRIPE_SECRET_KEY):
+            return jsonify({'error': 'Stripe is not configured on this server'}), 503
+        price_id = STRIPE_PRICES.get(allowed_price_key)
+        if not price_id:
+            return jsonify({'error': 'Invalid price configuration'}), 500
+        try:
+            session = _stripe_module.checkout.Session.create(
+                mode='subscription',
+                line_items=[{'price': price_id, 'quantity': 1}],
+                discounts=[{'coupon': stripe_coupon_id}],
+                success_url=request.host_url + '?upgrade=success',
+                cancel_url=request.host_url + '?upgrade=cancelled',
+                client_reference_id=user_id,
+                customer_email=user.get('email'),
+                metadata={'user_id': user_id},
+            )
+        except Exception as e:
+            return jsonify({'error': f'Stripe error: {e}'}), 500
+        # Record redemption and decrement before redirecting
+        _db.execute(
+            'INSERT OR IGNORE INTO promo_redemptions (user_id, code_hash) VALUES (?,?)',
+            (user_id, code_hash)
+        )
+        _db.execute('UPDATE promo_codes SET uses_remaining=uses_remaining-1 WHERE code_hash=?', (code_hash,))
+        return jsonify({'type': 'checkout', 'url': session.url})
+
+    # Free-access path: grant tier directly
     tier = promo['tier']
-    row_id = f'promo_{user["id"]}'
+    row_id = f'promo_{user_id}'
     _db.execute(
         '''INSERT INTO subscriptions (id, user_id, tier, status, updated_at)
            VALUES (?,?,?,?,unixepoch())
            ON CONFLICT(id) DO UPDATE SET tier=excluded.tier, status=excluded.status, updated_at=unixepoch()''',
-        (row_id, user['id'], tier, 'active')
+        (row_id, user_id, tier, 'active')
+    )
+    _db.execute(
+        'INSERT OR IGNORE INTO promo_redemptions (user_id, code_hash) VALUES (?,?)',
+        (user_id, code_hash)
     )
     _db.execute('UPDATE promo_codes SET uses_remaining=uses_remaining-1 WHERE code_hash=?', (code_hash,))
     return jsonify({'success': True, 'tier': tier})
@@ -12382,17 +12471,79 @@ def admin_create_promo():
     tier = (data.get('tier') or 'pro').strip()
     max_uses = max(int(data.get('max_uses', 1)), 1)
     expires_days = data.get('expires_days')
+    # Stripe coupon support: pass percent_off + duration to auto-create coupon
+    percent_off = data.get('percent_off')       # e.g. 90
+    coupon_duration = data.get('duration', 'once')  # 'once' | 'repeating' | 'forever'
+    allowed_price_key = (data.get('allowed_price_key') or '').strip() or None
+    stripe_coupon_id = (data.get('stripe_coupon_id') or '').strip() or None
+
     if not code:
         return jsonify({'error': 'code is required'}), 400
+
+    # Auto-create Stripe coupon if percent_off is specified and Stripe is available
+    if percent_off and not stripe_coupon_id:
+        if not (_stripe_available and STRIPE_SECRET_KEY):
+            return jsonify({'error': 'Stripe not configured; cannot create coupon'}), 503
+        try:
+            coupon = _stripe_module.Coupon.create(
+                percent_off=int(percent_off),
+                duration=coupon_duration,
+                name=f'Promo {code}',
+            )
+            stripe_coupon_id = coupon.id
+        except Exception as e:
+            return jsonify({'error': f'Stripe coupon creation failed: {e}'}), 500
+
     from backend.app import db as _db
     promo_secret = (os.environ.get('APP_SECRET_KEY') or 'fallback').encode()
     code_hash = hmac.new(promo_secret, code.encode(), hashlib.sha256).hexdigest()
     expires_at = int(time.time()) + int(expires_days) * 86400 if expires_days else None
     _db.execute(
-        'INSERT OR REPLACE INTO promo_codes (code_hash, tier, max_uses, uses_remaining, expires_at) VALUES (?,?,?,?,?)',
-        (code_hash, tier, max_uses, max_uses, expires_at)
+        '''INSERT OR REPLACE INTO promo_codes
+           (code_hash, tier, max_uses, uses_remaining, expires_at, stripe_coupon_id, allowed_price_key)
+           VALUES (?,?,?,?,?,?,?)''',
+        (code_hash, tier, max_uses, max_uses, expires_at, stripe_coupon_id, allowed_price_key)
     )
-    return jsonify({'success': True, 'tier': tier, 'max_uses': max_uses})
+    return jsonify({
+        'success': True, 'tier': tier, 'max_uses': max_uses,
+        'stripe_coupon_id': stripe_coupon_id, 'allowed_price_key': allowed_price_key,
+    })
+
+
+@app.route('/admin/cancel-subscription', methods=['POST'])
+def admin_cancel_subscription():
+    """Cancel a user's subscription. Cancels in Stripe (if applicable) and resets DB tier to free."""
+    if not ADMIN_SECRET or request.headers.get('X-Admin-Secret') != ADMIN_SECRET:
+        return jsonify({'error': 'Forbidden'}), 403
+    data = request.get_json(silent=True) or {}
+    user_id = (data.get('user_id') or '').strip()
+    if not user_id:
+        return jsonify({'error': 'user_id is required'}), 400
+
+    from backend.app import db as _db
+    sub = _get_user_subscription(user_id)
+    stripe_error = None
+
+    # Cancel in Stripe if we have a subscription ID
+    stripe_sub_id = sub.get('stripe_subscription_id') if sub else None
+    if stripe_sub_id and _stripe_available and STRIPE_SECRET_KEY:
+        try:
+            _stripe_module.Subscription.cancel(stripe_sub_id)
+        except Exception as e:
+            stripe_error = str(e)
+
+    # Downgrade in DB regardless of Stripe result
+    _db.execute(
+        'UPDATE subscriptions SET tier=?, status=?, updated_at=unixepoch() WHERE user_id=?',
+        ('free', 'cancelled', user_id)
+    )
+
+    result: dict = {'success': True, 'user_id': user_id}
+    if stripe_error:
+        result['stripe_error'] = stripe_error
+    if stripe_sub_id:
+        result['stripe_subscription_id'] = stripe_sub_id
+    return jsonify(result)
 
 
 @app.route('/api/pins', methods=['GET'])
