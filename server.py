@@ -38,7 +38,6 @@ from urllib.parse import urljoin
 from backend.app.agent import run_agent, stream_agent, build_system_prompt, get_tool_definitions
 from backend.app.agent.tool_executors import AgentToolExecutors, list_skill_frontmatter
 from backend.app.agent.types import AgentSettings
-from backend.app.db import init_schema
 
 
 def _load_local_env_files():
@@ -78,7 +77,8 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
 # Initialise database schema (idempotent — safe to run on every startup)
 try:
-    init_schema()
+    from backend.app.db import init_schema as _init_schema
+    _init_schema()
     print("✅ Database ready")
 except Exception as _db_err:
     print(f"⚠️  Database init failed (continuing without DB): {_db_err}")

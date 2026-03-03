@@ -16,12 +16,14 @@ Usage:
 
 import os
 import threading
-import libsql_experimental as libsql
+from typing import Any
 
 _local = threading.local()
 
 
-def _connect() -> libsql.Connection:
+def _connect() -> Any:
+    # Import lazily to reduce startup fragility from native extension initialization.
+    import libsql_experimental as libsql
     url = os.environ.get("TURSO_DB_URL", "")
     token = os.environ.get("TURSO_AUTH_TOKEN", "")
     if not url or not token:
@@ -32,7 +34,7 @@ def _connect() -> libsql.Connection:
     return libsql.connect(url, auth_token=token)
 
 
-def get_db() -> libsql.Connection:
+def get_db() -> Any:
     """Return a per-thread database connection (lazy-initialised)."""
     if not getattr(_local, "conn", None):
         _local.conn = _connect()
