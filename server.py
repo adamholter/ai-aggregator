@@ -1393,7 +1393,7 @@ except ImportError:
     _stripe_available = False
 STRIPE_SECRET_KEY = (os.environ.get('STRIPE_SECRET_KEY') or '').strip()
 STRIPE_WEBHOOK_SECRET = (os.environ.get('STRIPE_WEBHOOK_SECRET') or '').strip()
-SERVER_OPENROUTER_KEY = (os.environ.get('SERVER_OPENROUTER_KEY') or '').strip()
+SERVER_OPENROUTER_KEY = (os.environ.get('SERVER_OPENROUTER_KEY') or os.environ.get('OPENROUTER_API_KEY') or '').strip()
 STRIPE_PRICES = {
     'starter_monthly': (os.environ.get('STRIPE_PRICE_STARTER_MONTHLY') or '').strip(),
     'pro_monthly':     (os.environ.get('STRIPE_PRICE_PRO_MONTHLY') or '').strip(),
