@@ -6591,7 +6591,8 @@ def agent_tool_loop_generator(
     theme='light',
     mode='standard',
     max_iterations=100,
-    default_recency=None
+    default_recency=None,
+    server_key_user_id=None,
 ):
     print(f"🔧 [AGENT] Starting tool loop generator")
     print(f"📝 [AGENT] User message: {user_message[:100]}{'...' if len(user_message) > 100 else ''}")
@@ -6752,6 +6753,15 @@ def agent_tool_loop_generator(
                     yield ('status', status_payload('LLM Request', f'Error: {last_exception}'))
                     yield ('error', error_message, traces, fetch_context, web_context)
                     return
+
+                # Record server-key usage cost from OR response
+                if server_key_user_id:
+                    _usage = full_response.get('usage') or {}
+                    _cost = float(_usage.get('cost') or 0.0)
+                    _tok_in = int(_usage.get('prompt_tokens') or 0)
+                    _tok_out = int(_usage.get('completion_tokens') or 0)
+                    if _cost > 0:
+                        _record_server_key_usage(server_key_user_id, final_model, _cost, _tok_in, _tok_out)
 
                 choice_payload = full_response.get('choices', [{}])[0]
                 message_payload = choice_payload.get('message', {}) or {}
@@ -8449,7 +8459,8 @@ Respond concisely and cite the sources (Conversation History, Database, Web Sear
                         theme=current_theme,
                         mode='deep-research' if deep_research else 'standard',
                         max_iterations=100 if deep_research else 100,
-                        default_recency=recency_filter
+                        default_recency=recency_filter,
+                        server_key_user_id=_server_key_uid_agent if _is_server_key_agent else None,
                     )
                     print(f"✅ [SERVER] Generator created successfully")
                     
@@ -8621,7 +8632,8 @@ Respond concisely and cite the sources (Conversation History, Database, Web Sear
             user_openrouter_token,
             theme=current_theme,
             mode='deep-research' if deep_research else 'standard',
-            max_iterations=100 if deep_research else 100
+            max_iterations=100 if deep_research else 100,
+            server_key_user_id=_server_key_uid_agent if _is_server_key_agent else None,
         )
 
         for event in local_generator:
@@ -10506,7 +10518,7 @@ def _agent_exp_execute_perplexity(tool_args, auth_token, deeper_mode=False):
     return json.dumps(tool_payload, ensure_ascii=False), log_entry
 
 
-def agent_exp_session(auth_token, user_message, conversation_history, model_id, experimental_mode):
+def agent_exp_session(auth_token, user_message, conversation_history, model_id, experimental_mode, server_key_user_id=None):
     headers = build_openrouter_headers(auth_token)
     system_prompt = build_agent_exp_system_prompt(experimental_mode)
     messages = build_agent_exp_messages(system_prompt, conversation_history, user_message)
@@ -10552,6 +10564,14 @@ def agent_exp_session(auth_token, user_message, conversation_history, model_id, 
             return
 
         payload_json = response.json()
+        # Record server-key usage cost
+        if server_key_user_id:
+            _usage = payload_json.get('usage') or {}
+            _cost = float(_usage.get('cost') or 0.0)
+            if _cost > 0:
+                _record_server_key_usage(server_key_user_id, model_id, _cost,
+                                         int(_usage.get('prompt_tokens') or 0),
+                                         int(_usage.get('completion_tokens') or 0))
         choice = (payload_json.get('choices') or [{}])[0]
         message = choice.get('message') or {}
         tool_calls = message.get('tool_calls') or []
@@ -10650,7 +10670,8 @@ def agent_exp_endpoint():
     if not stream:
         final_response = ''
         events = []
-        for event in agent_exp_session(auth_token, user_message, conversation, model_id, experimental_mode):
+        _sk_uid = _sk_uid_ae if _is_sk_ae else None
+        for event in agent_exp_session(auth_token, user_message, conversation, model_id, experimental_mode, server_key_user_id=_sk_uid):
             events.append(event)
             if event.get('type') == 'content':
                 final_response += event.get('content', '')
@@ -10661,9 +10682,11 @@ def agent_exp_endpoint():
             'events': events
         })
 
+    _sk_uid_ae_stream = _sk_uid_ae if _is_sk_ae else None
+
     def event_stream():
         try:
-            for event in agent_exp_session(auth_token, user_message, conversation, model_id, experimental_mode):
+            for event in agent_exp_session(auth_token, user_message, conversation, model_id, experimental_mode, server_key_user_id=_sk_uid_ae_stream):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
         except Exception as exc:
             message = f'Agent session failed: {exc}'
