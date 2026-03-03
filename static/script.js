@@ -297,8 +297,11 @@ const LATEST_CACHE_STORAGE_KEY = 'dashboard-latest-cache';
 const TAB_PREVIEW_CACHE_KEY = 'dashboard-tab-preview-cache-v1';
 const TAB_PREVIEW_LIMIT = 12;
 const TAB_PREVIEW_TTL_MS = 1000 * 60 * 30; // 30 minutes
+const INCREMENTAL_RENDER_CHUNK_SIZE = 20;
+const ENABLE_BACKGROUND_PREFETCH = false;
 let latestControlsWired = false;
 const tabPreviewState = {};
+const renderJobIds = {};
 
 const TAB_PREVIEW_CONFIG = {
     hype: { containerId: 'hype-data', loadingId: 'hype-loading', render: (items) => displayHypeItems({ items }) },
@@ -378,6 +381,43 @@ function markCardsForStagger(container, maxCards = TAB_PREVIEW_LIMIT) {
         card.classList.add('card-stagger-enter');
         card.style.animationDelay = `${Math.min(index, 16) * 26}ms`;
     });
+}
+
+function renderCardsIncrementally(container, items, createCardFn, options = {}) {
+    if (!container) return;
+    const list = Array.isArray(items) ? items : [];
+    const chunkSize = Math.max(1, options.chunkSize || INCREMENTAL_RENDER_CHUNK_SIZE);
+    const shouldAnimate = options.animate !== false;
+    const jobId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    renderJobIds[container.id || 'default'] = jobId;
+
+    container.innerHTML = '';
+
+    let index = 0;
+    const step = () => {
+        if (renderJobIds[container.id || 'default'] !== jobId) {
+            return;
+        }
+
+        const frag = document.createDocumentFragment();
+        const end = Math.min(index + chunkSize, list.length);
+        for (; index < end; index += 1) {
+            const card = createCardFn(list[index], index);
+            if (!card) continue;
+            if (shouldAnimate) {
+                card.classList.add('card-stagger-enter');
+                card.style.animationDelay = `${Math.min(index, 16) * 18}ms`;
+            }
+            frag.appendChild(card);
+        }
+        container.appendChild(frag);
+
+        if (index < list.length) {
+            requestAnimationFrame(step);
+        }
+    };
+
+    requestAnimationFrame(step);
 }
 
 function renderCachedPreview(section) {
@@ -1570,47 +1610,24 @@ document.addEventListener('DOMContentLoaded', async function () {
     // Setup global search
     setupGlobalSearch();
 
-    // Background load all data sources for global search
-    // Staggered loading to avoid overwhelming the server
-    setTimeout(async () => {
-        console.log('Background loading data for global search...');
-        try {
-            // Load OpenRouter models first (most searched)
-            if (!cachedData.openRouterModels) {
-                await loadOpenRouterModels();
+    if (ENABLE_BACKGROUND_PREFETCH) {
+        const idlePrefetch = async () => {
+            try {
+                // Keep prefetch light and data-only to preserve responsiveness.
+                if (!cachedData.openRouterModels) {
+                    await fetchAndCacheOpenRouterModels(false);
+                }
+            } catch (e) {
+                console.warn('Background prefetch failed:', e);
             }
-        } catch (e) { console.warn('Background load OpenRouter failed:', e); }
-
-        // Stagger remaining loads
-        setTimeout(async () => {
-            try {
-                if (!cachedData.falModels) {
-                    await loadFalModelsData();
-                }
-            } catch (e) { console.warn('Background load Fal failed:', e); }
-        }, 1000);
-
-        setTimeout(async () => {
-            try {
-                if (!cachedData.replicateModels) {
-                    await loadReplicateModelsData();
-                }
-            } catch (e) { console.warn('Background load Replicate failed:', e); }
-        }, 2000);
-
-        setTimeout(async () => {
-            try {
-                if (!cachedData.textToImage) {
-                    await loadTextToImageData();
-                }
-                if (!cachedData.textToVideo) {
-                    await loadTextToVideoData();
-                }
-            } catch (e) { console.warn('Background load media failed:', e); }
-        }, 3000);
-
-        console.log('Background data loading complete');
-    }, 2000); // Start after 2s to allow page to render
+        };
+        const ric = window.requestIdleCallback;
+        if (typeof ric === 'function') {
+            ric(() => { idlePrefetch(); }, { timeout: 4000 });
+        } else {
+            setTimeout(() => { idlePrefetch(); }, 3500);
+        }
+    }
 });
 
 // Global Search Implementation
@@ -2889,7 +2906,8 @@ function setupNavigation() {
             document.getElementById(targetSection).classList.add('active');
 
             // Load data for the selected section
-            loadSectionData(targetSection);
+            // Defer section loading so nav state updates stay responsive.
+            setTimeout(() => loadSectionData(targetSection), 0);
         });
     });
 }
@@ -3042,12 +3060,7 @@ async function loadLLMData() {
 // Display LLM data
 function displayLLMData(models) {
     const container = document.getElementById('llms-data');
-    container.innerHTML = '';
-
-    models.forEach(model => {
-        const modelCard = createLLMCard(model);
-        container.appendChild(modelCard);
-    });
+    renderCardsIncrementally(container, models, (model) => createLLMCard(model));
     recordDisplayedItems('llms', models);
 }
 
@@ -3497,12 +3510,9 @@ function displayOpenRouterModelsData(models) {
     const container = document.getElementById('openrouter-models-data');
     if (!container) return;
 
-    container.innerHTML = '';
     const displayModels = getFilteredItems('openrouter', models);
     recordDisplayedItems('openrouter', displayModels);
-    displayModels.forEach(model => {
-        container.appendChild(createOpenRouterCard(model));
-    });
+    renderCardsIncrementally(container, displayModels, (model) => createOpenRouterCard(model));
 }
 
 async function fetchHypeData(forceRefresh = false) {
@@ -4801,13 +4811,10 @@ function setupOpenRouterControls() {
 // Display media data (for non-LLM endpoints)
 function displayMediaData(models, type) {
     const container = document.getElementById(`${type}-data`);
-    container.innerHTML = '';
+    if (!container) return;
 
     const displayModels = getFilteredItems(type, Array.isArray(models) ? models : []);
-    displayModels.forEach(model => {
-        const modelCard = createMediaCard(model, type);
-        container.appendChild(modelCard);
-    });
+    renderCardsIncrementally(container, displayModels, (model) => createMediaCard(model, type));
     recordDisplayedItems(type, displayModels);
 }
 
@@ -6127,21 +6134,15 @@ function displayFalModelsDataWithGroups(models, container) {
     if (!container) {
         container = document.getElementById('fal-models-data');
     }
-    container.innerHTML = '';
+    if (!container) return;
 
     const groups = groupFalModels(models);
-
-    for (const group of groups) {
+    renderCardsIncrementally(container, groups, (group) => {
         if (group.variants.length === 0) {
-            // Single model - render normally
-            const card = createFalModelCard(group.primary);
-            container.appendChild(card);
-        } else {
-            // Grouped models - render stacked
-            const stackWrapper = createFalModelStack(group);
-            container.appendChild(stackWrapper);
+            return createFalModelCard(group.primary);
         }
-    }
+        return createFalModelStack(group);
+    }, { chunkSize: 10 });
 }
 
 /**
@@ -6350,14 +6351,11 @@ function createReplicateModelCard(model) {
 // Display Replicate models data
 function displayReplicateModelsData(models) {
     const container = document.getElementById('replicate-models-data');
-    container.innerHTML = '';
+    if (!container) return;
 
     const displayModels = getFilteredItems('replicate', models);
     recordDisplayedItems('replicate', displayModels);
-    displayModels.forEach(model => {
-        const modelCard = createReplicateModelCard(model);
-        container.appendChild(modelCard);
-    });
+    renderCardsIncrementally(container, displayModels, (model) => createReplicateModelCard(model));
 }
 
 // Filtering and sorting functions for Replicate models

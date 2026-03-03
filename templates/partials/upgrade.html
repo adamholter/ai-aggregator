@@ -274,14 +274,38 @@
   };
 
   window.upgradeSubscribe = function(priceKey) {
+    var btn = document.activeElement;
+    if (btn && btn.classList && btn.classList.contains('upgrade-cta-btn')) {
+      btn.disabled = true;
+      btn.dataset.originalText = btn.textContent || 'Subscribe';
+      btn.textContent = 'Starting…';
+    }
     fetch('/api/create-checkout-session', {
       method: 'POST',
+      credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ price_key: priceKey })
-    }).then(function(r) { return r.json(); }).then(function(data) {
+    }).then(function(r) {
+      return r.json().catch(function() { return { error: 'Checkout failed' }; }).then(function(data) {
+        return { ok: r.ok, status: r.status, data: data };
+      });
+    }).then(function(res) {
+      var data = res.data || {};
       if (data.url) { window.location.href = data.url; }
-      else { alert(data.error || 'Checkout failed'); }
-    }).catch(function() { alert('Checkout failed. Please try again.'); });
+      else if (res.status === 401 && typeof window.openAuthModal === 'function') {
+        window.openAuthModal('login');
+        alert('Please log in to continue checkout.');
+      } else {
+        alert(data.error || 'Checkout failed');
+      }
+    }).catch(function() { alert('Checkout failed. Please try again.'); })
+      .finally(function() {
+        if (btn && btn.classList && btn.classList.contains('upgrade-cta-btn')) {
+          btn.disabled = false;
+          btn.textContent = btn.dataset.originalText || 'Subscribe';
+          delete btn.dataset.originalText;
+        }
+      });
   };
 
   window.upgradeOpenBillingPortal = function() {
