@@ -273,7 +273,7 @@
     }).catch(function() {});
   };
 
-  window.upgradeSubscribe = async function(priceKey) {
+  window.upgradeSubscribe = function(priceKey) {
     var btn = document.activeElement;
     if (btn && btn.classList && btn.classList.contains('upgrade-cta-btn')) {
       btn.disabled = true;
@@ -287,56 +287,40 @@
         try { controller.abort(); } catch (e) {}
       }, 12000);
     }
-    var requestCheckout = function() {
-      return fetch('/api/create-checkout-session', {
-        method: 'POST',
-        credentials: 'same-origin',
-        signal: controller ? controller.signal : undefined,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ price_key: priceKey })
-      }).then(function(r) {
-        return r.json().catch(function() { return { error: 'Checkout failed' }; }).then(function(data) {
-          return { ok: r.ok, status: r.status, data: data };
-        });
+    fetch('/api/create-checkout-session', {
+      method: 'POST',
+      credentials: 'same-origin',
+      signal: controller ? controller.signal : undefined,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ price_key: priceKey })
+    }).then(function(r) {
+      return r.json().catch(function() { return { error: 'Checkout failed' }; }).then(function(data) {
+        return { ok: r.ok, status: r.status, data: data };
       });
-    };
-
-    try {
-      var res = await requestCheckout();
-      if (res.status === 401) {
-        // Session might not be synced yet. Try one sync+retry before failing.
-        await fetch('/auth/clerk-sync', {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({})
-        }).catch(function() {});
-        res = await requestCheckout();
-      }
-
+    }).then(function(res) {
       var data = res.data || {};
-      if (data.url) {
-        window.location.href = data.url;
-      } else if (res.status === 401 && typeof window.openAuthModal === 'function') {
+      if (data.url) { window.location.href = data.url; }
+      else if (res.status === 401 && typeof window.openAuthModal === 'function') {
         window.openAuthModal('login');
         alert('Please log in to continue checkout.');
       } else {
         alert(data.error || 'Checkout failed');
       }
-    } catch (err) {
+    }).catch(function(err) {
       if (err && err.name === 'AbortError') {
         alert('Checkout is taking longer than expected. Please try again.');
       } else {
         alert('Checkout failed. Please try again.');
       }
-    } finally {
-      if (timeoutId) clearTimeout(timeoutId);
-      if (btn && btn.classList && btn.classList.contains('upgrade-cta-btn')) {
-        btn.disabled = false;
-        btn.textContent = btn.dataset.originalText || 'Subscribe';
-        delete btn.dataset.originalText;
-      }
-    }
+    })
+      .finally(function() {
+        if (timeoutId) clearTimeout(timeoutId);
+        if (btn && btn.classList && btn.classList.contains('upgrade-cta-btn')) {
+          btn.disabled = false;
+          btn.textContent = btn.dataset.originalText || 'Subscribe';
+          delete btn.dataset.originalText;
+        }
+      });
   };
 
   window.upgradeOpenBillingPortal = function() {

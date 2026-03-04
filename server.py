@@ -1875,7 +1875,7 @@ def _upsert_clerk_user(clerk_user):
     return {'id': clerk_id, 'email': email, 'display_name': display_name}
 
 
-def get_current_user(allow_remote_clerk=True):
+def get_current_user():
     # 1. Fast-path legacy session auth first to avoid unnecessary Clerk API latency
     email = session.get('user_email')
     if email:
@@ -1887,9 +1887,6 @@ def get_current_user(allow_remote_clerk=True):
             return {'id': email, 'email': email}
 
     # 2. Check for Clerk session token in Authorization header or cookie
-    if not allow_remote_clerk:
-        return None
-
     auth_header = request.headers.get('Authorization', '')
     clerk_token = None
     if auth_header.startswith('Bearer '):
@@ -12410,8 +12407,7 @@ def auth_clerk_sync():
 
 @app.route('/api/create-checkout-session', methods=['POST'])
 def create_checkout_session():
-    # Fast auth path only: avoid remote Clerk lookups on checkout startup.
-    user = get_current_user(allow_remote_clerk=False)
+    user = get_current_user()
     if not user:
         return jsonify({'error': 'Login required'}), 401
     if not _stripe_available or not STRIPE_SECRET_KEY:
@@ -12443,8 +12439,7 @@ def create_checkout_session():
 
 @app.route('/api/billing-portal', methods=['POST'])
 def billing_portal():
-    # Fast auth path only: avoid remote Clerk lookups on checkout startup.
-    user = get_current_user(allow_remote_clerk=False)
+    user = get_current_user()
     if not user:
         return jsonify({'error': 'Login required'}), 401
     if not _stripe_available or not STRIPE_SECRET_KEY:
