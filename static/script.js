@@ -2097,6 +2097,10 @@ function setAuthMode(mode) {
 }
 
 function openAuthModal(mode = 'login') {
+    if (typeof window.showClerkSignIn === 'function') {
+        window.showClerkSignIn();
+        return;
+    }
     const modal = document.getElementById('auth-modal');
     if (!modal) return;
     setAuthMode(mode);
@@ -2108,6 +2112,9 @@ function openAuthModal(mode = 'login') {
 }
 
 function closeAuthModal() {
+    if (typeof window.hideClerkSignIn === 'function') {
+        window.hideClerkSignIn();
+    }
     const modal = document.getElementById('auth-modal');
     if (modal) {
         modal.style.display = 'none';

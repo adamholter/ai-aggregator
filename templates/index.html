@@ -478,7 +478,6 @@
 
     <div id="toast-container" aria-live="polite" aria-atomic="true"></div>
 
-    {% include 'modals/auth.html' %}
     {% include 'modals/settings.html' %}
     {% include 'modals/chart.html' %}
     {% include 'modals/command_palette.html' %}
@@ -938,6 +937,24 @@ window.renderAnalysisPayload = function(analysisContainer, result, options) {
 }
 #clerk-auth-close-btn:hover { background: #f0f0f0; color: #111; }
 #clerk-sign-in-container { padding: 8px 0; }
+.clerk-auth-loading,
+.clerk-auth-error {
+  padding: 20px 24px;
+  text-align: center;
+  color: #444;
+  font-size: 13px;
+}
+.clerk-auth-error { color: #b91c1c; }
+.clerk-auth-retry {
+  margin-top: 10px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  border-radius: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
 #clerk-auth-footer {
   padding: 10px 24px 14px;
   border-top: 1px solid #f0f0f0;
@@ -986,10 +1003,18 @@ window.renderAnalysisPayload = function(analysisContainer, result, options) {
   'use strict';
 
   var clerkInstance = null;
+  var clerkPublishableKey = null;
+  var clerkInitPromise = null;
   var _origFetch = window.fetch.bind(window);
 
   async function initClerk(publishableKey) {
-    if (!publishableKey || clerkInstance) return;
+    if (publishableKey) clerkPublishableKey = publishableKey;
+    if (clerkInstance) return clerkInstance;
+    if (clerkInitPromise) return clerkInitPromise;
+    if (!clerkPublishableKey) throw new Error('Clerk publishable key is missing');
+
+    clerkInitPromise = (async function() {
+    var pk = clerkPublishableKey;
     var b64 = publishableKey.split('_')[2] || '';
     while (b64.length % 4) b64 += '=';
     var domain = '';
@@ -1025,6 +1050,59 @@ window.renderAnalysisPayload = function(analysisContainer, result, options) {
         if (typeof window.refreshAuthState === 'function') window.refreshAuthState();
       }
     });
+    return clerkInstance;
+    })();
+    try {
+      return await clerkInitPromise;
+    } catch (e) {
+      clerkInitPromise = null;
+      throw e;
+    }
+  }
+
+  function renderClerkLoading() {
+    var container = document.getElementById('clerk-sign-in-container');
+    if (!container) return;
+    container.innerHTML = '<div class="clerk-auth-loading">Preparing secure sign in…</div>';
+  }
+
+  function renderClerkError(message) {
+    var container = document.getElementById('clerk-sign-in-container');
+    if (!container) return;
+    var safeMsg = String(message || 'Unable to load sign in. Please retry.');
+    container.innerHTML = '<div class="clerk-auth-error">' + safeMsg + '<div><button class="clerk-auth-retry" type="button" id="clerk-auth-retry-btn">Retry</button></div></div>';
+    var retryBtn = document.getElementById('clerk-auth-retry-btn');
+    if (retryBtn) retryBtn.addEventListener('click', function() { showClerkSignIn(); });
+  }
+
+  async function ensureClerkReady() {
+    if (clerkInstance) return clerkInstance;
+    if (!clerkPublishableKey) {
+      try {
+        var meResp = await _origFetch('/api/me');
+        var meData = await meResp.json();
+        clerkPublishableKey = meData && meData.clerk_publishable_key ? meData.clerk_publishable_key : null;
+      } catch(e) {}
+    }
+    if (!clerkPublishableKey) {
+      throw new Error('Secure sign in is unavailable right now.');
+    }
+    return initClerk(clerkPublishableKey);
+  }
+
+  function mountClerkSignIn() {
+    var container = document.getElementById('clerk-sign-in-container');
+    if (!container || !clerkInstance || !clerkInstance.mountSignIn) return;
+    while (container.firstChild) container.removeChild(container.firstChild);
+    clerkInstance.mountSignIn(container, {
+      appearance: {
+        elements: {
+          rootBox: { fontFamily: 'inherit', width: '100%' },
+          card: { boxShadow: 'none', border: 'none', borderRadius: '0', margin: '0' },
+          footer: { display: 'none' },
+        }
+      }
+    });
   }
 
   async function syncClerkSession() {
@@ -1042,37 +1120,14 @@ window.renderAnalysisPayload = function(analysisContainer, result, options) {
 
   function showClerkSignIn() {
     var overlay = document.getElementById('clerk-auth-overlay');
-    var container = document.getElementById('clerk-sign-in-container');
     var oldModal = document.getElementById('auth-modal');
-    if (!overlay) {
-      if (oldModal) oldModal.style.display = 'flex';
-      return;
-    }
-
-    // If Clerk hasn't loaded yet, fall back to the legacy modal instead of showing a blank shell.
-    if (!clerkInstance || !clerkInstance.mountSignIn) {
-      overlay.style.display = 'none';
-      if (oldModal) oldModal.style.display = 'flex';
-      return;
-    }
-
     if (oldModal) oldModal.style.display = 'none';
+    if (!overlay) return;
     overlay.style.display = 'flex';
-    while (container.firstChild) container.removeChild(container.firstChild);
-    try {
-      clerkInstance.mountSignIn(container, {
-        appearance: {
-          elements: {
-            rootBox: { fontFamily: 'inherit', width: '100%' },
-            card: { boxShadow: 'none', border: 'none', borderRadius: '0', margin: '0' },
-            footer: { display: 'none' },
-          }
-        }
-      });
-    } catch (e) {
-      overlay.style.display = 'none';
-      if (oldModal) oldModal.style.display = 'flex';
-    }
+    renderClerkLoading();
+    ensureClerkReady()
+      .then(function() { mountClerkSignIn(); })
+      .catch(function(err) { renderClerkError(err && err.message ? err.message : 'Unable to load sign in.'); });
   }
 
   function hideClerkSignIn() {
@@ -1160,8 +1215,9 @@ window.renderAnalysisPayload = function(analysisContainer, result, options) {
     }
   };
 
-  window.openAuthModal = function() { showClerkSignIn(); };
-  window.showAuthModal = function() { showClerkSignIn(); };
+  window.openAuthModal = function(_mode) { showClerkSignIn(); };
+  window.showAuthModal = function(_mode) { showClerkSignIn(); };
+  window.hideClerkSignIn = hideClerkSignIn;
   window.clerkSignOut = clerkSignOut;
 
   // Capture-phase listener intercepts #auth-button clicks before script.js fires
@@ -1206,6 +1262,7 @@ window.renderAnalysisPayload = function(analysisContainer, result, options) {
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data.clerk_publishable_key) {
+        clerkPublishableKey = data.clerk_publishable_key;
         initClerk(data.clerk_publishable_key);
       }
     })
