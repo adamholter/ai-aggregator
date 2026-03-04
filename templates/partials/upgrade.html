@@ -285,7 +285,7 @@
     if (controller) {
       timeoutId = setTimeout(function() {
         try { controller.abort(); } catch (e) {}
-      }, 12000);
+      }, 4000);
     }
     fetch('/api/create-checkout-session', {
       method: 'POST',

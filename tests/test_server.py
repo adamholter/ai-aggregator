@@ -31,3 +31,35 @@ def test_testing_catalog_history_loaded():
         raw = json.load(handle)
     assert history == raw
     assert all('url' in entry for entry in history)
+
+
+def test_checkout_fast_user_from_session_email():
+    with server.app.test_request_context('/'):
+        server.session['user_email'] = 'user@example.com'
+        user = server._get_current_user_for_checkout()
+    assert user == {'id': 'user@example.com', 'email': 'user@example.com'}
+
+
+def test_checkout_fast_user_from_session_clerk_id():
+    with server.app.test_request_context('/'):
+        server.session['clerk_id'] = 'user_abc123'
+        user = server._get_current_user_for_checkout()
+    assert user == {'id': 'user_abc123', 'email': ''}
+
+
+def test_create_checkout_session_skips_remote_clerk_lookup(monkeypatch):
+    def fail_verify(_token):
+        raise AssertionError('remote clerk lookup should be skipped for checkout')
+
+    monkeypatch.setattr(server, '_verify_clerk_token', fail_verify)
+    client = server.app.test_client()
+    with client.session_transaction() as sess:
+        sess['clerk_id'] = 'user_fast_auth'
+
+    response = client.post(
+        '/api/create-checkout-session',
+        json={'price_key': 'starter_monthly'},
+        headers={'Authorization': 'Bearer fake-token'}
+    )
+    # Primary assertion is no remote clerk lookup path (would raise AssertionError via monkeypatch).
+    assert response.status_code in (200, 400, 401, 503)

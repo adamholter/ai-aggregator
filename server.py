@@ -1910,6 +1910,26 @@ def get_current_user():
     return None
 
 
+def _get_current_user_for_checkout():
+    """Fast, deterministic auth lookup for checkout/billing routes.
+    Uses only server-side session state and never performs remote Clerk calls.
+    """
+    email = session.get('user_email')
+    clerk_id = session.get('clerk_id')
+
+    if email:
+        user = _find_user_by_email(email)
+        if user:
+            return user
+        # Accept existing session email even when local user lookup is unavailable.
+        return {'id': email, 'email': email}
+
+    if clerk_id:
+        return {'id': clerk_id, 'email': email or ''}
+
+    return None
+
+
 def _run_with_timeout(fn, timeout_seconds=12):
     """Execute blocking calls with an upper bound to prevent hanging requests."""
     executor = ThreadPoolExecutor(max_workers=1)
@@ -12393,13 +12413,23 @@ def auth_clerk_sync():
     if not verified:
         return jsonify({'error': 'Invalid or expired session token'}), 401
     clerk_id = verified.get('clerk_id')
-    clerk_user = _get_clerk_user(clerk_id)
-    user = _upsert_clerk_user(clerk_user) if clerk_user else {'id': clerk_id, 'email': ''}
-    # Also set a legacy session so existing session checks keep working
+    raw_claims = verified.get('_raw', {}) if isinstance(verified, dict) else {}
+
+    # Start with a minimal fallback user from verified token claims.
+    user = {'id': clerk_id, 'email': raw_claims.get('email', '')}
+    try:
+        clerk_user = _get_clerk_user(clerk_id)
+        if clerk_user:
+            user = _upsert_clerk_user(clerk_user) or user
+    except Exception:
+        # Keep fallback user; checkout can still proceed with clerk_id-only session.
+        pass
+
+    # Persist session keys even if email lookup/upsert fails.
+    session.permanent = True
+    session['clerk_id'] = clerk_id
     if user.get('email'):
-        session.permanent = True
         session['user_email'] = user['email']
-        session['clerk_id'] = clerk_id
     return jsonify({'success': True, 'user': user})
 
 
@@ -12407,7 +12437,7 @@ def auth_clerk_sync():
 
 @app.route('/api/create-checkout-session', methods=['POST'])
 def create_checkout_session():
-    user = get_current_user()
+    user = _get_current_user_for_checkout()
     if not user:
         return jsonify({'error': 'Login required'}), 401
     if not _stripe_available or not STRIPE_SECRET_KEY:
@@ -12439,7 +12469,7 @@ def create_checkout_session():
 
 @app.route('/api/billing-portal', methods=['POST'])
 def billing_portal():
-    user = get_current_user()
+    user = _get_current_user_for_checkout()
     if not user:
         return jsonify({'error': 'Login required'}), 401
     if not _stripe_available or not STRIPE_SECRET_KEY:
