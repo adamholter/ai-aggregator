@@ -47,6 +47,25 @@ def test_checkout_fast_user_from_session_clerk_id():
     assert user == {'id': 'user_abc123', 'email': ''}
 
 
+def test_checkout_fast_user_from_bearer_token(monkeypatch):
+    monkeypatch.setattr(server, 'CLERK_SECRET_KEY', 'clerk_test_secret')
+
+    def fake_verify(token):
+        assert token == 'token-123'
+        return {
+            'clerk_id': 'user_from_token',
+            '_raw': {'email': 'token@example.com'},
+        }
+
+    monkeypatch.setattr(server, '_verify_clerk_token', fake_verify)
+
+    with server.app.test_request_context('/', headers={'Authorization': 'Bearer token-123'}):
+        user = server._get_current_user_for_checkout()
+        assert user == {'id': 'user_from_token', 'email': 'token@example.com'}
+        assert server.session.get('clerk_id') == 'user_from_token'
+        assert server.session.get('user_email') == 'token@example.com'
+
+
 def test_create_checkout_session_skips_remote_clerk_lookup(monkeypatch):
     def fail_verify(_token):
         raise AssertionError('remote clerk lookup should be skipped for checkout')

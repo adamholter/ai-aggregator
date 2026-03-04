@@ -903,7 +903,7 @@ window.renderAnalysisPayload = function(analysisContainer, result, options) {
   display: none;
   position: fixed;
   inset: 0;
-  z-index: 9999;
+  z-index: 12050;
   background: rgba(0,0,0,.6);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
@@ -1015,7 +1015,7 @@ window.renderAnalysisPayload = function(analysisContainer, result, options) {
 
     clerkInitPromise = (async function() {
     var pk = clerkPublishableKey;
-    var b64 = publishableKey.split('_')[2] || '';
+    var b64 = pk.split('_')[2] || '';
     while (b64.length % 4) b64 += '=';
     var domain = '';
     try { domain = atob(b64).replace(/\$$/, ''); } catch(e) {}
@@ -1026,7 +1026,7 @@ window.renderAnalysisPayload = function(analysisContainer, result, options) {
     await new Promise(function(resolve, reject) {
       if (window.Clerk) { resolve(); return; }
       var s = document.createElement('script');
-      s.setAttribute('data-clerk-publishable-key', publishableKey);
+      s.setAttribute('data-clerk-publishable-key', pk);
       s.src = cdnUrl;
       s.crossOrigin = 'anonymous';
       s.onload = resolve; s.onerror = reject;
@@ -1121,6 +1121,9 @@ window.renderAnalysisPayload = function(analysisContainer, result, options) {
   function showClerkSignIn() {
     var overlay = document.getElementById('clerk-auth-overlay');
     var oldModal = document.getElementById('auth-modal');
+    if (typeof window.endTour === 'function') {
+      try { window.endTour(); } catch (e) {}
+    }
     if (oldModal) oldModal.style.display = 'none';
     if (!overlay) return;
     overlay.style.display = 'flex';
@@ -1217,6 +1220,7 @@ window.renderAnalysisPayload = function(analysisContainer, result, options) {
 
   window.openAuthModal = function(_mode) { showClerkSignIn(); };
   window.showAuthModal = function(_mode) { showClerkSignIn(); };
+  window.showClerkSignIn = showClerkSignIn;
   window.hideClerkSignIn = hideClerkSignIn;
   window.clerkSignOut = clerkSignOut;
 

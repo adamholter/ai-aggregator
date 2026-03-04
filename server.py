@@ -1912,7 +1912,8 @@ def get_current_user():
 
 def _get_current_user_for_checkout():
     """Fast, deterministic auth lookup for checkout/billing routes.
-    Uses only server-side session state and never performs remote Clerk calls.
+    Prefers server-side session state and only falls back to local token verify.
+    Never performs remote Clerk user/profile API calls.
     """
     email = session.get('user_email')
     clerk_id = session.get('clerk_id')
@@ -1926,6 +1927,28 @@ def _get_current_user_for_checkout():
 
     if clerk_id:
         return {'id': clerk_id, 'email': email or ''}
+
+    # Fallback for first request right after Clerk sign-in: verify bearer/cookie token
+    # and establish session state for subsequent fast-path requests.
+    auth_header = request.headers.get('Authorization', '')
+    clerk_token = None
+    if isinstance(auth_header, str) and auth_header.startswith('Bearer '):
+        clerk_token = auth_header[7:].strip()
+    if not clerk_token:
+        clerk_token = request.cookies.get('__session') or request.cookies.get('__clerk_session')
+
+    if clerk_token and CLERK_SECRET_KEY:
+        verified = _verify_clerk_token(clerk_token)
+        if verified:
+            clerk_id = verified.get('clerk_id')
+            raw = verified.get('_raw', {}) if isinstance(verified, dict) else {}
+            verified_email = raw.get('email', '') if isinstance(raw, dict) else ''
+            if clerk_id:
+                session.permanent = True
+                session['clerk_id'] = clerk_id
+                if verified_email:
+                    session['user_email'] = verified_email
+                return {'id': clerk_id, 'email': verified_email}
 
     return None
 
@@ -12460,7 +12483,7 @@ def create_checkout_session():
                 customer_email=user.get('email') or None,
                 metadata={'user_id': user['id']},
             ),
-            timeout_seconds=12
+            timeout_seconds=20
         )
         return jsonify({'url': checkout.url})
     except Exception as exc:

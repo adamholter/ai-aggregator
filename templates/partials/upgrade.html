@@ -280,17 +280,9 @@
       btn.dataset.originalText = btn.textContent || 'Subscribe';
       btn.textContent = 'Starting…';
     }
-    var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-    var timeoutId = null;
-    if (controller) {
-      timeoutId = setTimeout(function() {
-        try { controller.abort(); } catch (e) {}
-      }, 4000);
-    }
     fetch('/api/create-checkout-session', {
       method: 'POST',
       credentials: 'same-origin',
-      signal: controller ? controller.signal : undefined,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ price_key: priceKey })
     }).then(function(r) {
@@ -302,19 +294,35 @@
       if (data.url) { window.location.href = data.url; }
       else if (res.status === 401 && typeof window.openAuthModal === 'function') {
         window.openAuthModal('login');
-        alert('Please log in to continue checkout.');
+        if (typeof window.showToast === 'function') {
+          window.showToast('Please sign in to continue checkout.');
+        } else {
+          alert('Please sign in to continue checkout.');
+        }
       } else {
-        alert(data.error || 'Checkout failed');
+        var msg = data.error || 'Checkout failed. Please try again.';
+        if (typeof window.showToast === 'function') {
+          window.showToast(msg);
+        } else {
+          alert(msg);
+        }
       }
     }).catch(function(err) {
       if (err && err.name === 'AbortError') {
-        alert('Checkout is taking longer than expected. Please try again.');
+        if (typeof window.showToast === 'function') {
+          window.showToast('Checkout is taking longer than expected. Please try again.');
+        } else {
+          alert('Checkout is taking longer than expected. Please try again.');
+        }
       } else {
-        alert('Checkout failed. Please try again.');
+        if (typeof window.showToast === 'function') {
+          window.showToast('Checkout failed. Please try again.');
+        } else {
+          alert('Checkout failed. Please try again.');
+        }
       }
     })
       .finally(function() {
-        if (timeoutId) clearTimeout(timeoutId);
         if (btn && btn.classList && btn.classList.contains('upgrade-cta-btn')) {
           btn.disabled = false;
           btn.textContent = btn.dataset.originalText || 'Subscribe';

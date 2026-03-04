@@ -1134,9 +1134,11 @@ window.endTour = function () {
 // Expose startTour globally for "Start tour" links
 window.startTour = startTour;
 
-// Auto-start tour for first-time visitors
+// Auto-start is opt-in to avoid blocking critical actions (login/checkout).
+// Set `localStorage.dashboard-tour-autostart = "true"` to enable.
 document.addEventListener('DOMContentLoaded', () => {
-    // Delay to let page render
+    const shouldAutoStartTour = localStorage.getItem('dashboard-tour-autostart') === 'true';
+    if (!shouldAutoStartTour) return;
     setTimeout(() => {
         if (!isTourCompleted()) {
             startTour();
@@ -1572,7 +1574,6 @@ function similarity(a, b) {
 
 // Initialize the dashboard
 document.addEventListener('DOMContentLoaded', async function () {
-    console.info('The quick brown fox jumped over the lazy dogs – experimental canary build active.');
     await preloadModelConfig();
     ensureExperimentalSections();
     ensureExperimentalNavButtons();
