@@ -1105,10 +1105,20 @@ window.renderAnalysisPayload = function(analysisContainer, result, options) {
     });
   }
 
+  async function getClerkTokenWithTimeout(timeoutMs) {
+    if (!clerkInstance || !clerkInstance.session || !clerkInstance.session.getToken) return null;
+    var tokenPromise = clerkInstance.session.getToken().catch(function() { return null; });
+    var timeoutPromise = new Promise(function(resolve) {
+      setTimeout(function() { resolve(null); }, timeoutMs || 1200);
+    });
+    return Promise.race([tokenPromise, timeoutPromise]);
+  }
+
   async function syncClerkSession() {
     if (!clerkInstance || !clerkInstance.session) return null;
     try {
-      var token = await clerkInstance.session.getToken();
+      var token = await getClerkTokenWithTimeout(3000);
+      if (!token) return null;
       var resp = await _origFetch('/auth/clerk-sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
@@ -1251,11 +1261,18 @@ window.renderAnalysisPayload = function(analysisContainer, result, options) {
   // Inject Bearer token into /api/ and /auth/ requests
   window.fetch = async function(input, init) {
     init = init || {};
-    var url = typeof input === 'string' ? input : (input && input.url) || '';
-    if ((url.startsWith('/api/') || url.startsWith('/auth/')) && clerkInstance && clerkInstance.session) {
+    var rawUrl = typeof input === 'string' ? input : (input && input.url) || '';
+    var urlObj = null;
+    try { urlObj = new URL(rawUrl, window.location.origin); } catch(e) {}
+    var path = urlObj ? urlObj.pathname : rawUrl;
+    var isApi = path && (path.startsWith('/api/') || path.startsWith('/auth/'));
+    var isSameOrigin = !urlObj || urlObj.origin === window.location.origin;
+    if (isApi && isSameOrigin && clerkInstance && clerkInstance.session) {
       try {
-        var token = await clerkInstance.session.getToken();
-        init.headers = Object.assign({}, init.headers, { 'Authorization': 'Bearer ' + token });
+        var token = await getClerkTokenWithTimeout(800);
+        if (token) {
+          init.headers = Object.assign({}, init.headers, { 'Authorization': 'Bearer ' + token });
+        }
       } catch(e) {}
     }
     return _origFetch(input, init);

@@ -280,12 +280,18 @@
       btn.dataset.originalText = btn.textContent || 'Subscribe';
       btn.textContent = 'Starting…';
     }
-    fetch('/api/create-checkout-session', {
+    var checkoutRequest = fetch('/api/create-checkout-session', {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ price_key: priceKey })
-    }).then(function(r) {
+    });
+    var checkoutTimeout = new Promise(function(_, reject) {
+      setTimeout(function() {
+        reject(new Error('checkout_timeout'));
+      }, 15000);
+    });
+    Promise.race([checkoutRequest, checkoutTimeout]).then(function(r) {
       return r.json().catch(function() { return { error: 'Checkout failed' }; }).then(function(data) {
         return { ok: r.ok, status: r.status, data: data };
       });
@@ -308,7 +314,7 @@
         }
       }
     }).catch(function(err) {
-      if (err && err.name === 'AbortError') {
+      if (err && (err.name === 'AbortError' || err.message === 'checkout_timeout')) {
         if (typeof window.showToast === 'function') {
           window.showToast('Checkout is taking longer than expected. Please try again.');
         } else {
