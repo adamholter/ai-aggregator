@@ -1878,6 +1878,7 @@ def _upsert_clerk_user(clerk_user):
 def get_current_user():
     # 1. Fast-path legacy session auth first to avoid unnecessary Clerk API latency
     email = session.get('user_email')
+    clerk_id = session.get('clerk_id')
     if email:
         user = _find_user_by_email(email)
         if user:
@@ -1885,6 +1886,8 @@ def get_current_user():
         # If using Google Sheets auth, user may not exist in local file storage.
         if GOOGLE_SHEETS_AUTH_URL:
             return {'id': email, 'email': email}
+    if clerk_id:
+        return {'id': clerk_id, 'email': email or ''}
 
     # 2. Check for Clerk session token in Authorization header or cookie
     auth_header = request.headers.get('Authorization', '')
@@ -1898,10 +1901,6 @@ def get_current_user():
         verified = _verify_clerk_token(clerk_token)
         if verified:
             clerk_id = verified.get('clerk_id')
-            clerk_user = _get_clerk_user(clerk_id)
-            if clerk_user:
-                return _upsert_clerk_user(clerk_user)
-            # Fallback: return minimal user from verify payload
             raw = verified.get('_raw', {})
             email = raw.get('email', '')
             return {'id': clerk_id, 'email': email}
@@ -12418,6 +12417,7 @@ def auth_login():
 @app.route('/auth/logout', methods=['POST'])
 def auth_logout():
     session.pop('user_email', None)
+    session.pop('clerk_id', None)
     return jsonify({'success': True})
 
 
@@ -12438,21 +12438,15 @@ def auth_clerk_sync():
     clerk_id = verified.get('clerk_id')
     raw_claims = verified.get('_raw', {}) if isinstance(verified, dict) else {}
 
-    # Start with a minimal fallback user from verified token claims.
+    # Keep auth sync session-only. This avoids native libsql writes in the sign-in
+    # hot path while still establishing the app session for authenticated flows.
     user = {'id': clerk_id, 'email': raw_claims.get('email', '')}
-    try:
-        clerk_user = _get_clerk_user(clerk_id)
-        if clerk_user:
-            user = _upsert_clerk_user(clerk_user) or user
-    except Exception:
-        # Keep fallback user; checkout can still proceed with clerk_id-only session.
-        pass
-
-    # Persist session keys even if email lookup/upsert fails.
     session.permanent = True
     session['clerk_id'] = clerk_id
     if user.get('email'):
         session['user_email'] = user['email']
+    else:
+        session.pop('user_email', None)
     return jsonify({'success': True, 'user': user})
 
 

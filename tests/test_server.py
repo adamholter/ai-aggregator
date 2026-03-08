@@ -66,6 +66,74 @@ def test_checkout_fast_user_from_bearer_token(monkeypatch):
         assert server.session.get('user_email') == 'token@example.com'
 
 
+def test_get_current_user_fast_from_session_clerk_id():
+    with server.app.test_request_context('/'):
+        server.session['clerk_id'] = 'user_session_only'
+        server.session['user_email'] = 'session@example.com'
+        user = server.get_current_user()
+    assert user == {'id': 'user_session_only', 'email': 'session@example.com'}
+
+
+def test_get_current_user_from_verified_token_skips_upsert(monkeypatch):
+    monkeypatch.setattr(server, 'CLERK_SECRET_KEY', 'clerk_test_secret')
+
+    def fake_verify(token):
+        assert token == 'token-fast'
+        return {
+            'clerk_id': 'user_token_only',
+            '_raw': {'email': 'tokenonly@example.com'},
+        }
+
+    def fail_get_user(_clerk_id):
+        raise AssertionError('Clerk profile lookup should be skipped')
+
+    def fail_upsert(_clerk_user):
+        raise AssertionError('Clerk upsert should be skipped')
+
+    monkeypatch.setattr(server, '_verify_clerk_token', fake_verify)
+    monkeypatch.setattr(server, '_get_clerk_user', fail_get_user)
+    monkeypatch.setattr(server, '_upsert_clerk_user', fail_upsert)
+
+    with server.app.test_request_context('/', headers={'Authorization': 'Bearer token-fast'}):
+        user = server.get_current_user()
+    assert user == {'id': 'user_token_only', 'email': 'tokenonly@example.com'}
+
+
+def test_auth_clerk_sync_sets_session_without_upsert(monkeypatch):
+    monkeypatch.setattr(server, 'CLERK_SECRET_KEY', 'clerk_test_secret')
+
+    def fake_verify(token):
+        assert token == 'sync-token'
+        return {
+            'clerk_id': 'user_sync',
+            '_raw': {'email': 'sync@example.com'},
+        }
+
+    def fail_get_user(_clerk_id):
+        raise AssertionError('Clerk profile lookup should be skipped')
+
+    def fail_upsert(_clerk_user):
+        raise AssertionError('Clerk upsert should be skipped')
+
+    monkeypatch.setattr(server, '_verify_clerk_token', fake_verify)
+    monkeypatch.setattr(server, '_get_clerk_user', fail_get_user)
+    monkeypatch.setattr(server, '_upsert_clerk_user', fail_upsert)
+
+    client = server.app.test_client()
+    response = client.post(
+        '/auth/clerk-sync',
+        json={'token': 'sync-token'},
+        headers={'Authorization': 'Bearer sync-token'}
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload['user'] == {'id': 'user_sync', 'email': 'sync@example.com'}
+    with client.session_transaction() as sess:
+        assert sess['clerk_id'] == 'user_sync'
+        assert sess['user_email'] == 'sync@example.com'
+
+
 def test_create_checkout_session_skips_remote_clerk_lookup(monkeypatch):
     def fail_verify(_token):
         raise AssertionError('remote clerk lookup should be skipped for checkout')
