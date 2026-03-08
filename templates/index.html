@@ -1228,7 +1228,7 @@ window.renderAnalysisPayload = function(analysisContainer, result, options) {
       .catch(function(err) {
         var message = err && err.message ? err.message : 'Unable to load sign in.';
         renderClerkError(message);
-        if (message.indexOf('timed out') !== -1) {
+        if (buildClerkHostedSignInUrl() && message.indexOf('unavailable right now') === -1 && message.indexOf('missing') === -1) {
           setTimeout(function() { openClerkHostedSignIn(); }, 250);
         }
       });
