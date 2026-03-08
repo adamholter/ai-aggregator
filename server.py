@@ -1753,28 +1753,52 @@ def _record_server_key_usage(user_id, model, cost_usd, tokens_input=0, tokens_ou
         pass
 
 
+def _empty_subscription_payload():
+    return {
+        'tier': 'free',
+        'status': 'active',
+        'current_period_end': None,
+        'credit_limit': 0.0,
+        'credit_used': 0.0,
+        'credit_remaining': 0.0,
+    }
+
+
+def _is_lightweight_user(user):
+    if not isinstance(user, dict):
+        return False
+    if user.get('_skip_billing_lookup'):
+        return True
+    return bool(user.get('id')) and 'created_at' not in user and 'display_name' not in user
+
+
 def _serialize_user(user):
     if not isinstance(user, dict):
         return None
     user_id = user.get('id', '')
-    sub = _get_user_subscription(user_id)
-    tier = (sub.get('tier') if sub else None) or 'free'
-    credit = TIER_CREDITS.get(tier, 0.0)
-    used = _get_monthly_usage_cost(user_id) if credit > 0 else 0.0
-    return {
+    payload = {
         'id': user_id,
         'email': user.get('email'),
         'display_name': user.get('display_name'),
         'created_at': user.get('created_at'),
-        'subscription': {
-            'tier': tier,
-            'status': (sub.get('status') if sub else None) or 'active',
-            'current_period_end': sub.get('current_period_end') if sub else None,
-            'credit_limit': credit,
-            'credit_used': round(used, 4),
-            'credit_remaining': round(max(0.0, credit - used), 4),
-        }
     }
+    if _is_lightweight_user(user):
+        payload['subscription'] = _empty_subscription_payload()
+        return payload
+
+    sub = _get_user_subscription(user_id)
+    tier = (sub.get('tier') if sub else None) or 'free'
+    credit = TIER_CREDITS.get(tier, 0.0)
+    used = _get_monthly_usage_cost(user_id) if credit > 0 else 0.0
+    payload['subscription'] = {
+        'tier': tier,
+        'status': (sub.get('status') if sub else None) or 'active',
+        'current_period_end': sub.get('current_period_end') if sub else None,
+        'credit_limit': credit,
+        'credit_used': round(used, 4),
+        'credit_remaining': round(max(0.0, credit - used), 4),
+    }
+    return payload
 
 
 def _verify_clerk_token(token):
@@ -1887,7 +1911,7 @@ def get_current_user():
         if GOOGLE_SHEETS_AUTH_URL:
             return {'id': email, 'email': email}
     if clerk_id:
-        return {'id': clerk_id, 'email': email or ''}
+        return {'id': clerk_id, 'email': email or '', '_skip_billing_lookup': True}
 
     # 2. Check for Clerk session token in Authorization header or cookie
     auth_header = request.headers.get('Authorization', '')
@@ -1903,7 +1927,7 @@ def get_current_user():
             clerk_id = verified.get('clerk_id')
             raw = verified.get('_raw', {})
             email = raw.get('email', '')
-            return {'id': clerk_id, 'email': email}
+            return {'id': clerk_id, 'email': email, '_skip_billing_lookup': True}
 
     # 3. No valid auth context found
     return None

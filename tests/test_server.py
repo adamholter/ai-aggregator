@@ -71,7 +71,11 @@ def test_get_current_user_fast_from_session_clerk_id():
         server.session['clerk_id'] = 'user_session_only'
         server.session['user_email'] = 'session@example.com'
         user = server.get_current_user()
-    assert user == {'id': 'user_session_only', 'email': 'session@example.com'}
+    assert user == {
+        'id': 'user_session_only',
+        'email': 'session@example.com',
+        '_skip_billing_lookup': True,
+    }
 
 
 def test_get_current_user_from_verified_token_skips_upsert(monkeypatch):
@@ -96,7 +100,11 @@ def test_get_current_user_from_verified_token_skips_upsert(monkeypatch):
 
     with server.app.test_request_context('/', headers={'Authorization': 'Bearer token-fast'}):
         user = server.get_current_user()
-    assert user == {'id': 'user_token_only', 'email': 'tokenonly@example.com'}
+    assert user == {
+        'id': 'user_token_only',
+        'email': 'tokenonly@example.com',
+        '_skip_billing_lookup': True,
+    }
 
 
 def test_auth_clerk_sync_sets_session_without_upsert(monkeypatch):
@@ -132,6 +140,36 @@ def test_auth_clerk_sync_sets_session_without_upsert(monkeypatch):
     with client.session_transaction() as sess:
         assert sess['clerk_id'] == 'user_sync'
         assert sess['user_email'] == 'sync@example.com'
+
+
+def test_api_me_for_clerk_session_skips_billing_lookup(monkeypatch):
+    def fail_get_user_subscription(_user_id):
+        raise AssertionError('subscription lookup should be skipped')
+
+    def fail_get_monthly_usage_cost(_user_id):
+        raise AssertionError('usage lookup should be skipped')
+
+    monkeypatch.setattr(server, '_get_user_subscription', fail_get_user_subscription)
+    monkeypatch.setattr(server, '_get_monthly_usage_cost', fail_get_monthly_usage_cost)
+
+    client = server.app.test_client()
+    with client.session_transaction() as sess:
+        sess['clerk_id'] = 'user_clerk_fast'
+
+    response = client.get('/api/me')
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload['authenticated'] is True
+    assert payload['user']['id'] == 'user_clerk_fast'
+    assert payload['user']['subscription'] == {
+        'tier': 'free',
+        'status': 'active',
+        'current_period_end': None,
+        'credit_limit': 0.0,
+        'credit_used': 0.0,
+        'credit_remaining': 0.0,
+    }
 
 
 def test_create_checkout_session_skips_remote_clerk_lookup(monkeypatch):
