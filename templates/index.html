@@ -955,6 +955,22 @@ window.renderAnalysisPayload = function(analysisContainer, result, options) {
   font-size: 12px;
   font-weight: 600;
 }
+.clerk-auth-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 10px;
+  margin-left: 8px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  border-radius: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: #111;
+  text-decoration: none;
+}
 #clerk-auth-footer {
   padding: 10px 24px 14px;
   border-top: 1px solid #f0f0f0;
@@ -1007,6 +1023,62 @@ window.renderAnalysisPayload = function(analysisContainer, result, options) {
   var clerkInitPromise = null;
   var _origFetch = window.fetch.bind(window);
 
+  function decodeClerkFrontendApi(publishableKey) {
+    if (!publishableKey) return '';
+    var b64 = publishableKey.split('_')[2] || '';
+    while (b64.length % 4) b64 += '=';
+    try { return atob(b64).replace(/\$$/, ''); } catch(e) { return ''; }
+  }
+
+  function withTimeout(promise, timeoutMs, message) {
+    var timer = null;
+    return Promise.race([
+      promise,
+      new Promise(function(_, reject) {
+        timer = setTimeout(function() {
+          reject(new Error(message || 'Operation timed out.'));
+        }, timeoutMs || 10000);
+      })
+    ]).finally(function() {
+      if (timer) clearTimeout(timer);
+    });
+  }
+
+  function buildClerkHostedSignInUrl() {
+    var frontendApi = decodeClerkFrontendApi(clerkPublishableKey);
+    if (!frontendApi) return '';
+    var hostedDomain = frontendApi.indexOf('.clerk.') !== -1
+      ? frontendApi.replace('.clerk.', '.')
+      : (frontendApi.indexOf('clerk.') === 0 ? 'accounts.' + frontendApi.slice('clerk.'.length) : frontendApi);
+    return hostedDomain
+      ? 'https://' + hostedDomain + '/sign-in?redirect_url=' + encodeURIComponent(window.location.href)
+      : '';
+  }
+
+  function openClerkHostedSignIn() {
+    var url = buildClerkHostedSignInUrl();
+    if (!url) return false;
+    window.location.assign(url);
+    return true;
+  }
+
+  function injectClerkScript(src, publishableKey) {
+    return withTimeout(new Promise(function(resolve, reject) {
+      if (window.Clerk) { resolve(window.Clerk); return; }
+      var s = document.createElement('script');
+      s.setAttribute('data-clerk-publishable-key', publishableKey);
+      s.setAttribute('data-clerk-loader', 'dynamic');
+      s.src = src;
+      s.crossOrigin = 'anonymous';
+      s.onload = function() { resolve(window.Clerk); };
+      s.onerror = function() {
+        if (s.parentNode) s.parentNode.removeChild(s);
+        reject(new Error('Secure sign in script failed to load.'));
+      };
+      document.head.appendChild(s);
+    }), 8000, 'Secure sign in timed out while loading.');
+  }
+
   async function initClerk(publishableKey) {
     if (publishableKey) clerkPublishableKey = publishableKey;
     if (clerkInstance) return clerkInstance;
@@ -1015,25 +1087,33 @@ window.renderAnalysisPayload = function(analysisContainer, result, options) {
 
     clerkInitPromise = (async function() {
     var pk = clerkPublishableKey;
-    var b64 = pk.split('_')[2] || '';
-    while (b64.length % 4) b64 += '=';
-    var domain = '';
-    try { domain = atob(b64).replace(/\$$/, ''); } catch(e) {}
-    var cdnUrl = domain
-      ? 'https://' + domain + '/npm/@clerk/clerk-js@latest/dist/clerk.browser.js'
-      : 'https://cdn.jsdelivr.net/npm/@clerk/clerk-js@5/dist/clerk.browser.js';
+    var frontendApi = decodeClerkFrontendApi(pk);
+    var primaryUrl = frontendApi
+      ? 'https://' + frontendApi + '/npm/@clerk/clerk-js@latest/dist/clerk.browser.js'
+      : '';
+    var fallbackUrl = 'https://cdn.jsdelivr.net/npm/@clerk/clerk-js@5/dist/clerk.browser.js';
 
-    await new Promise(function(resolve, reject) {
-      if (window.Clerk) { resolve(); return; }
-      var s = document.createElement('script');
-      s.setAttribute('data-clerk-publishable-key', pk);
-      s.src = cdnUrl;
-      s.crossOrigin = 'anonymous';
-      s.onload = resolve; s.onerror = reject;
-      document.head.appendChild(s);
-    });
+    if (!window.Clerk) {
+      try {
+        if (primaryUrl) {
+          await injectClerkScript(primaryUrl, pk);
+        } else {
+          await injectClerkScript(fallbackUrl, pk);
+        }
+      } catch (primaryErr) {
+        if (!window.Clerk && (!primaryUrl || primaryUrl !== fallbackUrl)) {
+          await injectClerkScript(fallbackUrl, pk);
+        } else {
+          throw primaryErr;
+        }
+      }
+    }
+
     clerkInstance = window.Clerk;
-    await clerkInstance.load();
+    if (!clerkInstance || !clerkInstance.load) {
+      throw new Error('Secure sign in failed to initialize.');
+    }
+    await withTimeout(clerkInstance.load(), 10000, 'Secure sign in timed out while initializing.');
     if (clerkInstance.session) {
       await syncClerkSession();
       refreshAuthUI();
@@ -1055,6 +1135,7 @@ window.renderAnalysisPayload = function(analysisContainer, result, options) {
     try {
       return await clerkInitPromise;
     } catch (e) {
+      clerkInstance = null;
       clerkInitPromise = null;
       throw e;
     }
@@ -1070,7 +1151,11 @@ window.renderAnalysisPayload = function(analysisContainer, result, options) {
     var container = document.getElementById('clerk-sign-in-container');
     if (!container) return;
     var safeMsg = String(message || 'Unable to load sign in. Please retry.');
-    container.innerHTML = '<div class="clerk-auth-error">' + safeMsg + '<div><button class="clerk-auth-retry" type="button" id="clerk-auth-retry-btn">Retry</button></div></div>';
+    var hostedUrl = buildClerkHostedSignInUrl();
+    var hostedLink = hostedUrl
+      ? '<a class="clerk-auth-link" href="' + hostedUrl + '" id="clerk-auth-hosted-link">Open secure sign in</a>'
+      : '';
+    container.innerHTML = '<div class="clerk-auth-error">' + safeMsg + '<div><button class="clerk-auth-retry" type="button" id="clerk-auth-retry-btn">Retry</button>' + hostedLink + '</div></div>';
     var retryBtn = document.getElementById('clerk-auth-retry-btn');
     if (retryBtn) retryBtn.addEventListener('click', function() { showClerkSignIn(); });
   }
@@ -1140,7 +1225,13 @@ window.renderAnalysisPayload = function(analysisContainer, result, options) {
     renderClerkLoading();
     ensureClerkReady()
       .then(function() { mountClerkSignIn(); })
-      .catch(function(err) { renderClerkError(err && err.message ? err.message : 'Unable to load sign in.'); });
+      .catch(function(err) {
+        var message = err && err.message ? err.message : 'Unable to load sign in.';
+        renderClerkError(message);
+        if (message.indexOf('timed out') !== -1) {
+          setTimeout(function() { openClerkHostedSignIn(); }, 250);
+        }
+      });
   }
 
   function hideClerkSignIn() {
@@ -1284,7 +1375,7 @@ window.renderAnalysisPayload = function(analysisContainer, result, options) {
     .then(function(data) {
       if (data.clerk_publishable_key) {
         clerkPublishableKey = data.clerk_publishable_key;
-        initClerk(data.clerk_publishable_key);
+        initClerk(data.clerk_publishable_key).catch(function(){});
       }
     })
     .catch(function(){});
