@@ -1062,6 +1062,21 @@ window.renderAnalysisPayload = function(analysisContainer, result, options) {
     return true;
   }
 
+  function getClerkRedirectUrl() {
+    return window.location.origin + '/';
+  }
+
+  function getClerkRedirectOptions() {
+    var redirectUrl = getClerkRedirectUrl();
+    return {
+      signInForceRedirectUrl: redirectUrl,
+      signUpForceRedirectUrl: redirectUrl,
+      signInFallbackRedirectUrl: redirectUrl,
+      signUpFallbackRedirectUrl: redirectUrl,
+      allowedRedirectOrigins: [window.location.origin]
+    };
+  }
+
   function injectClerkScript(src, publishableKey) {
     return withTimeout(new Promise(function(resolve, reject) {
       if (window.Clerk) { resolve(window.Clerk); return; }
@@ -1113,7 +1128,11 @@ window.renderAnalysisPayload = function(analysisContainer, result, options) {
     if (!clerkInstance || !clerkInstance.load) {
       throw new Error('Secure sign in failed to initialize.');
     }
-    await withTimeout(clerkInstance.load(), 10000, 'Secure sign in timed out while initializing.');
+    await withTimeout(
+      clerkInstance.load(getClerkRedirectOptions()),
+      10000,
+      'Secure sign in timed out while initializing.'
+    );
     if (clerkInstance.session) {
       await syncClerkSession();
       refreshAuthUI();
@@ -1179,7 +1198,7 @@ window.renderAnalysisPayload = function(analysisContainer, result, options) {
     var container = document.getElementById('clerk-sign-in-container');
     if (!container || !clerkInstance || !clerkInstance.mountSignIn) return;
     while (container.firstChild) container.removeChild(container.firstChild);
-    clerkInstance.mountSignIn(container, {
+    clerkInstance.mountSignIn(container, Object.assign({
       appearance: {
         elements: {
           rootBox: { fontFamily: 'inherit', width: '100%' },
@@ -1187,7 +1206,7 @@ window.renderAnalysisPayload = function(analysisContainer, result, options) {
           footer: { display: 'none' },
         }
       }
-    });
+    }, getClerkRedirectOptions()));
   }
 
   async function getClerkTokenWithTimeout(timeoutMs) {
