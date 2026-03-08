@@ -2,7 +2,6 @@
 // NOTE: No hardcoded API keys - all keys are user-provided via Settings modal
 // Server-side keys are handled by the backend for catalog data only
 const ARTIFICIAL_ANALYSIS_BASE_URL = 'https://artificialanalysis.ai/api/v2';
-const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
 
 // Global variables to store cached data
 let cachedData = {
@@ -1393,7 +1392,7 @@ async function fetchExistingAnalysis(model, type) {
 
         // Handle specific error cases
         if (response.status === 402) {
-            errorMessage = "🔑 OpenRouter API key required. Please add your key in Settings to use AI features.";
+            errorMessage = "OpenRouter access required. Add your own key in Settings or use a paid plan with server-side access.";
         }
 
         throw new Error(errorMessage);
@@ -1483,7 +1482,7 @@ async function requestModelMatch(source, target, modelPayload, options = {}) {
 
         // Handle specific error cases
         if (response.status === 402) {
-            errorMessage = "🔑 OpenRouter API key required. Please add your key in Settings to use AI features.";
+            errorMessage = "OpenRouter access required. Add your own key in Settings or use a paid plan with server-side access.";
         }
 
         throw new Error(errorMessage);
@@ -3028,7 +3027,7 @@ async function makeAPICall(url, apiKey, options = {}) {
 
             // Handle specific error cases
             if (response.status === 402) {
-                message = "🔑 OpenRouter API key required. Please add your key in Settings to use AI features.";
+                message = "OpenRouter access required. Add your own key in Settings or use a paid plan with server-side access.";
             }
 
             throw new Error(message);
@@ -5276,12 +5275,6 @@ async function sendAgentExpMessage(event) {
         return;
     }
 
-    if (!getUserOpenRouterKey()) {
-        showToast('🔑 Add your OpenRouter key in Settings to chat with the Agent.', 'warning');
-        setAgentExpStatus('Add your OpenRouter key in Settings to talk to the Agent.', true);
-        return;
-    }
-
     appendAgentExpMessage('user', message);
     pushAgentExpHistory({ role: 'user', content: message });
     input.value = '';
@@ -5360,7 +5353,7 @@ async function streamAgentExpResponse(message) {
                 // ignore
             }
             if (response.status === 402) {
-                errorMessage = "🔑 OpenRouter API key required. Please add your key in Settings to use the Agent.";
+                errorMessage = "Agent access requires OpenRouter access. Add your own key in Settings or use a paid plan with server-side access.";
             }
             throw new Error(errorMessage);
         }
@@ -5578,7 +5571,7 @@ async function handleStreamingWithFetch(userMessage, attachments, resolve, rejec
 
             // Handle specific error cases
             if (response.status === 402) {
-                errorMessage = "🔑 OpenRouter API key required. Please add your key in Settings to use AI features.";
+                errorMessage = "OpenRouter access required. Add your own key in Settings or use a paid plan with server-side access.";
             }
 
             throw new Error(errorMessage);
@@ -5691,7 +5684,7 @@ async function handleNonStreamingFallback(userMessage, attachments, resolve, rej
             }
 
             if (response.status === 402) {
-                errorMessage = "🔑 OpenRouter API key required. Please add your key in Settings to use AI features.";
+                errorMessage = "OpenRouter access required. Add your own key in Settings or use a paid plan with server-side access.";
             }
 
             throw new Error(errorMessage);
@@ -7226,7 +7219,7 @@ async function streamModelAnalysis(analysisContainer, model, type, options = {})
 
             // Handle specific error cases
             if (response.status === 402) {
-                errorMessage = "🔑 OpenRouter API key required. Please add your key in Settings to use AI features.";
+                errorMessage = "OpenRouter access required. Add your own key in Settings or use a paid plan with server-side access.";
             }
 
             throw new Error(errorMessage);
@@ -7552,7 +7545,7 @@ async function handleNonStreamingModalAnalysis(analysisContainer, model, type) {
 
             // Handle specific error cases
             if (response.status === 402) {
-                errorMessage = "🔑 OpenRouter API key required. Please add your key in Settings to use AI features.";
+                errorMessage = "OpenRouter access required. Add your own key in Settings or use a paid plan with server-side access.";
             }
 
             throw new Error(errorMessage);
@@ -7632,7 +7625,7 @@ function refreshOpenRouterKeyField() {
         input.placeholder = 'Key stored locally';
         input.dataset.hasStoredKey = 'true';
     } else {
-        input.placeholder = 'sk-or-...';
+        input.placeholder = 'Optional: add your own OpenRouter key';
         input.dataset.hasStoredKey = 'false';
     }
 }
@@ -8182,12 +8175,12 @@ function initSettingsVariants() {
 
     // Refresh API key state on every open
     const hasKey = !!getUserOpenRouterKey();
-    inner.dataset.apiState = hasKey ? 'set' : 'missing';
+    inner.dataset.apiState = hasKey ? 'set' : 'optional';
 
-    // Default to API tab if key is missing, otherwise keep last active or models
+    // Default to the models tab; BYO keys are optional for paid users.
     const hasActive = inner.querySelector('.settings-section[data-tab].tab-active');
-    if (!hasActive || !hasKey) {
-        applySettingsTab(hasKey ? 'models' : 'api');
+    if (!hasActive) {
+        applySettingsTab('models');
     }
 }
 

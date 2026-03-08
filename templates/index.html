@@ -768,20 +768,20 @@ window.buildAnalysisUserMessage = function(model, type) {
 window.streamModelAnalysis = async function(analysisContainer, model, type, options) {
     options = options || {};
     var apiKey = getUserOpenRouterKey();
-    if (!apiKey) throw new Error('\u{1F511} OpenRouter API key required. Please add your key in Settings.');
     var analysisModel = localStorage.getItem('dashboard-analysis-model') || 'openai/gpt-oss-120b';
     var systemOverride = '## MODEL ANALYSIS MODE\nYou are producing a concise analysis of a specific AI model for a user browsing an AI leaderboard dashboard.\n\nTOOL USAGE RULES:\n- The user message already includes full structured data (benchmarks, pricing, speed) for the model. Use it.\n- Call fetch_llm_benchmarks ONCE to get peer context. That is usually all you need.\n- Do NOT call ask_perplexity unless the model is brand-new and the structured data is mostly empty/null. Perplexity is slow and unnecessary when benchmark data is already available.\n- Never call the same tool twice. All results are in your context.\n- After at most 2 tool calls, write your analysis immediately.\n\nStructure your response with ## sections: Overview, Performance (with a benchmark comparison chart), Speed & Cost, Strengths & Weaknesses, Best Use Cases.\n\nChart syntax — JSON code block:\n```json\n{"type":"bar","labels":["Model A","Model B"],"datasets":[{"label":"Score","data":[72,85]}]}\n```\nReference related models with [[model:openrouter:provider/model-id]] for clickable cards.\n\nBe concise. Synthesize from available data — do not wait for web search results you don\'t need.';
     var response = await fetch('/api/agent-v2/chat/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            settings: { api_key: apiKey, model: analysisModel, mode: 'quick', system_prompt_override: systemOverride },
+            settings: Object.assign({ model: analysisModel, mode: 'quick', system_prompt_override: systemOverride }, apiKey ? { api_key: apiKey } : {}),
             messages: [{ role: 'user', content: buildAnalysisUserMessage(model, type) }]
         })
     });
     if (!response.ok) {
         var msg = 'HTTP error ' + response.status;
         try { var p = await response.json(); msg = p.error || p.message || msg; } catch(_) {}
+        if (response.status === 402) msg = 'OpenRouter access required. Add your own key in Settings or use a paid plan with server-side access.';
         throw new Error(msg);
     }
     var reader = response.body && response.body.getReader();

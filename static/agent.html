@@ -865,6 +865,7 @@ function modelLabel(id) {
 (function init() {
   populateModelSelect();
   $apiKey.value = localStorage.getItem(LS_APIKEY) || '';
+  $apiKey.placeholder = 'Optional: add your own OpenRouter key';
   if (localStorage.getItem(LS_DEEPER) === 'true') $deeper.checked = true;
   updateSend();
 })();
@@ -925,13 +926,6 @@ async function send() {
   if (!text || isLoading) return;
 
   const key = getKey();
-  if (!key) {
-    $settBar.classList.remove('hidden');
-    $apiKey.focus();
-    $apiKey.style.outline = '2px solid #dc2626';
-    setTimeout(() => { $apiKey.style.outline = ''; }, 2000);
-    return;
-  }
 
   $empty.style.display = 'none';
 
@@ -972,12 +966,11 @@ async function send() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        settings: {
-          api_key: key,
+        settings: Object.assign({
           model: $model.value,
           mode: $deeper.checked ? 'heavy' : 'quick',
           max_iterations: 200
-        },
+        }, key ? { api_key: key } : {}),
         messages: history
       })
     });
@@ -986,7 +979,11 @@ async function send() {
       const t = await res.text();
       clearInterval(timerInterval);
       loadEl.remove();
-      addError('HTTP ' + res.status + ': ' + t.slice(0, 200));
+      let message = 'HTTP ' + res.status + ': ' + t.slice(0, 200);
+      if (res.status === 402) {
+        message = 'OpenRouter access required. Add your own key in Settings or use a paid plan with server-side access.';
+      }
+      addError(message);
     } else {
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
