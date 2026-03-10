@@ -990,11 +990,42 @@ async function send() {
       const labelEl = loadEl.querySelector('.load-label');
       let buf = '';
       let toolCalls = [];
+      let streamedResponse = '';
+      let sawTerminalEvent = false;
+      let sawAnyStreamEvent = false;
       loadEl.querySelector('.loading-row').addEventListener('click', () => openLiveTrace(toolCalls));
+
+      function finishRun(responseText, elapsed, options = {}) {
+        const {
+          persistHistory = true,
+          interrupted = false,
+        } = options;
+        clearInterval(timerInterval);
+        loadEl.remove();
+        if (isLiveTrace) {
+          isLiveTrace = false;
+          liveTraceEls = [];
+          const suffix = interrupted ? ' · interrupted' : '';
+          $tsbMeta.textContent = toolCalls.length + ' step' + (toolCalls.length !== 1 ? 's' : '') + ' · ' + fmtDur(elapsed) + suffix;
+        }
+        const finalText = (responseText || '').trim();
+        if (finalText) {
+          if (persistHistory) history.push({ role: 'assistant', content: finalText });
+          addAgentMsg(finalText, toolCalls, elapsed);
+        } else if (interrupted) {
+          addError('Agent run ended before a final response was delivered.');
+        }
+      }
 
       outer: while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+          const elapsed = Date.now() - startMs;
+          if (!sawTerminalEvent) {
+            finishRun(streamedResponse, elapsed, { interrupted: true });
+          }
+          break;
+        }
         buf += decoder.decode(value, { stream: true });
         const parts = buf.split('\n\n');
         buf = parts.pop(); // keep incomplete trailing chunk
@@ -1003,6 +1034,7 @@ async function send() {
           if (!part.startsWith('data: ')) continue;
           let evt;
           try { evt = JSON.parse(part.slice(6)); } catch (e) { continue; }
+          sawAnyStreamEvent = true;
 
           if (evt.type === 'status') {
             const stage = evt.stage || '';
@@ -1033,20 +1065,15 @@ async function send() {
               addArtifactCard(evt.artifact);
             }
           } else if (evt.type === 'content_chunk') {
+            streamedResponse += String(evt.delta || '');
             if (labelEl) labelEl.textContent = 'Writing\u2026';
           } else if (evt.type === 'done') {
+            sawTerminalEvent = true;
             const elapsed = Date.now() - startMs;
-            clearInterval(timerInterval);
-            loadEl.remove();
-            if (isLiveTrace) {
-              isLiveTrace = false;
-              liveTraceEls = [];
-              $tsbMeta.textContent = toolCalls.length + ' step' + (toolCalls.length !== 1 ? 's' : '') + ' \u00b7 ' + fmtDur(elapsed);
-            }
-            history.push({ role: 'assistant', content: evt.response || '' });
-            addAgentMsg(evt.response || '', toolCalls, elapsed);
+            finishRun(evt.response || streamedResponse, elapsed);
             break outer;
           } else if (evt.type === 'error') {
+            sawTerminalEvent = true;
             clearInterval(timerInterval);
             loadEl.remove();
             isLiveTrace = false; liveTraceEls = [];
@@ -1054,6 +1081,12 @@ async function send() {
             break outer;
           }
         }
+      }
+
+      if (!sawAnyStreamEvent && !sawTerminalEvent) {
+        clearInterval(timerInterval);
+        loadEl.remove();
+        addError('Agent stream ended without returning any events.');
       }
     }
   } catch(e) {

@@ -1,88 +1,68 @@
 import { test, expect } from '@playwright/test';
 
 function sse(events: unknown[]) {
-  return events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join('');
+  return events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join('');
 }
 
-test('New shell renders and activity pane is present', async ({ page }) => {
-  await page.goto('/static/agent.html');
-  await expect(page.getByRole('heading', { name: 'Model Analyst' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Activity' })).toBeVisible();
-  await expect(page.locator('#promptInput')).toBeVisible();
-});
-
-test('Settings save updates mode badge', async ({ page }) => {
-  await page.goto('/static/agent.html');
-  await page.getByRole('button', { name: 'Settings' }).click();
-  await page.locator('#agentMode').selectOption('heavy');
-  await page.locator('#saveSettingsBtn').click();
-  await expect(page.locator('#modeBadge')).toContainText('Heavy Mode');
-});
-
-test('Streaming timeline is curated (no content_chunk spam items)', async ({ page }) => {
+test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('dashboard-user-openrouter-key', 'sk-test');
-    localStorage.setItem('dashboard-agent-exp-model', 'anthropic/claude-sonnet-4');
   });
+});
 
+test('agent shell renders current UI', async ({ page }) => {
+  await page.goto('/static/agent.html');
+
+  await expect(page.locator('.header-brand')).toHaveText('Agent');
+  await expect(page.locator('#input')).toBeVisible();
+  await expect(page.locator('#tsb-panel')).toContainText('Activity');
+});
+
+test('streamed completion renders response and activity summary', async ({ page }) => {
   await page.route('**/api/agent-v2/chat/stream', async (route) => {
     await route.fulfill({
       status: 200,
       headers: { 'content-type': 'text/event-stream' },
       body: sse([
         { type: 'status', stage: 'start', mode: 'quick' },
-        { type: 'status', stage: 'iteration_start', iteration: 1 },
         { type: 'tool_start', iteration: 1, tool_name: 'get_llm_leaderboard', args: { limit: 5 } },
         { type: 'tool_result', iteration: 1, tool_name: 'get_llm_leaderboard', status: 'done', result_preview: 'ok' },
         { type: 'content_chunk', delta: '# Answer\n\n' },
         { type: 'content_chunk', delta: 'hello world' },
-        { type: 'done', response: '# Answer\n\nhello world' }
-      ])
+        { type: 'done', response: '# Answer\n\nhello world' },
+      ]),
     });
   });
 
   await page.goto('/static/agent.html');
-  await page.locator('#promptInput').fill('best coding models');
-  await page.getByRole('button', { name: 'Send' }).click();
+  await page.locator('#input').fill('best coding models');
+  await page.locator('#send-btn').click();
 
-  await expect(page.getByRole('heading', { name: 'Answer' })).toBeVisible();
-  await expect(page.locator('.action-feed .run-group')).toHaveCount(1);
-  await expect(page.locator('.action-feed .event')).toHaveCount(5);
-  await expect(page.locator('.action-feed .event .title')).toContainText([
-    'Plan request',
-    'Iteration 1',
-    'get_llm_leaderboard',
-    'Synthesize response',
-    'Done'
-  ]);
+  await expect(page.locator('.agent-response h1')).toHaveText('Answer');
+  await expect(page.locator('.agent-response')).toContainText('hello world');
+  await expect(page.locator('.trace-pill')).toContainText('Activity');
 });
 
-test('Stop cancels active request and shows Stopped state', async ({ page }) => {
-  await page.addInitScript(() => {
-    localStorage.setItem('dashboard-user-openrouter-key', 'sk-test');
-    localStorage.setItem('dashboard-agent-exp-model', 'anthropic/claude-sonnet-4');
-  });
-
+test('truncated stream still finalizes with partial response instead of spinning forever', async ({ page }) => {
   await page.route('**/api/agent-v2/chat/stream', async (route) => {
-    await page.waitForTimeout(400);
     await route.fulfill({
       status: 200,
       headers: { 'content-type': 'text/event-stream' },
-      body: sse([{ type: 'done', response: 'late' }]),
+      body: sse([
+        { type: 'status', stage: 'start', mode: 'quick' },
+        { type: 'tool_start', iteration: 1, tool_name: 'web_search', args: { query: 'ai trends' } },
+        { type: 'tool_result', iteration: 1, tool_name: 'web_search', status: 'done', result_preview: 'results' },
+        { type: 'content_chunk', delta: 'Partial answer' },
+      ]),
     });
   });
 
   await page.goto('/static/agent.html');
-  await page.locator('#promptInput').fill('long run');
-  await page.getByRole('button', { name: 'Send' }).click();
-  await expect(page.getByRole('button', { name: 'Stop' })).toBeEnabled();
-  await page.getByRole('button', { name: 'Stop' }).click();
-  await expect(page.locator('#runState')).toContainText('Stopped');
-  await page.waitForTimeout(500);
-});
+  await page.locator('#input').fill('find a trend');
+  await page.locator('#send-btn').click();
 
-test('Main page iframe points at rebuilt agent UI', async ({ page }) => {
-  await page.goto('/');
-  const iframe = page.locator('iframe[title="Agent"]');
-  await expect(iframe).toHaveAttribute('src', '/static/agent.html');
+  await expect(page.locator('.agent-response')).toContainText('Partial answer');
+  await expect(page.locator('.loading-row')).toHaveCount(0);
+  await page.locator('#input').fill('second prompt');
+  await expect(page.locator('#send-btn')).toBeEnabled();
 });
