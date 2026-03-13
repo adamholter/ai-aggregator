@@ -15,6 +15,9 @@ import requests
 from .tools import get_tool_definitions
 from .types import AgentRunResult, AgentSettings, AgentToolCallLog
 
+OPENROUTER_CONNECT_TIMEOUT_SECONDS = 15
+OPENROUTER_READ_TIMEOUT_SECONDS = 3600
+
 
 def _parse_tool_args(raw: Any) -> Dict[str, Any]:
     if isinstance(raw, dict):
@@ -58,7 +61,7 @@ def _openrouter_chat_completion(
             "Content-Type": "application/json",
         },
         json=payload,
-        timeout=120,
+        timeout=(OPENROUTER_CONNECT_TIMEOUT_SECONDS, OPENROUTER_READ_TIMEOUT_SECONDS),
     )
     response.raise_for_status()
     return response.json()

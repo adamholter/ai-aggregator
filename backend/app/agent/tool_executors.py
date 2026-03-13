@@ -11,6 +11,9 @@ import requests
 
 from .model_identity import build_umi
 
+OPENROUTER_CONNECT_TIMEOUT_SECONDS = 15
+OPENROUTER_READ_TIMEOUT_SECONDS = 3600
+
 
 class AgentToolExecutors:
     def __init__(
@@ -325,7 +328,7 @@ class AgentToolExecutors:
                 "Content-Type": "application/json",
             },
             json=payload,
-            timeout=120,
+            timeout=(OPENROUTER_CONNECT_TIMEOUT_SECONDS, OPENROUTER_READ_TIMEOUT_SECONDS),
         )
         response.raise_for_status()
         data = response.json()
