@@ -17,6 +17,7 @@ from .types import AgentRunResult, AgentSettings, AgentToolCallLog
 
 OPENROUTER_CONNECT_TIMEOUT_SECONDS = 15
 OPENROUTER_READ_TIMEOUT_SECONDS = 3600
+DUPLICATE_TOOL_CALL_LIMIT = 3
 
 
 def _parse_tool_args(raw: Any) -> Dict[str, Any]:
@@ -37,6 +38,38 @@ def _safe_json_text(value: Any) -> str:
         return json.dumps(value, ensure_ascii=False)
     except Exception:
         return str(value)
+
+
+def _canonical_tool_signature(tool_name: str, args: Dict[str, Any]) -> str:
+    return f"{tool_name}:{json.dumps(args or {}, sort_keys=True, ensure_ascii=False, separators=(',', ':'))}"
+
+
+def _duplicate_tool_warning(tool_name: str, duplicate_count: int) -> str:
+    return (
+        f"Duplicate tool call blocked: `{tool_name}` with identical arguments already completed successfully earlier in this run. "
+        "That result is still in context. Use the prior result, choose a different tool, or call `send_final_response`."
+        f" Duplicate attempt #{duplicate_count}."
+    )
+
+
+def _loop_detected_message(tool_name: str) -> str:
+    return (
+        f"Loop detected: the agent repeated the identical `{tool_name}` tool call after being warned that the result was already in context."
+    )
+
+
+def _describe_llm_api_failure(exc: Exception, auth_source: str) -> str:
+    if isinstance(exc, requests.exceptions.HTTPError):
+        response = exc.response
+        status_code = getattr(response, "status_code", None)
+        if status_code in {401, 403}:
+            if auth_source == "server_key":
+                return "Upstream provider authentication failed while using server-side access. Please try again later."
+            if auth_source == "user_key":
+                return "Your OpenRouter API key was rejected by the upstream provider. Update your key in Settings and try again."
+        if status_code == 402 and auth_source == "server_key":
+            return "The upstream provider rejected this server-side request for billing reasons. Please try again later."
+    return str(exc)
 
 
 def _openrouter_chat_completion(
@@ -81,6 +114,8 @@ def run_agent(
     mode = (settings.mode or "quick").lower()
     tools = get_tool_definitions(mode=mode)
     logs: List[AgentToolCallLog] = []
+    successful_tool_results: Dict[str, Dict[str, Any]] = {}
+    duplicate_attempts: Dict[str, int] = {}
 
     messages: List[Dict[str, Any]] = [{"role": "system", "content": system_prompt}]
     messages.extend(user_messages)
@@ -101,7 +136,7 @@ def run_agent(
                 response="",
                 messages=messages,
                 logs=logs,
-                error=f"LLM API call failed at iteration {iteration}: {exc}\n{traceback.format_exc()}",
+                error=f"LLM API call failed at iteration {iteration}: {_describe_llm_api_failure(exc, settings.auth_source)}\n{traceback.format_exc()}",
             )
 
         choice = (completion.get("choices") or [{}])[0]
@@ -126,6 +161,45 @@ def run_agent(
             fn = call.get("function") or {}
             name = fn.get("name") or "unknown"
             args = _parse_tool_args(fn.get("arguments"))
+            signature = _canonical_tool_signature(name, args) if name != "send_final_response" else ""
+
+            if signature and signature in successful_tool_results:
+                prior = successful_tool_results[signature]
+                duplicate_attempts[signature] = duplicate_attempts.get(signature, 0) + 1
+                duplicate_count = duplicate_attempts[signature]
+                warning_message = _duplicate_tool_warning(name, duplicate_count)
+                log = AgentToolCallLog(
+                    iteration=iteration,
+                    tool_name=name,
+                    status="duplicate",
+                    args=args,
+                    result_preview=warning_message[:220],
+                    raw_result=prior.get("raw_result"),
+                )
+                logs.append(log)
+                duplicate_payload = {
+                    "ok": True,
+                    "tool": name,
+                    "duplicate_blocked": True,
+                    "message": warning_message,
+                    "prior_result": prior.get("result"),
+                }
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tool_call_id,
+                        "name": name,
+                        "content": _safe_json_text(duplicate_payload),
+                    }
+                )
+                if duplicate_count >= DUPLICATE_TOOL_CALL_LIMIT:
+                    return AgentRunResult(
+                        response="",
+                        messages=messages,
+                        logs=logs,
+                        error=_loop_detected_message(name),
+                    )
+                continue
 
             log = AgentToolCallLog(
                 iteration=iteration,
@@ -164,6 +238,11 @@ def run_agent(
                     "tool": name,
                     "result": tool_result.get("result"),
                 }
+                if signature:
+                    successful_tool_results[signature] = {
+                        "result": tool_result.get("result"),
+                        "raw_result": tool_result.get("result"),
+                    }
 
             messages.append(
                 {
@@ -208,6 +287,8 @@ def stream_agent(
     tools = get_tool_definitions(mode=mode)
     logs: List[AgentToolCallLog] = []
     final_response = ""
+    successful_tool_results: Dict[str, Dict[str, Any]] = {}
+    duplicate_attempts: Dict[str, int] = {}
 
     messages: List[Dict[str, Any]] = [{"role": "system", "content": system_prompt}]
     messages.extend(user_messages)
@@ -235,7 +316,7 @@ def stream_agent(
         except Exception as exc:
             yield {
                 "type": "error",
-                "error": f"LLM API call failed at iteration {iteration}: {exc}",
+                "error": f"LLM API call failed at iteration {iteration}: {_describe_llm_api_failure(exc, settings.auth_source)}",
                 "stack": traceback.format_exc(),
             }
             return
@@ -277,6 +358,44 @@ def stream_agent(
                 "tool_name": name,
                 "args": args,
             }
+
+            signature = _canonical_tool_signature(name, args) if name != "send_final_response" else ""
+            if signature and signature in successful_tool_results:
+                prior = successful_tool_results[signature]
+                duplicate_attempts[signature] = duplicate_attempts.get(signature, 0) + 1
+                duplicate_count = duplicate_attempts[signature]
+                warning_message = _duplicate_tool_warning(name, duplicate_count)
+                log.status = "duplicate"
+                log.result_preview = warning_message[:220]
+                log.raw_result = prior.get("raw_result")
+                duplicate_payload = {
+                    "ok": True,
+                    "tool": name,
+                    "duplicate_blocked": True,
+                    "message": warning_message,
+                    "prior_result": prior.get("result"),
+                }
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tool_call_id,
+                    "name": name,
+                    "content": _safe_json_text(duplicate_payload),
+                })
+                yield {
+                    "type": "tool_result",
+                    "iteration": iteration,
+                    "tool_name": name,
+                    "status": "duplicate",
+                    "result_preview": warning_message[:220],
+                    "raw_result": prior.get("result"),
+                }
+                if duplicate_count >= DUPLICATE_TOOL_CALL_LIMIT:
+                    yield {
+                        "type": "error",
+                        "error": _loop_detected_message(name),
+                    }
+                    return
+                continue
 
             # create_artifact is handled client-side — emit event, skip executor
             if name == "create_artifact":
@@ -349,6 +468,11 @@ def stream_agent(
                     "tool": name,
                     "result": tool_result.get("result"),
                 }
+                if signature:
+                    successful_tool_results[signature] = {
+                        "result": tool_result.get("result"),
+                        "raw_result": tool_result.get("result"),
+                    }
                 yield {
                     "type": "tool_result",
                     "iteration": iteration,

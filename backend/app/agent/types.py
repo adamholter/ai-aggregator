@@ -14,6 +14,7 @@ class AgentSettings:
     max_iterations: int = 20
     api_key: Optional[str] = None
     system_prompt_override: str = ""
+    auth_source: str = "none"
 
 
 @dataclass

@@ -1352,7 +1352,7 @@ function withUserOpenRouterKey(headers = {}) {
     if (token) {
         return {
             ...headers,
-            Authorization: `Bearer ${token}`
+            'X-OpenRouter-Key': token
         };
     }
     return headers;

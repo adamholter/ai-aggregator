@@ -129,11 +129,27 @@ def init_schema() -> None:
             PRIMARY KEY (user_id, code_hash)
         );
 
+        -- Durable Stripe webhook inbox
+        CREATE TABLE IF NOT EXISTS stripe_webhook_events (
+            event_id           TEXT PRIMARY KEY,
+            event_type         TEXT NOT NULL,
+            livemode           INTEGER NOT NULL DEFAULT 0,
+            payload_json       TEXT NOT NULL,
+            processing_status  TEXT NOT NULL DEFAULT 'pending',
+            attempt_count      INTEGER NOT NULL DEFAULT 0,
+            received_at        INTEGER NOT NULL DEFAULT (unixepoch()),
+            processed_at       INTEGER,
+            next_attempt_at    INTEGER NOT NULL DEFAULT 0,
+            last_error         TEXT
+        );
+
         -- Indexes for hot query paths
         CREATE INDEX IF NOT EXISTS idx_usage_user_time
             ON usage_records(user_id, created_at);
         CREATE INDEX IF NOT EXISTS idx_subscriptions_user
             ON subscriptions(user_id);
+        CREATE INDEX IF NOT EXISTS idx_stripe_webhook_status_retry
+            ON stripe_webhook_events(processing_status, next_attempt_at, received_at);
     """)
 
     db.commit()
@@ -142,6 +158,7 @@ def init_schema() -> None:
     for migration_sql in [
         "ALTER TABLE promo_codes ADD COLUMN stripe_coupon_id TEXT",
         "ALTER TABLE promo_codes ADD COLUMN allowed_price_key TEXT",
+        "ALTER TABLE stripe_webhook_events ADD COLUMN next_attempt_at INTEGER NOT NULL DEFAULT 0",
     ]:
         try:
             db.execute(migration_sql)

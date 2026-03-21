@@ -41,6 +41,7 @@ Tool reliability rules:
 - Never hide tool errors. Use them to recover.
 - Keep reasoning concise and user-facing answer clear.
 - Include units for speed/pricing where possible.
+- Never call the same tool with identical arguments twice after it has already succeeded. Prior tool results remain in context and can be reused directly.
 {heavy_mode_note}
 Artifact rules (create_artifact tool):
 - Use create_artifact ONLY when the user explicitly asks for an artifact, or when producing a standalone deliverable like a complete HTML app or an SVG diagram.

@@ -17,6 +17,7 @@ import sys
 import shutil
 import json
 import signal
+import threading
 import time
 import math
 import re
@@ -1418,6 +1419,23 @@ ADMIN_SECRET = (os.environ.get('ADMIN_SECRET') or '').strip()
 APP_BASE_URL = (os.environ.get('APP_BASE_URL') or '').strip().rstrip('/')
 if _stripe_available and STRIPE_SECRET_KEY:
     _stripe_module.api_key = STRIPE_SECRET_KEY
+STRIPE_WEBHOOK_SUPPORTED_TYPES = {
+    'checkout.session.completed',
+    'customer.subscription.created',
+    'customer.subscription.updated',
+    'customer.subscription.deleted',
+    'invoice.paid',
+    'invoice.payment_failed',
+}
+STRIPE_WEBHOOK_STATUS_PENDING = 'pending'
+STRIPE_WEBHOOK_STATUS_PROCESSED = 'processed'
+STRIPE_WEBHOOK_STATUS_IGNORED = 'ignored'
+STRIPE_WEBHOOK_STATUS_FAILED = 'failed'
+STRIPE_WEBHOOK_POLL_SECONDS = max(int(os.environ.get('STRIPE_WEBHOOK_POLL_SECONDS', '5')), 1)
+STRIPE_WEBHOOK_BATCH_SIZE = max(int(os.environ.get('STRIPE_WEBHOOK_BATCH_SIZE', '10')), 1)
+STRIPE_WEBHOOK_MAX_BACKOFF_SECONDS = max(int(os.environ.get('STRIPE_WEBHOOK_MAX_BACKOFF_SECONDS', '300')), 5)
+_STRIPE_WEBHOOK_WORKER_LOCK = Lock()
+_STRIPE_WEBHOOK_WORKER_STARTED = False
 DEEP_RESEARCH_MODEL_ID = 'openai/o4-mini-deep-research'
 MAX_REPLICATE_MODELS = max(int(os.environ.get('MAX_REPLICATE_MODELS', '60')), 1)
 MAX_REPLICATE_TOTAL = max(int(os.environ.get('MAX_REPLICATE_TOTAL', '250')), MAX_REPLICATE_MODELS)
@@ -1581,9 +1599,17 @@ _warn_if_missing('HYPE_SUPABASE_API_KEY', HYPE_SUPABASE_API_KEY)
 class MissingOpenRouterKeyError(Exception):
     """Raised when an OpenRouter API key is required but not available."""
 
+    def __init__(self, message=OPENROUTER_KEY_REQUIRED_MESSAGE, code='key_required'):
+        super().__init__(message)
+        self.code = code
+
 
 class CreditExhaustedError(Exception):
     """Raised when a user's monthly server-key credit limit is exhausted."""
+
+    def __init__(self, message, code='credit_exhausted'):
+        super().__init__(message)
+        self.code = code
 
 
 def _normalize_email(value):
@@ -1753,6 +1779,454 @@ def _record_server_key_usage(user_id, model, cost_usd, tokens_input=0, tokens_ou
         pass
 
 
+def _stripe_to_plain(value):
+    if hasattr(value, 'to_dict_recursive'):
+        try:
+            return _stripe_to_plain(value.to_dict_recursive())
+        except Exception:
+            return str(value)
+    if isinstance(value, dict):
+        return {str(key): _stripe_to_plain(val) for key, val in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_stripe_to_plain(item) for item in value]
+    return value
+
+
+def _infer_tier_from_price_key(price_key):
+    price_key = (price_key or '').strip()
+    if not price_key:
+        return ''
+    return price_key.split('_', 1)[0]
+
+
+def _infer_tier_from_price_id(price_id):
+    price_id = (price_id or '').strip()
+    if not price_id:
+        return ''
+    for price_key, configured_price_id in STRIPE_PRICES.items():
+        if configured_price_id and configured_price_id == price_id:
+            return _infer_tier_from_price_key(price_key)
+    return ''
+
+
+def _extract_subscription_price_id(subscription_obj):
+    items = (subscription_obj or {}).get('items') or {}
+    data = items.get('data') or []
+    if not data:
+        return ''
+    first_item = data[0] or {}
+    price = first_item.get('price') or {}
+    if isinstance(price, dict):
+        return (price.get('id') or '').strip()
+    return str(price or '').strip()
+
+
+def _extract_invoice_price_id(invoice_obj):
+    lines = (invoice_obj or {}).get('lines') or {}
+    data = lines.get('data') or []
+    if not data:
+        return ''
+    first_line = data[0] or {}
+    price = first_line.get('price') or {}
+    if isinstance(price, dict):
+        return (price.get('id') or '').strip()
+    return str(price or '').strip()
+
+
+def _extract_invoice_period_bounds(invoice_obj):
+    lines = (invoice_obj or {}).get('lines') or {}
+    data = lines.get('data') or []
+    if not data:
+        return None, None
+    period = (data[0] or {}).get('period') or {}
+    period_start = period.get('start')
+    period_end = period.get('end')
+    return period_start, period_end
+
+
+def _ensure_local_user_row(user_id, email=''):
+    user_id = (user_id or '').strip()
+    if not user_id:
+        return
+    try:
+        from backend.app import db as _db
+        existing = _db.query_one('SELECT id, email FROM users WHERE id=?', (user_id,))
+        normalized_email = (email or '').strip()
+        if not normalized_email:
+            normalized_email = user_id if '@' in user_id else f'{user_id}@placeholder.local'
+        if existing:
+            current_email = (existing.get('email') or '').strip()
+            if normalized_email and current_email != normalized_email:
+                try:
+                    _db.execute('UPDATE users SET email=?, last_login_at=unixepoch() WHERE id=?', (normalized_email, user_id))
+                except Exception:
+                    pass
+            return
+        _db.execute(
+            'INSERT INTO users (id, email, display_name, created_at, last_login_at) VALUES (?,?,?,?,?)',
+            (user_id, normalized_email, normalized_email.split('@')[0], int(time.time()), int(time.time())),
+        )
+    except Exception:
+        app.logger.exception('stripe_user_upsert_failed', extra={'user_id': user_id})
+
+
+def _find_subscription_row(user_id='', stripe_customer_id='', stripe_subscription_id=''):
+    try:
+        from backend.app import db as _db
+        if stripe_subscription_id:
+            row = _db.query_one('SELECT * FROM subscriptions WHERE stripe_subscription_id=?', (stripe_subscription_id,))
+            if row:
+                return row
+        if stripe_customer_id:
+            row = _db.query_one(
+                'SELECT * FROM subscriptions WHERE stripe_customer_id=? ORDER BY updated_at DESC LIMIT 1',
+                (stripe_customer_id,),
+            )
+            if row:
+                return row
+        if user_id:
+            row = _db.query_one(
+                'SELECT * FROM subscriptions WHERE user_id=? ORDER BY updated_at DESC LIMIT 1',
+                (user_id,),
+            )
+            if row:
+                return row
+    except Exception:
+        app.logger.exception(
+            'stripe_subscription_lookup_failed',
+            extra={'user_id': user_id, 'stripe_customer_id': stripe_customer_id, 'stripe_subscription_id': stripe_subscription_id},
+        )
+    return None
+
+
+def _resolve_user_id_for_stripe_mapping(stripe_customer_id='', stripe_subscription_id=''):
+    existing = _find_subscription_row(
+        stripe_customer_id=(stripe_customer_id or '').strip(),
+        stripe_subscription_id=(stripe_subscription_id or '').strip(),
+    )
+    if existing:
+        return (existing.get('user_id') or '').strip()
+    return ''
+
+
+def _upsert_subscription_record(
+    *,
+    user_id,
+    stripe_customer_id='',
+    stripe_subscription_id='',
+    tier='',
+    status='active',
+    current_period_start=None,
+    current_period_end=None,
+    email='',
+):
+    user_id = (user_id or '').strip()
+    if not user_id:
+        raise ValueError('user_id is required for subscription upsert')
+    _ensure_local_user_row(user_id, email=email)
+    from backend.app import db as _db
+    existing = _find_subscription_row(
+        user_id=user_id,
+        stripe_customer_id=(stripe_customer_id or '').strip(),
+        stripe_subscription_id=(stripe_subscription_id or '').strip(),
+    )
+    resolved_customer_id = (stripe_customer_id or (existing or {}).get('stripe_customer_id') or '').strip()
+    resolved_subscription_id = (stripe_subscription_id or (existing or {}).get('stripe_subscription_id') or '').strip()
+    resolved_tier = (tier or (existing or {}).get('tier') or 'free').strip()
+    resolved_status = (status or (existing or {}).get('status') or 'active').strip()
+    resolved_period_start = current_period_start if current_period_start is not None else (existing or {}).get('current_period_start')
+    resolved_period_end = current_period_end if current_period_end is not None else (existing or {}).get('current_period_end')
+    row_id = (existing or {}).get('id') or resolved_subscription_id or f'sub_{user_id}'
+
+    if existing:
+        _db.execute(
+            '''UPDATE subscriptions
+               SET user_id=?, stripe_customer_id=?, stripe_subscription_id=?, tier=?, status=?,
+                   current_period_start=?, current_period_end=?, updated_at=unixepoch()
+               WHERE id=?''',
+            (
+                user_id,
+                resolved_customer_id or None,
+                resolved_subscription_id or None,
+                resolved_tier,
+                resolved_status,
+                resolved_period_start,
+                resolved_period_end,
+                row_id,
+            ),
+        )
+        return row_id
+
+    _db.execute(
+        '''INSERT INTO subscriptions
+               (id, user_id, stripe_customer_id, stripe_subscription_id, tier, status,
+                current_period_start, current_period_end, updated_at)
+           VALUES (?,?,?,?,?,?,?,?,unixepoch())''',
+        (
+            row_id,
+            user_id,
+            resolved_customer_id or None,
+            resolved_subscription_id or None,
+            resolved_tier,
+            resolved_status,
+            resolved_period_start,
+            resolved_period_end,
+        ),
+    )
+    return row_id
+
+
+def _stripe_event_backoff_seconds(attempt_count):
+    safe_attempt = max(int(attempt_count or 1), 1)
+    return min(STRIPE_WEBHOOK_MAX_BACKOFF_SECONDS, 2 ** (safe_attempt - 1))
+
+
+def _enqueue_stripe_webhook_event(event):
+    event_payload = _stripe_to_plain(event)
+    event_id = (event_payload.get('id') or '').strip()
+    event_type = (event_payload.get('type') or '').strip()
+    if not event_id or not event_type:
+        raise ValueError('Stripe event payload is missing id or type')
+    payload_json = json.dumps(event_payload, ensure_ascii=False, default=str)
+    try:
+        from backend.app import db as _db
+        _db.execute(
+            '''INSERT INTO stripe_webhook_events
+                   (event_id, event_type, livemode, payload_json, processing_status, attempt_count, next_attempt_at)
+               VALUES (?,?,?,?,?,?,?)''',
+            (
+                event_id,
+                event_type,
+                1 if event_payload.get('livemode') else 0,
+                payload_json,
+                STRIPE_WEBHOOK_STATUS_PENDING,
+                0,
+                int(time.time()),
+            ),
+        )
+        app.logger.info('stripe_webhook_received', extra={'event_id': event_id, 'event_type': event_type})
+        return True, event_payload
+    except Exception as exc:
+        message = str(exc).lower()
+        if 'unique' in message or 'primary key' in message or 'constraint' in message:
+            app.logger.info('stripe_webhook_duplicate', extra={'event_id': event_id, 'event_type': event_type})
+            return False, event_payload
+        raise
+
+
+def _mark_stripe_webhook_event_state(event_id, status, *, attempt_count=None, last_error=None, next_attempt_at=None):
+    from backend.app import db as _db
+    processed_at = int(time.time()) if status in {STRIPE_WEBHOOK_STATUS_PROCESSED, STRIPE_WEBHOOK_STATUS_IGNORED} else None
+    _db.execute(
+        '''UPDATE stripe_webhook_events
+           SET processing_status=?,
+               attempt_count=COALESCE(?, attempt_count),
+               processed_at=?,
+               next_attempt_at=COALESCE(?, next_attempt_at),
+               last_error=?
+           WHERE event_id=?''',
+        (
+            status,
+            attempt_count,
+            processed_at,
+            next_attempt_at,
+            last_error,
+            event_id,
+        ),
+    )
+
+
+def _apply_stripe_event(event_payload):
+    event_type = (event_payload.get('type') or '').strip()
+    if event_type not in STRIPE_WEBHOOK_SUPPORTED_TYPES:
+        return STRIPE_WEBHOOK_STATUS_IGNORED
+
+    obj = ((event_payload.get('data') or {}).get('object') or {})
+    metadata = (obj.get('metadata') or {}) if isinstance(obj, dict) else {}
+    stripe_customer_id = (obj.get('customer') or '').strip() if isinstance(obj, dict) else ''
+    stripe_subscription_id = (obj.get('subscription') or '').strip() if isinstance(obj, dict) else ''
+
+    if event_type == 'checkout.session.completed':
+        user_id = (
+            (metadata.get('user_id') or '').strip()
+            or (obj.get('client_reference_id') or '').strip()
+            or _resolve_user_id_for_stripe_mapping(stripe_customer_id=stripe_customer_id, stripe_subscription_id=stripe_subscription_id)
+        )
+        if not user_id:
+            raise ValueError('Unable to resolve user_id for checkout.session.completed')
+        price_key = (metadata.get('price_key') or '').strip()
+        email = (
+            ((obj.get('customer_details') or {}).get('email') or '').strip()
+            or (obj.get('customer_email') or '').strip()
+        )
+        _upsert_subscription_record(
+            user_id=user_id,
+            stripe_customer_id=stripe_customer_id,
+            stripe_subscription_id=stripe_subscription_id,
+            tier=_infer_tier_from_price_key(price_key) or 'free',
+            status='active',
+            email=email,
+        )
+        return STRIPE_WEBHOOK_STATUS_PROCESSED
+
+    if event_type in {'customer.subscription.created', 'customer.subscription.updated', 'customer.subscription.deleted'}:
+        stripe_subscription_id = (obj.get('id') or stripe_subscription_id or '').strip()
+        stripe_customer_id = (obj.get('customer') or stripe_customer_id or '').strip()
+        user_id = (
+            (metadata.get('user_id') or '').strip()
+            or _resolve_user_id_for_stripe_mapping(stripe_customer_id=stripe_customer_id, stripe_subscription_id=stripe_subscription_id)
+        )
+        if not user_id:
+            raise ValueError(f'Unable to resolve user_id for {event_type}')
+        price_key = (metadata.get('price_key') or '').strip()
+        price_id = _extract_subscription_price_id(obj)
+        tier = _infer_tier_from_price_key(price_key) or _infer_tier_from_price_id(price_id) or 'free'
+        status = (obj.get('status') or '').strip() or 'active'
+        if event_type == 'customer.subscription.deleted':
+            tier = 'free'
+            status = status or 'canceled'
+        _upsert_subscription_record(
+            user_id=user_id,
+            stripe_customer_id=stripe_customer_id,
+            stripe_subscription_id=stripe_subscription_id,
+            tier=tier,
+            status=status,
+            current_period_start=obj.get('current_period_start'),
+            current_period_end=obj.get('current_period_end'),
+        )
+        return STRIPE_WEBHOOK_STATUS_PROCESSED
+
+    if event_type in {'invoice.paid', 'invoice.payment_failed'}:
+        stripe_customer_id = (obj.get('customer') or stripe_customer_id or '').strip()
+        stripe_subscription_id = (obj.get('subscription') or stripe_subscription_id or '').strip()
+        user_id = (
+            (metadata.get('user_id') or '').strip()
+            or _resolve_user_id_for_stripe_mapping(stripe_customer_id=stripe_customer_id, stripe_subscription_id=stripe_subscription_id)
+        )
+        if not user_id:
+            raise ValueError(f'Unable to resolve user_id for {event_type}')
+        price_id = _extract_invoice_price_id(obj)
+        period_start, period_end = _extract_invoice_period_bounds(obj)
+        existing = _find_subscription_row(
+            user_id=user_id,
+            stripe_customer_id=stripe_customer_id,
+            stripe_subscription_id=stripe_subscription_id,
+        ) or {}
+        _upsert_subscription_record(
+            user_id=user_id,
+            stripe_customer_id=stripe_customer_id,
+            stripe_subscription_id=stripe_subscription_id,
+            tier=_infer_tier_from_price_id(price_id) or (existing.get('tier') or 'free'),
+            status='active' if event_type == 'invoice.paid' else 'past_due',
+            current_period_start=period_start if period_start is not None else existing.get('current_period_start'),
+            current_period_end=period_end if period_end is not None else existing.get('current_period_end'),
+        )
+        return STRIPE_WEBHOOK_STATUS_PROCESSED
+
+    return STRIPE_WEBHOOK_STATUS_IGNORED
+
+
+def _process_stripe_webhook_event_row(row, *, dry_run=False):
+    event_id = (row.get('event_id') or '').strip()
+    event_type = (row.get('event_type') or '').strip()
+    attempt_count = int(row.get('attempt_count') or 0) + 1
+    event_payload = json.loads(row.get('payload_json') or '{}')
+    try:
+        outcome = _apply_stripe_event(event_payload)
+        if dry_run:
+            return outcome
+        _mark_stripe_webhook_event_state(
+            event_id,
+            outcome,
+            attempt_count=attempt_count,
+            last_error=None,
+            next_attempt_at=0,
+        )
+        app.logger.info('stripe_webhook_processed', extra={'event_id': event_id, 'event_type': event_type, 'status': outcome})
+        return outcome
+    except Exception as exc:
+        retry_at = int(time.time()) + _stripe_event_backoff_seconds(attempt_count)
+        if not dry_run:
+            _mark_stripe_webhook_event_state(
+                event_id,
+                STRIPE_WEBHOOK_STATUS_FAILED,
+                attempt_count=attempt_count,
+                last_error=str(exc),
+                next_attempt_at=retry_at,
+            )
+        app.logger.exception('stripe_webhook_processing_failed', extra={'event_id': event_id, 'event_type': event_type, 'attempt_count': attempt_count})
+        raise
+
+
+def _drain_stripe_webhook_events(limit=STRIPE_WEBHOOK_BATCH_SIZE, *, dry_run=False):
+    from backend.app import db as _db
+    rows = _db.query_all(
+        '''SELECT * FROM stripe_webhook_events
+           WHERE processing_status IN (?, ?)
+             AND next_attempt_at <= ?
+           ORDER BY received_at ASC
+           LIMIT ?''',
+        (
+            STRIPE_WEBHOOK_STATUS_PENDING,
+            STRIPE_WEBHOOK_STATUS_FAILED,
+            int(time.time()),
+            max(int(limit or STRIPE_WEBHOOK_BATCH_SIZE), 1),
+        ),
+    )
+    processed = 0
+    for row in rows:
+        try:
+            _process_stripe_webhook_event_row(row, dry_run=dry_run)
+            processed += 1
+        except Exception:
+            continue
+    return processed
+
+
+def _backfill_stripe_events_from(started_at, *, limit=100, dry_run=False):
+    if not (_stripe_available and STRIPE_SECRET_KEY):
+        raise RuntimeError('Stripe is not configured')
+    created_gte = int(started_at.timestamp())
+    params = {'limit': min(max(int(limit or 100), 1), 100), 'created': {'gte': created_gte}}
+    collected = 0
+    inserted = 0
+    for event in _stripe_module.Event.list(**params).auto_paging_iter():
+        collected += 1
+        if dry_run:
+            continue
+        was_inserted, _payload = _enqueue_stripe_webhook_event(event)
+        if was_inserted:
+            inserted += 1
+    return {'collected': collected, 'inserted': inserted}
+
+
+def _stripe_webhook_worker_loop():
+    while True:
+        try:
+            processed = _drain_stripe_webhook_events(limit=STRIPE_WEBHOOK_BATCH_SIZE)
+        except Exception:
+            processed = 0
+            app.logger.exception('stripe_webhook_worker_iteration_failed')
+        time.sleep(1 if processed else STRIPE_WEBHOOK_POLL_SECONDS)
+
+
+def _ensure_stripe_webhook_worker():
+    global _STRIPE_WEBHOOK_WORKER_STARTED
+    if not (_stripe_available and STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET):
+        return
+    with _STRIPE_WEBHOOK_WORKER_LOCK:
+        if _STRIPE_WEBHOOK_WORKER_STARTED:
+            return
+        worker = threading.Thread(
+            target=_stripe_webhook_worker_loop,
+            name='stripe-webhook-worker',
+            daemon=True,
+        )
+        worker.start()
+        _STRIPE_WEBHOOK_WORKER_STARTED = True
+        app.logger.info('stripe_webhook_worker_started')
+
+
 def _empty_subscription_payload():
     return {
         'tier': 'free',
@@ -1913,11 +2387,8 @@ def get_current_user():
     if clerk_id:
         return {'id': clerk_id, 'email': email or '', '_skip_billing_lookup': True}
 
-    # 2. Check for Clerk session token in Authorization header or cookie
-    auth_header = request.headers.get('Authorization', '')
-    clerk_token = None
-    if auth_header.startswith('Bearer '):
-        clerk_token = auth_header[7:].strip()
+    # 2. Check for Clerk session token in app-auth header or cookie
+    clerk_token = _get_request_clerk_token()
     if not clerk_token:
         clerk_token = request.cookies.get('__session') or request.cookies.get('__clerk_session')
 
@@ -1953,10 +2424,7 @@ def _get_current_user_for_checkout():
 
     # Fallback for first request right after Clerk sign-in: verify bearer/cookie token
     # and establish session state for subsequent fast-path requests.
-    auth_header = request.headers.get('Authorization', '')
-    clerk_token = None
-    if isinstance(auth_header, str) and auth_header.startswith('Bearer '):
-        clerk_token = auth_header[7:].strip()
+    clerk_token = _get_request_clerk_token()
     if not clerk_token:
         clerk_token = request.cookies.get('__session') or request.cookies.get('__clerk_session')
 
@@ -1974,6 +2442,27 @@ def _get_current_user_for_checkout():
                 return {'id': clerk_id, 'email': verified_email}
 
     return None
+
+
+def _parse_bearer_token(header_value):
+    if not isinstance(header_value, str):
+        return ''
+    header_value = header_value.strip()
+    if not header_value:
+        return ''
+    parts = header_value.split(' ', 1)
+    if len(parts) == 2 and parts[0].lower() == 'bearer':
+        return parts[1].strip()
+    return ''
+
+
+def _get_request_clerk_token():
+    if not has_request_context():
+        return ''
+    return (
+        _parse_bearer_token(request.headers.get('X-Clerk-Authorization', ''))
+        or _parse_bearer_token(request.headers.get('Authorization', ''))
+    )
 
 
 def _run_with_timeout(fn, timeout_seconds=12):
@@ -2362,48 +2851,60 @@ def _parse_filter_toon_response(content):
 
 
 def get_request_bearer_token():
-    """Extract Bearer token from the current request, if present."""
+    """Extract an OpenRouter user key from the current request, if present."""
     if not has_request_context():
         return ''
-    auth_header = request.headers.get('Authorization', '')
-    if not isinstance(auth_header, str):
-        return ''
-    auth_header = auth_header.strip()
-    if not auth_header:
-        return ''
-    parts = auth_header.split(' ', 1)
-    if len(parts) == 2 and parts[0].lower() == 'bearer':
-        return parts[1].strip()
-    return ''
+    explicit_token = (request.headers.get('X-OpenRouter-Key', '') or '').strip()
+    if explicit_token:
+        return explicit_token
+    return _parse_bearer_token(request.headers.get('Authorization', ''))
 
 
 def require_user_openrouter_token():
     """Return (token, is_server_key, user_id).
-    Prefers user-provided Bearer token. Falls back to server key for paid users.
+    Prefers an explicit user-provided OpenRouter key. Falls back to server key for paid users.
     Raises MissingOpenRouterKeyError or CreditExhaustedError as appropriate."""
     token = get_request_bearer_token()
     if token:
+        app.logger.info('openrouter_auth_resolved', extra={'auth_source': 'user_key'})
         return token, False, None  # User's own key — no cost tracking needed
 
-    # No user key — check if this user has a paid subscription
-    if SERVER_OPENROUTER_KEY:
-        user = get_current_user()
-        if user:
-            user_id = user.get('id', '')
-            sub = _get_user_subscription(user_id)
-            tier = (sub.get('tier') if sub else None) or 'free'
-            credit = TIER_CREDITS.get(tier, 0.0)
-            if credit > 0:
-                used = _get_monthly_usage_cost(user_id)
-                if used < credit:
-                    return SERVER_OPENROUTER_KEY, True, user_id
-                else:
-                    raise CreditExhaustedError(
-                        f'Monthly server credit exhausted (${credit:.2f} limit). '
-                        'Provide your own OpenRouter key or upgrade your plan.'
-                    )
+    user = get_current_user()
+    if not user:
+        app.logger.info('openrouter_auth_missing', extra={'auth_source': 'none', 'reason': 'not_signed_in'})
+        raise MissingOpenRouterKeyError(
+            'Sign in to use server-side OpenRouter access, or add your own OpenRouter key in Settings.',
+            code='not_signed_in',
+        )
 
-    raise MissingOpenRouterKeyError(OPENROUTER_KEY_REQUIRED_MESSAGE)
+    user_id = user.get('id', '')
+    sub = _get_user_subscription(user_id)
+    tier = (sub.get('tier') if sub else None) or 'free'
+    credit = TIER_CREDITS.get(tier, 0.0)
+    if credit <= 0:
+        app.logger.info('openrouter_auth_missing', extra={'auth_source': 'none', 'reason': 'no_paid_plan', 'user_id': user_id, 'tier': tier})
+        raise MissingOpenRouterKeyError(
+            'No paid plan with server-side OpenRouter access is active on this account. Add your own OpenRouter key or upgrade.',
+            code='no_paid_plan',
+        )
+
+    if not SERVER_OPENROUTER_KEY:
+        app.logger.warning('openrouter_auth_missing', extra={'auth_source': 'none', 'reason': 'server_key_unavailable', 'user_id': user_id, 'tier': tier})
+        raise MissingOpenRouterKeyError(
+            'Server-side OpenRouter access is temporarily unavailable. Add your own OpenRouter key or try again later.',
+            code='server_key_unavailable',
+        )
+
+    used = _get_monthly_usage_cost(user_id)
+    if used >= credit:
+        app.logger.info('openrouter_auth_denied', extra={'auth_source': 'server_key', 'reason': 'credit_exhausted', 'user_id': user_id, 'tier': tier, 'credit_limit': credit, 'credit_used': used})
+        raise CreditExhaustedError(
+            f'Monthly server credit exhausted (${credit:.2f} limit). Provide your own OpenRouter key or upgrade your plan.',
+            code='credit_exhausted',
+        )
+
+    app.logger.info('openrouter_auth_resolved', extra={'auth_source': 'server_key', 'user_id': user_id, 'tier': tier, 'credit_limit': credit, 'credit_used': used})
+    return SERVER_OPENROUTER_KEY, True, user_id
 
 def _get_rate_limit_key():
     token = get_request_bearer_token()
@@ -2440,6 +2941,7 @@ def _enforce_rate_limit():
 
 @app.before_request
 def enforce_basic_rate_limit():
+    _ensure_stripe_webhook_worker()
     if RATE_LIMIT_MAX_REQUESTS <= 0:
         return None
     if request.method == 'OPTIONS':
@@ -2467,9 +2969,18 @@ def openrouter_key_required_response():
     return jsonify({'error': OPENROUTER_KEY_REQUIRED_MESSAGE, 'code': 'key_required'}), 402
 
 
-def credit_exhausted_response(msg=''):
+def openrouter_access_error_response(exc=None):
+    if exc is None:
+        return openrouter_key_required_response()
+    return jsonify({
+        'error': str(exc) or OPENROUTER_KEY_REQUIRED_MESSAGE,
+        'code': getattr(exc, 'code', 'key_required'),
+    }), 402
+
+
+def credit_exhausted_response(msg='', code='credit_exhausted'):
     """Standard JSON response when monthly server credit is exhausted."""
-    return jsonify({'error': msg or 'Monthly server credit exhausted. Provide your own OpenRouter key or upgrade.', 'code': 'credit_exhausted'}), 402
+    return jsonify({'error': msg or 'Monthly server credit exhausted. Provide your own OpenRouter key or upgrade.', 'code': code}), 402
 
 
 def _format_bearer_token(token):
@@ -10926,13 +11437,16 @@ def agent_v2_chat():
     umi_model = str(settings_payload.get('umi_model') or 'google/gemini-2.5-flash').strip()
     web_search_model = str(settings_payload.get('web_search_model') or 'perplexity/sonar-pro').strip()
     api_key = (settings_payload.get('api_key') or '').strip()
+    auth_source = 'user_key' if api_key else 'none'
     if not api_key:
         try:
             api_key, _is_sk_v2, _sk_uid_v2 = require_user_openrouter_token()
         except CreditExhaustedError as exc:
-            return credit_exhausted_response(str(exc))
-        except MissingOpenRouterKeyError:
-            return openrouter_key_required_response()
+            return credit_exhausted_response(str(exc), code=getattr(exc, 'code', 'credit_exhausted'))
+        except MissingOpenRouterKeyError as exc:
+            return openrouter_access_error_response(exc)
+        auth_source = 'server_key' if _is_sk_v2 else 'user_key'
+        app.logger.info('agent_v2_auth_resolved', extra={'auth_source': auth_source, 'user_id': _sk_uid_v2})
     system_override = str(settings_payload.get('system_prompt_override') or '').strip()
 
     settings = AgentSettings(
@@ -10944,6 +11458,7 @@ def agent_v2_chat():
         max_iterations=max(1, min(max_iterations, 300)),
         api_key=api_key,
         system_prompt_override=system_override,
+        auth_source=auth_source,
     )
 
     skills = list_skill_frontmatter(os.path.join(BASE_DIR, 'skills'))
@@ -11014,13 +11529,16 @@ def agent_v2_chat_stream():
     umi_model = str(settings_payload.get('umi_model') or 'google/gemini-2.5-flash').strip()
     web_search_model = str(settings_payload.get('web_search_model') or 'perplexity/sonar-pro').strip()
     api_key = (settings_payload.get('api_key') or '').strip()
+    auth_source = 'user_key' if api_key else 'none'
     if not api_key:
         try:
             api_key, _is_sk_v2_stream, _sk_uid_v2_stream = require_user_openrouter_token()
         except CreditExhaustedError as exc:
-            return credit_exhausted_response(str(exc))
-        except MissingOpenRouterKeyError:
-            return openrouter_key_required_response()
+            return credit_exhausted_response(str(exc), code=getattr(exc, 'code', 'credit_exhausted'))
+        except MissingOpenRouterKeyError as exc:
+            return openrouter_access_error_response(exc)
+        auth_source = 'server_key' if _is_sk_v2_stream else 'user_key'
+        app.logger.info('agent_v2_stream_auth_resolved', extra={'auth_source': auth_source, 'user_id': _sk_uid_v2_stream})
     system_override = str(settings_payload.get('system_prompt_override') or '').strip()
 
     settings = AgentSettings(
@@ -11032,6 +11550,7 @@ def agent_v2_chat_stream():
         max_iterations=max(1, min(max_iterations, 300)),
         api_key=api_key,
         system_prompt_override=system_override,
+        auth_source=auth_source,
     )
 
     skills = list_skill_frontmatter(os.path.join(BASE_DIR, 'skills'))
@@ -11118,13 +11637,16 @@ def agent_v2_inspector_test_tool():
     if not isinstance(args, dict):
         args = {}
     api_key = (data.get('api_key') or '').strip()
+    auth_source = 'user_key' if api_key else 'none'
     if not api_key:
         try:
             api_key, _is_sk_v2_test, _sk_uid_v2_test = require_user_openrouter_token()
         except CreditExhaustedError as exc:
-            return credit_exhausted_response(str(exc))
-        except MissingOpenRouterKeyError:
-            return openrouter_key_required_response()
+            return credit_exhausted_response(str(exc), code=getattr(exc, 'code', 'credit_exhausted'))
+        except MissingOpenRouterKeyError as exc:
+            return openrouter_access_error_response(exc)
+        auth_source = 'server_key' if _is_sk_v2_test else 'user_key'
+        app.logger.info('agent_v2_test_tool_auth_resolved', extra={'auth_source': auth_source, 'user_id': _sk_uid_v2_test})
 
     if not tool_name:
         return jsonify({'ok': False, 'error': {'message': 'tool_name is required'}}), 400
@@ -11135,6 +11657,7 @@ def agent_v2_inspector_test_tool():
             'api_key': api_key,
             'web_search_model': 'perplexity/sonar-pro',
             'umi_model': 'google/gemini-2.5-flash',
+            'auth_source': auth_source,
         })
         return jsonify(result)
     except Exception as exc:
@@ -12450,10 +12973,9 @@ def auth_clerk_sync():
     """Called by the frontend after Clerk sign-in to sync the user into Turso
     and establish a Flask session for legacy-compatible auth."""
     data = request.get_json(silent=True) or {}
-    auth_header = request.headers.get('Authorization', '')
     token = data.get('token')
-    if not token and isinstance(auth_header, str) and auth_header.startswith('Bearer '):
-        token = auth_header[7:].strip()
+    if not token:
+        token = _get_request_clerk_token()
     if not token:
         return jsonify({'error': 'No token provided'}), 400
     verified = _verify_clerk_token(token)
@@ -12499,7 +13021,8 @@ def create_checkout_session():
                 cancel_url=f'{base_url}/?upgrade=cancelled',
                 client_reference_id=user['id'],
                 customer_email=user.get('email') or None,
-                metadata={'user_id': user['id']},
+                metadata={'user_id': user['id'], 'price_key': price_key},
+                subscription_data={'metadata': {'user_id': user['id'], 'price_key': price_key}},
             ),
             timeout_seconds=20
         )
@@ -12542,42 +13065,8 @@ def stripe_webhook():
         event = _stripe_module.Webhook.construct_event(payload, sig, STRIPE_WEBHOOK_SECRET)
     except Exception:
         return jsonify({'error': 'Invalid signature'}), 400
-
-    obj = event['data']['object']
-    etype = event['type']
-
-    if etype in ('customer.subscription.created', 'customer.subscription.updated', 'customer.subscription.deleted'):
-        from backend.app import db as _db
-        user_id = (obj.get('metadata') or {}).get('user_id')
-        if not user_id:
-            row = _db.query_one('SELECT user_id FROM subscriptions WHERE stripe_customer_id=?', (obj.get('customer', ''),))
-            user_id = row['user_id'] if row else None
-        if user_id:
-            price_id = ''
-            items = obj.get('items', {})
-            if items and items.get('data'):
-                price_id = (items['data'][0].get('price') or {}).get('id', '')
-            tier = 'free'
-            if etype != 'customer.subscription.deleted':
-                for k, v in STRIPE_PRICES.items():
-                    if v and v == price_id:
-                        tier = k.split('_')[0]
-                        break
-            _db.execute(
-                '''INSERT INTO subscriptions
-                       (id, user_id, stripe_customer_id, stripe_subscription_id, tier, status,
-                        current_period_start, current_period_end, updated_at)
-                   VALUES (?,?,?,?,?,?,?,?,unixepoch())
-                   ON CONFLICT(stripe_subscription_id) DO UPDATE SET
-                       tier=excluded.tier, status=excluded.status,
-                       current_period_start=excluded.current_period_start,
-                       current_period_end=excluded.current_period_end,
-                       updated_at=unixepoch()''',
-                (obj.get('id', ''), user_id, obj.get('customer', ''), obj.get('id', ''),
-                 tier, obj.get('status', 'active'),
-                 obj.get('current_period_start'), obj.get('current_period_end'))
-            )
-
+    _enqueue_stripe_webhook_event(event)
+    _ensure_stripe_webhook_worker()
     return jsonify({'received': True})
 
 
@@ -12687,7 +13176,8 @@ def redeem_promo():
                 cancel_url=f'{base_url}/?upgrade=cancelled',
                 client_reference_id=user_id,
                 customer_email=user.get('email'),
-                metadata={'user_id': user_id},
+                metadata={'user_id': user_id, 'price_key': allowed_price_key},
+                subscription_data={'metadata': {'user_id': user_id, 'price_key': allowed_price_key}},
             )
         except Exception as e:
             return jsonify({'error': f'Stripe error: {e}'}), 500

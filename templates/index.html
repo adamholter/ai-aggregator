@@ -1225,7 +1225,7 @@ window.renderAnalysisPayload = function(analysisContainer, result, options) {
       if (!token) return null;
       var resp = await _origFetch('/auth/clerk-sync', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        headers: { 'Content-Type': 'application/json', 'X-Clerk-Authorization': 'Bearer ' + token },
         body: JSON.stringify({ token: token }),
       });
       return resp.ok ? resp.json() : null;
@@ -1342,6 +1342,7 @@ window.renderAnalysisPayload = function(analysisContainer, result, options) {
   window.showAuthModal = function(_mode) { showClerkSignIn(); };
   window.showClerkSignIn = showClerkSignIn;
   window.hideClerkSignIn = hideClerkSignIn;
+  window.getClerkTokenWithTimeout = getClerkTokenWithTimeout;
   window.clerkSignOut = clerkSignOut;
 
   // Capture-phase listener intercepts #auth-button clicks before script.js fires
@@ -1368,7 +1369,8 @@ window.renderAnalysisPayload = function(analysisContainer, result, options) {
     });
   });
 
-  // Inject Bearer token into /api/ and /auth/ requests
+  // Inject Clerk app-auth token into /api/ and /auth/ requests without
+  // overloading Authorization, which is reserved for explicit user API keys.
   window.fetch = async function(input, init) {
     init = init || {};
     var rawUrl = typeof input === 'string' ? input : (input && input.url) || '';
@@ -1381,7 +1383,7 @@ window.renderAnalysisPayload = function(analysisContainer, result, options) {
       try {
         var token = await getClerkTokenWithTimeout(800);
         if (token) {
-          init.headers = Object.assign({}, init.headers, { 'Authorization': 'Bearer ' + token });
+          init.headers = Object.assign({}, init.headers, { 'X-Clerk-Authorization': 'Bearer ' + token });
         }
       } catch(e) {}
     }

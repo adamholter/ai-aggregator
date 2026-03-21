@@ -66,3 +66,55 @@ test('truncated stream still finalizes with partial response instead of spinning
   await page.locator('#input').fill('second prompt');
   await expect(page.locator('#send-btn')).toBeEnabled();
 });
+
+test('duplicate tool warnings show in activity instead of silently looping', async ({ page }) => {
+  await page.route('**/api/agent-v2/chat/stream', async (route) => {
+    await route.fulfill({
+      status: 200,
+      headers: { 'content-type': 'text/event-stream' },
+      body: sse([
+        { type: 'status', stage: 'start', mode: 'heavy' },
+        { type: 'tool_start', iteration: 1, tool_name: 'read_skill', args: { skill_name: 'billing' } },
+        { type: 'tool_result', iteration: 1, tool_name: 'read_skill', status: 'done', result_preview: 'skill body' },
+        { type: 'tool_start', iteration: 2, tool_name: 'read_skill', args: { skill_name: 'billing' } },
+        { type: 'tool_result', iteration: 2, tool_name: 'read_skill', status: 'duplicate', result_preview: 'Duplicate tool call blocked' },
+        { type: 'done', response: 'Used the prior result.' },
+      ]),
+    });
+  });
+
+  await page.goto('/static/agent.html');
+  await page.locator('#input').fill('loop once');
+  await page.locator('#send-btn').click();
+
+  await expect(page.locator('.agent-response')).toContainText('Used the prior result.');
+  await page.locator('.trace-pill').click();
+  await expect(page.locator('#tsb-body')).toContainText('duplicate');
+  await expect(page.locator('#tsb-body')).toContainText('Duplicate tool call blocked');
+});
+
+test('typed 402 messages render specific paid-access guidance', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.removeItem('dashboard-user-openrouter-key');
+  });
+
+  await page.route('**/api/agent-v2/chat/stream', async (route) => {
+    await route.fulfill({
+      status: 402,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        code: 'no_paid_plan',
+        error: 'No paid plan with server-side OpenRouter access is active on this account. Add your own OpenRouter key or upgrade.',
+      }),
+    });
+  });
+
+  await page.goto('/static/agent.html');
+  await page.locator('#input').fill('need access');
+  await page.locator('#send-btn').click();
+
+  await expect(page.locator('.error-box')).toContainText('does not have a paid plan');
+  await expect(page.locator('.loading-row')).toHaveCount(0);
+  await page.locator('#input').fill('try again');
+  await expect(page.locator('#send-btn')).toBeEnabled();
+});

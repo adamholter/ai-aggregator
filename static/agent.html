@@ -189,6 +189,7 @@ button.icon-btn:hover, a.icon-btn:hover { background: var(--surface); border-col
   padding: 1px 7px; border-radius: 10px; flex-shrink: 0;
 }
 .trace-row-badge.err { color: var(--red); background: var(--red-bg); }
+.trace-row-badge.warn { color: #92400e; background: rgba(245, 158, 11, 0.18); }
 
 .trace-expand { padding: 2px; color: var(--text-3); flex-shrink: 0; transition: transform 0.15s; display: flex; }
 .trace-expand svg { width: 12px; height: 12px; }
@@ -322,6 +323,7 @@ button.icon-btn:hover, a.icon-btn:hover { background: var(--surface); border-col
 }
 .tsb-dot.done { background: var(--green); }
 .tsb-dot.err  { background: var(--red); }
+.tsb-dot.warn { background: #f59e0b; }
 
 .tsb-content {
   flex: 1; padding: 10px 16px 10px 4px; min-width: 0;
@@ -338,6 +340,7 @@ button.icon-btn:hover, a.icon-btn:hover { background: var(--surface); border-col
   flex-shrink: 0;
 }
 .tsb-badge.err { color: var(--red); }
+.tsb-badge.warn { color: #92400e; }
 .tsb-chevron {
   width: 12px; height: 12px; color: var(--text-3);
   transition: transform 0.15s ease; flex-shrink: 0;
@@ -642,7 +645,7 @@ button.icon-btn:hover, a.icon-btn:hover { background: var(--surface); border-col
 
   <div id="settings-bar" class="hidden">
     <span class="settings-label">API Key</span>
-    <input type="password" id="api-key-input" placeholder="sk-or-v1-…" autocomplete="off">
+    <input type="password" id="api-key-input" placeholder="OpenRouter API key" autocomplete="off">
     <label class="toggle-wrap">
       <input type="checkbox" id="deeper-mode"> Deeper research
     </label>
@@ -901,6 +904,18 @@ function getKey() {
   return localStorage.getItem(LS_APIKEY) || '';
 }
 
+async function getAppAuthHeaders() {
+  const headers = {};
+  try {
+    const parentWin = window.parent && window.parent !== window ? window.parent : window;
+    if (parentWin && typeof parentWin.getClerkTokenWithTimeout === 'function') {
+      const token = await parentWin.getClerkTokenWithTimeout(1200);
+      if (token) headers['X-Clerk-Authorization'] = 'Bearer ' + token;
+    }
+  } catch (e) {}
+  return headers;
+}
+
 // ── Input ──
 $input.addEventListener('input', () => {
   $input.style.height = 'auto';
@@ -962,9 +977,11 @@ async function send() {
   }, 500);
 
   try {
+    const appAuthHeaders = await getAppAuthHeaders();
     const res = await fetch(API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      headers: Object.assign({ 'Content-Type': 'application/json' }, appAuthHeaders),
       body: JSON.stringify({
         settings: Object.assign({
           model: $model.value,
@@ -976,12 +993,25 @@ async function send() {
     });
 
     if (!res.ok) {
+      let payload = null;
       const t = await res.text();
+      try { payload = JSON.parse(t); } catch (e) {}
       clearInterval(timerInterval);
       loadEl.remove();
-      let message = 'HTTP ' + res.status + ': ' + t.slice(0, 200);
+      let message = (payload && (payload.error || payload.message)) || ('HTTP ' + res.status + ': ' + t.slice(0, 200));
       if (res.status === 402) {
-        message = 'OpenRouter access required. Add your own key in Settings or use a paid plan with server-side access.';
+        const code = payload && payload.code;
+        if (code === 'not_signed_in') {
+          message = 'Sign in to use server-side OpenRouter access, or add your own OpenRouter key in Settings.';
+        } else if (code === 'no_paid_plan') {
+          message = 'This account does not have a paid plan with server-side OpenRouter access. Add your own key or upgrade.';
+        } else if (code === 'server_key_unavailable') {
+          message = 'Server-side OpenRouter access is temporarily unavailable. Add your own key or try again later.';
+        } else if (code === 'credit_exhausted') {
+          message = payload && payload.error ? payload.error : 'Monthly server credit exhausted. Add your own key or upgrade.';
+        } else {
+          message = 'OpenRouter access required. Add your own key in Settings or use a paid plan with server-side access.';
+        }
       }
       addError(message);
     } else {
@@ -1054,7 +1084,7 @@ async function send() {
             const realIdx = revIdx >= 0 ? toolCalls.length - 1 - revIdx : -1;
             if (realIdx >= 0) {
               toolCalls[realIdx].status = evt.status || 'done';
-              toolCalls[realIdx].result = evt.result_preview || '';
+              toolCalls[realIdx].result = evt.result_preview || (evt.error && evt.error.message) || evt.error || '';
               if (isLiveTrace && liveTraceEls[realIdx]) {
                 updateLiveStep(liveTraceEls[realIdx], toolCalls[realIdx]);
               }
@@ -1295,7 +1325,8 @@ function buildCarousel(refs) {
   return outer;
 }
 
-function fetchCarouselData(refs, carousel) {
+async function fetchCarouselData(refs, carousel) {
+  const appAuthHeaders = await getAppAuthHeaders();
   refs.forEach(ref => {
     const key = ref.source + ':' + ref.name;
     if (modelPageCache[key]) {
@@ -1306,7 +1337,8 @@ function fetchCarouselData(refs, carousel) {
     if (!apiKey) return;
     fetch('/api/model-page', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      headers: Object.assign({ 'Content-Type': 'application/json' }, appAuthHeaders),
       body: JSON.stringify({ model_name: ref.name, source: ref.source, api_key: apiKey })
     })
     .then(r => r.json())
@@ -1332,7 +1364,7 @@ function updateCarouselCard(carousel, ref, data) {
   bodyEl.textContent = (data && !data.error && data.summary) ? data.summary : 'No data available.';
 }
 
-function openModelPage(name, source) {
+async function openModelPage(name, source) {
   const overlay = document.getElementById('model-modal-overlay');
   const title   = document.getElementById('modal-model-name');
   const body    = document.getElementById('modal-body');
@@ -1352,9 +1384,11 @@ function openModelPage(name, source) {
   }
 
   const apiKey = getKey();
+  const appAuthHeaders = await getAppAuthHeaders();
   fetch('/api/model-page', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
+    headers: Object.assign({ 'Content-Type': 'application/json' }, appAuthHeaders),
     body: JSON.stringify({ model_name: name, source: source || '', api_key: apiKey })
   })
   .then(r => r.json())
@@ -1526,8 +1560,8 @@ function buildTraceRow(tc) {
   }
   hdr.appendChild(labelWrap);
 
-  const badge = mk('span', 'trace-row-badge' + (tc.status === 'error' ? ' err' : ''));
-  badge.textContent = tc.status === 'error' ? 'error' : 'done';
+  const badge = mk('span', 'trace-row-badge' + (tc.status === 'error' ? ' err' : (tc.status === 'duplicate' ? ' warn' : '')));
+  badge.textContent = tc.status === 'error' ? 'error' : (tc.status === 'duplicate' ? 'duplicate' : 'done');
   hdr.appendChild(badge);
 
   const expand = mk('span', 'trace-expand');
@@ -1825,16 +1859,16 @@ function openLiveTrace(toolCallsRef) {
 // Update a live step element's dot/badge/detail when tool_result arrives
 function updateLiveStep(el, tc) {
   const dot = el.querySelector('.tsb-dot');
-  if (dot) dot.className = tc.status === 'error' ? 'tsb-dot err' : 'tsb-dot done';
+  if (dot) dot.className = tc.status === 'error' ? 'tsb-dot err' : (tc.status === 'duplicate' ? 'tsb-dot warn' : 'tsb-dot done');
   const rowMain = el.querySelector('.tsb-row-main');
   if (rowMain) {
     let badge = rowMain.querySelector('.tsb-badge');
     if (!badge) {
-      badge = mk('span', tc.status === 'error' ? 'tsb-badge err' : 'tsb-badge');
+      badge = mk('span', tc.status === 'error' ? 'tsb-badge err' : (tc.status === 'duplicate' ? 'tsb-badge warn' : 'tsb-badge'));
       const chev = rowMain.querySelector('.tsb-chevron');
       if (chev) rowMain.insertBefore(badge, chev); else rowMain.appendChild(badge);
     } else {
-      badge.className = tc.status === 'error' ? 'tsb-badge err' : 'tsb-badge';
+      badge.className = tc.status === 'error' ? 'tsb-badge err' : (tc.status === 'duplicate' ? 'tsb-badge warn' : 'tsb-badge');
     }
     badge.textContent = tc.status;
   }
@@ -2027,7 +2061,13 @@ function buildSidebarStep(tc) {
 
   // Gutter + dot
   const gutter = mk('div', 'tsb-gutter');
-  const dotCls = tc.status === 'error' ? 'tsb-dot err' : tc.status === 'done' ? 'tsb-dot done' : 'tsb-dot running';
+  const dotCls = tc.status === 'error'
+    ? 'tsb-dot err'
+    : tc.status === 'duplicate'
+      ? 'tsb-dot warn'
+      : tc.status === 'done'
+        ? 'tsb-dot done'
+        : 'tsb-dot running';
   const dot = mk('div', dotCls);
   gutter.appendChild(dot);
 
@@ -2039,7 +2079,7 @@ function buildSidebarStep(tc) {
   name.textContent = info.label;
 
   if (tc.status && tc.status !== 'running') {
-    const badge = mk('span', tc.status === 'error' ? 'tsb-badge err' : 'tsb-badge');
+    const badge = mk('span', tc.status === 'error' ? 'tsb-badge err' : (tc.status === 'duplicate' ? 'tsb-badge warn' : 'tsb-badge'));
     badge.textContent = tc.status;
     rowMain.appendChild(name);
     rowMain.appendChild(badge);

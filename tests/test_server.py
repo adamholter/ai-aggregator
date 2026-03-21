@@ -66,6 +66,25 @@ def test_checkout_fast_user_from_bearer_token(monkeypatch):
         assert server.session.get('user_email') == 'token@example.com'
 
 
+def test_checkout_fast_user_from_x_clerk_authorization(monkeypatch):
+    monkeypatch.setattr(server, 'CLERK_SECRET_KEY', 'clerk_test_secret')
+
+    def fake_verify(token):
+        assert token == 'token-x-clerk'
+        return {
+            'clerk_id': 'user_from_x_header',
+            '_raw': {'email': 'xheader@example.com'},
+        }
+
+    monkeypatch.setattr(server, '_verify_clerk_token', fake_verify)
+
+    with server.app.test_request_context('/', headers={'X-Clerk-Authorization': 'Bearer token-x-clerk'}):
+        user = server._get_current_user_for_checkout()
+        assert user == {'id': 'user_from_x_header', 'email': 'xheader@example.com'}
+        assert server.session.get('clerk_id') == 'user_from_x_header'
+        assert server.session.get('user_email') == 'xheader@example.com'
+
+
 def test_get_current_user_fast_from_session_clerk_id():
     with server.app.test_request_context('/'):
         server.session['clerk_id'] = 'user_session_only'
@@ -140,6 +159,115 @@ def test_auth_clerk_sync_sets_session_without_upsert(monkeypatch):
     with client.session_transaction() as sess:
         assert sess['clerk_id'] == 'user_sync'
         assert sess['user_email'] == 'sync@example.com'
+
+
+def test_auth_clerk_sync_accepts_x_clerk_authorization(monkeypatch):
+    monkeypatch.setattr(server, 'CLERK_SECRET_KEY', 'clerk_test_secret')
+
+    def fake_verify(token):
+        assert token == 'sync-token-x'
+        return {
+            'clerk_id': 'user_sync_x',
+            '_raw': {'email': 'syncx@example.com'},
+        }
+
+    monkeypatch.setattr(server, '_verify_clerk_token', fake_verify)
+
+    client = server.app.test_client()
+    response = client.post(
+        '/auth/clerk-sync',
+        json={},
+        headers={'X-Clerk-Authorization': 'Bearer sync-token-x'}
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload['user'] == {'id': 'user_sync_x', 'email': 'syncx@example.com'}
+
+
+def test_require_user_openrouter_token_prefers_explicit_provider_header_over_clerk_auth(monkeypatch):
+    with server.app.test_request_context(
+        '/',
+        headers={
+            'X-OpenRouter-Key': 'or-key-123',
+            'X-Clerk-Authorization': 'Bearer clerk-token',
+        },
+    ):
+        token, is_server_key, user_id = server.require_user_openrouter_token()
+
+    assert token == 'or-key-123'
+    assert is_server_key is False
+    assert user_id is None
+
+
+def test_require_user_openrouter_token_uses_server_key_for_paid_user_without_personal_key(monkeypatch):
+    monkeypatch.setattr(server, 'SERVER_OPENROUTER_KEY', 'server-key-123')
+    monkeypatch.setattr(server, 'get_current_user', lambda: {'id': 'user_paid', 'email': 'paid@example.com'})
+    monkeypatch.setattr(server, '_get_user_subscription', lambda _user_id: {'tier': 'pro', 'status': 'active'})
+    monkeypatch.setattr(server, '_get_monthly_usage_cost', lambda _user_id: 1.25)
+
+    with server.app.test_request_context('/', headers={'X-Clerk-Authorization': 'Bearer clerk-token'}):
+        token, is_server_key, user_id = server.require_user_openrouter_token()
+
+    assert token == 'server-key-123'
+    assert is_server_key is True
+    assert user_id == 'user_paid'
+
+
+def test_agent_v2_chat_returns_typed_402_for_missing_paid_plan(monkeypatch):
+    def fake_require():
+        raise server.MissingOpenRouterKeyError(
+            'No paid plan with server-side OpenRouter access is active on this account. Add your own OpenRouter key or upgrade.',
+            code='no_paid_plan',
+        )
+
+    monkeypatch.setattr(server, 'require_user_openrouter_token', fake_require)
+    client = server.app.test_client()
+
+    response = client.post(
+        '/api/agent-v2/chat',
+        json={
+            'messages': [{'role': 'user', 'content': 'hello'}],
+            'settings': {},
+        },
+    )
+
+    assert response.status_code == 402
+    payload = response.get_json()
+    assert payload['code'] == 'no_paid_plan'
+
+
+def test_create_checkout_session_includes_subscription_metadata(monkeypatch):
+    monkeypatch.setattr(server, '_stripe_available', True)
+    monkeypatch.setattr(server, 'STRIPE_SECRET_KEY', 'sk_live_test')
+    monkeypatch.setattr(server, 'STRIPE_PRICES', {'starter_monthly': 'price_live_123'})
+    monkeypatch.setattr(server, '_get_current_user_for_checkout', lambda: {'id': 'user_checkout', 'email': 'checkout@example.com'})
+
+    captured = {}
+
+    class DummyCheckout:
+        url = 'https://checkout.stripe.test/session'
+
+    class DummySession:
+        @staticmethod
+        def create(**kwargs):
+            captured.update(kwargs)
+            return DummyCheckout()
+
+    class DummyCheckoutAPI:
+        Session = DummySession
+
+    class DummyStripe:
+        checkout = DummyCheckoutAPI()
+
+    monkeypatch.setattr(server, '_stripe_module', DummyStripe())
+
+    client = server.app.test_client()
+    response = client.post('/api/create-checkout-session', json={'price_key': 'starter_monthly'})
+
+    assert response.status_code == 200
+    assert captured['metadata'] == {'user_id': 'user_checkout', 'price_key': 'starter_monthly'}
+    assert captured['subscription_data']['metadata'] == {'user_id': 'user_checkout', 'price_key': 'starter_monthly'}
 
 
 def test_api_me_for_clerk_session_skips_billing_lookup(monkeypatch):
