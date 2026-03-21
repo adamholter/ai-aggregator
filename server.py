@@ -2941,7 +2941,6 @@ def _enforce_rate_limit():
 
 @app.before_request
 def enforce_basic_rate_limit():
-    _ensure_stripe_webhook_worker()
     if RATE_LIMIT_MAX_REQUESTS <= 0:
         return None
     if request.method == 'OPTIONS':
