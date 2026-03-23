@@ -4652,6 +4652,22 @@ function formatContextLength(contextLength) {
 function formatPricing(pricing) {
     if (!pricing) return 'Not provided';
 
+    if (typeof pricing === 'string') {
+        return pricing.trim() || 'Not provided';
+    }
+
+    if (pricing.summary) {
+        return pricing.summary;
+    }
+
+    const unitPriceRaw = Number(pricing.unit_price);
+    if (Number.isFinite(unitPriceRaw)) {
+        const formatted = formatUsd(unitPriceRaw);
+        if (formatted) {
+            return pricing.unit ? `${formatted} / ${pricing.unit}` : formatted;
+        }
+    }
+
     const parts = [];
 
     if (pricing.request && parseFloat(pricing.request) > 0) {
@@ -6236,7 +6252,7 @@ function createFalModelCard(model) {
         : '';
 
     // Format pricing info
-    const pricing = model.pricing || 'Pricing details available on platform';
+    const pricing = formatPricing(model.pricing);
 
     card.innerHTML = `
         <h3>${model.title}</h3>
@@ -6687,6 +6703,7 @@ function renderFalOverview(container, model) {
     const summarySection = createSection('fal.ai Summary');
     const summaryGrid = createDetailGrid();
     appendDetailRow(summaryGrid, 'Category', model.category || 'N/A');
+    appendDetailRow(summaryGrid, 'Pricing', formatPricing(model.pricing));
     appendDetailRow(summaryGrid, 'License', model.licenseType || 'N/A');
     appendDetailRow(summaryGrid, 'Credits Required', model.creditsRequired != null ? model.creditsRequired : 'N/A');
     appendDetailRow(summaryGrid, 'Duration Estimate', model.durationEstimate ? `${model.durationEstimate}s` : 'N/A');

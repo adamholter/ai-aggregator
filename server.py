@@ -1391,6 +1391,10 @@ ARTIFICIAL_ANALYSIS_BASE_URL = 'https://artificialanalysis.ai/api/v2'
 OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
 REPLICATE_API_KEY = (os.environ.get('REPLICATE_API_KEY') or '').strip()
 REPLICATE_BASE_URL = 'https://api.replicate.com/v1'
+FAL_API_KEY = (os.environ.get('FAL_API_KEY') or '').strip()
+FAL_PRICING_API_URL = 'https://api.fal.ai/v1/models/pricing'
+FAL_MODELS_MAX_PAGES = max(int(os.environ.get('FAL_MODELS_MAX_PAGES', '20')), 1)
+FAL_PRICING_BATCH_SIZE = max(int(os.environ.get('FAL_PRICING_BATCH_SIZE', '50')), 1)
 # Google Sheets authentication URL (Apps Script web app)
 GOOGLE_SHEETS_AUTH_URL = (os.environ.get('GOOGLE_SHEETS_AUTH_URL') or '').strip()
 # Clerk authentication
@@ -5401,29 +5405,7 @@ def compress_fal_entry(item):
     date = parse_timestamp(item.get('date')) or ''
     category = item.get('category') or 'n/a'
     description = (item.get('description') or '').replace('\n', ' ').strip()
-    pricing_text = item.get('pricing') or ''
-    price = None
-    if pricing_text and '$' in pricing_text:
-        part = pricing_text.split('$', 1)[1]
-        number = part.split(None, 1)[0].strip('*').strip()
-        unit = ''
-        remainder = part[len(number):].strip()
-        if remainder:
-            lower = remainder.lower()
-            if 'per' in lower:
-                # capture fragment after 'per'
-                fragment = remainder[remainder.lower().find('per'):].split('.', 1)[0].strip()
-                if 'second' in fragment:
-                    unit = '/sec'
-                elif 'minute' in fragment:
-                    unit = '/min'
-                elif 'request' in fragment:
-                    unit = '/req'
-                elif 'image' in fragment:
-                    unit = '/image'
-                else:
-                    unit = f" {fragment}"
-        price = f"${number}{unit}" if unit else f"${number}"
+    price = format_fal_pricing_summary(item.get('pricing'))
     license_type = item.get('licenseType') or ''
     tags = item.get('tags') or []
     segments = [f"{model_id}; {date}" if date else model_id]
@@ -5437,6 +5419,139 @@ def compress_fal_entry(item):
     if tags:
         segments.append(f"Tags: {', '.join(tags[:6])}")
     return '; '.join(segments)
+
+
+def _format_fal_currency(amount, currency='USD'):
+    try:
+        numeric = float(amount)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(numeric):
+        return None
+
+    if numeric < 1:
+        amount_text = f"{numeric:.4f}"
+    elif numeric < 10:
+        amount_text = f"{numeric:.2f}"
+    else:
+        amount_text = f"{numeric:.2f}".rstrip('0').rstrip('.')
+
+    currency_code = (currency or 'USD').strip().upper()
+    if currency_code == 'USD':
+        return f"${amount_text}"
+    return f"{amount_text} {currency_code}"
+
+
+def format_fal_pricing_summary(pricing):
+    if isinstance(pricing, str):
+        return pricing.strip()
+
+    if not isinstance(pricing, dict):
+        return ''
+
+    summary = str(pricing.get('summary') or '').strip()
+    if summary:
+        return summary
+
+    amount = _format_fal_currency(pricing.get('unit_price'), pricing.get('currency') or 'USD')
+    unit = str(pricing.get('unit') or '').strip()
+    if amount:
+        return f"{amount} / {unit}" if unit else amount
+
+    fallback = str(pricing.get('legacy_text') or pricing.get('text') or '').strip()
+    return fallback
+
+
+def _normalize_fal_pricing(price_record=None, fallback_text=''):
+    fallback = str(fallback_text or '').strip()
+    if not isinstance(price_record, dict):
+        if not fallback:
+            return None
+        return {
+            'summary': fallback,
+            'legacy_text': fallback,
+            'source': 'legacy_text',
+        }
+
+    normalized = {
+        'source': 'fal_pricing_api',
+    }
+    endpoint_id = str(price_record.get('endpoint_id') or '').strip()
+    if endpoint_id:
+        normalized['endpoint_id'] = endpoint_id
+
+    try:
+        unit_price = float(price_record.get('unit_price'))
+    except (TypeError, ValueError):
+        unit_price = None
+    if unit_price is not None and math.isfinite(unit_price):
+        normalized['unit_price'] = unit_price
+
+    unit = str(price_record.get('unit') or '').strip()
+    if unit:
+        normalized['unit'] = unit
+
+    currency = str(price_record.get('currency') or '').strip().upper() or 'USD'
+    if currency:
+        normalized['currency'] = currency
+
+    summary = format_fal_pricing_summary(normalized)
+    if not summary and fallback:
+        summary = fallback
+    if summary:
+        normalized['summary'] = summary
+    if fallback and fallback != summary:
+        normalized['legacy_text'] = fallback
+
+    return normalized if len(normalized) > 1 else None
+
+
+def _chunk_values(values, size):
+    for idx in range(0, len(values), size):
+        yield values[idx: idx + size]
+
+
+def _fetch_fal_pricing_map(endpoint_ids):
+    if not FAL_API_KEY:
+        return {}
+
+    unique_ids = []
+    seen = set()
+    for endpoint_id in endpoint_ids or []:
+        normalized = str(endpoint_id or '').strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        unique_ids.append(normalized)
+
+    if not unique_ids:
+        return {}
+
+    headers = {'Authorization': f'Key {FAL_API_KEY}'}
+    pricing_by_id = {}
+
+    for batch in _chunk_values(unique_ids, FAL_PRICING_BATCH_SIZE):
+        params = [('endpoint_id', endpoint_id) for endpoint_id in batch]
+        try:
+            response = requests.get(FAL_PRICING_API_URL, headers=headers, params=params, timeout=20)
+            response.raise_for_status()
+            payload = response.json()
+        except requests.exceptions.RequestException as exc:
+            print(f"WARNING: Failed to fetch Fal pricing batch ({len(batch)} models): {exc}")
+            continue
+        except ValueError as exc:
+            print(f"WARNING: Invalid Fal pricing JSON for batch ({len(batch)} models): {exc}")
+            continue
+
+        for record in payload.get('prices') or []:
+            endpoint_id = str(record.get('endpoint_id') or '').strip()
+            if not endpoint_id:
+                continue
+            normalized = _normalize_fal_pricing(record)
+            if normalized:
+                pricing_by_id[endpoint_id] = normalized
+
+    return pricing_by_id
 
 def compress_replicate_entry(item):
     model_id = safe_slug(item.get('id'))
@@ -8364,6 +8479,15 @@ def get_image_to_video():
 def get_fal_models():
     """Get media generation models data from fal.ai API."""
     cache_key = get_cache_key('fal_models')
+    limit_value = None
+    raw_limit = request.args.get('limit')
+    if raw_limit:
+        try:
+            parsed_limit = int(raw_limit)
+            if parsed_limit > 0:
+                limit_value = parsed_limit
+        except ValueError:
+            limit_value = None
 
     # Force fresh data fetch if cache_bust parameter is present
     force_refresh = request.args.get('cache_bust', 'false').lower() == 'true'
@@ -8407,24 +8531,16 @@ def get_fal_models():
             print(f"DEBUG: Updated {cache_dirty} model URLs in cache")
 
         print(f"DEBUG: Returning {len(normalized_models)} normalized models from cache")
-        
-        # Apply limit if requested
-        limit = request.args.get('limit')
-        if limit:
-            try:
-                limit_val = int(limit)
-                if limit_val > 0:
-                    normalized_models = normalized_models[:limit_val]
-            except ValueError:
-                pass
-                
+        if limit_value:
+            normalized_models = normalized_models[:limit_value]
         return jsonify(normalized_models)
     
     try:
         # Fetch all pages of fal.ai models
         all_models = []
         page = 1
-        max_pages = 20  # Safety limit to prevent infinite loops
+        max_pages = FAL_MODELS_MAX_PAGES
+        pages_fetched = 0
         
         encountered_error = None
         while page <= max_pages:
@@ -8443,8 +8559,17 @@ def get_fal_models():
             if not models:
                 break
 
+            if limit_value:
+                remaining = limit_value - len(all_models)
+                if remaining <= 0:
+                    break
+                models = models[:remaining]
+
             all_models.extend(models)
             print(f"Fetched page {page} of fal.ai models: {len(models)} models")
+            pages_fetched = page
+            if limit_value and len(all_models) >= limit_value:
+                break
             page += 1
 
         if encountered_error and not all_models:
@@ -8453,17 +8578,27 @@ def get_fal_models():
         if encountered_error:
             print(f"WARNING: Using partial fal.ai dataset after error: {encountered_error}")
 
-        print(f"Total fal.ai models fetched: {len(all_models)} from {max(page-1, 0)} pages")
+        print(f"Total fal.ai models fetched: {len(all_models)} from {pages_fetched} pages")
+
+        pricing_map = _fetch_fal_pricing_map(model.get('id') for model in all_models)
         
         # Process and standardize the model data
         processed_models = []
         for model in all_models:
             original_url = model.get('modelUrl', '')
             normalized_url = normalize_fal_model_url(original_url)
+            model_id = model.get('id', '')
+            legacy_pricing_text = model.get('pricingInfoOverride', '')
+            pricing = pricing_map.get(model_id)
+            if pricing and legacy_pricing_text and pricing.get('legacy_text') is None:
+                if legacy_pricing_text.strip() and legacy_pricing_text.strip() != pricing.get('summary'):
+                    pricing = {**pricing, 'legacy_text': legacy_pricing_text.strip()}
+            if not pricing:
+                pricing = _normalize_fal_pricing(None, legacy_pricing_text)
             print(f"DEBUG: Processing model {model.get('title', 'Unknown')} - URL: {original_url} -> {normalized_url}")
 
             processed_model = {
-                'id': model.get('id', ''),
+                'id': model_id,
                 'title': model.get('title', ''),
                 'category': model.get('category', ''),
                 'description': model.get('shortDescription', ''),
@@ -8473,7 +8608,7 @@ def get_fal_models():
                 'modelUrl': normalized_url,
                 'thumbnailUrl': model.get('thumbnailUrl', ''),
                 'group': model.get('group', {}),
-                'pricing': model.get('pricingInfoOverride', ''),
+                'pricing': pricing,
                 'highlighted': model.get('highlighted', False),
                 'creditsRequired': model.get('creditsRequired', 0),
                 'durationEstimate': model.get('durationEstimate', 0)
@@ -8483,11 +8618,12 @@ def get_fal_models():
         # Sort by date (newest first)
         processed_models.sort(key=lambda x: x.get('date', ''), reverse=True)
         
-        # Cache the processed data
-        cache[cache_key] = {
-            'data': processed_models,
-            'timestamp': datetime.now()
-        }
+        # Cache only the full dataset; limited responses are for fast first-paint requests.
+        if not limit_value:
+            cache[cache_key] = {
+                'data': processed_models,
+                'timestamp': datetime.now()
+            }
         _record_provider_check('fal')
         
         return jsonify(processed_models), 200, {

@@ -2,6 +2,7 @@ import json
 import os
 
 import pytest
+import requests
 
 import server
 
@@ -316,3 +317,92 @@ def test_create_checkout_session_skips_remote_clerk_lookup(monkeypatch):
     )
     # Primary assertion is no remote clerk lookup path (would raise AssertionError via monkeypatch).
     assert response.status_code in (200, 400, 401, 503)
+
+
+def test_format_fal_pricing_summary_supports_structured_pricing():
+    summary = server.format_fal_pricing_summary({
+        'unit_price': 0.025,
+        'unit': 'megapixels',
+        'currency': 'USD',
+    })
+
+    assert summary == '$0.0250 / megapixels'
+
+
+def test_get_fal_models_enriches_pricing_from_fal_pricing_api(monkeypatch):
+    server.cache.clear()
+    monkeypatch.setattr(server, 'FAL_API_KEY', 'fal_test_key')
+    monkeypatch.setattr(server, 'FAL_MODELS_MAX_PAGES', 2)
+
+    class DummyResponse:
+        def __init__(self, payload, status_code=200):
+            self._payload = payload
+            self.status_code = status_code
+
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                raise requests.exceptions.HTTPError(f'{self.status_code} error')
+
+        def json(self):
+            return self._payload
+
+    calls = []
+
+    def fake_get(url, params=None, headers=None, timeout=None):
+        calls.append({'url': url, 'params': params, 'headers': headers, 'timeout': timeout})
+        if url.startswith('https://fal.ai/api/models'):
+            if 'page=1' in url:
+                return DummyResponse({
+                    'items': [
+                        {
+                            'id': 'fal-ai/flux/dev',
+                            'title': 'FLUX Dev',
+                            'category': 'text-to-image',
+                            'shortDescription': 'Image model',
+                            'tags': ['image'],
+                            'date': '2026-03-20T12:00:00Z',
+                            'licenseType': 'commercial',
+                            'modelUrl': 'https://fal.run/fal-ai/flux/dev',
+                            'thumbnailUrl': 'https://example.com/thumb.jpg',
+                            'group': {'name': 'Flux'},
+                            'pricingInfoOverride': '$0.10 per request',
+                            'highlighted': True,
+                            'creditsRequired': 3,
+                            'durationEstimate': 9,
+                        }
+                    ]
+                })
+            return DummyResponse({'items': []})
+        if url == server.FAL_PRICING_API_URL:
+            assert headers == {'Authorization': 'Key fal_test_key'}
+            assert params == [('endpoint_id', 'fal-ai/flux/dev')]
+            return DummyResponse({
+                'prices': [
+                    {
+                        'endpoint_id': 'fal-ai/flux/dev',
+                        'unit_price': 0.025,
+                        'unit': 'megapixels',
+                        'currency': 'USD',
+                    }
+                ]
+            })
+        raise AssertionError(f'unexpected URL {url}')
+
+    monkeypatch.setattr(server.requests, 'get', fake_get)
+
+    client = server.app.test_client()
+    response = client.get('/api/fal-models?cache_bust=true&limit=1')
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert len(payload) == 1
+    assert payload[0]['pricing'] == {
+        'source': 'fal_pricing_api',
+        'endpoint_id': 'fal-ai/flux/dev',
+        'unit_price': 0.025,
+        'unit': 'megapixels',
+        'currency': 'USD',
+        'summary': '$0.0250 / megapixels',
+        'legacy_text': '$0.10 per request',
+    }
+    assert any(call['url'] == server.FAL_PRICING_API_URL for call in calls)
