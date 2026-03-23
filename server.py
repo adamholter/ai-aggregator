@@ -1438,6 +1438,9 @@ STRIPE_WEBHOOK_STATUS_FAILED = 'failed'
 STRIPE_WEBHOOK_POLL_SECONDS = max(int(os.environ.get('STRIPE_WEBHOOK_POLL_SECONDS', '5')), 1)
 STRIPE_WEBHOOK_BATCH_SIZE = max(int(os.environ.get('STRIPE_WEBHOOK_BATCH_SIZE', '10')), 1)
 STRIPE_WEBHOOK_MAX_BACKOFF_SECONDS = max(int(os.environ.get('STRIPE_WEBHOOK_MAX_BACKOFF_SECONDS', '300')), 5)
+STRIPE_WEBHOOK_BACKGROUND_WORKER_ENABLED = (
+    (os.environ.get('STRIPE_WEBHOOK_BACKGROUND_WORKER_ENABLED') or '').strip().lower() in {'1', 'true', 'yes', 'on'}
+)
 _STRIPE_WEBHOOK_WORKER_LOCK = Lock()
 _STRIPE_WEBHOOK_WORKER_STARTED = False
 DEEP_RESEARCH_MODEL_ID = 'openai/o4-mini-deep-research'
@@ -2187,6 +2190,26 @@ def _drain_stripe_webhook_events(limit=STRIPE_WEBHOOK_BATCH_SIZE, *, dry_run=Fal
     return processed
 
 
+def _process_specific_stripe_webhook_event(event_id, *, dry_run=False):
+    normalized_event_id = (event_id or '').strip()
+    if not normalized_event_id:
+        return None
+    from backend.app import db as _db
+    row = _db.query_one(
+        'SELECT * FROM stripe_webhook_events WHERE event_id=?',
+        (normalized_event_id,),
+    )
+    if not row:
+        return None
+    status = (row.get('processing_status') or '').strip()
+    if status not in {STRIPE_WEBHOOK_STATUS_PENDING, STRIPE_WEBHOOK_STATUS_FAILED}:
+        return status
+    next_attempt_at = int(row.get('next_attempt_at') or 0)
+    if status == STRIPE_WEBHOOK_STATUS_FAILED and next_attempt_at > int(time.time()):
+        return status
+    return _process_stripe_webhook_event_row(row, dry_run=dry_run)
+
+
 def _backfill_stripe_events_from(started_at, *, limit=100, dry_run=False):
     if not (_stripe_available and STRIPE_SECRET_KEY):
         raise RuntimeError('Stripe is not configured')
@@ -2216,6 +2239,8 @@ def _stripe_webhook_worker_loop():
 
 def _ensure_stripe_webhook_worker():
     global _STRIPE_WEBHOOK_WORKER_STARTED
+    if not STRIPE_WEBHOOK_BACKGROUND_WORKER_ENABLED:
+        return
     if not (_stripe_available and STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET):
         return
     with _STRIPE_WEBHOOK_WORKER_LOCK:
@@ -13210,7 +13235,16 @@ def stripe_webhook():
         event = _stripe_module.Webhook.construct_event(payload, sig, STRIPE_WEBHOOK_SECRET)
     except Exception:
         return jsonify({'error': 'Invalid signature'}), 400
-    _enqueue_stripe_webhook_event(event)
+    _was_inserted, event_payload = _enqueue_stripe_webhook_event(event)
+    event_id = (event_payload.get('id') or '').strip()
+    # Process the current event inline so live Stripe deliveries do not depend on
+    # a background worker thread in the request path.
+    if event_id:
+        try:
+            _process_specific_stripe_webhook_event(event_id)
+        except Exception:
+            # The event is durably stored and will remain retryable for replay.
+            pass
     _ensure_stripe_webhook_worker()
     return jsonify({'received': True})
 

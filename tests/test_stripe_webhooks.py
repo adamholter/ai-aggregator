@@ -130,6 +130,46 @@ def test_stripe_webhook_valid_event_is_stored_idempotently(monkeypatch, sqlite_d
     assert rows[0]['event_id'] == 'evt_checkout_1'
 
 
+def test_stripe_webhook_supported_event_is_processed_inline(monkeypatch, sqlite_db):
+    monkeypatch.setattr(server, '_stripe_available', True)
+    monkeypatch.setattr(server, 'STRIPE_WEBHOOK_SECRET', 'whsec_test')
+    monkeypatch.setattr(server, 'STRIPE_PRICES', {'starter_monthly': 'price_starter_live'})
+    event_payload = _event(
+        'evt_checkout_inline',
+        'checkout.session.completed',
+        {
+            'metadata': {'user_id': 'user_inline', 'price_key': 'starter_monthly'},
+            'client_reference_id': 'user_inline',
+            'customer': 'cus_inline',
+            'subscription': 'sub_inline',
+            'customer_email': 'inline@example.com',
+        },
+    )
+
+    class DummyWebhook:
+        @staticmethod
+        def construct_event(payload, sig, secret):
+            return event_payload
+
+    class DummyStripe:
+        Webhook = DummyWebhook
+
+    monkeypatch.setattr(server, '_stripe_module', DummyStripe())
+    client = server.app.test_client()
+
+    response = client.post('/webhooks/stripe', data=b'{}', headers={'Stripe-Signature': 'sig'})
+
+    event_row = db_module.query_one('SELECT * FROM stripe_webhook_events WHERE event_id=?', ('evt_checkout_inline',))
+    subscription = db_module.query_one('SELECT * FROM subscriptions WHERE user_id=?', ('user_inline',))
+
+    assert response.status_code == 200
+    assert event_row['processing_status'] == server.STRIPE_WEBHOOK_STATUS_PROCESSED
+    assert event_row['attempt_count'] == 1
+    assert subscription['stripe_customer_id'] == 'cus_inline'
+    assert subscription['stripe_subscription_id'] == 'sub_inline'
+    assert subscription['tier'] == 'starter'
+
+
 def test_checkout_session_completed_processing_maps_user_and_subscription(monkeypatch, sqlite_db):
     monkeypatch.setattr(server, 'STRIPE_PRICES', {'starter_monthly': 'price_starter_live'})
     db_module.execute(
