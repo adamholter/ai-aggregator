@@ -1391,7 +1391,7 @@ ARTIFICIAL_ANALYSIS_BASE_URL = 'https://artificialanalysis.ai/api/v2'
 OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
 REPLICATE_API_KEY = (os.environ.get('REPLICATE_API_KEY') or '').strip()
 REPLICATE_BASE_URL = 'https://api.replicate.com/v1'
-FAL_API_KEY = (os.environ.get('FAL_API_KEY') or '').strip()
+FAL_API_KEY = (os.environ.get('FAL_API_KEY') or os.environ.get('FAL_KEY') or '').strip()
 FAL_PRICING_API_URL = 'https://api.fal.ai/v1/models/pricing'
 FAL_MODELS_MAX_PAGES = max(int(os.environ.get('FAL_MODELS_MAX_PAGES', '20')), 1)
 FAL_PRICING_BATCH_SIZE = max(int(os.environ.get('FAL_PRICING_BATCH_SIZE', '50')), 1)
@@ -5511,8 +5511,18 @@ def _chunk_values(values, size):
         yield values[idx: idx + size]
 
 
+def _get_fal_api_key():
+    return (
+        FAL_API_KEY
+        or os.environ.get('FAL_API_KEY')
+        or os.environ.get('FAL_KEY')
+        or ''
+    ).strip()
+
+
 def _fetch_fal_pricing_map(endpoint_ids):
-    if not FAL_API_KEY:
+    fal_api_key = _get_fal_api_key()
+    if not fal_api_key:
         return {}
 
     unique_ids = []
@@ -5527,7 +5537,7 @@ def _fetch_fal_pricing_map(endpoint_ids):
     if not unique_ids:
         return {}
 
-    headers = {'Authorization': f'Key {FAL_API_KEY}'}
+    headers = {'Authorization': f'Key {fal_api_key}'}
     pricing_by_id = {}
 
     for batch in _chunk_values(unique_ids, FAL_PRICING_BATCH_SIZE):

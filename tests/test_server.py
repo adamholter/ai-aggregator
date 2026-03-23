@@ -406,3 +406,42 @@ def test_get_fal_models_enriches_pricing_from_fal_pricing_api(monkeypatch):
         'legacy_text': '$0.10 per request',
     }
     assert any(call['url'] == server.FAL_PRICING_API_URL for call in calls)
+
+
+def test_fetch_fal_pricing_map_accepts_legacy_fal_key_env(monkeypatch):
+    monkeypatch.setattr(server, 'FAL_API_KEY', '')
+    monkeypatch.delenv('FAL_API_KEY', raising=False)
+    monkeypatch.setenv('FAL_KEY', 'legacy_fal_key')
+
+    class DummyResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                'prices': [
+                    {
+                        'endpoint_id': 'fal-ai/example',
+                        'unit_price': 0.01,
+                        'unit': 'requests',
+                        'currency': 'USD',
+                    }
+                ]
+            }
+
+    captured = {}
+
+    def fake_get(url, params=None, headers=None, timeout=None):
+        captured['url'] = url
+        captured['params'] = params
+        captured['headers'] = headers
+        captured['timeout'] = timeout
+        return DummyResponse()
+
+    monkeypatch.setattr(server.requests, 'get', fake_get)
+
+    pricing_map = server._fetch_fal_pricing_map(['fal-ai/example'])
+
+    assert pricing_map['fal-ai/example']['unit_price'] == 0.01
+    assert captured['url'] == server.FAL_PRICING_API_URL
+    assert captured['headers'] == {'Authorization': 'Key legacy_fal_key'}
