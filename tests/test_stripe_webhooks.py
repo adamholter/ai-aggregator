@@ -77,6 +77,7 @@ def _event(event_id, event_type, obj):
 def test_stripe_webhook_invalid_signature_returns_400(monkeypatch, sqlite_db):
     monkeypatch.setattr(server, '_stripe_available', True)
     monkeypatch.setattr(server, 'STRIPE_WEBHOOK_SECRET', 'whsec_test')
+    monkeypatch.setattr(server, 'STRIPE_WEBHOOK_REQUEST_MODE', 'direct')
 
     class DummyWebhook:
         @staticmethod
@@ -96,6 +97,7 @@ def test_stripe_webhook_invalid_signature_returns_400(monkeypatch, sqlite_db):
 def test_stripe_webhook_valid_event_is_stored_idempotently(monkeypatch, sqlite_db):
     monkeypatch.setattr(server, '_stripe_available', True)
     monkeypatch.setattr(server, 'STRIPE_WEBHOOK_SECRET', 'whsec_test')
+    monkeypatch.setattr(server, 'STRIPE_WEBHOOK_REQUEST_MODE', 'direct')
     monkeypatch.setattr(server, '_ensure_stripe_webhook_worker', lambda: None)
     event_payload = _event(
         'evt_checkout_1',
@@ -133,6 +135,7 @@ def test_stripe_webhook_valid_event_is_stored_idempotently(monkeypatch, sqlite_d
 def test_stripe_webhook_supported_event_is_processed_inline(monkeypatch, sqlite_db):
     monkeypatch.setattr(server, '_stripe_available', True)
     monkeypatch.setattr(server, 'STRIPE_WEBHOOK_SECRET', 'whsec_test')
+    monkeypatch.setattr(server, 'STRIPE_WEBHOOK_REQUEST_MODE', 'direct')
     monkeypatch.setattr(server, 'STRIPE_PRICES', {'starter_monthly': 'price_starter_live'})
     event_payload = _event(
         'evt_checkout_inline',
@@ -261,6 +264,7 @@ def test_unknown_valid_event_is_marked_ignored(monkeypatch, sqlite_db):
 def test_processing_failure_is_retryable_and_does_not_break_ack(monkeypatch, sqlite_db):
     monkeypatch.setattr(server, '_stripe_available', True)
     monkeypatch.setattr(server, 'STRIPE_WEBHOOK_SECRET', 'whsec_test')
+    monkeypatch.setattr(server, 'STRIPE_WEBHOOK_REQUEST_MODE', 'direct')
     monkeypatch.setattr(server, '_ensure_stripe_webhook_worker', lambda: None)
     event_payload = _event(
         'evt_subscription_missing_user',
@@ -294,3 +298,46 @@ def test_processing_failure_is_retryable_and_does_not_break_ack(monkeypatch, sql
     assert event_row['processing_status'] == server.STRIPE_WEBHOOK_STATUS_FAILED
     assert event_row['attempt_count'] == 1
     assert 'Unable to resolve user_id' in event_row['last_error']
+
+
+def test_stripe_webhook_spool_mode_acks_and_writes_file(monkeypatch, sqlite_db, tmp_path):
+    monkeypatch.setattr(server, '_stripe_available', True)
+    monkeypatch.setattr(server, 'STRIPE_WEBHOOK_SECRET', 'whsec_test')
+    monkeypatch.setattr(server, 'STRIPE_WEBHOOK_REQUEST_MODE', 'spool')
+    monkeypatch.setattr(server, 'STRIPE_WEBHOOK_SPOOL_DIR', str(tmp_path))
+    launched = []
+
+    def fake_launch(spool_path):
+        launched.append(spool_path)
+
+    event_payload = _event(
+        'evt_spool_mode',
+        'checkout.session.completed',
+        {
+            'metadata': {'user_id': 'user_spool', 'price_key': 'starter_monthly'},
+            'client_reference_id': 'user_spool',
+            'customer': 'cus_spool',
+            'subscription': 'sub_spool',
+            'customer_email': 'spool@example.com',
+        },
+    )
+
+    class DummyWebhook:
+        @staticmethod
+        def construct_event(payload, sig, secret):
+            return event_payload
+
+    class DummyStripe:
+        Webhook = DummyWebhook
+
+    monkeypatch.setattr(server, '_stripe_module', DummyStripe())
+    monkeypatch.setattr(server, '_launch_stripe_webhook_spool_processor', fake_launch)
+    client = server.app.test_client()
+
+    response = client.post('/webhooks/stripe', data=b'{}', headers={'Stripe-Signature': 'sig'})
+
+    spool_path = tmp_path / 'evt_spool_mode.json'
+    assert response.status_code == 200
+    assert spool_path.exists()
+    assert launched == [str(spool_path)]
+    assert db_module.query_all('SELECT * FROM stripe_webhook_events') == []

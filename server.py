@@ -1435,11 +1435,15 @@ STRIPE_WEBHOOK_STATUS_PENDING = 'pending'
 STRIPE_WEBHOOK_STATUS_PROCESSED = 'processed'
 STRIPE_WEBHOOK_STATUS_IGNORED = 'ignored'
 STRIPE_WEBHOOK_STATUS_FAILED = 'failed'
+STRIPE_WEBHOOK_REQUEST_MODE = (os.environ.get('STRIPE_WEBHOOK_REQUEST_MODE') or 'spool').strip().lower()
 STRIPE_WEBHOOK_POLL_SECONDS = max(int(os.environ.get('STRIPE_WEBHOOK_POLL_SECONDS', '5')), 1)
 STRIPE_WEBHOOK_BATCH_SIZE = max(int(os.environ.get('STRIPE_WEBHOOK_BATCH_SIZE', '10')), 1)
 STRIPE_WEBHOOK_MAX_BACKOFF_SECONDS = max(int(os.environ.get('STRIPE_WEBHOOK_MAX_BACKOFF_SECONDS', '300')), 5)
 STRIPE_WEBHOOK_BACKGROUND_WORKER_ENABLED = (
     (os.environ.get('STRIPE_WEBHOOK_BACKGROUND_WORKER_ENABLED') or '').strip().lower() in {'1', 'true', 'yes', 'on'}
+)
+STRIPE_WEBHOOK_SPOOL_DIR = (
+    (os.environ.get('STRIPE_WEBHOOK_SPOOL_DIR') or os.path.join(tempfile.gettempdir(), 'ai-dashboard-stripe-webhooks')).strip()
 )
 _STRIPE_WEBHOOK_WORKER_LOCK = Lock()
 _STRIPE_WEBHOOK_WORKER_STARTED = False
@@ -2019,6 +2023,60 @@ def _enqueue_stripe_webhook_event(event):
             app.logger.info('stripe_webhook_duplicate', extra={'event_id': event_id, 'event_type': event_type})
             return False, event_payload
         raise
+
+
+def _stripe_webhook_spool_path(event_id):
+    safe_id = re.sub(r'[^A-Za-z0-9._-]+', '_', (event_id or '').strip()) or f'evt_{uuid.uuid4().hex}'
+    return os.path.join(STRIPE_WEBHOOK_SPOOL_DIR, f'{safe_id}.json')
+
+
+def _persist_stripe_webhook_spool(event_payload):
+    event_id = (event_payload.get('id') or '').strip()
+    if not event_id:
+        raise ValueError('Stripe event payload is missing id')
+    os.makedirs(STRIPE_WEBHOOK_SPOOL_DIR, exist_ok=True)
+    final_path = _stripe_webhook_spool_path(event_id)
+    if os.path.exists(final_path):
+        return final_path, False
+    temp_path = f'{final_path}.{uuid.uuid4().hex}.tmp'
+    with open(temp_path, 'w', encoding='utf-8') as handle:
+        json.dump(event_payload, handle, ensure_ascii=False, separators=(',', ':'))
+    os.replace(temp_path, final_path)
+    app.logger.info('stripe_webhook_spooled', extra={'event_id': event_id, 'spool_path': final_path})
+    return final_path, True
+
+
+def _launch_stripe_webhook_spool_processor(spool_path):
+    script_path = os.path.join(os.path.dirname(__file__), 'scripts', 'process_stripe_webhook_spool.py')
+    if not os.path.exists(script_path):
+        raise RuntimeError('Stripe spool processor script is missing')
+    with open(os.devnull, 'wb') as devnull:
+        subprocess.Popen(
+            [sys.executable, script_path, '--event-file', spool_path],
+            stdout=devnull,
+            stderr=devnull,
+            stdin=devnull,
+            close_fds=True,
+            start_new_session=True,
+        )
+
+
+def _store_and_process_stripe_webhook_event(event_payload, *, process_inline=True):
+    was_inserted, normalized_payload = _enqueue_stripe_webhook_event(event_payload)
+    event_id = (normalized_payload.get('id') or '').strip()
+    outcome = None
+    if process_inline and event_id:
+        try:
+            outcome = _process_specific_stripe_webhook_event(event_id)
+        except Exception:
+            # The event remains durable and retryable in the inbox.
+            pass
+    _ensure_stripe_webhook_worker()
+    return {
+        'event_id': event_id,
+        'was_inserted': was_inserted,
+        'outcome': outcome,
+    }
 
 
 def _mark_stripe_webhook_event_state(event_id, status, *, attempt_count=None, last_error=None, next_attempt_at=None):
@@ -13235,17 +13293,20 @@ def stripe_webhook():
         event = _stripe_module.Webhook.construct_event(payload, sig, STRIPE_WEBHOOK_SECRET)
     except Exception:
         return jsonify({'error': 'Invalid signature'}), 400
-    _was_inserted, event_payload = _enqueue_stripe_webhook_event(event)
-    event_id = (event_payload.get('id') or '').strip()
-    # Process the current event inline so live Stripe deliveries do not depend on
-    # a background worker thread in the request path.
-    if event_id:
+    event_payload = _stripe_to_plain(event)
+    if STRIPE_WEBHOOK_REQUEST_MODE == 'direct':
         try:
-            _process_specific_stripe_webhook_event(event_id)
+            _store_and_process_stripe_webhook_event(event_payload, process_inline=True)
         except Exception:
-            # The event is durably stored and will remain retryable for replay.
-            pass
-    _ensure_stripe_webhook_worker()
+            app.logger.exception('stripe_webhook_direct_mode_failed')
+            return jsonify({'error': 'Webhook storage failed'}), 500
+        return jsonify({'received': True})
+    try:
+        spool_path, _created = _persist_stripe_webhook_spool(event_payload)
+        _launch_stripe_webhook_spool_processor(spool_path)
+    except Exception:
+        app.logger.exception('stripe_webhook_spool_mode_failed')
+        return jsonify({'error': 'Webhook spool failed'}), 500
     return jsonify({'received': True})
 
 
