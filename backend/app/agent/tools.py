@@ -78,6 +78,29 @@ def get_tool_definitions(mode: str = "quick") -> List[Dict]:
             }
         ),
         _fn(
+            "get_model_endpoints",
+            "Get every OpenRouter provider endpoint for one model, including provider-specific rolling throughput, latency, uptime, quantization, and prices. Use this whenever speed or routing varies by provider.",
+            {
+                "model_id": {"type": "string", "description": "Exact OpenRouter model id, for example z-ai/glm-5.2."},
+                "sort_by": {"type": "string", "enum": ["throughput", "price", "latency", "uptime"], "description": "How to order providers (default throughput)."},
+                "percentile": {"type": "string", "enum": ["p50", "p75", "p90", "p99"], "description": "Metric percentile (default p50)."}
+            },
+            ["model_id"],
+        ),
+        _fn(
+            "search_fast_model_endpoints",
+            "Compare provider-specific OpenRouter endpoints for selected models. Filters and ranks endpoint variants, not misleading model-level average speed. Never assume a speed threshold unless the user supplies one.",
+            {
+                "model_ids": {"type": "array", "items": {"type": "string"}, "description": "Exact OpenRouter model ids to compare."},
+                "min_tps": {"type": "number", "description": "Optional minimum throughput. Omit when the user only says fast."},
+                "max_input_price_1m": {"type": "number", "description": "Optional maximum input price per 1M tokens."},
+                "max_output_price_1m": {"type": "number", "description": "Optional maximum output price per 1M tokens."},
+                "percentile": {"type": "string", "enum": ["p50", "p75", "p90", "p99"], "description": "Throughput percentile (default p50)."},
+                "limit": {"type": "number", "description": "Maximum endpoint rows (default 25)."}
+            },
+            ["model_ids"],
+        ),
+        _fn(
             "get_monitor_news",
             "Fetch entries from the Monitor Google Sheet.",
             {

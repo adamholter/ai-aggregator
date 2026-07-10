@@ -369,6 +369,11 @@ button.icon-btn:hover, a.icon-btn:hover { background: var(--surface); border-col
 .loading-row { cursor: pointer; }
 .live-hint { font-size: 12px; color: var(--text-3); margin-left: 8px; text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 2px; }
 .loading-row:hover .live-hint { color: var(--text-2); }
+.inline-activity { margin-top: 8px; max-width: 720px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; display: none; background: var(--surface-2); }
+.inline-activity.has-steps { display: block; }
+.inline-activity .tsb-step { padding: 8px 10px; }
+.stream-preview { margin-top: 10px; max-width: 760px; color: var(--text-1); line-height: 1.65; display: none; }
+.stream-preview.has-content { display: block; }
 .tsb-dot.running { background: var(--blue); animation: dotpulse 1s ease-in-out infinite; }
 .tsb-head-live { display: inline-block; font-size: 10px; font-weight: 700; color: var(--blue); text-transform: uppercase; letter-spacing: .06em; background: var(--blue-bg); border: 1px solid var(--blue-border); padding: 1px 5px; border-radius: 4px; }
 
@@ -758,9 +763,17 @@ const LS_APIKEY    = 'dashboard-user-openrouter-key';
 const LS_MODEL     = 'agent-model';
 const LS_DEEPER    = 'agent-deeper';
 const LS_AV_MODELS = 'dashboard-available-models';
+const DEFAULT_AGENT_MODEL = '~openai/gpt-latest';
+const DEFAULT_REASONING_EFFORT = 'low';
+const LEGACY_DEFAULT_MODELS = new Set([
+  'anthropic/claude-sonnet-4',
+  'google/gemini-2.5-flash',
+  'x-ai/grok-4-fast'
+]);
 
 // Default fallback models if none configured in settings
 const DEFAULT_MODELS = [
+  [DEFAULT_AGENT_MODEL,              'GPT Latest'],
   ['google/gemini-2.5-flash',      'Gemini 2.5 Flash'],
   ['google/gemini-2.5-pro',        'Gemini 2.5 Pro'],
   ['anthropic/claude-sonnet-4-5',  'Claude Sonnet 4.5'],
@@ -836,9 +849,12 @@ document.getElementById('attach-remove').addEventListener('click', () => {
 function populateModelSelect() {
   const raw = localStorage.getItem(LS_AV_MODELS) || '';
   const ids = raw.split(',').map(s => s.trim()).filter(Boolean);
-  const pairs = ids.length > 0
-    ? ids.map(id => [id, modelLabel(id)])
-    : DEFAULT_MODELS;
+  const pairsById = new Map();
+  DEFAULT_MODELS.forEach(([id, label]) => pairsById.set(id, label));
+  ids.forEach(id => {
+    if (!pairsById.has(id)) pairsById.set(id, modelLabel(id));
+  });
+  const pairs = Array.from(pairsById.entries());
 
   while ($model.firstChild) $model.removeChild($model.firstChild);
   pairs.forEach(([id, label]) => {
@@ -850,8 +866,11 @@ function populateModelSelect() {
 
   // Restore saved selection
   const saved = localStorage.getItem(LS_MODEL);
-  if (saved && $model.querySelector('option[value="' + CSS.escape(saved) + '"]')) {
+  if (saved && !LEGACY_DEFAULT_MODELS.has(saved) && $model.querySelector('option[value="' + CSS.escape(saved) + '"]')) {
     $model.value = saved;
+  } else if ($model.querySelector('option[value="' + CSS.escape(DEFAULT_AGENT_MODEL) + '"]')) {
+    $model.value = DEFAULT_AGENT_MODEL;
+    localStorage.setItem(LS_MODEL, DEFAULT_AGENT_MODEL);
   }
 }
 
@@ -928,6 +947,17 @@ $input.addEventListener('keydown', e => {
 $send.addEventListener('click', () => { if (!isLoading) send(); });
 function updateSend() { $send.disabled = isLoading || !$input.value.trim(); }
 
+window.addEventListener('message', e => {
+  const payload = e.data || {};
+  if (payload.type !== 'agent-query') return;
+  const query = String(payload.query || '').trim();
+  if (!query) return;
+  $input.value = query;
+  $input.dispatchEvent(new Event('input', { bubbles: true }));
+  $input.focus();
+  if (payload.submit && !isLoading) send();
+});
+
 function resetChat() {
   history = [];
   while ($msgs.firstChild) $msgs.removeChild($msgs.firstChild);
@@ -986,6 +1016,7 @@ async function send() {
         settings: Object.assign({
           model: $model.value,
           mode: $deeper.checked ? 'heavy' : 'quick',
+          reasoning_effort: DEFAULT_REASONING_EFFORT,
           max_iterations: 200
         }, key ? { api_key: key } : {}),
         messages: history
@@ -1020,6 +1051,9 @@ async function send() {
       const labelEl = loadEl.querySelector('.load-label');
       let buf = '';
       let toolCalls = [];
+      let inlineTraceEls = [];
+      const inlineActivity = loadEl.querySelector('.inline-activity');
+      const streamPreview = loadEl.querySelector('.stream-preview');
       let streamedResponse = '';
       let sawTerminalEvent = false;
       let sawAnyStreamEvent = false;
@@ -1070,9 +1104,15 @@ async function send() {
             const stage = evt.stage || '';
             if (labelEl) labelEl.textContent = stage === 'iteration_start' ? 'Thinking\u2026' : (stage.replace(/_/g, ' ') || 'Working\u2026');
           } else if (evt.type === 'tool_start') {
-            const tc = { tool: evt.tool_name, args: evt.args || {}, status: 'running', result: '' };
+            const tc = { id: evt.tool_call_id || '', tool: evt.tool_name, args: evt.args || {}, status: 'running', result: '' };
             toolCalls.push(tc);
             if (labelEl) labelEl.textContent = (evt.tool_name || 'tool').replace(/_/g, ' ');
+            if (inlineActivity) {
+              const inlineEl = buildSidebarStep(tc);
+              inlineActivity.appendChild(inlineEl);
+              inlineActivity.classList.add('has-steps');
+              inlineTraceEls.push(inlineEl);
+            }
             if (isLiveTrace) {
               const el = buildSidebarStep(tc);
               $tsbBody.appendChild(el);
@@ -1080,7 +1120,9 @@ async function send() {
               $tsbBody.scrollTop = $tsbBody.scrollHeight;
             }
           } else if (evt.type === 'tool_result') {
-            const revIdx = toolCalls.slice().reverse().findIndex(t => t.tool === evt.tool_name && t.status === 'running');
+            const revIdx = toolCalls.slice().reverse().findIndex(t =>
+              t.status === 'running' && (evt.tool_call_id ? t.id === evt.tool_call_id : t.tool === evt.tool_name)
+            );
             const realIdx = revIdx >= 0 ? toolCalls.length - 1 - revIdx : -1;
             if (realIdx >= 0) {
               toolCalls[realIdx].status = evt.status || 'done';
@@ -1088,6 +1130,7 @@ async function send() {
               if (isLiveTrace && liveTraceEls[realIdx]) {
                 updateLiveStep(liveTraceEls[realIdx], toolCalls[realIdx]);
               }
+              if (inlineTraceEls[realIdx]) updateLiveStep(inlineTraceEls[realIdx], toolCalls[realIdx]);
             }
           } else if (evt.type === 'artifact') {
             if (evt.artifact) {
@@ -1097,6 +1140,14 @@ async function send() {
           } else if (evt.type === 'content_chunk') {
             streamedResponse += String(evt.delta || '');
             if (labelEl) labelEl.textContent = 'Writing\u2026';
+            if (streamPreview) {
+              const html = renderMd(streamedResponse);
+              streamPreview.innerHTML = typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(html) : html;
+              streamPreview.classList.add('has-content');
+              scrollBot();
+            }
+          } else if (evt.type === 'reasoning_chunk') {
+            if (labelEl) labelEl.textContent = 'Reasoning\u2026';
           } else if (evt.type === 'done') {
             sawTerminalEvent = true;
             const elapsed = Date.now() - startMs;
@@ -1168,6 +1219,8 @@ function addLoading() {
   inner.appendChild(elapsed);
   inner.appendChild(hint);
   row.appendChild(inner);
+  row.appendChild(mk('div', 'inline-activity'));
+  row.appendChild(mk('div', 'stream-preview agent-response'));
   $msgs.appendChild(row);
   scrollBot();
   return row;

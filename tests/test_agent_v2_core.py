@@ -32,6 +32,36 @@ def _tool_call(call_id, name, arguments):
     }
 
 
+def test_openrouter_chat_completion_sends_reasoning_effort(monkeypatch):
+    captured = {}
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {'choices': [{'message': {'content': 'ok'}}]}
+
+    def fake_post(*args, **kwargs):
+        captured.update(kwargs)
+        return FakeResponse()
+
+    monkeypatch.setattr(agent_core.requests, 'post', fake_post)
+
+    response = agent_core._openrouter_chat_completion(
+        api_key='sk-test',
+        model='~openai/gpt-latest',
+        messages=[{'role': 'user', 'content': 'hello'}],
+        tools=[],
+        temperature=0.3,
+        reasoning_effort='low',
+    )
+
+    assert response['choices'][0]['message']['content'] == 'ok'
+    assert captured['json']['model'] == '~openai/gpt-latest'
+    assert captured['json']['reasoning'] == {'effort': 'low'}
+
+
 def test_run_agent_blocks_duplicate_successful_tool_calls(monkeypatch):
     completions = iter([
         {'choices': [{'message': {'tool_calls': [_tool_call('tc1', 'read_skill', '{"skill_name":"billing"}')]}}]},
@@ -89,7 +119,10 @@ def test_stream_agent_emits_duplicate_warning_and_then_loop_error(monkeypatch):
         {'choices': [{'message': {'tool_calls': [_tool_call('tc3', 'read_skill', '{"skill_name":"billing"}')]}}]},
         {'choices': [{'message': {'tool_calls': [_tool_call('tc4', 'read_skill', '{"skill_name":"billing"}')]}}]},
     ])
-    monkeypatch.setattr(agent_core, '_openrouter_chat_completion', lambda **kwargs: next(completions))
+    def fake_stream(**kwargs):
+        completion = next(completions)
+        yield {'type': 'message', 'message': completion['choices'][0]['message']}
+    monkeypatch.setattr(agent_core, '_stream_openrouter_chat_completion', fake_stream)
     executor = FakeExecutor({
         'read_skill': {'ok': True, 'result': {'content': 'billing skill body'}},
     })

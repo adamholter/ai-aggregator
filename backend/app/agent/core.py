@@ -78,6 +78,7 @@ def _openrouter_chat_completion(
     messages: List[Dict[str, Any]],
     tools: List[Dict[str, Any]],
     temperature: float,
+    reasoning_effort: str = "low",
 ) -> Dict[str, Any]:
     payload = {
         "model": model,
@@ -86,6 +87,9 @@ def _openrouter_chat_completion(
         "tool_choice": "auto",
         "temperature": temperature,
     }
+    normalized_effort = (reasoning_effort or "").strip().lower()
+    if normalized_effort in {"none", "minimal", "low", "medium", "high", "xhigh"}:
+        payload["reasoning"] = {"effort": normalized_effort}
 
     response = requests.post(
         "https://openrouter.ai/api/v1/chat/completions",
@@ -98,6 +102,74 @@ def _openrouter_chat_completion(
     )
     response.raise_for_status()
     return response.json()
+
+
+def _stream_openrouter_chat_completion(
+    api_key: str,
+    model: str,
+    messages: List[Dict[str, Any]],
+    tools: List[Dict[str, Any]],
+    temperature: float,
+    reasoning_effort: str = "low",
+):
+    """Yield live text/reasoning deltas followed by one assembled assistant message."""
+    payload = {
+        "model": model,
+        "messages": messages,
+        "tools": tools,
+        "tool_choice": "auto",
+        "temperature": temperature,
+        "stream": True,
+    }
+    normalized_effort = (reasoning_effort or "").strip().lower()
+    if normalized_effort in {"none", "minimal", "low", "medium", "high", "xhigh"}:
+        payload["reasoning"] = {"effort": normalized_effort}
+    response = requests.post(
+        "https://openrouter.ai/api/v1/chat/completions",
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        json=payload,
+        stream=True,
+        timeout=(OPENROUTER_CONNECT_TIMEOUT_SECONDS, OPENROUTER_READ_TIMEOUT_SECONDS),
+    )
+    response.raise_for_status()
+    content_parts: List[str] = []
+    reasoning_parts: List[str] = []
+    tool_calls_by_index: Dict[int, Dict[str, Any]] = {}
+    for raw_line in response.iter_lines(decode_unicode=True):
+        line = (raw_line or "").strip()
+        if not line.startswith("data:"):
+            continue
+        data = line[5:].strip()
+        if not data or data == "[DONE]":
+            continue
+        chunk = json.loads(data)
+        delta = ((chunk.get("choices") or [{}])[0].get("delta") or {})
+        text_delta = delta.get("content")
+        if isinstance(text_delta, str) and text_delta:
+            content_parts.append(text_delta)
+            yield {"type": "content", "delta": text_delta}
+        reasoning_delta = delta.get("reasoning")
+        if isinstance(reasoning_delta, str) and reasoning_delta:
+            reasoning_parts.append(reasoning_delta)
+            yield {"type": "reasoning", "delta": reasoning_delta}
+        for call_delta in delta.get("tool_calls") or []:
+            index = int(call_delta.get("index") or 0)
+            current = tool_calls_by_index.setdefault(index, {
+                "id": "", "type": "function", "function": {"name": "", "arguments": ""}
+            })
+            if call_delta.get("id"):
+                current["id"] = call_delta["id"]
+            fn_delta = call_delta.get("function") or {}
+            if fn_delta.get("name"):
+                current["function"]["name"] += fn_delta["name"]
+            if fn_delta.get("arguments"):
+                current["function"]["arguments"] += fn_delta["arguments"]
+    message: Dict[str, Any] = {"role": "assistant", "content": "".join(content_parts) or None}
+    if reasoning_parts:
+        message["reasoning"] = "".join(reasoning_parts)
+    if tool_calls_by_index:
+        message["tool_calls"] = [tool_calls_by_index[index] for index in sorted(tool_calls_by_index)]
+    yield {"type": "message", "message": message}
 
 
 def run_agent(
@@ -130,6 +202,7 @@ def run_agent(
                 messages=messages,
                 tools=tools,
                 temperature=float(settings.temperature),
+                reasoning_effort=settings.reasoning_effort,
             )
         except Exception as exc:
             return AgentRunResult(
@@ -306,13 +379,22 @@ def stream_agent(
     for iteration in range(1, max_iterations + 1):
         yield {"type": "status", "stage": "iteration_start", "iteration": iteration}
         try:
-            completion = _openrouter_chat_completion(
+            assistant_message = None
+            yield {"type": "status", "stage": "model_streaming", "iteration": iteration}
+            for stream_event in _stream_openrouter_chat_completion(
                 api_key=api_key,
                 model=settings.model,
                 messages=messages,
                 tools=tools,
                 temperature=float(settings.temperature),
-            )
+                reasoning_effort=settings.reasoning_effort,
+            ):
+                if stream_event.get("type") == "content":
+                    yield {"type": "content_chunk", "delta": stream_event.get("delta") or ""}
+                elif stream_event.get("type") == "reasoning":
+                    yield {"type": "reasoning_chunk", "delta": stream_event.get("delta") or ""}
+                elif stream_event.get("type") == "message":
+                    assistant_message = stream_event.get("message") or {}
         except Exception as exc:
             yield {
                 "type": "error",
@@ -321,8 +403,7 @@ def stream_agent(
             }
             return
 
-        choice = (completion.get("choices") or [{}])[0]
-        assistant_message = (choice.get("message") or {})
+        assistant_message = assistant_message or {}
         content = assistant_message.get("content")
         tool_calls = assistant_message.get("tool_calls") or []
 
@@ -355,6 +436,7 @@ def stream_agent(
             yield {
                 "type": "tool_start",
                 "iteration": iteration,
+                "tool_call_id": tool_call_id,
                 "tool_name": name,
                 "args": args,
             }
@@ -384,6 +466,7 @@ def stream_agent(
                 yield {
                     "type": "tool_result",
                     "iteration": iteration,
+                    "tool_call_id": tool_call_id,
                     "tool_name": name,
                     "status": "duplicate",
                     "result_preview": warning_message[:220],
@@ -411,6 +494,7 @@ def stream_agent(
                 yield {
                     "type": "tool_result",
                     "iteration": iteration,
+                    "tool_call_id": tool_call_id,
                     "tool_name": name,
                     "status": "done",
                     "result_preview": log.result_preview,
@@ -437,6 +521,7 @@ def stream_agent(
                 yield {
                     "type": "tool_result",
                     "iteration": iteration,
+                    "tool_call_id": tool_call_id,
                     "tool_name": name,
                     "status": "done",
                     "result_preview": log.result_preview,
@@ -455,6 +540,7 @@ def stream_agent(
                 yield {
                     "type": "tool_result",
                     "iteration": iteration,
+                    "tool_call_id": tool_call_id,
                     "tool_name": name,
                     "status": "error",
                     "error": payload.get("error"),
@@ -476,6 +562,7 @@ def stream_agent(
                 yield {
                     "type": "tool_result",
                     "iteration": iteration,
+                    "tool_call_id": tool_call_id,
                     "tool_name": name,
                     "status": "done",
                     "result_preview": log.result_preview,
@@ -496,11 +583,6 @@ def stream_agent(
 
     if not final_response:
         final_response = "I reached the iteration limit before finishing. Please refine the request or increase max iterations."
-
-    # Simulate a human-readable stream at the UI layer by chunking final content.
-    chunk_size = 48
-    for index in range(0, len(final_response), chunk_size):
-        yield {"type": "content_chunk", "delta": final_response[index:index + chunk_size]}
 
     yield {
         "type": "done",

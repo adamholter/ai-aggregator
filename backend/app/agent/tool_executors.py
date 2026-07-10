@@ -196,6 +196,108 @@ class AgentToolExecutors:
         matched = self._search_in_items(items, query)
         return {"count": len(matched), "items": matched[: max(1, min(limit, 200))]}
 
+    @staticmethod
+    def _metric_value(value: Any, percentile: str = "p50") -> float | None:
+        if isinstance(value, dict):
+            value = value.get(percentile)
+        try:
+            return float(value) if value is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _price_per_million(pricing: Dict[str, Any], field: str) -> float | None:
+        try:
+            value = pricing.get(field)
+            return float(value) * 1_000_000 if value is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    def _load_model_endpoints(self, model_id: str, api_key: str) -> List[Dict[str, Any]]:
+        if not model_id or "/" not in model_id:
+            raise ValueError("An exact OpenRouter model_id such as z-ai/glm-5.2 is required")
+        headers = {"Accept": "application/json"}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+        response = requests.get(
+            f"{self.openrouter_base_url}/models/{model_id}/endpoints",
+            headers=headers,
+            timeout=(OPENROUTER_CONNECT_TIMEOUT_SECONDS, 60),
+        )
+        response.raise_for_status()
+        payload = response.json()
+        return ((payload.get("data") or {}).get("endpoints") or [])
+
+    def _normalize_endpoint(self, model_id: str, endpoint: Dict[str, Any], percentile: str) -> Dict[str, Any]:
+        pricing = endpoint.get("pricing") or {}
+        throughput = endpoint.get("throughput_last_30m")
+        latency = endpoint.get("latency_last_30m")
+        return {
+            "model_id": model_id,
+            "provider_name": endpoint.get("provider_name"),
+            "endpoint_name": endpoint.get("name"),
+            "tag": endpoint.get("tag"),
+            "quantization": endpoint.get("quantization"),
+            "status": endpoint.get("status"),
+            "context_length": endpoint.get("context_length"),
+            "supports_tools": endpoint.get("supports_tools"),
+            "throughput_tps": self._metric_value(throughput, percentile),
+            "throughput_last_30m": throughput,
+            "latency_ms": self._metric_value(latency, percentile),
+            "latency_last_30m": latency,
+            "uptime_last_30m": endpoint.get("uptime_last_30m"),
+            "input_price_1m": self._price_per_million(pricing, "prompt"),
+            "output_price_1m": self._price_per_million(pricing, "completion"),
+        }
+
+    def tool_get_model_endpoints(self, args: Dict[str, Any], settings: Dict[str, Any]) -> Dict[str, Any]:
+        model_id = str(args.get("model_id") or "").strip()
+        percentile = str(args.get("percentile") or "p50").lower()
+        sort_by = str(args.get("sort_by") or "throughput").lower()
+        api_key = str(settings.get("api_key") or "").strip()
+        rows = [self._normalize_endpoint(model_id, item, percentile) for item in self._load_model_endpoints(model_id, api_key)]
+        if sort_by == "price":
+            rows.sort(key=lambda row: (row.get("output_price_1m") is None, row.get("output_price_1m") or 0))
+        elif sort_by == "latency":
+            rows.sort(key=lambda row: (row.get("latency_ms") is None, row.get("latency_ms") or 0))
+        elif sort_by == "uptime":
+            rows.sort(key=lambda row: row.get("uptime_last_30m") or -1, reverse=True)
+        else:
+            rows.sort(key=lambda row: row.get("throughput_tps") or -1, reverse=True)
+        return {"model_id": model_id, "percentile": percentile, "count": len(rows), "endpoints": rows}
+
+    def tool_search_fast_model_endpoints(self, args: Dict[str, Any], settings: Dict[str, Any]) -> Dict[str, Any]:
+        model_ids = [str(value).strip() for value in (args.get("model_ids") or []) if str(value).strip()]
+        if not model_ids:
+            raise ValueError("model_ids must contain at least one exact OpenRouter model id")
+        if len(model_ids) > 20:
+            raise ValueError("At most 20 model ids can be compared per call")
+        percentile = str(args.get("percentile") or "p50").lower()
+        min_tps = args.get("min_tps")
+        max_input = args.get("max_input_price_1m")
+        max_output = args.get("max_output_price_1m")
+        limit = max(1, min(int(args.get("limit") or 25), 100))
+        api_key = str(settings.get("api_key") or "").strip()
+        rows = []
+        failures = []
+        for model_id in model_ids:
+            try:
+                endpoints = self._load_model_endpoints(model_id, api_key)
+                rows.extend(self._normalize_endpoint(model_id, item, percentile) for item in endpoints)
+            except Exception as exc:
+                failures.append({"model_id": model_id, "error": str(exc)})
+        def allowed(row: Dict[str, Any]) -> bool:
+            if min_tps is not None and (row.get("throughput_tps") is None or row["throughput_tps"] < float(min_tps)):
+                return False
+            if max_input is not None and (row.get("input_price_1m") is None or row["input_price_1m"] > float(max_input)):
+                return False
+            if max_output is not None and (row.get("output_price_1m") is None or row["output_price_1m"] > float(max_output)):
+                return False
+            return True
+        rows = [row for row in rows if allowed(row)]
+        rows.sort(key=lambda row: (-(row.get("throughput_tps") or -1), row.get("output_price_1m") is None, row.get("output_price_1m") or 0))
+        return {"percentile": percentile, "count": len(rows), "endpoints": rows[:limit], "failures": failures}
+
     def tool_get_monitor_news(self, args: Dict[str, Any], settings: Dict[str, Any]) -> Dict[str, Any]:
         keyword = (args.get("keyword") or "").strip().lower()
         limit = int(args.get("limit") or 20)
