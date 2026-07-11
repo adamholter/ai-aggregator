@@ -366,12 +366,19 @@ button.icon-btn:hover, a.icon-btn:hover { background: var(--surface); border-col
 }
 
 /* ── Live Trace enhancements ─────────────────────────────────── */
-.loading-row { cursor: pointer; }
-.live-hint { font-size: 12px; color: var(--text-3); margin-left: 8px; text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 2px; }
-.loading-row:hover .live-hint { color: var(--text-2); }
+.loading-row { cursor: default; }
+.live-hint { border: 0; background: transparent; padding: 2px 0; font: inherit; font-size: 12px; color: var(--text-3); margin-left: 8px; cursor: pointer; text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 3px; }
+.live-hint:hover, .live-hint:focus-visible { color: var(--text); }
 .inline-activity { margin-top: 8px; max-width: 720px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; display: none; background: var(--surface-2); }
-.inline-activity.has-steps { display: block; }
-.inline-activity .tsb-step { padding: 8px 10px; }
+.inline-activity.has-steps.expanded { display: block; }
+.inline-activity .tsb-step { padding: 0; }
+.inline-activity .tsb-content { padding-right: 12px; }
+.inline-activity .tsb-gutter { width: 36px; }
+.activity-summary { display: inline-flex; align-items: center; gap: 7px; align-self: flex-start; border: 0; background: transparent; color: var(--text-2); font: inherit; font-size: 12px; padding: 3px 0; cursor: pointer; }
+.activity-summary:hover { color: var(--text); }
+.activity-summary .trace-chevron { width: 13px; height: 13px; }
+.activity-block.expanded .activity-summary .trace-chevron { transform: rotate(90deg); }
+.activity-block { display: flex; flex-direction: column; gap: 6px; }
 .stream-preview { margin-top: 10px; max-width: 760px; color: var(--text-1); line-height: 1.65; display: none; }
 .stream-preview.has-content { display: block; }
 .tsb-dot.running { background: var(--blue); animation: dotpulse 1s ease-in-out infinite; }
@@ -1057,7 +1064,8 @@ async function send() {
       let streamedResponse = '';
       let sawTerminalEvent = false;
       let sawAnyStreamEvent = false;
-      loadEl.querySelector('.loading-row').addEventListener('click', () => openLiveTrace(toolCalls));
+      const thinkingCall = loadEl._thinkingCall;
+      const thinkingEl = loadEl._thinkingEl;
 
       function finishRun(responseText, elapsed, options = {}) {
         const {
@@ -1065,6 +1073,7 @@ async function send() {
           interrupted = false,
         } = options;
         clearInterval(timerInterval);
+        const wasExpanded = inlineActivity.classList.contains('expanded');
         loadEl.remove();
         if (isLiveTrace) {
           isLiveTrace = false;
@@ -1075,7 +1084,7 @@ async function send() {
         const finalText = (responseText || '').trim();
         if (finalText) {
           if (persistHistory) history.push({ role: 'assistant', content: finalText });
-          addAgentMsg(finalText, toolCalls, elapsed);
+          addAgentMsg(finalText, toolCalls, elapsed, wasExpanded);
         } else if (interrupted) {
           addError('Agent run ended before a final response was delivered.');
         }
@@ -1103,6 +1112,9 @@ async function send() {
           if (evt.type === 'status') {
             const stage = evt.stage || '';
             if (labelEl) labelEl.textContent = stage === 'iteration_start' ? 'Thinking\u2026' : (stage.replace(/_/g, ' ') || 'Working\u2026');
+            thinkingCall.result = stage ? 'Current stage: ' + stage.replace(/_/g, ' ') : 'Working';
+            const thinkingDetail = thinkingEl.querySelector('.tsb-detail');
+            if (thinkingDetail) thinkingDetail.textContent = thinkingCall.result;
           } else if (evt.type === 'tool_start') {
             const tc = { id: evt.tool_call_id || '', tool: evt.tool_name, args: evt.args || {}, status: 'running', result: '' };
             toolCalls.push(tc);
@@ -1148,6 +1160,9 @@ async function send() {
             }
           } else if (evt.type === 'reasoning_chunk') {
             if (labelEl) labelEl.textContent = 'Reasoning\u2026';
+            thinkingCall.result = 'Reasoning is streaming. Tool calls appear below as soon as they start.';
+            const thinkingDetail = thinkingEl.querySelector('.tsb-detail');
+            if (thinkingDetail) thinkingDetail.textContent = thinkingCall.result;
           } else if (evt.type === 'done') {
             sawTerminalEvent = true;
             const elapsed = Date.now() - startMs;
@@ -1211,15 +1226,29 @@ function addLoading() {
   const elapsed = mk('span', 'elapsed');
   elapsed.textContent = '0s';
 
-  const hint = mk('span', 'live-hint');
+  const hint = mk('button', 'live-hint');
+  hint.type = 'button';
+  hint.setAttribute('aria-expanded', 'false');
   hint.textContent = 'View activity';
 
   inner.appendChild(dots);
   inner.appendChild(label);
   inner.appendChild(elapsed);
   inner.appendChild(hint);
+  const activity = mk('div', 'inline-activity');
+  const thinkingCall = { tool: 'reasoning', args: {}, status: 'running', result: 'Waiting for the first model or tool event.' };
+  const thinkingEl = buildSidebarStep(thinkingCall);
+  activity.appendChild(thinkingEl);
+  activity.classList.add('has-steps');
+  row._thinkingCall = thinkingCall;
+  row._thinkingEl = thinkingEl;
+  hint.addEventListener('click', () => {
+    const expanded = activity.classList.toggle('expanded');
+    hint.setAttribute('aria-expanded', String(expanded));
+    hint.textContent = expanded ? 'Hide activity' : 'View activity';
+  });
   row.appendChild(inner);
-  row.appendChild(mk('div', 'inline-activity'));
+  row.appendChild(activity);
   row.appendChild(mk('div', 'stream-preview agent-response'));
   $msgs.appendChild(row);
   scrollBot();
@@ -1235,12 +1264,14 @@ function addError(msg) {
   scrollBot();
 }
 
-function addAgentMsg(responseText, toolCalls, elapsed) {
+function addAgentMsg(responseText, toolCalls, elapsed, initiallyExpanded = false) {
   const row = mk('div', 'msg-agent');
 
   if (toolCalls.length > 0) {
-    // Trace pill
-    const pill = mk('button', 'trace-pill');
+    const activityBlock = mk('div', 'activity-block' + (initiallyExpanded ? ' expanded' : ''));
+    const pill = mk('button', 'activity-summary');
+    pill.type = 'button';
+    pill.setAttribute('aria-expanded', String(initiallyExpanded));
 
     const chevron = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     chevron.setAttribute('viewBox', '0 0 24 24');
@@ -1266,11 +1297,16 @@ function addAgentMsg(responseText, toolCalls, elapsed) {
       pill.appendChild(s);
     });
 
-    const capturedCalls = toolCalls.slice();
-    const capturedElapsed = elapsed;
-    pill.addEventListener('click', () => openTraceSidebar(capturedCalls, capturedElapsed));
-
-    row.appendChild(pill);
+    const traceItems = mk('div', 'inline-activity has-steps' + (initiallyExpanded ? ' expanded' : ''));
+    toolCalls.forEach(tc => traceItems.appendChild(buildSidebarStep(tc)));
+    pill.addEventListener('click', () => {
+      const expanded = traceItems.classList.toggle('expanded');
+      activityBlock.classList.toggle('expanded', expanded);
+      pill.setAttribute('aria-expanded', String(expanded));
+    });
+    activityBlock.appendChild(pill);
+    activityBlock.appendChild(traceItems);
+    row.appendChild(activityBlock);
   }
 
   // Response — sanitize markdown output before inserting
@@ -1643,6 +1679,7 @@ function buildTraceRow(tc) {
 function toolInfo(name, args) {
   const q = (args && args.query) ? args.query : '';
   const map = {
+    reasoning:                { iconName: 'dot',     iconColor: '#3b82f6', label: 'Thinking', sub: 'Live reasoning state' },
     ask_perplexity:           { iconName: 'globe',   iconColor: '#3b82f6', label: q || 'Web search',               sub: 'Perplexity' },
     fetch_llm_benchmarks:     { iconName: 'bar',     iconColor: '#8b5cf6', label: q ? 'LLM benchmarks · '+q : 'LLM benchmarks', sub: 'Artificial Analysis' },
     search_openrouter_models: { iconName: 'search',  iconColor: '#6b7280', label: q ? 'OpenRouter · '+q : 'OpenRouter catalog', sub: '' },

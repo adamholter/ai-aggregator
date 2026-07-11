@@ -20,6 +20,7 @@ test('agent shell renders current UI', async ({ page }) => {
 
 test('UI contract: streamed completion renders response and activity summary', async ({ page }) => {
   await page.route('**/api/agent-v2/chat/stream', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 500));
     await route.fulfill({
       status: 200,
       headers: { 'content-type': 'text/event-stream' },
@@ -38,10 +39,22 @@ test('UI contract: streamed completion renders response and activity summary', a
   await page.locator('#input').fill('best coding models');
   await page.locator('#send-btn').click();
 
+  const liveActivity = page.locator('.msg-agent').last();
+  await expect(liveActivity.locator('.live-hint')).toBeVisible();
+  await liveActivity.locator('.live-hint').click();
+  await expect(liveActivity.locator('.inline-activity')).toBeVisible();
+  await expect(liveActivity.locator('.inline-activity')).toContainText('Thinking');
+  await expect(page.locator('#tsb-panel')).not.toHaveClass(/open/);
+
   await expect(page.locator('.agent-response h1')).toHaveText('Answer');
   await expect(page.locator('.agent-response')).toContainText('hello — 14.3–14.9; café €0.10');
   await expect(page.locator('.agent-response')).not.toContainText('â');
-  await expect(page.locator('.trace-pill')).toContainText('Activity');
+  await expect(page.locator('.activity-summary')).toContainText('Activity');
+  const completedActivity = page.locator('.activity-block').last();
+  await expect(completedActivity.locator('.inline-activity')).toBeVisible();
+  await expect(completedActivity).toContainText('llm leaderboard');
+  await completedActivity.locator('.tsb-step').first().click();
+  await expect(completedActivity.locator('.tsb-detail').first()).toBeVisible();
 });
 
 test('UI contract: truncated stream finalizes with partial response', async ({ page }) => {
@@ -89,9 +102,11 @@ test('UI contract: duplicate tool warnings show in activity', async ({ page }) =
   await page.locator('#send-btn').click();
 
   await expect(page.locator('.agent-response')).toContainText('Used the prior result.');
-  await page.locator('.trace-pill').click();
-  await expect(page.locator('#tsb-body')).toContainText('duplicate');
-  await expect(page.locator('#tsb-body')).toContainText('Duplicate tool call blocked');
+  await page.locator('.activity-summary').click();
+  const inlineTrace = page.locator('.activity-block .inline-activity');
+  await expect(inlineTrace).toContainText('duplicate');
+  await inlineTrace.locator('.tsb-step').last().click();
+  await expect(inlineTrace).toContainText('Duplicate tool call blocked');
 });
 
 test('UI contract: typed 402 messages render specific paid-access guidance', async ({ page }) => {
