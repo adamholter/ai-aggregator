@@ -28,8 +28,8 @@ test('UI contract: streamed completion renders response and activity summary', a
         { type: 'tool_start', iteration: 1, tool_name: 'get_llm_leaderboard', args: { limit: 5 } },
         { type: 'tool_result', iteration: 1, tool_name: 'get_llm_leaderboard', status: 'done', result_preview: 'ok' },
         { type: 'content_chunk', delta: '# Answer\n\n' },
-        { type: 'content_chunk', delta: 'hello world' },
-        { type: 'done', response: '# Answer\n\nhello world' },
+        { type: 'content_chunk', delta: 'hello — 14.3–14.9; café €0.10' },
+        { type: 'done', response: '# Answer\n\nhello — 14.3–14.9; café €0.10' },
       ]),
     });
   });
@@ -39,7 +39,8 @@ test('UI contract: streamed completion renders response and activity summary', a
   await page.locator('#send-btn').click();
 
   await expect(page.locator('.agent-response h1')).toHaveText('Answer');
-  await expect(page.locator('.agent-response')).toContainText('hello world');
+  await expect(page.locator('.agent-response')).toContainText('hello — 14.3–14.9; café €0.10');
+  await expect(page.locator('.agent-response')).not.toContainText('â');
   await expect(page.locator('.trace-pill')).toContainText('Activity');
 });
 

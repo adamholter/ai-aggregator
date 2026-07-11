@@ -132,6 +132,10 @@ def _stream_openrouter_chat_completion(
         timeout=(OPENROUTER_CONNECT_TIMEOUT_SECONDS, OPENROUTER_READ_TIMEOUT_SECONDS),
     )
     response.raise_for_status()
+    # OpenRouter streams UTF-8 JSON but some provider/proxy responses omit a
+    # charset. requests otherwise falls back to ISO-8859-1 for text/* and turns
+    # punctuation such as em dashes into mojibake (for example, "â€").
+    response.encoding = "utf-8"
     content_parts: List[str] = []
     reasoning_parts: List[str] = []
     tool_calls_by_index: Dict[int, Dict[str, Any]] = {}

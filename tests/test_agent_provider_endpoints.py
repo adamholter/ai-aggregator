@@ -94,7 +94,7 @@ def test_catalog_discovery_is_generic_paginated_and_reports_coverage(monkeypatch
 
     assert first["coverage"] == {
         "mode": "catalog", "query": "general", "catalog_matches": 2,
-        "evaluated_models": 1, "offset": 0, "next_offset": 1,
+        "evaluated_models": 1, "offset": 0, "next_offset": 1, "complete": False,
     }
     assert second["coverage"]["next_offset"] is None
     assert {first["endpoints"][0]["model_id"], second["endpoints"][0]["model_id"]} == {
@@ -117,3 +117,34 @@ def test_missing_metrics_remain_unknown_and_do_not_pass_numeric_filters(monkeypa
 
     assert unfiltered["endpoints"][0]["throughput_tps"] is None
     assert filtered["endpoints"] == []
+
+
+def test_catalog_discovery_defaults_to_complete_coverage_and_pareto_tradeoffs(monkeypatch):
+    catalog = [{"id": f"maker/model-{index}", "name": f"Model {index}"} for index in range(6)]
+    executor = AgentToolExecutors(
+        fetch_categories=lambda *args, **kwargs: {},
+        load_openrouter_models=lambda *args, **kwargs: catalog,
+        load_monitor_feed=lambda *args, **kwargs: [],
+        fetch_hype_feed_payload=lambda *args, **kwargs: {},
+        fetch_blog_posts=lambda *args, **kwargs: {},
+        fetch_testing_catalog_feed=lambda *args, **kwargs: {},
+        load_category_items_simple=lambda *args, **kwargs: [],
+        openrouter_base_url="https://openrouter.ai/api/v1",
+    )
+    fixtures = {
+        "maker/model-0": _endpoint("cheap", {"p50": 80}, 0.10),
+        "maker/model-1": _endpoint("balanced", {"p50": 160}, 0.20),
+        "maker/model-2": _endpoint("dominated", {"p50": 120}, 0.30),
+        "maker/model-3": _endpoint("fast", {"p50": 240}, 0.60),
+        "maker/model-4": _endpoint("slower-costly", {"p50": 70}, 0.50),
+        "maker/model-5": _endpoint("middle-dominated", {"p50": 100}, 0.40),
+    }
+    monkeypatch.setattr(executor, "_load_model_endpoints", lambda model_id, api_key: [fixtures[model_id]])
+
+    result = executor.tool_search_fast_model_endpoints({}, {"api_key": "sk-test"})
+
+    assert result["coverage"]["evaluated_models"] == len(catalog)
+    assert result["coverage"]["complete"] is True
+    assert result["coverage"]["next_offset"] is None
+    assert [row["provider_name"] for row in result["endpoints"][:3]] == ["cheap", "balanced", "fast"]
+    assert result["pareto_count"] == 3

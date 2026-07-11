@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import traceback
+import concurrent.futures
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List
@@ -270,7 +271,8 @@ class AgentToolExecutors:
         supplied_ids = [str(value).strip() for value in (args.get("model_ids") or []) if str(value).strip()]
         query = str(args.get("query") or "").strip()
         offset = max(0, int(args.get("offset") or 0))
-        max_models = max(1, min(int(args.get("max_models") or 25), 100))
+        requested_max_models = args.get("max_models")
+        max_models = max(1, min(int(requested_max_models), 500)) if requested_max_models is not None else None
         discovery = "supplied"
         catalog_count = None
         next_offset = None
@@ -284,7 +286,7 @@ class AgentToolExecutors:
             catalog_ids = [str(item.get("id") or "").strip() for item in catalog]
             catalog_ids = list(dict.fromkeys(value for value in catalog_ids if "/" in value))
             catalog_count = len(catalog_ids)
-            model_ids = catalog_ids[offset:offset + max_models]
+            model_ids = catalog_ids[offset:] if max_models is None else catalog_ids[offset:offset + max_models]
             if offset + len(model_ids) < catalog_count:
                 next_offset = offset + len(model_ids)
             if not model_ids:
@@ -297,12 +299,17 @@ class AgentToolExecutors:
         api_key = str(settings.get("api_key") or "").strip()
         rows = []
         failures = []
-        for model_id in model_ids:
+        def load_one(model_id: str):
             try:
                 endpoints = self._load_model_endpoints(model_id, api_key)
-                rows.extend(self._normalize_endpoint(model_id, item, percentile) for item in endpoints)
+                return model_id, [self._normalize_endpoint(model_id, item, percentile) for item in endpoints], None
             except Exception as exc:
-                failures.append({"model_id": model_id, "error": str(exc)})
+                return model_id, [], str(exc)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(16, max(1, len(model_ids)))) as pool:
+            for model_id, endpoint_rows, error in pool.map(load_one, model_ids):
+                rows.extend(endpoint_rows)
+                if error:
+                    failures.append({"model_id": model_id, "error": error})
         def allowed(row: Dict[str, Any]) -> bool:
             if min_tps is not None and (row.get("throughput_tps") is None or row["throughput_tps"] < float(min_tps)):
                 return False
@@ -312,12 +319,33 @@ class AgentToolExecutors:
                 return False
             return True
         rows = [row for row in rows if allowed(row)]
-        rows.sort(key=lambda row: (-(row.get("throughput_tps") or -1), row.get("output_price_1m") is None, row.get("output_price_1m") or 0))
+        comparable = [row for row in rows if row.get("throughput_tps") is not None and row.get("output_price_1m") is not None]
+        for row in rows:
+            row["is_pareto_optimal"] = False
+        for candidate in comparable:
+            dominated = any(
+                other is not candidate
+                and other["throughput_tps"] >= candidate["throughput_tps"]
+                and other["output_price_1m"] <= candidate["output_price_1m"]
+                and (other["throughput_tps"] > candidate["throughput_tps"] or other["output_price_1m"] < candidate["output_price_1m"])
+                for other in comparable
+            )
+            candidate["is_pareto_optimal"] = not dominated
+        sort_by = str(args.get("sort_by") or "pareto").lower()
+        if sort_by == "throughput":
+            rows.sort(key=lambda row: (row.get("throughput_tps") is None, -(row.get("throughput_tps") or -1)))
+        elif sort_by == "input_price":
+            rows.sort(key=lambda row: (row.get("input_price_1m") is None, row.get("input_price_1m") or 0))
+        elif sort_by == "output_price":
+            rows.sort(key=lambda row: (row.get("output_price_1m") is None, row.get("output_price_1m") or 0))
+        else:
+            rows.sort(key=lambda row: (not row.get("is_pareto_optimal"), row.get("output_price_1m") is None, row.get("output_price_1m") or 0, -(row.get("throughput_tps") or -1)))
         return {
             "percentile": percentile,
             "count": len(rows),
             "endpoints": rows[:limit],
             "failures": failures,
+            "pareto_count": sum(1 for row in rows if row.get("is_pareto_optimal")),
             "coverage": {
                 "mode": discovery,
                 "query": query or None,
@@ -325,6 +353,7 @@ class AgentToolExecutors:
                 "evaluated_models": len(model_ids),
                 "offset": offset if discovery == "catalog" else None,
                 "next_offset": next_offset,
+                "complete": next_offset is None and not failures,
             },
         }
 

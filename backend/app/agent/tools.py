@@ -89,16 +89,14 @@ def get_tool_definitions(mode: str = "quick") -> List[Dict]:
         ),
         _fn(
             "search_fast_model_endpoints",
-            "Discover and compare provider-specific OpenRouter endpoints. Supply model_ids for a known set, or omit them to page through catalog candidates. Filters only use explicit user constraints and the result reports discovery coverage.",
+            "Discover and compare provider-specific OpenRouter endpoints. Supply model_ids for a known set, or omit them to evaluate the catalog. Unquantified multi-objective requests should use the Pareto frontier rather than an invented cutoff. The result reports exact discovery coverage.",
             {
                 "model_ids": {"type": "array", "items": {"type": "string"}, "description": "Optional exact model ids. Omit for catalog discovery."},
                 "query": {"type": "string", "description": "Optional catalog search applied before endpoint evaluation."},
-                "offset": {"type": "number", "description": "Catalog offset for deterministic pagination (default 0)."},
-                "max_models": {"type": "number", "description": "Catalog models evaluated in this call (default 25, maximum 100)."},
-                "min_tps": {"type": "number", "description": "Optional minimum throughput. Omit when the user only says fast."},
-                "max_input_price_1m": {"type": "number", "description": "Optional maximum input price per 1M tokens."},
-                "max_output_price_1m": {"type": "number", "description": "Optional maximum output price per 1M tokens."},
+                "offset": {"type": "number", "description": "Catalog offset for explicit pagination (default 0)."},
+                "max_models": {"type": "number", "description": "Optional safety cap. Omit to evaluate every matching catalog model; maximum 500."},
                 "percentile": {"type": "string", "enum": ["p50", "p75", "p90", "p99"], "description": "Throughput percentile (default p50)."},
+                "sort_by": {"type": "string", "enum": ["pareto", "throughput", "input_price", "output_price"], "description": "Ranking method. Pareto is the default for unquantified price/speed tradeoffs."},
                 "limit": {"type": "number", "description": "Maximum endpoint rows (default 25)."}
             },
             [],
