@@ -18,7 +18,7 @@ test('agent shell renders current UI', async ({ page }) => {
   await expect(page.locator('#tsb-panel')).toContainText('Activity');
 });
 
-test('streamed completion renders response and activity summary', async ({ page }) => {
+test('UI contract: streamed completion renders response and activity summary', async ({ page }) => {
   await page.route('**/api/agent-v2/chat/stream', async (route) => {
     await route.fulfill({
       status: 200,
@@ -43,7 +43,7 @@ test('streamed completion renders response and activity summary', async ({ page 
   await expect(page.locator('.trace-pill')).toContainText('Activity');
 });
 
-test('truncated stream still finalizes with partial response instead of spinning forever', async ({ page }) => {
+test('UI contract: truncated stream finalizes with partial response', async ({ page }) => {
   await page.route('**/api/agent-v2/chat/stream', async (route) => {
     await route.fulfill({
       status: 200,
@@ -67,7 +67,7 @@ test('truncated stream still finalizes with partial response instead of spinning
   await expect(page.locator('#send-btn')).toBeEnabled();
 });
 
-test('duplicate tool warnings show in activity instead of silently looping', async ({ page }) => {
+test('UI contract: duplicate tool warnings show in activity', async ({ page }) => {
   await page.route('**/api/agent-v2/chat/stream', async (route) => {
     await route.fulfill({
       status: 200,
@@ -93,7 +93,7 @@ test('duplicate tool warnings show in activity instead of silently looping', asy
   await expect(page.locator('#tsb-body')).toContainText('Duplicate tool call blocked');
 });
 
-test('typed 402 messages render specific paid-access guidance', async ({ page }) => {
+test('UI contract: typed 402 messages render specific paid-access guidance', async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.removeItem('dashboard-user-openrouter-key');
   });

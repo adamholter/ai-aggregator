@@ -41,13 +41,19 @@ let rawData = {
 
 // AI Agent configuration
 let agentConfig = {
-    model: 'x-ai/grok-4-fast',
+    model: '~openai/gpt-latest',
     availableModels: [], // Will be populated from settings
     conversationHistory: [] // For context memory
 };
 
 const AGENT_EXP_MODEL_STORAGE_KEY = 'dashboard-agent-exp-model';
-const AGENT_EXP_DEFAULT_MODEL = 'x-ai/grok-4-fast';
+const AGENT_EXP_DEFAULT_MODEL = '~openai/gpt-latest';
+const AGENT_DEFAULT_REASONING_EFFORT = 'low';
+const AGENT_EXP_LEGACY_DEFAULT_MODELS = new Set([
+    'x-ai/grok-4-fast',
+    'google/gemini-2.5-flash',
+    'anthropic/claude-sonnet-4'
+]);
 let agentExpState = {
     model: AGENT_EXP_DEFAULT_MODEL,
     conversation: [],
@@ -267,8 +273,8 @@ const EXPERIMENTAL_MODE_STORAGE_KEY = 'dashboard-experimental-mode';
 
 const THEME_SEQUENCE = ['light', 'dark'];
 const THEME_LABELS = {
-    light: { label: 'Light Mode', icon: '☀️' },
-    dark: { label: 'Dark Mode', icon: '🌙' }
+    light: { label: 'Light Mode' },
+    dark: { label: 'Dark Mode' }
 };
 
 const LLM_MAIN_INDEX_KEYS = [
@@ -716,7 +722,9 @@ function createDataSnapshot() {
     };
 
     // OpenRouter: track model IDs, pricing, context_length
-    const orModels = cachedData.openRouterModels || [];
+    const orModels = Array.isArray(cachedData.openRouterModels)
+        ? cachedData.openRouterModels
+        : (cachedData.openRouterModels?.data || []);
     orModels.forEach(m => {
         if (m.id) {
             snapshot.openrouter[m.id] = {
@@ -728,11 +736,15 @@ function createDataSnapshot() {
     });
 
     // LLMs: just track names for new model detection
-    const llms = cachedData.llms || [];
+    const llms = Array.isArray(cachedData.llms)
+        ? cachedData.llms
+        : (cachedData.llms?.data || []);
     snapshot.llms = llms.map(m => m.name).filter(Boolean);
 
     // Fal: track model IDs
-    const fal = cachedData.falModels || [];
+    const fal = Array.isArray(cachedData.falModels)
+        ? cachedData.falModels
+        : (cachedData.falModels?.data || []);
     snapshot.falModels = fal.map(m => m.id || m.title).filter(Boolean);
 
     return snapshot;
@@ -1640,7 +1652,8 @@ function setupGlobalSearch() {
 
     input.addEventListener('input', () => {
         clearTimeout(debounceTimer);
-        const query = input.value.trim().toLowerCase();
+        const rawQuery = input.value.trim();
+        const query = rawQuery.toLowerCase();
 
         if (query.length < 2) {
             resultsContainer.style.display = 'none';
@@ -1650,7 +1663,7 @@ function setupGlobalSearch() {
 
         debounceTimer = setTimeout(() => {
             const results = searchAllData(query);
-            displayGlobalSearchResults(results, resultsContainer, query);
+            displayGlobalSearchResults(results, resultsContainer, rawQuery);
         }, 200);
     });
 
@@ -1666,6 +1679,24 @@ function setupGlobalSearch() {
         if (e.key === 'Escape') {
             resultsContainer.style.display = 'none';
             input.blur();
+            return;
+        }
+
+        if (e.key === 'Enter') {
+            const rawQuery = input.value.trim();
+            if (!rawQuery) {
+                return;
+            }
+
+            const results = searchAllData(rawQuery.toLowerCase());
+            displayGlobalSearchResults(results, resultsContainer, rawQuery);
+
+            if (results.length === 0) {
+                e.preventDefault();
+                askAgentWithQuery(rawQuery, { submit: true });
+                resultsContainer.style.display = 'none';
+                input.value = '';
+            }
         }
     });
 }
@@ -1874,33 +1905,73 @@ function displayGlobalSearchResults(results, container, query) {
     }
 }
 
-function askAgentWithQuery(query) {
+function sendQueryToAgentFrame(query, options = {}) {
+    const trimmed = (query || '').trim();
+    if (!trimmed) {
+        return false;
+    }
+
+    const iframe = document.querySelector('#agent-exp iframe');
+    if (!iframe || !iframe.contentWindow) {
+        return false;
+    }
+
+    try {
+        const doc = iframe.contentDocument;
+        const agentInput = doc?.getElementById('input') ||
+            doc?.getElementById('agent-exp-input') ||
+            doc?.querySelector('textarea');
+        if (agentInput) {
+            agentInput.value = trimmed;
+            agentInput.focus();
+            agentInput.dispatchEvent(new Event('input', { bubbles: true }));
+            if (options.submit) {
+                const sendButton = doc.getElementById('send-btn') ||
+                    doc.querySelector('button[type="submit"]');
+                if (sendButton) {
+                    sendButton.click();
+                } else if (typeof iframe.contentWindow.send === 'function') {
+                    iframe.contentWindow.send();
+                }
+            }
+            return true;
+        }
+    } catch (error) {
+        // Fall through to postMessage for iframe isolation cases.
+    }
+
+    iframe.contentWindow.postMessage({
+        type: 'agent-query',
+        query: trimmed,
+        submit: Boolean(options.submit)
+    }, window.location.origin);
+    return true;
+}
+
+function askAgentWithQuery(query, options = {}) {
+    const trimmed = (query || '').trim();
+    if (!trimmed) {
+        return;
+    }
+
     // Navigate to Agent tab
     const navBtn = document.querySelector('.nav-btn[data-section="agent-exp"]');
     if (navBtn) {
         navBtn.click();
     }
 
-    // Wait for the agent iframe to be ready, then send the query
-    setTimeout(() => {
-        const iframe = document.querySelector('#agent-exp iframe');
-        if (iframe && iframe.contentWindow) {
-            // Try to set the input in the iframe
-            try {
-                const agentInput = iframe.contentDocument?.getElementById('agent-input') ||
-                    iframe.contentDocument?.querySelector('textarea');
-                if (agentInput) {
-                    agentInput.value = query;
-                    agentInput.focus();
-                    // Trigger input event
-                    agentInput.dispatchEvent(new Event('input', { bubbles: true }));
-                }
-            } catch (e) {
-                // Cross-origin issues - try postMessage
-                iframe.contentWindow.postMessage({ type: 'set-agent-query', query }, '*');
-            }
-        }
-    }, 500);
+    // Deliver immediately when possible, on iframe load, and once more after
+    // navigation settles so a newly-created frame cannot drop the query.
+    const deliver = () => sendQueryToAgentFrame(trimmed, { submit: Boolean(options.submit) });
+    const iframe = document.querySelector('#agent-exp iframe');
+    if (iframe) {
+        const agentUrl = new URL(iframe.getAttribute('src') || '/static/agent-datasette-demo.html', location.origin);
+        agentUrl.searchParams.set('query', trimmed);
+        agentUrl.searchParams.set('submit', options.submit ? '1' : '0');
+        iframe.src = agentUrl.pathname + agentUrl.search;
+    }
+    iframe?.addEventListener('load', deliver, { once: true });
+    [100, 500, 1200].forEach(delay => setTimeout(deliver, delay));
 }
 
 function navigateToResult(result) {
@@ -1997,8 +2068,8 @@ function updateThemeToggleText(theme) {
         const index = THEME_SEQUENCE.indexOf(theme);
         const currentIndex = index === -1 ? 0 : index;
         const nextTheme = THEME_SEQUENCE[(currentIndex + 1) % THEME_SEQUENCE.length];
-        const descriptor = THEME_LABELS[nextTheme] || { label: 'Theme', icon: '🎨' };
-        toggle.textContent = `${descriptor.icon} ${descriptor.label}`;
+        const descriptor = THEME_LABELS[nextTheme] || { label: 'Theme' };
+        toggle.textContent = descriptor.label;
     }
 }
 
@@ -3106,8 +3177,8 @@ function buildLLMEvaluationPreview(evaluations = {}) {
             <h4>Evaluations</h4>
             ${entries.map(entry => `
                 <div class="evaluation-item">
-                    <span>${entry.label}</span>
-                    <span>${entry.value}</span>
+                    <span>${escapeHtml(entry.label)}</span>
+                    <span>${escapeHtml(entry.value)}</span>
                 </div>
             `).join('')}
             ${hasMore ? '<div class="evaluation-note">Click to see the full breakdown.</div>' : ''}
@@ -3123,19 +3194,25 @@ function createLLMCard(model) {
 
     const evaluations = model.evaluations || {};
     const pricing = model.pricing || {};
+    const modelName = model.name || 'Untitled model';
+    const creatorName = (model.model_creator && model.model_creator.name) || 'Unknown provider';
+    const outputSpeed = model.median_output_tokens_per_second || 'N/A';
+    const timeToFirstToken = model.median_time_to_first_token_seconds || 'N/A';
+    const inputPrice = pricing.price_1m_input_tokens || 'N/A';
+    const outputPrice = pricing.price_1m_output_tokens || 'N/A';
 
     card.innerHTML = `
-        <h3>${model.name}</h3>
-        <div class="model-creator">${model.model_creator.name}</div>
+        <h3>${escapeHtml(modelName)}</h3>
+        <div class="model-creator">${escapeHtml(creatorName)}</div>
         
         <div class="model-stats">
             <div class="stat-item">
                 <span class="stat-label">Output Speed</span>
-                <span class="stat-value">${model.median_output_tokens_per_second || 'N/A'} tokens/s</span>
+                <span class="stat-value">${escapeHtml(outputSpeed)} tokens/s</span>
             </div>
             <div class="stat-item">
                 <span class="stat-label">Time to First Token</span>
-                <span class="stat-value">${model.median_time_to_first_token_seconds || 'N/A'}s</span>
+                <span class="stat-value">${escapeHtml(timeToFirstToken)}s</span>
             </div>
         </div>
         
@@ -3145,17 +3222,18 @@ function createLLMCard(model) {
             <h4>Pricing (per 1M tokens)</h4>
             <div class="evaluation-item">
                 <span>Input</span>
-                <span>$${pricing.price_1m_input_tokens || 'N/A'}</span>
+                <span>$${escapeHtml(inputPrice)}</span>
             </div>
             <div class="evaluation-item">
                 <span>Output</span>
-                <span>$${pricing.price_1m_output_tokens || 'N/A'}</span>
+                <span>$${escapeHtml(outputPrice)}</span>
             </div>
         </div>
         
-        <div class="click-hint">💡 Click to explore full model details</div>
+        <div class="click-hint">Click to explore full model details</div>
     `;
     attachPinButton(card, 'llms', model);
+    attachCompareButton(card, model);
     return card;
 }
 
@@ -3458,11 +3536,11 @@ function filterOpenRouterModelsData() {
 
     const searchTerm = ((searchInput && searchInput.value) || '').toLowerCase();
     const sortBy = (sortSelect && sortSelect.value) || 'newest';
-    const vendorFilter = (vendorSelect && vendorSelect.value) || '';
+    const vendorFilter = ((vendorSelect && vendorSelect.value) || '').trim().toLowerCase();
     const imageOnly = !!(mediaToggle && mediaToggle.checked);
 
     let filtered = rawData.openRouterModels.filter(model => {
-        const matchesVendor = !vendorFilter || (model.vendor && model.vendor === vendorFilter);
+        const matchesVendor = !vendorFilter || normalizeSearchField(model.vendor).toLowerCase() === vendorFilter;
         const architecture = model.architecture || {};
         const inputModalities = Array.isArray(architecture.input_modalities) ? architecture.input_modalities : [];
         const matchesMedia = !imageOnly || inputModalities.indexOf('image') !== -1;
@@ -3861,6 +3939,7 @@ async function loadTestingCatalogData(forceRefresh = false) {
         const previewItems = Array.isArray(payload?.items) ? payload.items : [];
         rawData.testingCatalog = previewItems;
         displayTestingCatalogItems(rawData.testingCatalog);
+        populateTestingCatalogTags();
         renderResultsText(previewItems, payload, false);
         previewDisplayed = true;
     } catch (error) {
@@ -4319,7 +4398,9 @@ async function loadLatestFeed(forceRefresh = false) {
         (async () => {
             try {
                 const params = new URLSearchParams({ timeframe: latestTimeframe });
-                params.set('cache_bust', (forceRefresh || latestTimeframe === 'day') ? 'true' : 'false');
+                // Normal navigation should use the live aggregator's short cache.
+                // Only the explicit Refresh action should force every upstream source.
+                params.set('cache_bust', forceRefresh ? 'true' : 'false');
                 if (latestIncludeHype) {
                     params.set('include_hype', 'true');
                 }
@@ -4795,6 +4876,7 @@ function createOpenRouterCard(model) {
         </div>
     `;
     attachPinButton(card, 'openrouter', model);
+    attachCompareButton(card, model);
     return card;
 }
 
@@ -4927,6 +5009,7 @@ function createMediaCard(model, mediaCategory = '') {
         <div class="click-hint">💡 Click to explore full model details</div>
     `;
     attachPinButton(card, mediaCategory || 'media', model);
+    attachCompareButton(card, decoratedModel);
     return card;
 }
 
@@ -5063,7 +5146,7 @@ function initializeAgentExp() {
     }
 
     const storedModel = localStorage.getItem(AGENT_EXP_MODEL_STORAGE_KEY);
-    if (storedModel) {
+    if (storedModel && !AGENT_EXP_LEGACY_DEFAULT_MODELS.has(storedModel)) {
         agentExpState.model = storedModel;
     }
 
@@ -5352,6 +5435,7 @@ async function streamAgentExpResponse(message) {
             body: JSON.stringify({
                 message,
                 model: agentExpState.model,
+                reasoning_effort: AGENT_DEFAULT_REASONING_EFFORT,
                 conversation: agentExpState.conversation,
                 experimental: getStoredExperimentalMode(),
                 stream: true
@@ -6302,6 +6386,7 @@ function createFalModelCard(model) {
         <div class="click-hint">💡 Click to explore full model details</div>
     `;
     attachPinButton(card, 'fal', model);
+    attachCompareButton(card, model);
     return card;
 }
 
@@ -6362,6 +6447,7 @@ function createReplicateModelCard(model) {
         <div class="click-hint">💡 Click to explore full model details</div>
     `;
     attachPinButton(card, 'replicate', model);
+    attachCompareButton(card, model);
     return card;
 }
 
@@ -6384,9 +6470,9 @@ function filterReplicateModelsData() {
     const categoryFilter = document.getElementById('replicate-models-category').value;
 
     let filteredData = rawData.replicateModels.filter(model => {
-        const matchesSearch = model.name.toLowerCase().includes(searchTerm) ||
-            model.description.toLowerCase().includes(searchTerm) ||
-            model.owner.toLowerCase().includes(searchTerm);
+        const matchesSearch = normalizeSearchField(model.name).toLowerCase().includes(searchTerm) ||
+            normalizeSearchField(model.description).toLowerCase().includes(searchTerm) ||
+            normalizeSearchField(model.owner).toLowerCase().includes(searchTerm);
 
         const matchesCategory = !categoryFilter || model.category === categoryFilter;
 
@@ -8320,6 +8406,27 @@ function addToComparison(model) {
     updateCompareButtonStates();
 }
 
+function attachCompareButton(card, model) {
+    if (!card || !model) return;
+    const modelId = model.id || model.name || model.model;
+    if (!modelId) return;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'compare-card-btn';
+    button.dataset.compareId = modelId;
+    button.textContent = 'Compare';
+    button.setAttribute('aria-label', `Add ${model.name || modelId} to comparison`);
+    button.addEventListener('click', event => {
+        event.preventDefault();
+        event.stopPropagation();
+        const selected = chartComparisonModels.some(entry => (entry.id || entry.name) === modelId);
+        if (selected) removeFromComparison(modelId);
+        else addToComparison(model);
+    });
+    card.appendChild(button);
+    updateCompareButtonStates();
+}
+
 /**
  * Remove a model from comparison
  * @param {string} modelId - Model identifier
@@ -8579,7 +8686,8 @@ async function copyShareableLink() {
         const hasFilter = fs && fs.enabled && Array.isArray(fs.items) && fs.items.length > 0;
 
         // Check if search is active
-        const searchInput = document.getElementById(`${section}-search`);
+        const searchInput = document.getElementById(`${section}-search`) ||
+            (section === 'llms' ? document.getElementById('llm-search') : null);
         const searchTerm = searchInput ? searchInput.value.trim() : '';
         const hasSearch = searchTerm.length > 0;
 
@@ -8613,12 +8721,12 @@ async function copyShareableLink() {
             }
 
             const data = await response.json();
-            const url = `${location.origin}/?view=${data.id}`;
+            const url = `${location.origin}/dashboard.html?view=${data.id}`;
             await navigator.clipboard.writeText(url);
             showToast('Filtered view link copied! Expires in 7 days.', 'success');
         } else {
             // Simple tab link - no server save needed
-            const url = `${location.origin}/?section=${section}`;
+            const url = `${location.origin}/dashboard.html?section=${section}`;
             await navigator.clipboard.writeText(url);
             showToast('Link copied!', 'success');
         }
@@ -8656,7 +8764,8 @@ async function applySharedView(viewId) {
 
         // Apply search term if present
         if (state.search) {
-            const searchInput = document.getElementById(`${section}-search`);
+            const searchInput = document.getElementById(`${section}-search`) ||
+                (section === 'llms' ? document.getElementById('llm-search') : null);
             if (searchInput) {
                 searchInput.value = state.search;
                 // Trigger input event to filter

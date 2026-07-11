@@ -1,0 +1,82 @@
+{
+  "lane": "account_api_flows",
+  "tested_at": "2026-07-10T13:25:00-04:00",
+  "scope": "Canonical local/account/API stories; external providers stubbed and no paid action performed.",
+  "command": "pytest -q tests/test_feature_user_stories.py",
+  "summary": {
+    "stories_tested": 10,
+    "passed": 10,
+    "failed": 0,
+    "test_cases_passed": 10,
+    "errors_discovered": 0,
+    "warnings": 43
+  },
+  "stories": [
+    {
+      "id": "DASH-AUTH-001",
+      "status": "Pass",
+      "evidence": "Invalid registration rejected; normalized local registration established session; logout then wrong-password login rejected; correct login restored user."
+    },
+    {
+      "id": "DASH-AUTH-002",
+      "status": "Pass",
+      "evidence": "POST /auth/logout removed user_email and clerk_id and /api/me returned authenticated=false."
+    },
+    {
+      "id": "DASH-AUTH-003",
+      "status": "Pass",
+      "evidence": "Permanent Flask session remained authenticated across page reload and subsequent /api/me request."
+    },
+    {
+      "id": "DASH-PIN-001",
+      "status": "Pass",
+      "evidence": "Unauthenticated remote pin request rejected; authenticated add/list/delete lifecycle persisted in isolated local backing store."
+    },
+    {
+      "id": "DASH-PIN-003",
+      "status": "Pass",
+      "evidence": "Posting the same pre-login pin key twice created one remote record, which remained after page reload."
+    },
+    {
+      "id": "DASH-ANALYSIS-001",
+      "status": "Pass",
+      "evidence": "Missing model rejected; cached analysis returned with markdown and completed trace through POST and GET without a provider call."
+    },
+    {
+      "id": "DASH-SET-001",
+      "status": "Pass",
+      "evidence": "All four searchable model controls and Save control exist; each model selection has matching localStorage save and load behavior in the browser script."
+    },
+    {
+      "id": "DASH-FILTER-001",
+      "status": "Pass",
+      "evidence": "Empty candidates rejected; valid request forwarded selected model and instructions and parsed filtered TOON response. OpenRouter call was stubbed."
+    },
+    {
+      "id": "DASH-UPG-001",
+      "status": "Pass",
+      "evidence": "/api/me serialized authenticated Pro tier, status, period end, $8 limit, $2.25 used, and $5.75 remaining."
+    },
+    {
+      "id": "DASH-UPG-002",
+      "status": "Pass",
+      "evidence": "Invalid price rejected; valid subscribe and billing portal routes generated the expected Stripe parameters and returned URLs using an in-memory Stripe stub. No checkout was created."
+    }
+  ],
+  "errors": [],
+  "warnings_detail": [
+    {
+      "type": "DeprecationWarning",
+      "count": 43,
+      "locations": ["server.py:5083", "server.py:13297", "server.py:2689"],
+      "message": "datetime.utcnow() is deprecated; use timezone-aware UTC datetimes.",
+      "classification": "Technical warning, not a failed user-story behavior."
+    }
+  ],
+  "boundaries": [
+    "DASH-ANALYSIS-001 verified cache/error contracts without a paid OpenRouter generation.",
+    "DASH-FILTER-001 verified request/response behavior against a stubbed OpenRouter response.",
+    "DASH-UPG-002 verified checkout and portal request construction against an in-memory Stripe stub; no real Stripe session was created.",
+    "DASH-SET-001 is a deterministic DOM/source persistence contract check; full interaction rendering is left to the headless UI lane."
+  ]
+}

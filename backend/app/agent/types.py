@@ -6,10 +6,11 @@ from typing import Any, Dict, List, Optional
 
 @dataclass
 class AgentSettings:
-    model: str = "anthropic/claude-sonnet-4"
+    model: str = "~openai/gpt-latest"
     umi_model: str = "google/gemini-2.5-flash"
     web_search_model: str = "perplexity/sonar-pro"
     mode: str = "quick"
+    reasoning_effort: str = "low"
     temperature: float = 0.3
     max_iterations: int = 20
     api_key: Optional[str] = None

@@ -1,0 +1,150 @@
+{
+  "stories": [
+    {
+      "id": "PAGE-ABOUT-001",
+      "status": "Pass",
+      "result": "About rendered; theme changed to dark and persisted as dark.",
+      "errors": []
+    },
+    {
+      "id": "PAGE-DOCS-001",
+      "status": "Fail",
+      "result": "Docs and LLM reference loaded (65/60 chars); clipboard copy matched.",
+      "errors": [
+        "console: Failed to load resource: the server responded with a status of 404 (NOT FOUND)",
+        "console: Failed to load resource: the server responded with a status of 404 (NOT FOUND)"
+      ]
+    },
+    {
+      "id": "PAGE-CARD-001",
+      "status": "Pass",
+      "result": "Draw, inspect, play, blocked-flow feedback, counts, and reset exercised (22->21->22; played 1).",
+      "errors": []
+    },
+    {
+      "id": "PAGE-CORK-001",
+      "status": "Pass",
+      "result": "Pinned two clues, selected and connected evidence (1 line), status \"Evidence linked\", and reset to 0 pins. Drag support was code-inspected but skipped after Playwright pointer interception.",
+      "errors": []
+    },
+    {
+      "id": "PAGE-LIFE-001",
+      "status": "Pass",
+      "result": "Step/play/pause/randomize/rule/undo/clear exercised; generation 0->1->3, final live cells 0.",
+      "errors": []
+    },
+    {
+      "id": "PAGE-LIFE-002",
+      "status": "Blocked",
+      "result": "Prompt chips populate the Agent input (verified 104 chars), but real proposal/apply behavior requires OpenRouter/server access not configured in this local server.",
+      "errors": []
+    },
+    {
+      "id": "PAGE-AGENT-001",
+      "status": "Blocked",
+      "result": "Model selector (8 options), key/deeper controls, suggestion entry (0 chars), and reset were exercised; streaming response requires a valid external Agent key.",
+      "errors": []
+    },
+    {
+      "id": "PAGE-AGENT-002",
+      "status": "Blocked",
+      "result": "Trace sidebar (1) and model modal (1) shells render, but opening them requires a real tool-using Agent response.",
+      "errors": []
+    },
+    {
+      "id": "PAGE-AGENT-003",
+      "status": "Blocked",
+      "result": "Artifact panel and all 4 preview/source/copy/download/close controls render, but behavior requires an artifact-producing Agent response.",
+      "errors": []
+    },
+    {
+      "id": "PAGE-AGENTVAR-001",
+      "status": "Pass",
+      "result": "Variation route loaded with 398 visible characters and no routing failure.",
+      "errors": []
+    },
+    {
+      "id": "PAGE-AREN-001",
+      "status": "Fail",
+      "result": "Loaded 0 model options; selected 2, rendered 0 chart canvases/0 table rows, and removal left 0.",
+      "errors": []
+    },
+    {
+      "id": "PAGE-AREN-002",
+      "status": "Fail",
+      "result": "Arena model catalog failed to load, so the required two-model Markdown/CSV export precondition could not be reached.",
+      "errors": []
+    },
+    {
+      "id": "PAGE-AREN-003",
+      "status": "Blocked",
+      "result": "AI question UI renders, but grounded response validation requires the external AI endpoint and valid key.",
+      "errors": []
+    },
+    {
+      "id": "PAGE-INSPECT-001",
+      "status": "Pass",
+      "result": "Quick/heavy modes and system/tools/skills views rendered (2191/2371/1439/722 chars).",
+      "errors": []
+    },
+    {
+      "id": "PAGE-INSPECT-002",
+      "status": "Blocked",
+      "result": "Tool tester rendered (1 selector, 1 argument editor, 0 run control), but meaningful tool result requires debug/API access and potentially a key.",
+      "errors": []
+    },
+    {
+      "id": "PAGE-DEBUG-001",
+      "status": "Blocked",
+      "result": "Debug runner loaded with 3 inspector tabs and 3 models; streaming a full debug run requires local/admin Agent API access and valid key.",
+      "errors": []
+    },
+    {
+      "id": "PAGE-TIME-001",
+      "status": "Pass",
+      "result": "Timeline rendered (5802 chars, 2 inputs, 2 buttons); search/filter controls present and interactive.",
+      "errors": []
+    },
+    {
+      "id": "PAGE-FRONT-001",
+      "status": "Pass",
+      "result": "Created/switched/renamed index from \"General Frontier\" to \"QA Index\"; weights 100%, normalized 100%, cleared 0%.",
+      "errors": []
+    },
+    {
+      "id": "PAGE-FRONT-002",
+      "status": "Pass",
+      "result": "Editor values applied immediately to rendered Index page; builder/index view switching worked.",
+      "errors": []
+    },
+    {
+      "id": "PAGE-FRONT-003",
+      "status": "Pass",
+      "result": "Rankings 14, source rows 24, builder charts 2, diagnostics visible true, disqualified 18, index charts 6, full-data rows 24.",
+      "errors": []
+    },
+    {
+      "id": "PAGE-FRONT-004",
+      "status": "Pass",
+      "result": "Copied current config (832 chars), copied public index URL (http://127.0.0.1:8924/static/frontier-index-lab.html#index=eyJpbmRleGVzIjpbeyJpZCI6IjUxM2MwNzBmLTFlNjctNGMwZi05N2Y4LTJjOTcxMTJlNDJiMiIsIm5hbWUiOiJHZW5lcmFsIEZyb250aWVyIiwicmVxdWlyZWQiOlsiZGVlcHN3ZSJdLCJ3ZWlnaHRzIjp7ImRlZXBzd2UiOjUwLCJic2JlbmNoX3YyIjoxNCwidGVybWluYWxiZW5jaF92Ml8xIjoxMiwibGl2ZWNvZGViZW5jaCI6MCwic2NpY29kZSI6MCwiYWltZV8yNSI6MCwiZ3BxYSI6MCwiaGxlIjoxMiwibGNyIjoxMiwiaWZiZW5jaCI6MCwibW1sdV9wcm8iOjB9fV0sImFjdGl2ZUlkIjoiNTEzYzA3MGYtMWU2Ny00YzBmLTk3ZjgtMmM5NzExMmU0MmIyIiwicGFnZSI6eyJ0aXRsZSI6IkN1c3RvbSBNb2RlbCBGcm9udGllciBJbmRleCIsImludHJvIjoiQSBjdXN0b20gbW9kZWwgbGVhZGVyYm9hcmQgYW5kIGluZGV4IGZlYXR1cmluZyBBcnRpZmljaWFsIEFuYWx5c2lzLXN0eWxlIGNoYXJ0cyBhbmQgbXVsdGktYmVuY2htYXJrIHJhbmtpbmcuIiwicmFua2luZ1NlY3Rpb24iOiJNb2RlbCBMZWFkZXJib2FyZCIsImNoYXJ0U2VjdGlvbiI6IkJlbmNobWFyayBQZXJmb3JtYW5jZSIsInNvY2lhbHMiOiJ4LmNvbS95b3VybmFtZSIsInN0eWxlIjoiY2xlYW4ifX0=), and refreshed to 14 rankings.",
+      "errors": []
+    }
+  ],
+  "discovered_errors": [
+    {
+      "story_id": "PAGE-DOCS-001",
+      "severity": "Major",
+      "summary": "The docs page requests /API_DOCS.md and /LLM.txt, but both return HTTP 404; the visible API and LLM content are error messages and the clipboard copies the error text."
+    },
+    {
+      "story_id": "PAGE-AREN-001",
+      "severity": "Major",
+      "summary": "The comparison arena receives /api/llms as an object with a data array but treats the top-level response as an array, leaving the model picker empty and preventing comparison charts/table behavior."
+    },
+    {
+      "story_id": "PAGE-AREN-002",
+      "severity": "Major",
+      "summary": "Because the arena model picker remains empty, the required two-model precondition for Copy Markdown and Download CSV cannot be reached."
+    }
+  ]
+}

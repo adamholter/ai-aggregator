@@ -261,7 +261,7 @@ def test_unknown_valid_event_is_marked_ignored(monkeypatch, sqlite_db):
     assert event_row['processing_status'] == server.STRIPE_WEBHOOK_STATUS_IGNORED
 
 
-def test_processing_failure_is_retryable_and_does_not_break_ack(monkeypatch, sqlite_db):
+def test_unmapped_subscription_event_is_ignored_and_does_not_break_ack(monkeypatch, sqlite_db):
     monkeypatch.setattr(server, '_stripe_available', True)
     monkeypatch.setattr(server, 'STRIPE_WEBHOOK_SECRET', 'whsec_test')
     monkeypatch.setattr(server, 'STRIPE_WEBHOOK_REQUEST_MODE', 'direct')
@@ -290,14 +290,55 @@ def test_processing_failure_is_retryable_and_does_not_break_ack(monkeypatch, sql
     client = server.app.test_client()
     response = client.post('/webhooks/stripe', data=b'{}', headers={'Stripe-Signature': 'sig'})
 
-    processed = server._drain_stripe_webhook_events(limit=10)
     event_row = db_module.query_one('SELECT * FROM stripe_webhook_events WHERE event_id=?', ('evt_subscription_missing_user',))
 
     assert response.status_code == 200
-    assert processed == 0
-    assert event_row['processing_status'] == server.STRIPE_WEBHOOK_STATUS_FAILED
+    assert event_row['processing_status'] == server.STRIPE_WEBHOOK_STATUS_IGNORED
     assert event_row['attempt_count'] == 1
-    assert 'Unable to resolve user_id' in event_row['last_error']
+    assert event_row['last_error'] is None
+
+
+def test_checkout_subscription_upsert_handles_existing_email_conflict(monkeypatch, sqlite_db):
+    monkeypatch.setattr(server, 'STRIPE_PRICES', {'starter_monthly': 'price_starter_live'})
+    db_module.execute(
+        'INSERT INTO users (id, email, display_name, created_at, last_login_at) VALUES (?,?,?,?,?)',
+        ('legacy_user', 'conflict@example.com', 'Legacy', 1, 1),
+    )
+    db_module.execute(
+        '''INSERT INTO stripe_webhook_events
+           (event_id, event_type, livemode, payload_json, processing_status, attempt_count, next_attempt_at)
+           VALUES (?,?,?,?,?,?,?)''',
+        (
+            'evt_checkout_email_conflict',
+            'checkout.session.completed',
+            1,
+            json.dumps(_event(
+                'evt_checkout_email_conflict',
+                'checkout.session.completed',
+                {
+                    'metadata': {'user_id': 'user_email_conflict', 'price_key': 'starter_monthly'},
+                    'client_reference_id': 'user_email_conflict',
+                    'customer': 'cus_email_conflict',
+                    'subscription': 'sub_email_conflict',
+                    'customer_email': 'conflict@example.com',
+                },
+            )),
+            server.STRIPE_WEBHOOK_STATUS_PENDING,
+            0,
+            0,
+        ),
+    )
+
+    processed = server._drain_stripe_webhook_events(limit=10)
+    user = db_module.query_one('SELECT * FROM users WHERE id=?', ('user_email_conflict',))
+    sub = db_module.query_one('SELECT * FROM subscriptions WHERE stripe_subscription_id=?', ('sub_email_conflict',))
+    event_row = db_module.query_one('SELECT * FROM stripe_webhook_events WHERE event_id=?', ('evt_checkout_email_conflict',))
+
+    assert processed == 1
+    assert user['email'] == 'user_email_conflict@placeholder.local'
+    assert sub['user_id'] == 'user_email_conflict'
+    assert sub['tier'] == 'starter'
+    assert event_row['processing_status'] == server.STRIPE_WEBHOOK_STATUS_PROCESSED
 
 
 def test_stripe_webhook_spool_mode_acks_and_writes_file(monkeypatch, sqlite_db, tmp_path):

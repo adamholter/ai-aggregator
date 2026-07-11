@@ -85,7 +85,8 @@ RATE_LIMIT_MAX_REQUESTS = max(int(os.environ.get('RATE_LIMIT_MAX_REQUESTS', '180
 CACHE_DURATION = timedelta(hours=1)
 
 # Agent settings
-AGENT_EXP_DEFAULT_MODEL = 'x-ai/grok-4-fast'
+AGENT_EXP_DEFAULT_MODEL = '~openai/gpt-latest'
+AGENT_DEFAULT_REASONING_EFFORT = 'low'
 AGENT_EXP_DEFAULT_LIMIT = 50
 AGENT_EXP_MAX_LIMIT = 200
 DEEP_RESEARCH_MODEL_ID = 'openai/o4-mini-deep-research'

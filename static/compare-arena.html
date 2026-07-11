@@ -412,7 +412,10 @@
                 // Load LLM benchmarks
                 const llmResp = await fetch('/api/llms');
                 if (llmResp.ok) {
-                    llmModels = await llmResp.json();
+                    const llmPayload = await llmResp.json();
+                    llmModels = Array.isArray(llmPayload)
+                        ? llmPayload
+                        : (Array.isArray(llmPayload?.data) ? llmPayload.data : []);
                     llmModels.forEach(m => {
                         // Avoid duplicates
                         if (!allModels.find(am => am.name.toLowerCase() === m.name.toLowerCase())) {

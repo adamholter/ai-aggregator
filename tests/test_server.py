@@ -7,6 +7,41 @@ import requests
 import server
 
 
+def test_recency_filter_excludes_undated_and_old_records():
+    items = [
+        {'id': 'fresh', 'created_at': server.datetime.utcnow().isoformat()},
+        {'id': 'old', 'created_at': '2020-01-01T00:00:00Z'},
+        {'id': 'unknown'},
+    ]
+
+    assert [item['id'] for item in server.filter_items_by_recency(items, 'day')] == ['fresh']
+    assert server.filter_items_by_recency(items, None) == items
+
+
+def test_simple_category_loader_does_not_silently_substitute_fallback(monkeypatch):
+    monkeypatch.setattr(server, 'resolve_category_config', lambda category: (category, {'source': 'test'}))
+    monkeypatch.setattr(server, 'load_category_payload', lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError('upstream failed')))
+    monkeypatch.setattr(server, 'load_category_fallback', lambda category: [{'id': 'cached'}])
+
+    assert server.load_category_items_simple('fal') == []
+    explicit = server.load_category_items_simple('fal', allow_fallback=True)
+    assert explicit == [{'id': 'cached', '_provenance': {'mode': 'fallback', 'category': 'fal'}}]
+
+
+def test_life_agent_never_returns_a_canned_patch_without_provider_access(monkeypatch):
+    monkeypatch.setattr(server, 'SERVER_OPENROUTER_KEY', '')
+    monkeypatch.setattr(server, 'OPENROUTER_API_KEY', '')
+    client = server.app.test_client()
+
+    response = client.post('/api/life-agent', json={'prompt': 'invent any arbitrary rule'})
+
+    assert response.status_code == 401
+    assert response.get_json() == {
+        'error': 'OpenRouter access is required to generate a proposal.',
+        'code': 'missing_openrouter_key',
+    }
+
+
 def test_health_endpoint():
     client = server.app.test_client()
     response = client.get('/api/health')
@@ -21,6 +56,60 @@ def test_usage_endpoint_has_content():
     response = client.get('/usage')
     assert response.status_code == 200
     assert 'Usage Dashboard' in response.get_data(as_text=True)
+
+
+def test_monitor_log_row_builds_feed_cards():
+    row = [
+        '2026-07-06T18:37:09.126Z',
+        'google/gemini-3.1-flash-lite-preview',
+        '0.8',
+        'TRUE',
+        'ai',
+        '100',
+        '12,60',
+        (
+            '- Anthropic released research on J-Space for Claude reasoning.\n'
+            '- GPT-5.6 Sol: leaks suggest a release on Codex and Cerebras.\n'
+            '\nSUMMARY: Broader context.'
+        ),
+    ]
+
+    entries = server._build_monitor_log_entries(row)
+
+    assert len(entries) == 2
+    assert entries[0]['timestamp'] == '2026-07-06T18:37:09Z'
+    assert entries[0]['source_label'] == 'X Feed Summary'
+    assert entries[0]['title'] == 'Anthropic released research on J-Space for Claude reasoning.'
+    assert entries[1]['title'] == 'GPT-5.6 Sol'
+    assert 'Codex and Cerebras' in entries[1]['excerpt']
+
+
+def test_fetch_sheet_rows_falls_back_to_public_csv_when_api_key_blocked(monkeypatch):
+    calls = []
+
+    class FakeResponse:
+        text = 'Timestamp,Name\n2026-07-06T18:37:09Z,Fresh item\n'
+
+        def raise_for_status(self):
+            return None
+
+    def fake_get(url, timeout):
+        calls.append(url)
+        if 'sheets.googleapis.com' in url:
+            raise requests.HTTPError('blocked')
+        return FakeResponse()
+
+    monkeypatch.setattr(server, 'GOOGLE_SHEETS_API_KEY', 'blocked-key')
+    monkeypatch.setattr(server.requests, 'get', fake_get)
+
+    rows = server._fetch_sheet_rows('Logs!A:B', sheet_name='Logs')
+
+    assert rows == [
+        ['Timestamp', 'Name'],
+        ['2026-07-06T18:37:09Z', 'Fresh item'],
+    ]
+    assert any('sheets.googleapis.com' in url for url in calls)
+    assert any('/gviz/tq?' in url for url in calls)
 
 
 def test_testing_catalog_history_loaded():

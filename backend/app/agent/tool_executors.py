@@ -215,7 +215,7 @@ class AgentToolExecutors:
 
     def _load_model_endpoints(self, model_id: str, api_key: str) -> List[Dict[str, Any]]:
         if not model_id or "/" not in model_id:
-            raise ValueError("An exact OpenRouter model_id such as z-ai/glm-5.2 is required")
+            raise ValueError("An exact OpenRouter model_id from the catalog is required")
         headers = {"Accept": "application/json"}
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
@@ -267,11 +267,28 @@ class AgentToolExecutors:
         return {"model_id": model_id, "percentile": percentile, "count": len(rows), "endpoints": rows}
 
     def tool_search_fast_model_endpoints(self, args: Dict[str, Any], settings: Dict[str, Any]) -> Dict[str, Any]:
-        model_ids = [str(value).strip() for value in (args.get("model_ids") or []) if str(value).strip()]
-        if not model_ids:
-            raise ValueError("model_ids must contain at least one exact OpenRouter model id")
-        if len(model_ids) > 20:
-            raise ValueError("At most 20 model ids can be compared per call")
+        supplied_ids = [str(value).strip() for value in (args.get("model_ids") or []) if str(value).strip()]
+        query = str(args.get("query") or "").strip()
+        offset = max(0, int(args.get("offset") or 0))
+        max_models = max(1, min(int(args.get("max_models") or 25), 100))
+        discovery = "supplied"
+        catalog_count = None
+        next_offset = None
+        if supplied_ids:
+            model_ids = list(dict.fromkeys(supplied_ids))
+            if len(model_ids) > 100:
+                raise ValueError("At most 100 model ids can be compared per call")
+        else:
+            discovery = "catalog"
+            catalog = self._search_in_items(self.load_openrouter_models(force_refresh=False) or [], query)
+            catalog_ids = [str(item.get("id") or "").strip() for item in catalog]
+            catalog_ids = list(dict.fromkeys(value for value in catalog_ids if "/" in value))
+            catalog_count = len(catalog_ids)
+            model_ids = catalog_ids[offset:offset + max_models]
+            if offset + len(model_ids) < catalog_count:
+                next_offset = offset + len(model_ids)
+            if not model_ids:
+                return {"percentile": str(args.get("percentile") or "p50").lower(), "count": 0, "endpoints": [], "failures": [], "coverage": {"mode": discovery, "query": query or None, "catalog_matches": catalog_count, "evaluated_models": 0, "offset": offset, "next_offset": None}}
         percentile = str(args.get("percentile") or "p50").lower()
         min_tps = args.get("min_tps")
         max_input = args.get("max_input_price_1m")
@@ -296,7 +313,20 @@ class AgentToolExecutors:
             return True
         rows = [row for row in rows if allowed(row)]
         rows.sort(key=lambda row: (-(row.get("throughput_tps") or -1), row.get("output_price_1m") is None, row.get("output_price_1m") or 0))
-        return {"percentile": percentile, "count": len(rows), "endpoints": rows[:limit], "failures": failures}
+        return {
+            "percentile": percentile,
+            "count": len(rows),
+            "endpoints": rows[:limit],
+            "failures": failures,
+            "coverage": {
+                "mode": discovery,
+                "query": query or None,
+                "catalog_matches": catalog_count,
+                "evaluated_models": len(model_ids),
+                "offset": offset if discovery == "catalog" else None,
+                "next_offset": next_offset,
+            },
+        }
 
     def tool_get_monitor_news(self, args: Dict[str, Any], settings: Dict[str, Any]) -> Dict[str, Any]:
         keyword = (args.get("keyword") or "").strip().lower()

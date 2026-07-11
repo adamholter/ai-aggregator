@@ -5,13 +5,13 @@ export default defineConfig({
   timeout: 120_000,
   expect: { timeout: 15_000 },
   use: {
-    baseURL: 'http://127.0.0.1:8765',
+    baseURL: 'http://127.0.0.1:8910',
     headless: true,
   },
   webServer: {
-    command: 'PORT=8765 python3 server.py',
-    url: 'http://127.0.0.1:8765/api/health',
+    command: 'PORT=8910 python3 server.py',
+    url: 'http://127.0.0.1:8910/api/health',
     timeout: 180_000,
-    reuseExistingServer: true,
+    reuseExistingServer: process.env.E2E_REUSE_SERVER === 'true',
   },
 });

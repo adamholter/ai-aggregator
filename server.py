@@ -493,7 +493,10 @@ def inline_exp_agent_api():
     if not api_key:
         return jsonify({'error': 'API key required'}), 401
 
-    model_id = data.get('model', 'google/gemini-2.5-flash')
+    model_id = data.get('model', AGENT_EXP_DEFAULT_MODEL)
+    reasoning_effort = normalize_agent_reasoning_effort(
+        data.get('reasoning_effort') or data.get('reasoningEffort')
+    )
     history = data.get('history', [])  # Get conversation history from frontend
     deeper_mode = data.get('deeper_mode', False)  # More thorough research mode
     stream_mode = data.get('stream', False)  # SSE streaming mode
@@ -543,7 +546,8 @@ def inline_exp_agent_api():
                     "model": model_id,
                     "messages": _messages,
                     "tools": AGENT_TOOLS,
-                    "tool_choice": "auto"
+                    "tool_choice": "auto",
+                    "reasoning": {"effort": reasoning_effort}
                 }
 
                 print(f"[Agent/stream] iter {iteration + 1}/{max_iterations}, model={model_id}")
@@ -660,7 +664,8 @@ def inline_exp_agent_api():
                 "model": model_id,
                 "messages": messages,
                 "tools": AGENT_TOOLS,
-                "tool_choice": "auto"
+                "tool_choice": "auto",
+                "reasoning": {"effort": reasoning_effort}
             }
 
             # Log the request for debugging
@@ -835,7 +840,10 @@ def api_agent_debug_stream():
 
     data = request.get_json() or {}
     question = (data.get('question') or '').strip()
-    model_id  = data.get('model', 'google/gemini-2.5-flash')
+    model_id  = data.get('model', AGENT_EXP_DEFAULT_MODEL)
+    reasoning_effort = normalize_agent_reasoning_effort(
+        data.get('reasoning_effort') or data.get('reasoningEffort')
+    )
     deeper    = data.get('deeper_mode', False)
     api_key   = data.get('api_key') or ''
     if not api_key:
@@ -865,7 +873,8 @@ def api_agent_debug_stream():
 
             payload = {
                 'model': model_id, 'messages': messages,
-                'tools': AGENT_TOOLS, 'tool_choice': 'auto'
+                'tools': AGENT_TOOLS, 'tool_choice': 'auto',
+                'reasoning': {'effort': reasoning_effort}
             }
             t0 = _time.time()
             try:
@@ -1484,6 +1493,8 @@ GOOGLE_SHEETS_API_KEY = (os.environ.get('GOOGLE_SHEETS_API_KEY') or '').strip()
 MONITOR_SHEET_ID = (os.environ.get('MONITOR_SHEET_ID') or '1Dg58BUnlBwREG__ls6qcUrj3PHE9LMAOvQMZGesQI84').strip()
 MONITOR_SHEET_RANGE = os.environ.get('MONITOR_SHEET_RANGE', 'Data for Dashboard!A:D').strip()
 MONITOR_SHEET_GID = (os.environ.get('MONITOR_SHEET_GID') or '435981851').strip()
+MONITOR_LOG_SHEET_NAME = (os.environ.get('MONITOR_LOG_SHEET_NAME') or 'Sheet1').strip()
+MONITOR_LOG_SHEET_RANGE = os.environ.get('MONITOR_LOG_SHEET_RANGE', f'{MONITOR_LOG_SHEET_NAME}!A:H').strip()
 
 OPENROUTER_KEY_REQUIRED_MESSAGE = (
     'An OpenRouter API key is required for this feature. Add your key in Settings to continue.'
@@ -1858,13 +1869,14 @@ def _extract_invoice_period_bounds(invoice_obj):
 def _ensure_local_user_row(user_id, email=''):
     user_id = (user_id or '').strip()
     if not user_id:
-        return
+        return False
+    placeholder_email = f'{user_id}@placeholder.local'
     try:
         from backend.app import db as _db
         existing = _db.query_one('SELECT id, email FROM users WHERE id=?', (user_id,))
         normalized_email = (email or '').strip()
         if not normalized_email:
-            normalized_email = user_id if '@' in user_id else f'{user_id}@placeholder.local'
+            normalized_email = user_id if '@' in user_id else placeholder_email
         if existing:
             current_email = (existing.get('email') or '').strip()
             if normalized_email and current_email != normalized_email:
@@ -1872,13 +1884,20 @@ def _ensure_local_user_row(user_id, email=''):
                     _db.execute('UPDATE users SET email=?, last_login_at=unixepoch() WHERE id=?', (normalized_email, user_id))
                 except Exception:
                     pass
-            return
-        _db.execute(
-            'INSERT INTO users (id, email, display_name, created_at, last_login_at) VALUES (?,?,?,?,?)',
-            (user_id, normalized_email, normalized_email.split('@')[0], int(time.time()), int(time.time())),
-        )
+            return True
+        for candidate_email in dict.fromkeys([normalized_email, placeholder_email]):
+            try:
+                _db.execute(
+                    'INSERT INTO users (id, email, display_name, created_at, last_login_at) VALUES (?,?,?,?,?)',
+                    (user_id, candidate_email, candidate_email.split('@')[0], int(time.time()), int(time.time())),
+                )
+                return True
+            except Exception:
+                if candidate_email == placeholder_email:
+                    raise
     except Exception:
         app.logger.exception('stripe_user_upsert_failed', extra={'user_id': user_id})
+    return False
 
 
 def _find_subscription_row(user_id='', stripe_customer_id='', stripe_subscription_id=''):
@@ -1920,6 +1939,18 @@ def _resolve_user_id_for_stripe_mapping(stripe_customer_id='', stripe_subscripti
     return ''
 
 
+def _missing_stripe_user_outcome(event_type, *, stripe_customer_id='', stripe_subscription_id=''):
+    app.logger.info(
+        'stripe_webhook_ignored_missing_user',
+        extra={
+            'event_type': event_type,
+            'stripe_customer_id': stripe_customer_id,
+            'stripe_subscription_id': stripe_subscription_id,
+        },
+    )
+    return STRIPE_WEBHOOK_STATUS_IGNORED
+
+
 def _upsert_subscription_record(
     *,
     user_id,
@@ -1934,7 +1965,8 @@ def _upsert_subscription_record(
     user_id = (user_id or '').strip()
     if not user_id:
         raise ValueError('user_id is required for subscription upsert')
-    _ensure_local_user_row(user_id, email=email)
+    if not _ensure_local_user_row(user_id, email=email):
+        raise ValueError(f'Unable to create local user row for {user_id}')
     from backend.app import db as _db
     existing = _find_subscription_row(
         user_id=user_id,
@@ -2118,7 +2150,11 @@ def _apply_stripe_event(event_payload):
             or _resolve_user_id_for_stripe_mapping(stripe_customer_id=stripe_customer_id, stripe_subscription_id=stripe_subscription_id)
         )
         if not user_id:
-            raise ValueError('Unable to resolve user_id for checkout.session.completed')
+            return _missing_stripe_user_outcome(
+                event_type,
+                stripe_customer_id=stripe_customer_id,
+                stripe_subscription_id=stripe_subscription_id,
+            )
         price_key = (metadata.get('price_key') or '').strip()
         email = (
             ((obj.get('customer_details') or {}).get('email') or '').strip()
@@ -2142,7 +2178,11 @@ def _apply_stripe_event(event_payload):
             or _resolve_user_id_for_stripe_mapping(stripe_customer_id=stripe_customer_id, stripe_subscription_id=stripe_subscription_id)
         )
         if not user_id:
-            raise ValueError(f'Unable to resolve user_id for {event_type}')
+            return _missing_stripe_user_outcome(
+                event_type,
+                stripe_customer_id=stripe_customer_id,
+                stripe_subscription_id=stripe_subscription_id,
+            )
         price_key = (metadata.get('price_key') or '').strip()
         price_id = _extract_subscription_price_id(obj)
         tier = _infer_tier_from_price_key(price_key) or _infer_tier_from_price_id(price_id) or 'free'
@@ -2169,7 +2209,11 @@ def _apply_stripe_event(event_payload):
             or _resolve_user_id_for_stripe_mapping(stripe_customer_id=stripe_customer_id, stripe_subscription_id=stripe_subscription_id)
         )
         if not user_id:
-            raise ValueError(f'Unable to resolve user_id for {event_type}')
+            return _missing_stripe_user_outcome(
+                event_type,
+                stripe_customer_id=stripe_customer_id,
+                stripe_subscription_id=stripe_subscription_id,
+            )
         price_id = _extract_invoice_price_id(obj)
         period_start, period_end = _extract_invoice_period_bounds(obj)
         existing = _find_subscription_row(
@@ -3522,6 +3566,7 @@ def get_model_display_name(model_id):
     model_id = str(model_id)
 
     known = {
+        '~openai/gpt-latest': 'GPT Latest',
         'z-ai/glm-4.6': 'GLM 4.6',
         'z-ai/glm-4.5': 'GLM 4.5',
         'openai/gpt-5': 'GPT-5',
@@ -4073,7 +4118,9 @@ FETCH_DATA_CATEGORY_CONFIG = {
 
 CUSTOM_CATEGORY_LOADERS = {}
 
-AGENT_EXP_DEFAULT_MODEL = 'x-ai/grok-4-fast'
+AGENT_EXP_DEFAULT_MODEL = '~openai/gpt-latest'
+AGENT_DEFAULT_REASONING_EFFORT = 'low'
+AGENT_REASONING_EFFORTS = {'none', 'minimal', 'low', 'medium', 'high', 'xhigh'}
 AGENT_EXP_DEFAULT_LIMIT = 50
 AGENT_EXP_MAX_LIMIT = 200
 FAL_CATEGORY_OPTIONS = {
@@ -4107,6 +4154,11 @@ for key, label in FAL_CATEGORY_OPTIONS.items():
         FAL_CATEGORY_ALIASES[variant] = key
 FAL_CATEGORY_ALIASES['all categories'] = 'all'
 FAL_CATEGORY_ALIASES['all'] = 'all'
+
+
+def normalize_agent_reasoning_effort(value):
+    effort = str(value or AGENT_DEFAULT_REASONING_EFFORT).strip().lower()
+    return effort if effort in AGENT_REASONING_EFFORTS else AGENT_DEFAULT_REASONING_EFFORT
 
 
 def normalize_fal_category_value(value):
@@ -5305,7 +5357,7 @@ def fetch_blog_posts(force_refresh=False, per_page_override=None, max_pages_over
     return payload
 
 
-def load_category_items_simple(category_id, force_refresh=False):
+def load_category_items_simple(category_id, force_refresh=False, allow_fallback=False):
     category_id, config = resolve_category_config(category_id)
     if not config:
         return []
@@ -5316,11 +5368,16 @@ def load_category_items_simple(category_id, force_refresh=False):
             return items
     except Exception as exc:
         print(f"WARNING: load_category_items_simple failed for '{category_id}': {exc}")
-    fallback = load_category_fallback(category_id)
-    if isinstance(fallback, list):
-        return fallback
-    if isinstance(fallback, dict):
-        return list(fallback.values())
+    if allow_fallback:
+        fallback = load_category_fallback(category_id)
+        if isinstance(fallback, dict):
+            fallback = list(fallback.values())
+        if isinstance(fallback, list):
+            return [
+                {**item, '_provenance': {'mode': 'fallback', 'category': category_id}}
+                if isinstance(item, dict) else item
+                for item in fallback
+            ]
     return []
 
 
@@ -5379,7 +5436,9 @@ def filter_items_by_recency(items, recency):
     filtered = []
     for item in items or []:
         timestamp = extract_item_timestamp(item)
-        if timestamp and timestamp < cutoff:
+        # A record without a trustworthy timestamp cannot satisfy a recency
+        # constraint. Keep it in unbounded views, but never imply it is recent.
+        if timestamp is None or timestamp < cutoff:
             continue
         filtered.append(item)
     return filtered
@@ -8257,6 +8316,26 @@ def docs_page():
     from flask import send_file
     return send_file(os.path.join(os.path.dirname(__file__), 'docs.html'))
 
+
+@app.route('/API_DOCS.md')
+def api_docs_markdown():
+    """Serve the maintained API reference consumed by the docs page."""
+    from flask import send_file
+    return send_file(
+        os.path.join(os.path.dirname(__file__), 'API_DOCS.md'),
+        mimetype='text/markdown; charset=utf-8',
+    )
+
+
+@app.route('/LLM.txt')
+def llm_reference_text():
+    """Serve the LLM-friendly reference consumed by the docs page."""
+    from flask import send_file
+    return send_file(
+        os.path.join(os.path.dirname(__file__), 'LLM.txt'),
+        mimetype='text/plain; charset=utf-8',
+    )
+
 @app.route('/card-game')
 def card_game_page():
     """Serve the codebase flow card game page."""
@@ -8280,6 +8359,57 @@ def cork_board_page():
     response.headers['Expires'] = '0'
     response.headers['Surrogate-Control'] = 'no-store'
     return response
+
+
+@app.route('/life-agent')
+def life_agent_page():
+    """Serve the interactive Game of Life agent sandbox."""
+    from flask import send_file
+    return send_file(os.path.join(os.path.dirname(__file__), 'static', 'life-agent.html'))
+
+
+@app.route('/api/life-agent', methods=['POST'])
+def life_agent_api():
+    """Use OpenRouter's Agent SDK to produce a structured simulation patch."""
+    data = request.get_json(silent=True) or {}
+    prompt = (data.get('prompt') or '').strip()
+    if not prompt:
+        return jsonify({'error': 'Prompt is required'}), 400
+
+    token = get_request_bearer_token() or SERVER_OPENROUTER_KEY or OPENROUTER_API_KEY
+    if not token:
+        return jsonify({'error': 'OpenRouter access is required to generate a proposal.', 'code': 'missing_openrouter_key'}), 401
+
+    runner = os.path.join(os.path.dirname(__file__), 'scripts', 'life-agent.mjs')
+    try:
+        env = os.environ.copy()
+        env['OPENROUTER_API_KEY'] = token
+        env.setdefault('OPENROUTER_SITE_URL', request.host_url.rstrip('/'))
+        env.setdefault('OPENROUTER_APP_NAME', 'Life Agent Sandbox')
+        proc = subprocess.run(
+            ['node', runner],
+            input=json.dumps({
+                'prompt': prompt,
+                'current': data.get('current') or {},
+                'history': data.get('history') or [],
+                'model': data.get('model') or 'google/gemma-3-27b-it',
+            }),
+            text=True,
+            capture_output=True,
+            timeout=45,
+            env=env,
+            cwd=os.path.dirname(__file__),
+        )
+        if proc.returncode != 0:
+            app.logger.warning('life_agent_sdk_failed: %s', (proc.stderr or proc.stdout or '').strip()[:1200])
+            return jsonify({'error': 'The agent provider rejected or failed the request.', 'code': 'agent_sdk_failed'}), 502
+        parsed = json.loads(proc.stdout or '{}')
+        if not parsed.get('patch'):
+            raise ValueError('Agent runner returned no patch')
+        return jsonify({'patch': parsed['patch'], 'generated_by': 'openrouter-agent'})
+    except Exception as exc:
+        app.logger.warning('life_agent_api_failed: %s', exc)
+        return jsonify({'error': 'The agent request failed without producing a proposal.', 'code': 'agent_sdk_exception'}), 502
 
 
 # ============================================================
@@ -11399,11 +11529,12 @@ def _agent_exp_execute_perplexity(tool_args, auth_token, deeper_mode=False):
     return json.dumps(tool_payload, ensure_ascii=False), log_entry
 
 
-def agent_exp_session(auth_token, user_message, conversation_history, model_id, experimental_mode, server_key_user_id=None):
+def agent_exp_session(auth_token, user_message, conversation_history, model_id, experimental_mode, server_key_user_id=None, reasoning_effort=AGENT_DEFAULT_REASONING_EFFORT):
     headers = build_openrouter_headers(auth_token)
     system_prompt = build_agent_exp_system_prompt(experimental_mode)
     messages = build_agent_exp_messages(system_prompt, conversation_history, user_message)
     model_label = get_model_display_name(model_id)
+    normalized_reasoning_effort = normalize_agent_reasoning_effort(reasoning_effort)
 
     max_iterations = 100
     iteration = 0
@@ -11422,6 +11553,7 @@ def agent_exp_session(auth_token, user_message, conversation_history, model_id, 
             'tool_choice': 'auto',
             'parallel_tool_calls': False,
             'stream': False,
+            'reasoning': {'effort': normalized_reasoning_effort},
             'max_output_tokens': 2048
         }
 
@@ -11530,6 +11662,9 @@ def agent_exp_endpoint():
         return jsonify({'error': 'Message is required.'}), 400
 
     model_id = (data.get('model') or AGENT_EXP_DEFAULT_MODEL).strip() or AGENT_EXP_DEFAULT_MODEL
+    reasoning_effort = normalize_agent_reasoning_effort(
+        data.get('reasoning_effort') or data.get('reasoningEffort')
+    )
     experimental_mode = bool(
         data.get('experimental')
         or data.get('experimentalMode')
@@ -11552,7 +11687,7 @@ def agent_exp_endpoint():
         final_response = ''
         events = []
         _sk_uid = _sk_uid_ae if _is_sk_ae else None
-        for event in agent_exp_session(auth_token, user_message, conversation, model_id, experimental_mode, server_key_user_id=_sk_uid):
+        for event in agent_exp_session(auth_token, user_message, conversation, model_id, experimental_mode, server_key_user_id=_sk_uid, reasoning_effort=reasoning_effort):
             events.append(event)
             if event.get('type') == 'content':
                 final_response += event.get('content', '')
@@ -11567,7 +11702,7 @@ def agent_exp_endpoint():
 
     def event_stream():
         try:
-            for event in agent_exp_session(auth_token, user_message, conversation, model_id, experimental_mode, server_key_user_id=_sk_uid_ae_stream):
+            for event in agent_exp_session(auth_token, user_message, conversation, model_id, experimental_mode, server_key_user_id=_sk_uid_ae_stream, reasoning_effort=reasoning_effort):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
         except Exception as exc:
             message = f'Agent session failed: {exc}'
@@ -11661,7 +11796,10 @@ def agent_v2_chat():
     except (TypeError, ValueError):
         max_iterations = 100
 
-    model_id = str(settings_payload.get('model') or 'anthropic/claude-sonnet-4').strip()
+    model_id = str(settings_payload.get('model') or AGENT_EXP_DEFAULT_MODEL).strip() or AGENT_EXP_DEFAULT_MODEL
+    reasoning_effort = normalize_agent_reasoning_effort(
+        settings_payload.get('reasoning_effort') or settings_payload.get('reasoningEffort')
+    )
     umi_model = str(settings_payload.get('umi_model') or 'google/gemini-2.5-flash').strip()
     web_search_model = str(settings_payload.get('web_search_model') or 'perplexity/sonar-pro').strip()
     api_key = (settings_payload.get('api_key') or '').strip()
@@ -11682,6 +11820,7 @@ def agent_v2_chat():
         umi_model=umi_model,
         web_search_model=web_search_model,
         mode=mode,
+        reasoning_effort=reasoning_effort,
         temperature=max(0.0, min(temperature, 1.5)),
         max_iterations=max(1, min(max_iterations, 300)),
         api_key=api_key,
@@ -11753,7 +11892,10 @@ def agent_v2_chat_stream():
     except (TypeError, ValueError):
         max_iterations = 100
 
-    model_id = str(settings_payload.get('model') or 'anthropic/claude-sonnet-4').strip()
+    model_id = str(settings_payload.get('model') or AGENT_EXP_DEFAULT_MODEL).strip() or AGENT_EXP_DEFAULT_MODEL
+    reasoning_effort = normalize_agent_reasoning_effort(
+        settings_payload.get('reasoning_effort') or settings_payload.get('reasoningEffort')
+    )
     umi_model = str(settings_payload.get('umi_model') or 'google/gemini-2.5-flash').strip()
     web_search_model = str(settings_payload.get('web_search_model') or 'perplexity/sonar-pro').strip()
     api_key = (settings_payload.get('api_key') or '').strip()
@@ -11774,6 +11916,7 @@ def agent_v2_chat_stream():
         umi_model=umi_model,
         web_search_model=web_search_model,
         mode=mode,
+        reasoning_effort=reasoning_effort,
         temperature=max(0.0, min(temperature, 1.5)),
         max_iterations=max(1, min(max_iterations, 300)),
         api_key=api_key,
@@ -13836,6 +13979,123 @@ def _build_monitor_entry(row):
     }
 
 
+def _monitor_sheet_name_from_range(range_name):
+    if not range_name or '!' not in range_name:
+        return ''
+    return range_name.split('!', 1)[0].strip().strip("'")
+
+
+def _fetch_sheet_rows_via_api(range_name):
+    encoded_range = urllib.parse.quote(range_name, safe='!')
+    url = (
+        f'https://sheets.googleapis.com/v4/spreadsheets/{MONITOR_SHEET_ID}/values/'
+        f'{encoded_range}?majorDimension=ROWS&key={GOOGLE_SHEETS_API_KEY}'
+    )
+    response = requests.get(url, timeout=15)
+    response.raise_for_status()
+    payload = response.json()
+    return payload.get('values') or []
+
+
+def _fetch_sheet_rows_via_csv(gid=None, sheet_name=''):
+    if gid:
+        url = (
+            f'https://docs.google.com/spreadsheets/d/{MONITOR_SHEET_ID}/export?format=csv&gid={gid}'
+        )
+    else:
+        params = {'tqx': 'out:csv'}
+        if sheet_name:
+            params['sheet'] = sheet_name
+        url = f'https://docs.google.com/spreadsheets/d/{MONITOR_SHEET_ID}/gviz/tq?{urllib.parse.urlencode(params)}'
+    response = requests.get(url, timeout=15)
+    response.raise_for_status()
+    csv_buffer = io.StringIO(response.text)
+    reader = csv.reader(csv_buffer)
+    return list(reader)
+
+
+def _fetch_sheet_rows(range_name, gid=None, sheet_name=''):
+    errors = []
+    if GOOGLE_SHEETS_API_KEY and range_name:
+        try:
+            return _fetch_sheet_rows_via_api(range_name)
+        except Exception as exc:
+            errors.append(exc)
+
+    resolved_sheet_name = sheet_name or _monitor_sheet_name_from_range(range_name)
+    try:
+        return _fetch_sheet_rows_via_csv(gid=gid, sheet_name=resolved_sheet_name)
+    except Exception:
+        if errors:
+            raise errors[0]
+        raise
+
+
+def _extract_monitor_summary_bullets(summary):
+    if not summary:
+        return []
+    bullets = []
+    for line in str(summary).splitlines():
+        cleaned = line.strip()
+        if not cleaned:
+            continue
+        match = re.match(r'^(?:[-*•]\s+|\d+[.)]\s+)(.+)$', cleaned)
+        if not match:
+            continue
+        bullet = re.sub(r'\*\*(.*?)\*\*', r'\1', match.group(1)).strip()
+        bullet = re.sub(r'\s+', ' ', bullet)
+        if bullet:
+            bullets.append(bullet)
+    return bullets
+
+
+def _split_monitor_bullet(bullet):
+    cleaned = str(bullet or '').strip()
+    if not cleaned:
+        return '', ''
+    label_match = re.match(r'^([^:]{6,90}):\s+(.+)$', cleaned)
+    if label_match:
+        return label_match.group(1).strip(), label_match.group(2).strip()
+
+    sentence_parts = re.split(r'(?<=[.!?])\s+', cleaned, maxsplit=1)
+    first_sentence = sentence_parts[0].strip()
+    title = first_sentence if len(first_sentence) <= 110 else _truncate_text(first_sentence, 100)
+    return title, cleaned
+
+
+def _build_monitor_log_entries(row):
+    if not isinstance(row, list) or len(row) < 8:
+        return []
+    timestamp_raw = row[0] if len(row) >= 1 else ''
+    if str(timestamp_raw).strip().lower() == 'timestamp':
+        return []
+    dt = _coerce_timestamp_utc(timestamp_raw)
+    if not dt:
+        return []
+
+    model = row[1] if len(row) >= 2 else ''
+    summary = row[7] if len(row) >= 8 else ''
+    entries = []
+    for index, bullet in enumerate(_extract_monitor_summary_bullets(summary)[:12]):
+        title, excerpt = _split_monitor_bullet(bullet)
+        if not title:
+            continue
+        digest = hashlib.sha1(f'{timestamp_raw}|{index}|{title}'.encode('utf-8')).hexdigest()[:16]
+        entries.append({
+            'id': f'monitor-log:{digest}',
+            'title': title or 'X Feed Summary',
+            'source': 'monitor',
+            'source_label': 'X Feed Summary',
+            'excerpt': _truncate_text(excerpt or bullet, 280),
+            'timestamp_dt': dt,
+            'timestamp': dt.replace(microsecond=0).isoformat().replace('+00:00', 'Z'),
+            'url': '',
+            'badge': model or 'X Feed',
+            'tags': []
+        })
+    return entries
+
+
 def summarize_fetch_context(context):
     context = context or {}
     metadata = context.get('metadata') or []
@@ -13859,29 +14119,23 @@ def summarize_fetch_context(context):
 
 
 def _fetch_monitor_rows(force_refresh=False):
-    if GOOGLE_SHEETS_API_KEY:
-        encoded_range = urllib.parse.quote(MONITOR_SHEET_RANGE, safe='!')
-        url = (
-            f'https://sheets.googleapis.com/v4/spreadsheets/{MONITOR_SHEET_ID}/values/'
-            f'{encoded_range}?majorDimension=ROWS&key={GOOGLE_SHEETS_API_KEY}'
-        )
-        response = requests.get(url, timeout=15)
-        response.raise_for_status()
-        payload = response.json()
-        values = payload.get('values') or []
-        return values
-
     if not MONITOR_SHEET_GID:
         raise RuntimeError('Monitor sheet GID is required when no Google Sheets API key is provided.')
 
-    csv_url = (
-        f'https://docs.google.com/spreadsheets/d/{MONITOR_SHEET_ID}/export?format=csv&gid={MONITOR_SHEET_GID}'
-    )
-    response = requests.get(csv_url, timeout=15)
-    response.raise_for_status()
-    csv_buffer = io.StringIO(response.text)
-    reader = csv.reader(csv_buffer)
-    return list(reader)
+    return _fetch_sheet_rows(MONITOR_SHEET_RANGE, gid=MONITOR_SHEET_GID)
+
+
+def _fetch_monitor_log_rows(force_refresh=False):
+    if not MONITOR_LOG_SHEET_RANGE and not MONITOR_LOG_SHEET_NAME:
+        return []
+    try:
+        return _fetch_sheet_rows(
+            MONITOR_LOG_SHEET_RANGE,
+            sheet_name=MONITOR_LOG_SHEET_NAME or _monitor_sheet_name_from_range(MONITOR_LOG_SHEET_RANGE)
+        )
+    except Exception as exc:
+        print(f"WARNING: Failed to fetch monitor log sheet: {exc}")
+        return []
 
 
 def load_monitor_feed(force_refresh=False, limit=None, sanitize=False):
@@ -13903,6 +14157,8 @@ def load_monitor_feed(force_refresh=False, limit=None, sanitize=False):
             entry = _build_monitor_entry(row)
             if entry:
                 entries.append(entry)
+        for row in _fetch_monitor_log_rows(force_refresh=force_refresh)[1:]:
+            entries.extend(_build_monitor_log_entries(row))
         entries.sort(key=lambda item: item['timestamp_dt'], reverse=True)
         _MONITOR_CACHE['payload'] = entries
         _MONITOR_CACHE['timestamp'] = datetime.utcnow()
@@ -13924,6 +14180,7 @@ def load_monitor_feed(force_refresh=False, limit=None, sanitize=False):
         return sanitized
 
     return result
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='AI Model Analysis Dashboard Server')

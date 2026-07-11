@@ -1,0 +1,23 @@
+{
+  "tested_at": "2026-07-10T19:13:00Z",
+  "target": "https://ai-model-analysis-dashboard.adamholter.chatgpt.site/dashboard",
+  "release": "production v12",
+  "summary": {
+    "stories_retested": 5,
+    "stories_fixed": 2,
+    "stories_still_failing": 3,
+    "agent_truthfulness_checks_passed": 1,
+    "real_failures": 1
+  },
+  "stories": [
+    {"id":"DASH-REP-002","status":"Pass","result":"Searching Replicate for 'flux' now renders 42 of 250 models with zero page errors; nullable fields no longer crash filtering."},
+    {"id":"DASH-TEST-002","status":"Pass","result":"Testing Catalog renders 360 articles and 10 tag choices (All Tags plus 9 real categories) with no failed catalog requests or error banner."},
+    {"id":"DASH-NAV-002","status":"Fail","result":"The functional deployed route is /dashboard?section=<id>, but the app still copies origin-root /?section=<id>. Opening the generated root URL returns an empty body with zero sections."},
+    {"id":"DASH-SHARE-001","status":"Fail","result":"Plain Share still copies https://ai-model-analysis-dashboard.adamholter.chatgpt.site/?section=llms instead of preserving /dashboard. Filtered shared-view creation itself returns HTTP 200."},
+    {"id":"DASH-SHARE-002","status":"Fail","result":"Shared-view storage remains operational, but the recipient URL construction still targets the blank origin root, so the copied UI link cannot reach dashboard restoration."},
+    {"id":"DASH-AGENT-001","status":"Pass","result":"The Agent opens on an empty live-data question surface with no demo/sample answer, mock output, placeholder response, or promotional/demo banner. Visible copy explicitly says source failures are reported instead of being replaced with sample output."}
+  ],
+  "discovered_errors": [
+    {"id":"ERR-DATA-003","severity":"High","stories":["DASH-NAV-002","DASH-SHARE-001","DASH-SHARE-002"],"title":"Generated direct/share links still omit the deployed /dashboard pathname","evidence":"Production v12 Share copied https://ai-model-analysis-dashboard.adamholter.chatgpt.site/?section=llms; loading that exact URL rendered an empty body and zero sections, while /dashboard?section=llms works.","expected":"Build section and shared-view URLs from the current dashboard pathname (or make the root route redirect while preserving query parameters)."}
+  ]
+}

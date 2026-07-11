@@ -106,10 +106,11 @@
     border-bottom: 1px solid var(--border-color);
     position: relative;
     gap: 0;
-    display: flex;
-    flex-direction: row;
     align-items: center;
     min-height: 48px;
+    display: grid;
+    grid-template-columns: minmax(220px, 1fr) auto;
+    column-gap: 16px;
 }
 
 /* Header-main: just shows the search bar, hide everything else */
@@ -131,8 +132,9 @@
 /* Expand the search bar to fill available space */
 .variant-sidebar .global-search {
     max-width: 600px;
-    width: 100%;
-    margin: 0;
+    width: min(100%, 600px);
+    margin: 0 auto;
+    min-width: 0;
 }
 
 .variant-sidebar .global-search input {
@@ -141,10 +143,12 @@
 
 /* Buttons top-right, vertically centered */
 .variant-sidebar .header-actions {
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    right: 24px;
+    position: static;
+    transform: none;
+    justify-content: flex-end;
+    flex-wrap: nowrap;
+    min-width: max-content;
+    padding-right: 24px;
 }
 
 /* Kill extra space below header */
@@ -236,5 +240,27 @@
     .variant-sidebar .main-content {
         margin-left: 0;
         width: 100%;
+    }
+
+    .variant-sidebar .header {
+        grid-template-columns: 1fr;
+        row-gap: 8px;
+        padding: 8px 16px;
+    }
+
+    .variant-sidebar .header-main {
+        padding: 0;
+    }
+
+    .variant-sidebar .global-search {
+        max-width: none;
+        width: 100%;
+    }
+
+    .variant-sidebar .header-actions {
+        padding-right: 0;
+        justify-content: flex-start;
+        flex-wrap: wrap;
+        min-width: 0;
     }
 }

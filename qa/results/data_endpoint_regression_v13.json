@@ -1,0 +1,17 @@
+{
+  "tested_at": "2026-07-10T19:20:00Z",
+  "target": "https://ai-model-analysis-dashboard.adamholter.chatgpt.site/dashboard",
+  "release": "production v13",
+  "summary": {
+    "stories_retested": 3,
+    "passed": 3,
+    "failed": 0,
+    "real_failures": 0
+  },
+  "stories": [
+    {"id":"DASH-NAV-002","status":"Pass","result":"Share generated /dashboard.html?section=llms; production canonicalized it to /dashboard?section=llms, activated LLMs, displayed the section, and rendered 570 cards."},
+    {"id":"DASH-SHARE-001","status":"Pass","result":"Plain Share generated the deployed /dashboard.html pathname. A filtered Gemini view POST returned 200 with a new shared-view id and the success toast reported the filtered link copied."},
+    {"id":"DASH-SHARE-002","status":"Pass","result":"Opening /dashboard.html?view=a8cdfbb466ed4610 canonicalized to /dashboard?view=..., activated LLMs, restored search='Gemini', rendered the exact 37-item snapshot, and displayed 'Loaded shared view with 37 items'."}
+  ],
+  "discovered_errors": []
+}
