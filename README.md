@@ -4,6 +4,8 @@ Build your own view of the AI model landscape instead of inheriting somebody els
 
 **Live demo:** [ai-model-analysis-dashboard.adamholter.chatgpt.site](https://ai-model-analysis-dashboard.adamholter.chatgpt.site/)
 
+**Video demo:** [AI Model Analysis Dashboard — Build Your Own Model Index](https://youtu.be/SPIXdXGepuo)
+
 The dashboard combines model, provider, benchmark, pricing, throughput, and news data from sources including Artificial Analysis, OpenRouter, fal.ai, Replicate, DeepSWE, BSBench, TerminalBench, and public benchmark artifacts.
 
 ## What it does
