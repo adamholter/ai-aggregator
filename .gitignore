@@ -1,0 +1,27 @@
+logs/
+__pycache__/
+*.pyc
+*.log
+node_modules/
+.venv/
+.DS_Store
+~/
+sandbox/
+.agent-handoffs/
+.playwright-mcp/
+test-results/
+outputs/
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+/ai-dashboard
+/ai-dashboard-info
+/ai-dashboard-shm
+/ai-dashboard-wal
+
+# Environment / secrets — never commit these
+.env
+.env.local
+.env.*.local
+*.env

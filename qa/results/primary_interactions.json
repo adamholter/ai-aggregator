@@ -1,0 +1,367 @@
+{
+  "tested_at": "2026-07-10T17:32:45.425Z",
+  "target": "https://ai-model-analysis-dashboard.adamholter.chatgpt.site/",
+  "browser": "isolated headless Chromium (Playwright)",
+  "stories": [
+    {
+      "id": "DASH-LLM-002",
+      "status": "Fail",
+      "result": "locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.nav-btn[data-section=\"llms\"]')\u001b[22m\n\u001b[2m    - locator resolved to <button data-section=\"llms\" class=\"nav-btn active\">LLMs</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    55 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is visible, enabled and stable\u001b[22m\n\u001b[2m       - scrolling into view if needed\u001b[22m\n\u001b[2m       - done scrolling\u001b[22m\n\u001b[2m       - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n",
+      "errors": [
+        "locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.nav-btn[data-section=\"llms\"]')\u001b[22m\n\u001b[2m    - locator resolved to <button data-section=\"llms\" class=\"nav-btn active\">LLMs</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    55 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is visible, enabled and stable\u001b[22m\n\u001b[2m       - scrolling into view if needed\u001b[22m\n\u001b[2m       - done scrolling\u001b[22m\n\u001b[2m       - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n"
+      ]
+    },
+    {
+      "id": "DASH-LLM-003",
+      "status": "Pass",
+      "result": "Selected all four sort modes; first-card sequence: intelligence=Claude Fable 5 (Adaptive Reasoning, Max Effort, Opus 4.8 Fallback); speed=Mercury 2; cost=Grok-1; name=Apertus 70B Instruct.",
+      "errors": []
+    },
+    {
+      "id": "DASH-FAL-002",
+      "status": "Fail",
+      "result": "locator.evaluateAll: Right-hand side of 'instanceof' is not an object",
+      "errors": [
+        "locator.evaluateAll: Right-hand side of 'instanceof' is not an object"
+      ]
+    },
+    {
+      "id": "DASH-REP-002",
+      "status": "Fail",
+      "result": "locator.evaluateAll: Right-hand side of 'instanceof' is not an object",
+      "errors": [
+        "locator.evaluateAll: Right-hand side of 'instanceof' is not an object"
+      ]
+    },
+    {
+      "id": "DASH-OR-002",
+      "status": "Fail",
+      "result": "locator.evaluateAll: Right-hand side of 'instanceof' is not an object",
+      "errors": [
+        "locator.evaluateAll: Right-hand side of 'instanceof' is not an object"
+      ]
+    },
+    {
+      "id": "DASH-HYPE-002",
+      "status": "Fail",
+      "result": "Loaded 120; top sort changed order=false; refresh response=200.",
+      "errors": [
+        "Sort or forced refresh did not produce expected evidence."
+      ]
+    },
+    {
+      "id": "DASH-LATEST-002",
+      "status": "Fail",
+      "result": "locator.selectOption: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('#latest-timeframe')\u001b[22m\n\u001b[2m    - locator resolved to <select id=\"latest-timeframe\" data-listener-attached=\"true\" aria-label=\"Latest feed timeframe\">…</select>\u001b[22m\n\u001b[2m  - attempting select option action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible and enabled\u001b[22m\n\u001b[2m      - did not find some options\u001b[22m\n\u001b[2m    - retrying select option action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible and enabled\u001b[22m\n\u001b[2m      - did not find some options\u001b[22m\n\u001b[2m    - retrying select option action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    60 × waiting for element to be visible and enabled\u001b[22m\n\u001b[2m       - did not find some options\u001b[22m\n\u001b[2m     - retrying select option action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n",
+      "errors": [
+        "locator.selectOption: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('#latest-timeframe')\u001b[22m\n\u001b[2m    - locator resolved to <select id=\"latest-timeframe\" data-listener-attached=\"true\" aria-label=\"Latest feed timeframe\">…</select>\u001b[22m\n\u001b[2m  - attempting select option action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible and enabled\u001b[22m\n\u001b[2m      - did not find some options\u001b[22m\n\u001b[2m    - retrying select option action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible and enabled\u001b[22m\n\u001b[2m      - did not find some options\u001b[22m\n\u001b[2m    - retrying select option action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    60 × waiting for element to be visible and enabled\u001b[22m\n\u001b[2m       - did not find some options\u001b[22m\n\u001b[2m     - retrying select option action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n"
+      ]
+    },
+    {
+      "id": "DASH-BLOG-002",
+      "status": "Fail",
+      "result": "Loaded 500; oldest sort changed order=false; refresh response=200.",
+      "errors": [
+        "Sort or refresh failed."
+      ]
+    },
+    {
+      "id": "DASH-TEST-002",
+      "status": "Blocked",
+      "result": "Testing Catalog returned no records (Failed to load Testing Catalog: HTTP error! status: 404); tag options=1.",
+      "errors": [
+        "Failed to load Testing Catalog: HTTP error! status: 404"
+      ]
+    },
+    {
+      "id": "DASH-SEARCH-001",
+      "status": "Fail",
+      "result": "locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.nav-btn[data-section=\"llms\"]')\u001b[22m\n\u001b[2m    - locator resolved to <button class=\"nav-btn\" data-section=\"llms\">LLMs</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    56 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is visible, enabled and stable\u001b[22m\n\u001b[2m       - scrolling into view if needed\u001b[22m\n\u001b[2m       - done scrolling\u001b[22m\n\u001b[2m       - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n",
+      "errors": [
+        "locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.nav-btn[data-section=\"llms\"]')\u001b[22m\n\u001b[2m    - locator resolved to <button class=\"nav-btn\" data-section=\"llms\">LLMs</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    56 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is visible, enabled and stable\u001b[22m\n\u001b[2m       - scrolling into view if needed\u001b[22m\n\u001b[2m       - done scrolling\u001b[22m\n\u001b[2m       - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n"
+      ]
+    },
+    {
+      "id": "DASH-MODAL-001",
+      "status": "Fail",
+      "result": "locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.nav-btn[data-section=\"llms\"]')\u001b[22m\n\u001b[2m    - locator resolved to <button class=\"nav-btn\" data-section=\"llms\">LLMs</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    56 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is visible, enabled and stable\u001b[22m\n\u001b[2m       - scrolling into view if needed\u001b[22m\n\u001b[2m       - done scrolling\u001b[22m\n\u001b[2m       - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n",
+      "errors": [
+        "locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.nav-btn[data-section=\"llms\"]')\u001b[22m\n\u001b[2m    - locator resolved to <button class=\"nav-btn\" data-section=\"llms\">LLMs</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    56 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is visible, enabled and stable\u001b[22m\n\u001b[2m       - scrolling into view if needed\u001b[22m\n\u001b[2m       - done scrolling\u001b[22m\n\u001b[2m       - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n"
+      ]
+    },
+    {
+      "id": "DASH-COMP-001",
+      "status": "Fail",
+      "result": "Rendered comparable-card controls found: 0; no user-visible compare selection controls were present on loaded cards.",
+      "errors": [
+        "No user-visible way to add/remove models from comparison."
+      ]
+    },
+    {
+      "id": "DASH-COMP-002",
+      "status": "Blocked",
+      "result": "Comparison charts cannot be reached because deployed cards expose zero comparison-selection controls.",
+      "errors": [
+        "Blocked by missing comparison entry controls."
+      ]
+    },
+    {
+      "id": "DASH-SHARE-001",
+      "status": "Fail",
+      "result": "locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.nav-btn[data-section=\"llms\"]')\u001b[22m\n\u001b[2m    - locator resolved to <button class=\"nav-btn\" data-section=\"llms\">LLMs</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    56 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is visible, enabled and stable\u001b[22m\n\u001b[2m       - scrolling into view if needed\u001b[22m\n\u001b[2m       - done scrolling\u001b[22m\n\u001b[2m       - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n",
+      "errors": [
+        "locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.nav-btn[data-section=\"llms\"]')\u001b[22m\n\u001b[2m    - locator resolved to <button class=\"nav-btn\" data-section=\"llms\">LLMs</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    56 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is visible, enabled and stable\u001b[22m\n\u001b[2m       - scrolling into view if needed\u001b[22m\n\u001b[2m       - done scrolling\u001b[22m\n\u001b[2m       - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n"
+      ]
+    },
+    {
+      "id": "DASH-SHARE-002",
+      "status": "Fail",
+      "result": "locator.fill: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('#llm-search')\u001b[22m\n\u001b[2m    - locator resolved to <input type=\"text\" id=\"llm-search\" autocomplete=\"off\" oninput=\"filterLLMData()\" placeholder=\"Search models...\"/>\u001b[22m\n\u001b[2m    - fill(\"\")\u001b[22m\n\u001b[2m  - attempting fill action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and editable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying fill action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and editable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying fill action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    60 × waiting for element to be visible, enabled and editable\u001b[22m\n\u001b[2m       - element is not visible\u001b[22m\n\u001b[2m     - retrying fill action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n",
+      "errors": [
+        "locator.fill: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('#llm-search')\u001b[22m\n\u001b[2m    - locator resolved to <input type=\"text\" id=\"llm-search\" autocomplete=\"off\" oninput=\"filterLLMData()\" placeholder=\"Search models...\"/>\u001b[22m\n\u001b[2m    - fill(\"\")\u001b[22m\n\u001b[2m  - attempting fill action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and editable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying fill action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and editable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying fill action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    60 × waiting for element to be visible, enabled and editable\u001b[22m\n\u001b[2m       - element is not visible\u001b[22m\n\u001b[2m     - retrying fill action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n"
+      ]
+    },
+    {
+      "id": "DASH-EXPORT-001",
+      "status": "Fail",
+      "result": "locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.nav-btn[data-section=\"llms\"]')\u001b[22m\n\u001b[2m    - locator resolved to <button class=\"nav-btn\" data-section=\"llms\">LLMs</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    57 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is visible, enabled and stable\u001b[22m\n\u001b[2m       - scrolling into view if needed\u001b[22m\n\u001b[2m       - done scrolling\u001b[22m\n\u001b[2m       - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n",
+      "errors": [
+        "locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.nav-btn[data-section=\"llms\"]')\u001b[22m\n\u001b[2m    - locator resolved to <button class=\"nav-btn\" data-section=\"llms\">LLMs</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    57 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is visible, enabled and stable\u001b[22m\n\u001b[2m       - scrolling into view if needed\u001b[22m\n\u001b[2m       - done scrolling\u001b[22m\n\u001b[2m       - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n"
+      ]
+    },
+    {
+      "id": "DASH-THEME-001",
+      "status": "Fail",
+      "result": "f.reload is not a function",
+      "errors": [
+        "f.reload is not a function"
+      ]
+    },
+    {
+      "id": "DASH-SET-002",
+      "status": "Pass",
+      "result": "Browser storage lifecycle: sk-or-test-qa-only -> null.",
+      "errors": []
+    },
+    {
+      "id": "DASH-SET-003",
+      "status": "Fail",
+      "result": "locator.uncheck: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('#setting-experimental-mode')\u001b[22m\n\u001b[2m    - locator resolved to <input type=\"checkbox\" id=\"setting-experimental-mode\"/>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    56 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is not visible\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n",
+      "errors": [
+        "locator.uncheck: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('#setting-experimental-mode')\u001b[22m\n\u001b[2m    - locator resolved to <input type=\"checkbox\" id=\"setting-experimental-mode\"/>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    56 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is not visible\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n"
+      ]
+    },
+    {
+      "id": "DASH-SET-005",
+      "status": "Fail",
+      "result": "Settings layout selector count=0; body class=variant-rail.",
+      "errors": [
+        "No user-visible rail/sidebar layout control exists in the deployed Settings modal."
+      ]
+    },
+    {
+      "id": "DASH-HOTKEY-001",
+      "status": "Fail",
+      "result": "Cannot read properties of undefined (reading 'press')",
+      "errors": [
+        "Cannot read properties of undefined (reading 'press')"
+      ]
+    },
+    {
+      "id": "DASH-TOUR-001",
+      "status": "Fail",
+      "result": "Cannot read properties of undefined (reading 'press')",
+      "errors": [
+        "Cannot read properties of undefined (reading 'press')"
+      ]
+    },
+    {
+      "id": "DASH-CHANGE-001",
+      "status": "Fail",
+      "result": "Snapshot stored=false; live console snapshot warning=Failed to save data snapshot: TypeError: llms.map is not a function\n    at createDataSnapshot (https://ai-model-analysis-dashboard.adamholter.chatgpt.site/static/script.js?v=1766078500:738:26)\n    at saveDataSnapshot (https://ai-model-analysis-dashboard.adamholter.chatgpt.site/static/script.js?v=1766078500:752:26)\n    at checkWhatsNew (https://ai-model-analysis-dashboard.adamholter.chatgpt.site/static/script.js?v=1766078500:887:9).",
+      "errors": [
+        "Failed to save data snapshot: TypeError: llms.map is not a function\n    at createDataSnapshot (https://ai-model-analysis-dashboard.adamholter.chatgpt.site/static/script.js?v=1766078500:738:26)\n    at saveDataSnapshot (https://ai-model-analysis-dashboard.adamholter.chatgpt.site/static/script.js?v=1766078500:752:26)\n    at checkWhatsNew (https://ai-model-analysis-dashboard.adamholter.chatgpt.site/static/script.js?v=1766078500:887:9)"
+      ]
+    },
+    {
+      "id": "DASH-NAV-002",
+      "status": "Fail",
+      "result": "Valid ?section=blog activated and displayed Blog: false; invalid value safely left active section “llms”.",
+      "errors": [
+        "Direct section activation or safe invalid fallback failed."
+      ]
+    },
+    {
+      "id": "DASH-LLM-004",
+      "status": "Fail",
+      "result": "locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('#llm-refresh')\u001b[22m\n",
+      "errors": [
+        "locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('#llm-refresh')\u001b[22m\n"
+      ]
+    },
+    {
+      "id": "DASH-SEARCH-002",
+      "status": "Fail",
+      "result": "Unmatched-results UI offered Ask Agent=true; active section=agent-exp; original query found in Agent surface=false.",
+      "errors": [
+        "Ask Agent did not carry the original unmatched query through the full user path."
+      ]
+    },
+    {
+      "id": "DASH-MODAL-002",
+      "status": "Fail",
+      "result": "locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.nav-btn[data-section=\"llms\"]')\u001b[22m\n\u001b[2m    - locator resolved to <button class=\"nav-btn\" data-section=\"llms\">LLMs</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    56 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is visible, enabled and stable\u001b[22m\n\u001b[2m       - scrolling into view if needed\u001b[22m\n\u001b[2m       - done scrolling\u001b[22m\n\u001b[2m       - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n",
+      "errors": [
+        "locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.nav-btn[data-section=\"llms\"]')\u001b[22m\n\u001b[2m    - locator resolved to <button class=\"nav-btn\" data-section=\"llms\">LLMs</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    56 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is visible, enabled and stable\u001b[22m\n\u001b[2m       - scrolling into view if needed\u001b[22m\n\u001b[2m       - done scrolling\u001b[22m\n\u001b[2m       - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n"
+      ]
+    },
+    {
+      "id": "DASH-EXPORT-002",
+      "status": "Fail",
+      "result": "locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('#llms-data .pin-control').first()\u001b[22m\n\u001b[2m    - locator resolved to <button type=\"button\" class=\"pin-control\" aria-label=\"Pin this card\" data-pin-key=\"llms:cd55210d-358e-4df1-ba9c-9acb5f186cc9\">…</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    57 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is not visible\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n",
+      "errors": [
+        "locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('#llms-data .pin-control').first()\u001b[22m\n\u001b[2m    - locator resolved to <button type=\"button\" class=\"pin-control\" aria-label=\"Pin this card\" data-pin-key=\"llms:cd55210d-358e-4df1-ba9c-9acb5f186cc9\">…</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    57 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is not visible\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n"
+      ]
+    },
+    {
+      "id": "DASH-SET-004",
+      "status": "Fail",
+      "result": "locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('#settings-btn')\u001b[22m\n\u001b[2m    - locator resolved to <button title=\"Settings\" id=\"settings-btn\" aria-label=\"Settings\" class=\"settings-button\">…</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div id=\"settings-modal\" class=\"modal-overlay\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div id=\"settings-modal\" class=\"modal-overlay\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    56 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is visible, enabled and stable\u001b[22m\n\u001b[2m       - scrolling into view if needed\u001b[22m\n\u001b[2m       - done scrolling\u001b[22m\n\u001b[2m       - <div id=\"settings-modal\" class=\"modal-overlay\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n",
+      "errors": [
+        "locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('#settings-btn')\u001b[22m\n\u001b[2m    - locator resolved to <button title=\"Settings\" id=\"settings-btn\" aria-label=\"Settings\" class=\"settings-button\">…</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div id=\"settings-modal\" class=\"modal-overlay\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div id=\"settings-modal\" class=\"modal-overlay\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    56 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is visible, enabled and stable\u001b[22m\n\u001b[2m       - scrolling into view if needed\u001b[22m\n\u001b[2m       - done scrolling\u001b[22m\n\u001b[2m       - <div id=\"settings-modal\" class=\"modal-overlay\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n"
+      ]
+    }
+  ],
+  "discovered_errors": [
+    {
+      "severity": "High",
+      "story_ids": [
+        "DASH-COMP-001",
+        "DASH-COMP-002"
+      ],
+      "observed": "Comparison functions exist, but loaded cards have no [data-compare-id] controls, so users cannot enter comparison or charts.",
+      "reproduction": "Open LLMs on production; inspect/click any model cards; no Compare control appears; zero [data-compare-id] elements exist."
+    },
+    {
+      "severity": "Medium",
+      "story_ids": [
+        "DASH-SET-005"
+      ],
+      "observed": "Settings promises sidebar style but exposes no rail/sidebar layout selector.",
+      "reproduction": "Open Settings and inspect Models, API & Auth, and Advanced tabs; #setting-ui-layout is absent."
+    },
+    {
+      "severity": "Medium",
+      "story_ids": [
+        "DASH-SEARCH-002"
+      ],
+      "observed": "Ask Agent from unmatched global search does not complete query handoff into the Agent surface.",
+      "reproduction": "Type a unique unmatched query in global search and choose Ask Agent; inspect Agent section for original query."
+    },
+    {
+      "severity": "Medium",
+      "story_ids": [
+        "DASH-CHANGE-001"
+      ],
+      "observed": "What’s New snapshot creation throws because the loaded LLM payload is not an array; persistence never initializes.",
+      "reproduction": "Load production with clean storage; console reports: Failed to save data snapshot: TypeError: llms.map is not a function\n    at createDataSnapshot (https://ai-model-analysis-dashboard.adamholter.chatgpt.site/static/script.js?v=1766078500:738:26)\n    at saveDataSnapshot (https://ai-model-analysis-dashboard.adamholter.chatgpt.site/static/script.js?v=1766078500:752:26)\n    at checkWhatsNew (https://ai-model-analysis-dashboard.adamholter.chatgpt.site/static/script.js?v=1766078500:887:9)"
+    },
+    {
+      "severity": "Medium",
+      "story_ids": [
+        "DASH-SHARE-001"
+      ],
+      "observed": "locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.nav-btn[data-section=\"llms\"]')\u001b[22m\n\u001b[2m    - locator resolved to <button class=\"nav-btn\" data-section=\"llms\">LLMs</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    56 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is visible, enabled and stable\u001b[22m\n\u001b[2m       - scrolling into view if needed\u001b[22m\n\u001b[2m       - done scrolling\u001b[22m\n\u001b[2m       - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n",
+      "reproduction": "Follow the canonical user story on the deployed dashboard; observe the recorded result/error."
+    },
+    {
+      "severity": "Medium",
+      "story_ids": [
+        "DASH-SHARE-002"
+      ],
+      "observed": "locator.fill: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('#llm-search')\u001b[22m\n\u001b[2m    - locator resolved to <input type=\"text\" id=\"llm-search\" autocomplete=\"off\" oninput=\"filterLLMData()\" placeholder=\"Search models...\"/>\u001b[22m\n\u001b[2m    - fill(\"\")\u001b[22m\n\u001b[2m  - attempting fill action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and editable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying fill action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and editable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying fill action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    60 × waiting for element to be visible, enabled and editable\u001b[22m\n\u001b[2m       - element is not visible\u001b[22m\n\u001b[2m     - retrying fill action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n",
+      "reproduction": "Follow the canonical user story on the deployed dashboard; observe the recorded result/error."
+    },
+    {
+      "severity": "Medium",
+      "story_ids": [
+        "DASH-EXPORT-001"
+      ],
+      "observed": "locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.nav-btn[data-section=\"llms\"]')\u001b[22m\n\u001b[2m    - locator resolved to <button class=\"nav-btn\" data-section=\"llms\">LLMs</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    57 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is visible, enabled and stable\u001b[22m\n\u001b[2m       - scrolling into view if needed\u001b[22m\n\u001b[2m       - done scrolling\u001b[22m\n\u001b[2m       - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n",
+      "reproduction": "Follow the canonical user story on the deployed dashboard; observe the recorded result/error."
+    },
+    {
+      "severity": "Medium",
+      "story_ids": [
+        "DASH-MODAL-001"
+      ],
+      "observed": "locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.nav-btn[data-section=\"llms\"]')\u001b[22m\n\u001b[2m    - locator resolved to <button class=\"nav-btn\" data-section=\"llms\">LLMs</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    56 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is visible, enabled and stable\u001b[22m\n\u001b[2m       - scrolling into view if needed\u001b[22m\n\u001b[2m       - done scrolling\u001b[22m\n\u001b[2m       - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n",
+      "reproduction": "Follow the canonical user story on the deployed dashboard; observe the recorded result/error."
+    },
+    {
+      "severity": "Medium",
+      "story_ids": [
+        "DASH-MODAL-002"
+      ],
+      "observed": "locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.nav-btn[data-section=\"llms\"]')\u001b[22m\n\u001b[2m    - locator resolved to <button class=\"nav-btn\" data-section=\"llms\">LLMs</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    56 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is visible, enabled and stable\u001b[22m\n\u001b[2m       - scrolling into view if needed\u001b[22m\n\u001b[2m       - done scrolling\u001b[22m\n\u001b[2m       - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n",
+      "reproduction": "Follow the canonical user story on the deployed dashboard; observe the recorded result/error."
+    }
+  ],
+  "console_and_page_errors": [
+    {
+      "type": "console-warning",
+      "text": "Failed to save data snapshot: TypeError: llms.map is not a function\n    at createDataSnapshot (https://ai-model-analysis-dashboard.adamholter.chatgpt.site/static/script.js?v=1766078500:738:26)\n    at saveDataSnapshot (https://ai-model-analysis-dashboard.adamholter.chatgpt.site/static/script.js?v=1766078500:752:26)\n    at checkWhatsNew (https://ai-model-analysis-dashboard.adamholter.chatgpt.site/static/script.js?v=1766078500:887:9)",
+      "url": "https://ai-model-analysis-dashboard.adamholter.chatgpt.site/static/script.js?v=1766078500"
+    },
+    {
+      "type": "console-warning",
+      "text": "Failed to save data snapshot: TypeError: llms.map is not a function\n    at createDataSnapshot (https://ai-model-analysis-dashboard.adamholter.chatgpt.site/static/script.js?v=1766078500:738:26)\n    at saveDataSnapshot (https://ai-model-analysis-dashboard.adamholter.chatgpt.site/static/script.js?v=1766078500:752:26)",
+      "url": "https://ai-model-analysis-dashboard.adamholter.chatgpt.site/static/script.js?v=1766078500"
+    },
+    {
+      "type": "console-warning",
+      "text": "Failed to save data snapshot: TypeError: llms.map is not a function\n    at createDataSnapshot (https://ai-model-analysis-dashboard.adamholter.chatgpt.site/static/script.js?v=1766078500:738:26)\n    at saveDataSnapshot (https://ai-model-analysis-dashboard.adamholter.chatgpt.site/static/script.js?v=1766078500:752:26)",
+      "url": "https://ai-model-analysis-dashboard.adamholter.chatgpt.site/static/script.js?v=1766078500"
+    },
+    {
+      "type": "console-warning",
+      "text": "Failed to save data snapshot: TypeError: llms.map is not a function\n    at createDataSnapshot (https://ai-model-analysis-dashboard.adamholter.chatgpt.site/static/script.js?v=1766078500:738:26)\n    at saveDataSnapshot (https://ai-model-analysis-dashboard.adamholter.chatgpt.site/static/script.js?v=1766078500:752:26)\n    at checkWhatsNew (https://ai-model-analysis-dashboard.adamholter.chatgpt.site/static/script.js?v=1766078500:887:9)",
+      "url": "https://ai-model-analysis-dashboard.adamholter.chatgpt.site/static/script.js?v=1766078500"
+    },
+    {
+      "type": "pageerror",
+      "text": "Cannot read properties of null (reading 'toLowerCase')",
+      "url": "https://ai-model-analysis-dashboard.adamholter.chatgpt.site/?section=not-a-real-section"
+    },
+    {
+      "type": "console-error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()",
+      "url": "https://ai-model-analysis-dashboard.adamholter.chatgpt.site/api/latest-preview?timeframe=day&limit=10&cache_bust=false"
+    },
+    {
+      "type": "console-error",
+      "text": "API call failed: Error: HTTP error! status: 404\n    at makeAPICall (https://ai-model-analysis-dashboard.adamholter.chatgpt.site/static/script.js?v=1766078500:3090:19)\n    at async loadLatestFeed (https://ai-model-analysis-dashboard.adamholter.chatgpt.site/static/script.js?v=1766078500:4426:32)",
+      "url": "https://ai-model-analysis-dashboard.adamholter.chatgpt.site/static/script.js?v=1766078500"
+    },
+    {
+      "type": "console-error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()",
+      "url": "https://ai-model-analysis-dashboard.adamholter.chatgpt.site/api/testing-catalog?fast_load=true&cache_bust=true"
+    },
+    {
+      "type": "console-error",
+      "text": "API call failed: Error: HTTP error! status: 404\n    at makeAPICall (https://ai-model-analysis-dashboard.adamholter.chatgpt.site/static/script.js?v=1766078500:3090:19)\n    at async loadTestingCatalogData (https://ai-model-analysis-dashboard.adamholter.chatgpt.site/static/script.js?v=1766078500:3920:25)",
+      "url": "https://ai-model-analysis-dashboard.adamholter.chatgpt.site/static/script.js?v=1766078500"
+    },
+    {
+      "type": "console-error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()",
+      "url": "https://ai-model-analysis-dashboard.adamholter.chatgpt.site/api/testing-catalog?cache_bust=true"
+    },
+    {
+      "type": "console-error",
+      "text": "API call failed: Error: HTTP error! status: 404\n    at makeAPICall (https://ai-model-analysis-dashboard.adamholter.chatgpt.site/static/script.js?v=1766078500:3090:19)\n    at async https://ai-model-analysis-dashboard.adamholter.chatgpt.site/static/script.js?v=1766078500:3895:33",
+      "url": "https://ai-model-analysis-dashboard.adamholter.chatgpt.site/static/script.js?v=1766078500"
+    }
+  ]
+}

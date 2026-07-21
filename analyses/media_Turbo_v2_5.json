@@ -1,0 +1,1163 @@
+{
+  "model_name": "Turbo v2.5",
+  "model_type": "media",
+  "analysis": "## Model Overview\n\n### Name, Creator, and Category\nThe model is named \"Turbo v2.5\" and was created by ElevenLabs (ID: 8d057760-0a8b-460a-9625-6dd261bb325c). It belongs to the \"text-to-speech\" media category, as indicated in the model data and the structured dataset summary. This positions it within a competitive field of 20 ranked models in the Artificial Analysis â Text-to-Speech category.\n\n### Key Specifications and Capabilities\nThe provided data does not include detailed technical specifications or explicit capabilities beyond its categorization as a text-to-speech (TTS) model. It is identified by the slug \"turbo-v2-5\" and has a unique ID of \"2d3f6b08-353d-40e9-a5e7-a3c1952b2dd8\". As part of ElevenLabs' portfolio, which features prominently in the top rankings of the text-to-speech category (e.g., ElevenLabs v3 at rank 2), Turbo v2.5 is implied to support natural language audio generation, though specific features like language support, voice customization, or speed optimizations are not detailed in the datasets.\n\n## Performance Analysis\n\n### Benchmarks and Scores\nIn the Artificial Analysis â Text-to-Speech dataset, Turbo v2.5 achieves an ELO score of 1111, placing it at rank 6 out of 20 models. The 95% confidence interval (CI95) is reported as \"-12/+13\", indicating moderate statistical reliability in its scoring, with potential variability of up to 13 points upward or 12 points downward. This ELO score reflects comparative performance in blind evaluations, likely assessing factors such as naturalness, expressiveness, and clarity in generated speech.\n\n### Comparisons with Similar Models\nTurbo v2.5 ranks below other ElevenLabs models in the same category, such as Multilingual v2 (ELO 1116, rank 5, CI95 -12/+12) and ElevenLabs v3 (ELO 1138, rank 2, CI95 -26/+28). It outperforms lower-ranked models like Flash v2.5 (also from ElevenLabs, ELO 1101, rank 7, CI95 -14/+15) and OpenAudio S1 from Fish Audio (ELO 1098, rank 8, CI95 -15/+15). Compared to the category leader, MiniMax's Speech-02-HD (ELO 1142, rank 1, CI95 -16/+15), Turbo v2.5 trails by 31 ELO points, suggesting it is solid but not frontier-level in perceived quality. OpenAI's TTS-1 (ELO 1125, rank 3, CI95 -12/+14) edges it out by 14 points, while MiniMax's Speech-02-Turbo (ELO 1124, rank 4, CI95 -15/+17) is slightly superior. Overall, ElevenLabs models dominate the mid-to-upper tier, with Turbo v2.5 representing a balanced, non-top performer in this lineup. No direct comparisons are available from the fal.ai dataset, which focuses on diverse modalities and does not rank TTS models like Turbo v2.5.\n\n## Technical Details\n\n### Architecture Insights\nNo information on the underlying architecture, such as model size, training data, or diffusion-based mechanisms, is present in the provided datasets. It is simply cataloged as a text-to-speech model without further technical breakdowns.\n\n### Input/Output Specifications\nThe datasets do not specify input formats (e.g., supported languages, text length limits) or output details (e.g., audio formats, sample rates, or voice options). As a TTS model, it is inferred to convert text inputs to audio outputs, but explicit specifications are absent. In contrast, the fal.ai dataset provides examples for other TTS models like Index TTS 2.0, which generates \"natural, clear speeches\" at a per-audio-second cost, but this does not apply to Turbo v2.5.\n\n## Pricing & Availability\n\n### Cost Structure and Pricing Tiers\nNo pricing information is available for Turbo v2.5 in the provided data. The Artificial Analysis â Text-to-Speech category focuses on performance rankings without cost details. The fal.ai dataset includes pricing for other TTS models, such as Index TTS 2.0 at 0.002 per generated audio second, but Turbo v2.5 is not part of that ecosystem. ElevenLabs models like v3 and Multilingual v2 also lack pricing here, suggesting availability through ElevenLabs' own platform rather than fal.ai.\n\n### Availability and Access Methods\nTurbo v2.5 is listed as an active model in the database with a slug for integration (e.g., API access via \"turbo-v2-5\"). It is part of the ElevenLabs suite, which is highlighted as prominent in the text-to-speech rankings. Access is implied through provider-specific APIs, similar to how models like OpenAI's TTS-1 are available, but no explicit methods (e.g., API endpoints or licensing) are detailed. The fal.ai dataset shows commercial licensing for many models, but Turbo v2.5 is not included there.\n\n## Use Cases & Applications\n\n### Recommended Applications Based on Performance Data\nGiven its rank 6 ELO of 1111 in a 20-model field, Turbo v2.5 is suitable for general-purpose text-to-speech applications requiring reliable but not elite audio quality, such as audiobook narration, virtual assistants, or content localization. Its position among top ElevenLabs models suggests it excels in multilingual or fast-generation scenarios, akin to Multilingual v2 (rank 5), making it appropriate for real-time apps like chatbots or e-learning tools. The moderate CI95 indicates consistent mid-tier performance, ideal for cost-sensitive deployments where top-tier naturalness (e.g., Speech-02-HD) is not critical.\n\n### Strengths and Limitations\n**Strengths**: As an ElevenLabs product in a category where the company holds multiple top spots (e.g., v3 at rank 2), Turbo v2.5 benefits from strong overall ecosystem performance, implying robust expressiveness and clarity. Its ELO places it ahead of models like Amazon's Polly Long-Form (rank 9, ELO 1098) and OpenAI's TTS-1 HD (rank 19, ELO 1037), suggesting better perceived quality for standard TTS tasks.\n\n**Limitations**: The ELO of 1111 is notably lower than leaders like Speech-02-HD (1142) or ElevenLabs v3 (1138), indicating potential gaps in high-fidelity naturalness or handling complex prosody, as inferred from ranking differences. The CI95 (-12/+13) shows some uncertainty, and without architecture details, it may lack advanced features like HD audio seen in top models (e.g., Speech-02-HD). No data on latency or scalability limits its suitability for ultra-fast or large-scale use.\n\n## Community & Updates\n\n### Recent Developments or Updates\nThe provided datasets do not include timestamps, release notes, or update histories for Turbo v2.5. It appears alongside other ElevenLabs models like v3 (rank 2) and Multilingual v2 (rank 5), suggesting it may be a variant in an evolving lineup, but no specific developments are noted. The fal.ai dataset mentions recent additions like Index TTS 2.0 (dated 2025-10-07), but this is unrelated.\n\n### User Feedback and Adoption\nNo user feedback, reviews, or adoption metrics are present in the data. ElevenLabs is noted as featuring \"prominently near the top of the rankings\" in the text-to-speech summary, implying strong industry adoption for its models overall, including Turbo v2.5 as a mid-tier option. The raw dataset lists it without community indicators, and highlights focus on category leaders rather than this model specifically.",
+  "traces": [
+    {
+      "step": "Dataset Fetch",
+      "description": "Loaded datasets: Artificial Analysis — Text-to-Speech (text-to-speech), fal.ai Models (fal)",
+      "tool": "fetch_data (3 categories)",
+      "status": "success"
+    },
+    {
+      "step": "Analysis Generation",
+      "description": "Generating comprehensive model analysis",
+      "tool": "Grok-4 Fast",
+      "status": "success"
+    }
+  ],
+  "model_data": {
+    "ci95": "-12/+13",
+    "elo": 1111,
+    "id": "2d3f6b08-353d-40e9-a5e7-a3c1952b2dd8",
+    "model_creator": {
+      "id": "8d057760-0a8b-460a-9625-6dd261bb325c",
+      "name": "ElevenLabs"
+    },
+    "name": "Turbo v2.5",
+    "rank": 6,
+    "slug": "turbo-v2-5",
+    "mediaCategory": "text-to-speech"
+  },
+  "context": {
+    "categories": [
+      {
+        "id": "text-to-speech",
+        "label": "Artificial Analysis — Text-to-Speech",
+        "items": 20,
+        "source": "artificial-analysis"
+      },
+      {
+        "id": "fal",
+        "label": "fal.ai Models",
+        "items": 40,
+        "source": "fal.ai"
+      }
+    ],
+    "structured": {
+      "category_summaries": [
+        {
+          "id": "text-to-speech",
+          "label": "Artificial Analysis — Text-to-Speech",
+          "summary": "The Text-to-Speech category ranks 20 models, with 'Speech-02-HD' from MiniMax holding the top rank (Rank 1) with an ELO of 1142. ElevenLabs and OpenAI also feature prominently near the top of the rankings.",
+          "top_items": [
+            {
+              "name": "Speech-02-HD",
+              "provider": "MiniMax",
+              "key_metrics": {
+                "elo": 1142,
+                "rank": 1
+              },
+              "notes": "Confidence Interval at 95%: -16/+15"
+            },
+            {
+              "name": "ElevenLabs v3",
+              "provider": "ElevenLabs",
+              "key_metrics": {
+                "elo": 1138,
+                "rank": 2
+              },
+              "notes": "Confidence Interval at 95%: -26/+28"
+            },
+            {
+              "name": "TTS-1",
+              "provider": "OpenAI",
+              "key_metrics": {
+                "elo": 1125,
+                "rank": 3
+              },
+              "notes": "Confidence Interval at 95%: -12/+14"
+            }
+          ]
+        },
+        {
+          "id": "fal",
+          "label": "fal.ai Models",
+          "summary": "The fal.ai dataset covers a broad range of modalities including text-to-video, image-to-video, image-to-image, and vision, featuring new models like Veo 3.1, Sora 2, and Moondream3 Preview. Pricing is highly varied, with some models charging per second of video (e.g., Veo 3.1 at $0.20/s) and others by image or token count.",
+          "top_items": [
+            {
+              "name": "Sora 2",
+              "provider": "OpenAI (via fal-ai)",
+              "key_metrics": {
+                "category": "text-to-video"
+              },
+              "notes": "Text-to-video pricing is $0.1/s (Sora 2) or $0.30/s for 720p (Sora 2 Pro)."
+            },
+            {
+              "name": "Veo 3.1",
+              "provider": "Google (via fal-ai)",
+              "key_metrics": {
+                "category": "text-to-video"
+              },
+              "notes": "Pricing is $0.20 per second (audio off) or $0.40 per second (audio on)."
+            },
+            {
+              "name": "Index TTS 2.0",
+              "provider": "IndexTeam (via fal-ai)",
+              "key_metrics": {
+                "category": "text-to-speech"
+              },
+              "notes": "Pricing is 0.002 per generated audio second."
+            }
+          ]
+        }
+      ],
+      "highlights": [
+        "In Text-to-Speech, MiniMax's 'Speech-02-HD' is the highest-ranked model with an ELO of 1142.",
+        "The 'fal' category includes multiple versions of models for different use cases, notably 'Veo 3.1' variants (Fast, Reference-to-Video, etc.) and 'Sora 2' variants (Pro, Remix).",
+        "Pricing for video generation in the fal category shows significant variation, from models like 'Index TTS 2.0' charging per audio second to models like 'Veo 3.1' charging $0.20 per video second (audio off)."
+      ],
+      "markdown_summary": "The analysis covers two datasets: **Artificial Analysis — Text-to-Speech** and **fal.ai Models**.\n\n### Artificial Analysis — Text-to-Speech\nThis category contains 20 ranked models. **Speech-02-HD** from **MiniMax** leads the field (Rank 1, ELO 1142). **ElevenLabs v3** follows closely (Rank 2, ELO 1138), and **OpenAI's TTS-1** is ranked third (Rank 3, ELO 1125).\n\n### fal.ai Models\nThis category showcases 40 models across modalities like Text-to-Video, Image-to-Video, Image-to-Image, and Vision. Notable models include **Veo 3.1** from Google and **Sora 2** from OpenAI, each offering multiple endpoints (e.g., Fast, Pro, Remix).\n\n*   **Text-to-Video:** High-performance models include **Sora 2** (pricing starts at $0.1/s) and the standard **Veo 3.1** ($0.20/s base rate).\n*   **Vision/Other:** Models like **Moondream3 Preview** provide specialized vision capabilities (Detect, Point, Query, Caption).\n*   **Pricing Insight:** Pricing in this category is granular, often defined by time (per second of video) or data volume (per token/image).",
+      "_model_id": "google/gemini-2.5-flash-lite-preview-09-2025",
+      "_raw_length": 3917
+    },
+    "datasets": {
+      "text-to-speech": [
+        {
+          "id": "65166a7b-b42c-4a68-b051-9662facd2f91",
+          "name": "Speech-02-HD",
+          "slug": "speech-02-hd",
+          "model_creator": {
+            "id": "a31a9071-6144-4dbb-92dc-2e02d653ecea",
+            "name": "MiniMax"
+          },
+          "elo": 1142,
+          "rank": 1,
+          "ci95": "-16/+15"
+        },
+        {
+          "id": "3f002d44-984e-411f-8a66-dcb90dcdee84",
+          "name": "ElevenLabs v3",
+          "slug": "elevenlabs-v3-1",
+          "model_creator": {
+            "id": "8d057760-0a8b-460a-9625-6dd261bb325c",
+            "name": "ElevenLabs"
+          },
+          "elo": 1138,
+          "rank": 2,
+          "ci95": "-26/+28"
+        },
+        {
+          "id": "78588185-b188-46fb-8d06-c06f52009715",
+          "name": "TTS-1",
+          "slug": "tts-1",
+          "model_creator": {
+            "id": "e67e56e3-15cd-43db-b679-da4660a69f41",
+            "name": "OpenAI"
+          },
+          "elo": 1125,
+          "rank": 3,
+          "ci95": "-12/+14"
+        },
+        {
+          "id": "953aeced-7f15-4a02-a2f5-3c9cfccbbb39",
+          "name": "Speech-02-Turbo",
+          "slug": "speech-02-turbo",
+          "model_creator": {
+            "id": "a31a9071-6144-4dbb-92dc-2e02d653ecea",
+            "name": "MiniMax"
+          },
+          "elo": 1124,
+          "rank": 4,
+          "ci95": "-15/+17"
+        },
+        {
+          "id": "9cd43eb4-f436-4ea2-b3d9-5c912bdea912",
+          "name": "Multilingual v2",
+          "slug": "multilingual-v2",
+          "model_creator": {
+            "id": "8d057760-0a8b-460a-9625-6dd261bb325c",
+            "name": "ElevenLabs"
+          },
+          "elo": 1116,
+          "rank": 5,
+          "ci95": "-12/+12"
+        },
+        {
+          "id": "2d3f6b08-353d-40e9-a5e7-a3c1952b2dd8",
+          "name": "Turbo v2.5",
+          "slug": "turbo-v2-5",
+          "model_creator": {
+            "id": "8d057760-0a8b-460a-9625-6dd261bb325c",
+            "name": "ElevenLabs"
+          },
+          "elo": 1111,
+          "rank": 6,
+          "ci95": "-12/+13"
+        },
+        {
+          "id": "cccb3742-da05-4447-910c-43a5d3eda5b7",
+          "name": "Flash v2.5",
+          "slug": "flash-v2-5",
+          "model_creator": {
+            "id": "8d057760-0a8b-460a-9625-6dd261bb325c",
+            "name": "ElevenLabs"
+          },
+          "elo": 1101,
+          "rank": 7,
+          "ci95": "-14/+15"
+        },
+        {
+          "id": "46730007-0d7b-4395-8077-2b5104ea79b0",
+          "name": "OpenAudio S1",
+          "slug": "openaudio-s1",
+          "model_creator": {
+            "id": "b28a9155-95e8-460a-82fe-8271e5f2bc77",
+            "name": "Fish Audio"
+          },
+          "elo": 1098,
+          "rank": 8,
+          "ci95": "-15/+15"
+        },
+        {
+          "id": "8b4be309-2f31-4ff2-be79-a6652c29ab12",
+          "name": "Polly Long-Form",
+          "slug": "polly-long-form",
+          "model_creator": {
+            "id": "bb5a4e55-7969-4ab4-8702-3b9fd6547dc2",
+            "name": "Amazon"
+          },
+          "elo": 1098,
+          "rank": 9,
+          "ci95": "-49/+55"
+        },
+        {
+          "id": "1df468c9-1994-44ac-8515-672074258436",
+          "name": "Inworld TTS",
+          "slug": "inworld-tts",
+          "model_creator": {
+            "id": "3aab6d2e-04b0-43ee-996f-d8ef76ac3232",
+            "name": "Inworld"
+          },
+          "elo": 1087,
+          "rank": 10,
+          "ci95": "-14/+16"
+        },
+        {
+          "id": "6de03a42-66ce-484a-9c01-95fe9b4d7422",
+          "name": "Kokoro 82M v1.0",
+          "slug": "kokoro-82m-v1-0",
+          "model_creator": {
+            "id": "7aef44e5-4337-4f96-afc5-ceb076e18afb",
+            "name": "Kokoro"
+          },
+          "elo": 1068,
+          "rank": 11,
+          "ci95": "-13/+14"
+        },
+        {
+          "id": "0707d10e-e111-484c-8fd5-5dbb0a78029e",
+          "name": "T2A-01-HD",
+          "slug": "t2a-01-hd",
+          "model_creator": {
+            "id": "a31a9071-6144-4dbb-92dc-2e02d653ecea",
+            "name": "MiniMax"
+          },
+          "elo": 1068,
+          "rank": 12,
+          "ci95": "-13/+14"
+        },
+        {
+          "id": "06b8f3e3-e4fe-4cf7-9774-30816972bb59",
+          "name": "Chatterbox HD",
+          "slug": "chatterbox-hd",
+          "model_creator": {
+            "id": "cca8a754-6c73-4b9f-aaad-aa10f0adb8e4",
+            "name": "Resemble AI"
+          },
+          "elo": 1064,
+          "rank": 13,
+          "ci95": "-14/+15"
+        },
+        {
+          "id": "4ef13968-15ee-4311-a6d1-685f015b0717",
+          "name": "Polly Generative",
+          "slug": "polly-generative",
+          "model_creator": {
+            "id": "bb5a4e55-7969-4ab4-8702-3b9fd6547dc2",
+            "name": "Amazon"
+          },
+          "elo": 1058,
+          "rank": 14,
+          "ci95": "-14/+15"
+        },
+        {
+          "id": "83bdad85-e32e-413d-84cf-8863e8402b7f",
+          "name": "GPT-4o mini TTS",
+          "slug": "gpt-4o-mini-tts",
+          "model_creator": {
+            "id": "e67e56e3-15cd-43db-b679-da4660a69f41",
+            "name": "OpenAI"
+          },
+          "elo": 1054,
+          "rank": 15,
+          "ci95": "-20/+20"
+        },
+        {
+          "id": "b4a9f921-ae13-4c12-b907-6e9c6bedaf58",
+          "name": "Octave 2",
+          "slug": "ocateve-2",
+          "model_creator": {
+            "id": "a6194e19-3b44-47d8-97b8-7eb2564c5b91",
+            "name": "Hume AI"
+          },
+          "elo": 1048,
+          "rank": 16,
+          "ci95": "-50/+50"
+        },
+        {
+          "id": "7255e62a-855d-49f2-948c-2ea36bc603aa",
+          "name": "Azure Neural",
+          "slug": "azure-neural",
+          "model_creator": {
+            "id": "ef5ce458-9986-4652-915a-e31fac5506b0",
+            "name": "Microsoft Azure"
+          },
+          "elo": 1048,
+          "rank": 17,
+          "ci95": "-11/+12"
+        },
+        {
+          "id": "588357bb-fe98-4286-b13e-3cae200e6085",
+          "name": "Simba",
+          "slug": "simba",
+          "model_creator": {
+            "id": "237d1944-ea14-43ed-82e6-3ab69698c9b4",
+            "name": "Speechify"
+          },
+          "elo": 1039,
+          "rank": 18,
+          "ci95": "-13/+15"
+        },
+        {
+          "id": "4a2776b8-a0c6-42f2-8ebe-db364f1ddf13",
+          "name": "TTS-1 HD",
+          "slug": "tts-1-hd",
+          "model_creator": {
+            "id": "e67e56e3-15cd-43db-b679-da4660a69f41",
+            "name": "OpenAI"
+          },
+          "elo": 1037,
+          "rank": 19,
+          "ci95": "-45/+49"
+        },
+        {
+          "id": "02265a20-67bc-4892-89d0-f54545b6b4a1",
+          "name": "Studio",
+          "slug": "studio",
+          "model_creator": {
+            "id": "faddc6d9-2c14-445f-9b28-56726f59c793",
+            "name": "Google"
+          },
+          "elo": 1035,
+          "rank": 20,
+          "ci95": "-15/+14"
+        }
+      ],
+      "fal": [
+        {
+          "id": "fal-ai/wan-alpha",
+          "title": "Wan Alpha",
+          "category": "text-to-video",
+          "description": "Generate videos with transparent backgrounds",
+          "tags": [
+            "transparent",
+            "alpha"
+          ],
+          "date": "2025-10-16T02:14:54.924Z",
+          "licenseType": "commercial",
+          "modelUrl": "https://fal.ai/models/fal-ai/wan-alpha",
+          "thumbnailUrl": "https://v3b.fal.media/files/b/lion/3oIcvX_9oIQh2cDai8geS_59a419be75fb46c5bd8094bb50e9cabf.jpg",
+          "group": {},
+          "pricing": "Your request will cost $0.04 per generated second for 720p, $0.03 per second for 580p, $0.02 per second for 480p, and $0.01 per second for 240p.  Generated seconds are calculated at 16 frames per second.",
+          "highlighted": false,
+          "creditsRequired": 0,
+          "durationEstimate": 0
+        },
+        {
+          "id": "mirelo-ai/sfx-v1.5/video-to-audio",
+          "title": "Mirelo SFX V1.5",
+          "category": "video-to-audio",
+          "description": "Generate synced sounds for any video, and return the new sound track (like MMAudio)",
+          "tags": [
+            "video-to-audio",
+            "sfx"
+          ],
+          "date": "2025-10-15T11:13:45.451Z",
+          "licenseType": "commercial",
+          "modelUrl": "https://fal.ai/models/mirelo-ai/sfx-v1.5/video-to-audio",
+          "thumbnailUrl": "https://v3b.fal.media/files/b/lion/wwhXRNDWSVEdS9jIG6BAA_b1d337ecdccb441aa80caab321487fb7.jpg",
+          "group": {
+            "key": "mirelo-sfx-v1.5",
+            "label": "Video To Audio"
+          },
+          "pricing": "",
+          "highlighted": false,
+          "creditsRequired": 0,
+          "durationEstimate": 0
+        },
+        {
+          "id": "mirelo-ai/sfx-v1.5/video-to-video",
+          "title": "Mirelo SFX V1.5",
+          "category": "video-to-video",
+          "description": "Generate synced sounds for any video, and return it with its new sound track (like MMAudio)",
+          "tags": [
+            "video-to-video",
+            "sfx"
+          ],
+          "date": "2025-10-15T11:11:27.394Z",
+          "licenseType": "commercial",
+          "modelUrl": "https://fal.ai/models/mirelo-ai/sfx-v1.5/video-to-video",
+          "thumbnailUrl": "https://v3b.fal.media/files/b/penguin/ySuE0GYF98p7-856X4mvc_9371de55f14448e08b76871b7d77c059.jpg",
+          "group": {
+            "key": "mirelo-sfx-v1.5",
+            "label": "Video To Video"
+          },
+          "pricing": "",
+          "highlighted": false,
+          "creditsRequired": 0,
+          "durationEstimate": 0
+        },
+        {
+          "id": "fal-ai/image2pixel",
+          "title": "Image2Pixel",
+          "category": "image-to-image",
+          "description": "Turn images into pixel-perfect retro art",
+          "tags": [
+            "post-processing",
+            "pixel-art"
+          ],
+          "date": "2025-10-14T14:01:05.292Z",
+          "licenseType": "commercial",
+          "modelUrl": "https://fal.ai/models/fal-ai/image2pixel",
+          "thumbnailUrl": "https://v3b.fal.media/files/b/penguin/9MSg8Fm_djrKJ76DtwZrx_0ebf4aa3ab1540298b3fcf4593cfd606.jpg",
+          "group": {},
+          "pricing": "",
+          "highlighted": false,
+          "creditsRequired": 0,
+          "durationEstimate": 0
+        },
+        {
+          "id": "fal-ai/kandinsky5/text-to-video/distill",
+          "title": "Kandinsky5",
+          "category": "text-to-video",
+          "description": "Kandinsky 5.0 Distilled is a lightweight diffusion model for fast, high-quality text-to-video generation.",
+          "tags": [],
+          "date": "2025-10-13T14:45:27.847Z",
+          "licenseType": "commercial",
+          "modelUrl": "https://fal.ai/models/fal-ai/kandinsky5/text-to-video/distill",
+          "thumbnailUrl": "https://v3b.fal.media/files/b/kangaroo/TyHaKAdxHRg3VIjUlKZPI_674ee5ee1f2d467e9f3806531f85dee2.jpg",
+          "group": {
+            "key": "kandinsky5",
+            "label": "Text to Video (Distill)"
+          },
+          "pricing": "Your request will cost **$0.05** for a **5-second video** and **$0.10** for a **10-second video**, regardless of resolution.",
+          "highlighted": false,
+          "creditsRequired": 0,
+          "durationEstimate": 0
+        },
+        {
+          "id": "fal-ai/kandinsky5/text-to-video",
+          "title": "Kandinsky5",
+          "category": "text-to-video",
+          "description": "Kandinsky 5.0 is a diffusion model for fast, high-quality text-to-video  generation.",
+          "tags": [],
+          "date": "2025-10-13T14:43:38.479Z",
+          "licenseType": "commercial",
+          "modelUrl": "https://fal.ai/models/fal-ai/kandinsky5/text-to-video",
+          "thumbnailUrl": "https://v3b.fal.media/files/b/panda/F-LagExgsZASG2uyIcj6X_093dccc7417c47e593e245767017f251.jpg",
+          "group": {
+            "key": "kandinsky5",
+            "label": "Text to Video"
+          },
+          "pricing": "Your request will cost **$0.10** for a **5-second video** and **$0.20** for a **10-second video**, regardless of resolution.",
+          "highlighted": false,
+          "creditsRequired": 0,
+          "durationEstimate": 0
+        },
+        {
+          "id": "fal-ai/dreamomni2/edit",
+          "title": "DreamOmni2",
+          "category": "image-to-image",
+          "description": "DreamOmni2 is a unified multimodal model for text and image guided image editing.",
+          "tags": [],
+          "date": "2025-10-10T22:13:05.899Z",
+          "licenseType": "commercial",
+          "modelUrl": "https://fal.ai/models/fal-ai/dreamomni2/edit",
+          "thumbnailUrl": "https://v3b.fal.media/files/b/panda/c4tQDAqMyMQ_6-LNFzCyj_13c4f35481fc4ebaaf4fddf9a5d86ddc.jpg",
+          "group": {},
+          "pricing": "Your request will cost **$0.05** per image. For **$1.00**, you can run this model **20 times.**",
+          "highlighted": false,
+          "creditsRequired": 0,
+          "durationEstimate": 0
+        },
+        {
+          "id": "fal-ai/moondream3-preview/detect",
+          "title": "Moondream3 Preview [Detect]",
+          "category": "vision",
+          "description": "Moondream 3 is a vision language model that brings frontier-level visual reasoning with native object detection, pointing, and OCR capabilities to real-world applications requiring fast, inexpensive inference at scale.",
+          "tags": [
+            "Vision"
+          ],
+          "date": "2025-10-09T20:57:37.622Z",
+          "licenseType": "commercial",
+          "modelUrl": "https://fal.ai/models/fal-ai/moondream3-preview/detect",
+          "thumbnailUrl": "https://v3b.fal.media/files/b/penguin/Ma6NXbAm7Gi18CcciKraL_c5133f964896437ca8fdb88652c1a3b9.jpg",
+          "group": {
+            "key": "moondream3-preview",
+            "label": "Detect"
+          },
+          "pricing": "Your request will cost $0.3 per million input tokens, and $2.5 per million output tokens.",
+          "highlighted": false,
+          "creditsRequired": 0,
+          "durationEstimate": 0
+        },
+        {
+          "id": "fal-ai/moondream3-preview/point",
+          "title": "Moondream3 Preview [Point]",
+          "category": "vision",
+          "description": "Moondream 3 is a vision language model that brings frontier-level visual reasoning with native object detection, pointing, and OCR capabilities to real-world applications requiring fast, inexpensive inference at scale.",
+          "tags": [
+            "Vision"
+          ],
+          "date": "2025-10-09T20:55:39.296Z",
+          "licenseType": "commercial",
+          "modelUrl": "https://fal.ai/models/fal-ai/moondream3-preview/point",
+          "thumbnailUrl": "https://v3b.fal.media/files/b/koala/r903D3raEamwM13Bmn1Lp_fa12f25ab96c41008fc48492bbdbbea2.jpg",
+          "group": {
+            "key": "moondream3-preview",
+            "label": "Point"
+          },
+          "pricing": "Your request will cost $0.3 per million input tokens, and $2.5 per million output tokens.",
+          "highlighted": false,
+          "creditsRequired": 0,
+          "durationEstimate": 0
+        },
+        {
+          "id": "fal-ai/moondream3-preview/query",
+          "title": "Moondream 3 Preview [Query]",
+          "category": "vision",
+          "description": "Moondream 3 is a vision language model that brings frontier-level visual reasoning with native object detection, pointing, and OCR capabilities to real-world applications requiring fast, inexpensive inference at scale.",
+          "tags": [
+            "Vision"
+          ],
+          "date": "2025-10-09T20:54:23.184Z",
+          "licenseType": "commercial",
+          "modelUrl": "https://fal.ai/models/fal-ai/moondream3-preview/query",
+          "thumbnailUrl": "https://v3b.fal.media/files/b/monkey/nWpJhvShCa7NcOUhC0JJ-_7dec4ab5fb2c49869d74af99dfa66bf4.jpg",
+          "group": {
+            "key": "moondream3-preview",
+            "label": "Query"
+          },
+          "pricing": "Your request will cost $0.3 per million input tokens, and $2.5 per million output tokens.",
+          "highlighted": false,
+          "creditsRequired": 0,
+          "durationEstimate": 0
+        },
+        {
+          "id": "fal-ai/moondream3-preview/caption",
+          "title": "Moondream3 Preview [Caption]",
+          "category": "vision",
+          "description": "Moondream 3 is a vision language model that brings frontier-level visual reasoning with native object detection, pointing, and OCR capabilities to real-world applications requiring fast, inexpensive inference at scale.",
+          "tags": [
+            "Vision"
+          ],
+          "date": "2025-10-09T20:50:44.363Z",
+          "licenseType": "commercial",
+          "modelUrl": "https://fal.ai/models/fal-ai/moondream3-preview/caption",
+          "thumbnailUrl": "https://v3b.fal.media/files/b/elephant/MThU-RSBqLWpvP60bOvk__d2902b4bea314d49bb01fe92584a0922.jpg",
+          "group": {
+            "key": "moondream3-preview",
+            "label": "Caption"
+          },
+          "pricing": "Your request will cost $0.3 per million input tokens, and $2.5 per million output tokens.",
+          "highlighted": false,
+          "creditsRequired": 0,
+          "durationEstimate": 0
+        },
+        {
+          "id": "fal-ai/kling-video/video-to-audio",
+          "title": "Kling Video",
+          "category": "video-to-audio",
+          "description": "Generate audio from input videos using Kling",
+          "tags": [],
+          "date": "2025-10-09T17:25:52.059Z",
+          "licenseType": "commercial",
+          "modelUrl": "https://fal.ai/models/fal-ai/kling-video/video-to-audio",
+          "thumbnailUrl": "https://v3b.fal.media/files/b/rabbit/UcIrV8sk1rLDIZAkPoW75_32e8d2d3f8de429aa32f3f35b595d5ac.jpg",
+          "group": {},
+          "pricing": "Your video request will cost $0.035 per video.",
+          "highlighted": false,
+          "creditsRequired": 0,
+          "durationEstimate": 0
+        },
+        {
+          "id": "fal-ai/sora-2/video-to-video/remix",
+          "title": "Sora 2",
+          "category": "video-to-video",
+          "description": "Video-to-video remix endpoint for Sora 2, OpenAI’s advanced model that transforms existing videos based on new text or image prompts allowing rich edits, style changes, and creative reinterpretations while preserving motion and structure",
+          "tags": [
+            "video to video",
+            "audio",
+            "sora",
+            ""
+          ],
+          "date": "2025-10-08T23:13:08.227Z",
+          "licenseType": "commercial",
+          "modelUrl": "https://fal.ai/models/fal-ai/sora-2/video-to-video/remix",
+          "thumbnailUrl": "https://v3b.fal.media/files/b/tiger/Wz6FyBTYFs2Lf8e9AoXED_966c4e27910e4979b2628d5666dd2ea0.jpg",
+          "group": {
+            "key": "sora-2",
+            "label": "Video to Video (Remix)"
+          },
+          "pricing": "If an OpenAI API key is provided, it will be directly charged by OpenAI. Otherwise, you will be charged fal credits. The pricing is $0.1/s for Sora 2.",
+          "highlighted": false,
+          "creditsRequired": 0,
+          "durationEstimate": 0
+        },
+        {
+          "id": "fal-ai/veo3.1/fast/first-last-frame-to-video",
+          "title": "Veo 3.1 Fast",
+          "category": "image-to-video",
+          "description": "Generate videos from a first/last frame using Google's Veo 3.1 Fast",
+          "tags": [],
+          "date": "2025-10-08T17:10:43.612Z",
+          "licenseType": "commercial",
+          "modelUrl": "https://fal.ai/models/fal-ai/veo3.1/fast/first-last-frame-to-video",
+          "thumbnailUrl": "https://v3b.fal.media/files/b/rabbit/8tRJcj1P_EtIcpbdkP3m7_f9984366e4054165a8919d0671acbcb3.jpg",
+          "group": {
+            "key": "veo3.1",
+            "label": "First/Last Frame to Video (Fast)"
+          },
+          "pricing": "For every second of video you generated, you will be charged **$0.10** (audio off) or **$0.15** (audio on). For example, a **5s video** with audio on will cost **$0.75**.",
+          "highlighted": false,
+          "creditsRequired": 0,
+          "durationEstimate": 0
+        },
+        {
+          "id": "fal-ai/veo3.1/first-last-frame-to-video",
+          "title": "Veo 3.1",
+          "category": "image-to-video",
+          "description": "Generate videos from a first and last framed using Google's Veo 3.1",
+          "tags": [],
+          "date": "2025-10-08T17:09:32.703Z",
+          "licenseType": "commercial",
+          "modelUrl": "https://fal.ai/models/fal-ai/veo3.1/first-last-frame-to-video",
+          "thumbnailUrl": "https://v3b.fal.media/files/b/monkey/5YSsAJ8Fbwuj97_9vBiTW.jpg",
+          "group": {
+            "key": "veo3.1",
+            "label": "First/Last Frame to Video"
+          },
+          "pricing": "For every second of video you generated, you will be charged **$0.20** (audio off) or **$0.40** (audio on). For example, a **5s video** with audio on will cost **$2**.",
+          "highlighted": false,
+          "creditsRequired": 0,
+          "durationEstimate": 0
+        },
+        {
+          "id": "fal-ai/veo3.1/reference-to-video",
+          "title": "Veo 3.1",
+          "category": "image-to-video",
+          "description": "Generate Videos from Ingredients using Google's Veo 3.1",
+          "tags": [],
+          "date": "2025-10-08T17:07:06.022Z",
+          "licenseType": "commercial",
+          "modelUrl": "https://fal.ai/models/fal-ai/veo3.1/reference-to-video",
+          "thumbnailUrl": "https://v3b.fal.media/files/b/tiger/IwzOGSbzp6e8N00QuLtFF_129417bb24f248298e95c3fa2b1b82fb.jpg",
+          "group": {
+            "key": "veo3.1",
+            "label": "Reference to Video"
+          },
+          "pricing": "For every second of video you generated, you will be charged **$0.20** (audio off) or **$0.40** (audio on). For example, a **5s video** with audio on will cost **$2**.",
+          "highlighted": false,
+          "creditsRequired": 0,
+          "durationEstimate": 0
+        },
+        {
+          "id": "fal-ai/veo3.1/fast",
+          "title": "Veo 3.1 Fast",
+          "category": "text-to-video",
+          "description": "Faster and more cost effective version of Google's Veo 3.1! ",
+          "tags": [],
+          "date": "2025-10-08T17:05:11.177Z",
+          "licenseType": "commercial",
+          "modelUrl": "https://fal.ai/models/fal-ai/veo3.1/fast",
+          "thumbnailUrl": "https://v3b.fal.media/files/b/lion/o5x4rjXr3fAEwQgr4Y5vp_69ee214c658e428ba2f8f8b054d70a0e.jpg",
+          "group": {
+            "key": "veo3.1",
+            "label": "Text to Video (Fast)"
+          },
+          "pricing": "For every second of video you generated, you will be charged **$0.10** (audio off) or **$0.15** (audio on). For example, a **5s video** with audio on will cost **$0.75**.",
+          "highlighted": false,
+          "creditsRequired": 0,
+          "durationEstimate": 0
+        },
+        {
+          "id": "fal-ai/veo3.1/fast/image-to-video",
+          "title": "Veo 3.1 Fast",
+          "category": "image-to-video",
+          "description": "Generate videos from your image prompts using Veo 3.1 fast.",
+          "tags": [],
+          "date": "2025-10-08T17:04:11.604Z",
+          "licenseType": "commercial",
+          "modelUrl": "https://fal.ai/models/fal-ai/veo3.1/fast/image-to-video",
+          "thumbnailUrl": "https://v3b.fal.media/files/b/tiger/CcVVXXOo5stpgsAJV_6UO_74aa2dbdc79447e7ae69b533a7863038.jpg",
+          "group": {
+            "key": "veo3.1",
+            "label": "Image to Video (Fast)"
+          },
+          "pricing": "For every second of video you generated, you will be charged **$0.10** (audio off) or **$0.15** (audio on). For example, a **5s video** with audio on will cost **$0.75**.",
+          "highlighted": false,
+          "creditsRequired": 0,
+          "durationEstimate": 0
+        },
+        {
+          "id": "fal-ai/veo3.1/image-to-video",
+          "title": "Veo 3.1",
+          "category": "image-to-video",
+          "description": "Veo 3.1 is the latest state-of-the art video generation model from Google DeepMind",
+          "tags": [],
+          "date": "2025-10-08T17:02:47.996Z",
+          "licenseType": "commercial",
+          "modelUrl": "https://fal.ai/models/fal-ai/veo3.1/image-to-video",
+          "thumbnailUrl": "https://v3b.fal.media/files/b/zebra/G680VZS5VpMMQO1pSt2uj_dfbae33f738344aa98a62cf2022c427c.jpg",
+          "group": {
+            "key": "veo3.1",
+            "label": "Image to Video"
+          },
+          "pricing": "For every second of video you generated, you will be charged **$0.20** (audio off) or **$0.40** (audio on). For example, a **5s video** with audio on will cost **$2**.",
+          "highlighted": false,
+          "creditsRequired": 0,
+          "durationEstimate": 0
+        },
+        {
+          "id": "fal-ai/veo3.1",
+          "title": "Veo 3.1",
+          "category": "text-to-video",
+          "description": "Veo 3.1 by Google, the most advanced AI video generation model in the world. With sound on!",
+          "tags": [],
+          "date": "2025-10-08T17:01:21.561Z",
+          "licenseType": "commercial",
+          "modelUrl": "https://fal.ai/models/fal-ai/veo3.1",
+          "thumbnailUrl": "https://v3b.fal.media/files/b/tiger/TGTZBJyLk9HdwjB6SB90e.png",
+          "group": {
+            "key": "veo3.1",
+            "label": "Text to Video"
+          },
+          "pricing": "For every second of video you generated, you will be charged **$0.20** (audio off) or **$0.40** (audio on). For example, a **5s video** with audio on will cost **$2**.",
+          "highlighted": false,
+          "creditsRequired": 0,
+          "durationEstimate": 0
+        },
+        {
+          "id": "fal-ai/hunyuan-part",
+          "title": "Hunyuan Part",
+          "category": "3d-to-3d",
+          "description": "Use the capabilities of hunyuan part to generate point clouds from your 3D files.",
+          "tags": [
+            "3D-to-3D",
+            "point-cloud"
+          ],
+          "date": "2025-10-08T16:59:43.761Z",
+          "licenseType": "commercial",
+          "modelUrl": "https://fal.ai/models/fal-ai/hunyuan-part",
+          "thumbnailUrl": "https://v3b.fal.media/files/b/rabbit/kqnsD6bjfNsg7OSwKze0X_365d05fbfc8b4e5a865e702a4fa15805.jpg",
+          "group": {},
+          "pricing": "",
+          "highlighted": false,
+          "creditsRequired": 0,
+          "durationEstimate": 0
+        },
+        {
+          "id": "fal-ai/wan-vace-apps/long-reframe",
+          "title": "Wan 2.1 VACE Long Reframe",
+          "category": "video-to-video",
+          "description": "Reframe entire videos scene-by-scene using Wan VACE 2.1",
+          "tags": [],
+          "date": "2025-10-07T23:30:40.266Z",
+          "licenseType": "commercial",
+          "modelUrl": "https://fal.ai/models/fal-ai/wan-vace-apps/long-reframe",
+          "thumbnailUrl": "https://v3b.fal.media/files/b/monkey/djppEVsT608o2Uk-qVVnF_db844977aa314ad4aed7f765afde7a2a.jpg",
+          "group": {},
+          "pricing": "Your request will cost **$0.08** per **video second** for **720p**, **$0.06** per **video second** for **580p**, **$0.04** per **video second** for **480p**. Video seconds are calculated at 16 frames per second.",
+          "highlighted": false,
+          "creditsRequired": 0,
+          "durationEstimate": 0
+        },
+        {
+          "id": "fal-ai/index-tts-2/text-to-speech",
+          "title": "Index TTS 2.0",
+          "category": "text-to-speech",
+          "description": "Generate natural, clear speeches using Index TTS 2.0 from IndexTeam",
+          "tags": [
+            "text-to-speech"
+          ],
+          "date": "2025-10-07T17:21:56.690Z",
+          "licenseType": "commercial",
+          "modelUrl": "https://fal.ai/models/fal-ai/index-tts-2/text-to-speech",
+          "thumbnailUrl": "https://v3b.fal.media/files/b/lion/Y_c2YQvO2F3F-Q3v8cMHr_e14577c0c33b4eca81ce5ebeb2a5ca49.jpg",
+          "group": {},
+          "pricing": "Your request will cost **0.002** per generated **audio seconds**.",
+          "highlighted": false,
+          "creditsRequired": 0,
+          "durationEstimate": 0
+        },
+        {
+          "id": "fal-ai/meshy/v6-preview/text-to-3d",
+          "title": "Meshy 6 Preview",
+          "category": "text-to-3d",
+          "description": "Meshy-6-Preview is the latest model from Meshy. It generates realistic and production ready 3D models.",
+          "tags": [
+            "text-to-3d"
+          ],
+          "date": "2025-10-06T23:26:16.872Z",
+          "licenseType": "commercial",
+          "modelUrl": "https://fal.ai/models/fal-ai/meshy/v6-preview/text-to-3d",
+          "thumbnailUrl": "https://v3b.fal.media/files/b/rabbit/R9WXOPkhbiHFjL8iXBLDG_79f59228974346e59950364b95325d80.jpg",
+          "group": {
+            "key": "Meshy",
+            "label": "v6 Preview Text to 3D"
+          },
+          "pricing": "",
+          "highlighted": false,
+          "creditsRequired": 0,
+          "durationEstimate": 0
+        },
+        {
+          "id": "fal-ai/meshy/v5/multi-image-to-3d",
+          "title": "Meshy 5 Multi",
+          "category": "image-to-3d",
+          "description": "Meshy-5 multi image generates realistic and production ready 3D models from multiple images.\n",
+          "tags": [
+            "multi-image-to-3d"
+          ],
+          "date": "2025-10-06T23:15:19.272Z",
+          "licenseType": "commercial",
+          "modelUrl": "https://fal.ai/models/fal-ai/meshy/v5/multi-image-to-3d",
+          "thumbnailUrl": "https://v3.fal.media/files/penguin/wLQpmudI-iiOD545isnQ0_b7878036846e4f72b23e29f55c97016e.jpg",
+          "group": {
+            "key": "Meshy",
+            "label": "v5 Multi-Image to 3D"
+          },
+          "pricing": "",
+          "highlighted": false,
+          "creditsRequired": 0,
+          "durationEstimate": 0
+        },
+        {
+          "id": "fal-ai/meshy/v6-preview/image-to-3d",
+          "title": "Meshy 6 Preview",
+          "category": "image-to-3d",
+          "description": "Meshy-6-Preview is the latest model from Meshy. It generates realistic and production ready 3D models.\n",
+          "tags": [
+            "image-to-3d"
+          ],
+          "date": "2025-10-06T23:11:32.101Z",
+          "licenseType": "commercial",
+          "modelUrl": "https://fal.ai/models/fal-ai/meshy/v6-preview/image-to-3d",
+          "thumbnailUrl": "https://v3b.fal.media/files/b/kangaroo/DSTicAg_awPQiKUDYINO1_f2f15f177bfe4e94b4f91340ff0393f6.jpg",
+          "group": {
+            "key": "Meshy",
+            "label": "v6 Preview Image to 3D"
+          },
+          "pricing": "",
+          "highlighted": false,
+          "creditsRequired": 0,
+          "durationEstimate": 0
+        },
+        {
+          "id": "fal-ai/sora-2/image-to-video/pro",
+          "title": "Sora 2",
+          "category": "image-to-video",
+          "description": "Image-to-video endpoint for Sora 2 Pro, OpenAI's state-of-the-art video model capable of creating richly detailed, dynamic clips with audio from natural language or images.",
+          "tags": [
+            "image-to-video",
+            "audio",
+            "sora-2-pro"
+          ],
+          "date": "2025-10-06T22:02:41.752Z",
+          "licenseType": "commercial",
+          "modelUrl": "https://fal.ai/models/fal-ai/sora-2/image-to-video/pro",
+          "thumbnailUrl": "https://v3.fal.media/files/koala/19D6ouLhOE6EKGbUTnfzf_b958de62e48c4356a1c58abef534060b.jpg",
+          "group": {
+            "key": "sora-2",
+            "label": "Image to Video (Pro)"
+          },
+          "pricing": "If an OpenAI API key is provided, it will be directly charged by OpenAI. Otherwise, you will be charged fal credits. The pricing is $0.30/s for 720p and $0.50/s for 1080p.",
+          "highlighted": false,
+          "creditsRequired": 0,
+          "durationEstimate": 0
+        },
+        {
+          "id": "fal-ai/sora-2/text-to-video/pro",
+          "title": "Sora 2",
+          "category": "text-to-video",
+          "description": "Text-to-video endpoint for Sora 2 Pro, OpenAI's state-of-the-art video model capable of creating richly detailed, dynamic clips with audio from natural language or images.",
+          "tags": [
+            "text-to-video",
+            "audio",
+            "sora-2-pro"
+          ],
+          "date": "2025-10-06T21:56:38.344Z",
+          "licenseType": "commercial",
+          "modelUrl": "https://fal.ai/models/fal-ai/sora-2/text-to-video/pro",
+          "thumbnailUrl": "https://v3b.fal.media/files/b/lion/0bXyMS_zSKpeaG3LM6ARv_d4ee6acbfd9a4168b012a848c33b154d.jpg",
+          "group": {
+            "key": "sora-2",
+            "label": "Text to Video (Pro)"
+          },
+          "pricing": "If an OpenAI API key is provided, it will be directly charged by OpenAI. Otherwise, you will be charged fal credits. The pricing is $0.30/s for 720p and $0.50/s for 1080p.",
+          "highlighted": false,
+          "creditsRequired": 0,
+          "durationEstimate": 0
+        },
+        {
+          "id": "fal-ai/sora-2/text-to-video",
+          "title": "Sora 2",
+          "category": "text-to-video",
+          "description": "Text-to-video endpoint for Sora 2, OpenAI's state-of-the-art video model capable of creating richly detailed, dynamic clips with audio from natural language or images.",
+          "tags": [
+            "text to video",
+            "audio",
+            "sora"
+          ],
+          "date": "2025-10-06T19:34:55.710Z",
+          "licenseType": "commercial",
+          "modelUrl": "https://fal.ai/models/fal-ai/sora-2/text-to-video",
+          "thumbnailUrl": "https://v3.fal.media/files/penguin/eOGowiQKXIKwyDfwgeWQO_b80784431c524553a564ebdd7550d7e6.jpg",
+          "group": {
+            "key": "sora-2",
+            "label": "Text to Video"
+          },
+          "pricing": "If an OpenAI API key is provided, it will be directly charged by OpenAI. Otherwise, you will be charged fal credits. The pricing is $0.1/s for Sora 2.",
+          "highlighted": false,
+          "creditsRequired": 0,
+          "durationEstimate": 0
+        },
+        {
+          "id": "fal-ai/sora-2/image-to-video",
+          "title": "Sora 2",
+          "category": "image-to-video",
+          "description": "Image-to-video endpoint for Sora 2, OpenAI's state-of-the-art video model capable of creating richly detailed, dynamic clips with audio from natural language or images.",
+          "tags": [
+            "image-to-video",
+            "audio",
+            "sora"
+          ],
+          "date": "2025-10-06T19:34:52.329Z",
+          "licenseType": "commercial",
+          "modelUrl": "https://fal.ai/models/fal-ai/sora-2/image-to-video",
+          "thumbnailUrl": "https://v3.fal.media/files/kangaroo/8n-yLTQvW5q0BEvW0H2J3_8233c7e127124290b6dfa965f44ebc79.jpg",
+          "group": {
+            "key": "sora-2",
+            "label": "Image to Video"
+          },
+          "pricing": "If an OpenAI API key is provided, it will be directly charged by OpenAI. Otherwise, you will be charged fal credits. The pricing is $0.1/s for Sora 2.",
+          "highlighted": false,
+          "creditsRequired": 0,
+          "durationEstimate": 0
+        },
+        {
+          "id": "fal-ai/qwen-image-edit-plus-lora",
+          "title": "Qwen Image Edit Plus Lora",
+          "category": "image-to-image",
+          "description": "LoRA endpoint for the Qwen Image Edit Plus model.",
+          "tags": [
+            "image-to-image",
+            "image-editing"
+          ],
+          "date": "2025-10-03T21:13:29.106Z",
+          "licenseType": "commercial",
+          "modelUrl": "https://fal.ai/models/fal-ai/qwen-image-edit-plus-lora",
+          "thumbnailUrl": "https://v3.fal.media/files/penguin/X3V08aAYEqPmeSvVdLgN9_6be5ff6349c9459d92e7a5d7db8dadcc.jpg",
+          "group": {},
+          "pricing": "",
+          "highlighted": false,
+          "creditsRequired": 0,
+          "durationEstimate": 0
+        },
+        {
+          "id": "fal-ai/lucidflux",
+          "title": "Lucidflux",
+          "category": "image-to-image",
+          "description": "LucidFlux for upscaling images with very high fidelity",
+          "tags": [
+            "image-to-image"
+          ],
+          "date": "2025-10-03T19:54:06.907Z",
+          "licenseType": "commercial",
+          "modelUrl": "https://fal.ai/models/fal-ai/lucidflux",
+          "thumbnailUrl": "https://v3.fal.media/files/koala/IoOnMLFUyTCBXNJfw8p6d_04001a3f68e34de687b6de1a73d7e1de.jpg",
+          "group": {},
+          "pricing": "",
+          "highlighted": false,
+          "creditsRequired": 0,
+          "durationEstimate": 0
+        },
+        {
+          "id": "fal-ai/ovi/image-to-video",
+          "title": "Ovi",
+          "category": "image-to-video",
+          "description": "Ovi can generate videos with audio from image and text inputs.",
+          "tags": [
+            "image-to-audio-video",
+            "image-to-video"
+          ],
+          "date": "2025-10-03T14:39:19.458Z",
+          "licenseType": "commercial",
+          "modelUrl": "https://fal.ai/models/fal-ai/ovi/image-to-video",
+          "thumbnailUrl": "https://v3.fal.media/files/elephant/0C5YI172kcCI9lcCtXDJI_61f25dd2c735440aafb1a2ec647b6bd0.jpg",
+          "group": {
+            "key": "ovi",
+            "label": "Image to Video"
+          },
+          "pricing": "",
+          "highlighted": false,
+          "creditsRequired": 0,
+          "durationEstimate": 0
+        },
+        {
+          "id": "fal-ai/ovi",
+          "title": "Ovi Text to Video",
+          "category": "text-to-video",
+          "description": "A unified paradigm for audio-video generation",
+          "tags": [],
+          "date": "2025-10-03T12:43:15.945Z",
+          "licenseType": "commercial",
+          "modelUrl": "https://fal.ai/models/fal-ai/ovi",
+          "thumbnailUrl": "https://v3.fal.media/files/lion/yU9aRgq2QMYK4eGH5mohA_2822a9b5892d46699e218791b207ae5c.jpg",
+          "group": {
+            "key": "ovi",
+            "label": "Text to video"
+          },
+          "pricing": "",
+          "highlighted": false,
+          "creditsRequired": 0,
+          "durationEstimate": 0
+        },
+        {
+          "id": "veed/fabric-1.0/fast",
+          "title": "Fabric 1.0 Fast",
+          "category": "image-to-video",
+          "description": "VEED Fabric 1.0 is an image-to-video API that turns any image into a talking video",
+          "tags": [],
+          "date": "2025-10-01T14:00:46.685Z",
+          "licenseType": "commercial",
+          "modelUrl": "https://fal.ai/models/veed/fabric-1.0/fast",
+          "thumbnailUrl": "https://v3.fal.media/files/zebra/AGRvOvMtrM0o02wz8-hRF_cb5739a5199b49a7971c5319881c6765.jpg",
+          "group": {
+            "key": "fabric-1.0",
+            "label": "Image To Video [fast]"
+          },
+          "pricing": "480p - $0.10 per second, 720p - $0.20 per second",
+          "highlighted": false,
+          "creditsRequired": 0,
+          "durationEstimate": 0
+        },
+        {
+          "id": "fal-ai/qwen-image-edit/image-to-image",
+          "title": "Qwen Image Edit",
+          "category": "image-to-image",
+          "description": "Image to Image Endpoint for Qwen's Image Editing model. Has superior text editing capabilities.",
+          "tags": [
+            "stylized",
+            "transform"
+          ],
+          "date": "2025-09-30T17:20:50.035Z",
+          "licenseType": "commercial",
+          "modelUrl": "https://fal.ai/models/fal-ai/qwen-image-edit/image-to-image",
+          "thumbnailUrl": "https://v3.fal.media/files/lion/y1wOAl3dW0LE43drzjWY3_71e9575367b14485b4a5ca83492c0e82.jpg",
+          "group": {},
+          "pricing": "",
+          "highlighted": false,
+          "creditsRequired": 0,
+          "durationEstimate": 0
+        },
+        {
+          "id": "fal-ai/hunyuan-image/v3/text-to-image",
+          "title": "Hunyuan Image",
+          "category": "text-to-image",
+          "description": "Leverage the state-of-the-art capabilities of Hunyuan Image 3.0 to generate visual content that effectively conveys the messaging of your written material.",
+          "tags": [
+            "text-to-image"
+          ],
+          "date": "2025-09-28T06:04:53.920Z",
+          "licenseType": "commercial",
+          "modelUrl": "https://fal.ai/models/fal-ai/hunyuan-image/v3/text-to-image",
+          "thumbnailUrl": "https://v3.fal.media/files/kangaroo/en7kxz5HNAQKg5QuONGDH_760708cdbc4b49e1a96e6b7628e43c35.jpg",
+          "group": {},
+          "pricing": "",
+          "highlighted": false,
+          "creditsRequired": 0,
+          "durationEstimate": 0
+        },
+        {
+          "id": "fal-ai/hyper3d/rodin/v2",
+          "title": "Hyper3d",
+          "category": "image-to-3d",
+          "description": "Rodin by Hyper3D generates realistic and production ready 3D models from text or images.",
+          "tags": [
+            "image-to-3d"
+          ],
+          "date": "2025-09-26T19:59:28.021Z",
+          "licenseType": "commercial",
+          "modelUrl": "https://fal.ai/models/fal-ai/hyper3d/rodin/v2",
+          "thumbnailUrl": "https://v3.fal.media/files/lion/liLB7F5DWmR3CgbqjvZo3_2a3d75c59b5f4951810452fa8c27d0ba.jpg",
+          "group": {},
+          "pricing": "",
+          "highlighted": false,
+          "creditsRequired": 0,
+          "durationEstimate": 0
+        },
+        {
+          "id": "fal-ai/lynx",
+          "title": "Lynx",
+          "category": "image-to-video",
+          "description": "Generate subject consistent videos using Lynx from ByteDance!",
+          "tags": [
+            "image-to-video",
+            "subject"
+          ],
+          "date": "2025-09-26T17:14:01.559Z",
+          "licenseType": "commercial",
+          "modelUrl": "https://fal.ai/models/fal-ai/lynx",
+          "thumbnailUrl": "https://v3.fal.media/files/lion/49-4PP-6iG8KcIfhWAduK_ac8d9da273624a95bf696ff6e439debd.jpg",
+          "group": {},
+          "pricing": "",
+          "highlighted": false,
+          "creditsRequired": 0,
+          "durationEstimate": 0
+        },
+        {
+          "id": "fal-ai/wan-25-preview/image-to-image",
+          "title": "Wan 2.5 Image to Image",
+          "category": "image-to-image",
+          "description": "Wan 2.5 image-to-image model.",
+          "tags": [],
+          "date": "2025-09-25T20:59:52.034Z",
+          "licenseType": "commercial",
+          "modelUrl": "https://fal.ai/models/fal-ai/wan-25-preview/image-to-image",
+          "thumbnailUrl": "https://v3.fal.media/files/panda/E-LG-LvtKaaYeyx_FPqmu_c75bdd0f332b455e80a7cf14a3a44725.jpg",
+          "group": {
+            "key": "wan-25-preview",
+            "label": "Image To Image"
+          },
+          "pricing": "Your request will cost **$0.05** per image.",
+          "highlighted": false,
+          "creditsRequired": 0,
+          "durationEstimate": 0
+        }
+      ]
+    }
+  },
+  "saved_at": "2025-10-17T09:17:51.321806"
+}

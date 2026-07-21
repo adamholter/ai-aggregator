@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Codebase Flow Card Game</title>
+    <link rel="stylesheet" href="/static/styles.css?v=1766074500">
+    <link rel="stylesheet" href="/static/card-game.css?v=1">
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+</head>
+
+<body>
+    <div class="container">
+        <header class="header card-game-header">
+            <div class="header-main">
+                <h1>Codebase Flow: The Card Game</h1>
+                <p>Play through the system. Build the pipeline. Watch information move from ingestion to UI.</p>
+                <div class="card-game-actions">
+                    <a class="refresh-btn" href="/">Back to Dashboard</a>
+                    <button class="refresh-btn" id="reset-game">Reset Game</button>
+                </div>
+            </div>
+        </header>
+
+        <main class="card-game">
+            <section class="card-game-brief">
+                <div class="card-game-panel">
+                    <h2>How To Play</h2>
+                    <ol class="card-game-rules">
+                        <li>Draw cards to learn about the codebase modules.</li>
+                        <li>Play cards into the matching stage on the flow board.</li>
+                        <li>Run the flow to see how a request moves through the system.</li>
+                    </ol>
+                    <div class="card-game-status">
+                        <div class="status-chip">Deck: <span id="deck-count">0</span></div>
+                        <div class="status-chip">Discard: <span id="discard-count">0</span></div>
+                        <div class="status-chip">Flow tokens: <span id="token-count">0</span></div>
+                    </div>
+                    <div class="card-game-controls">
+                        <button class="refresh-btn" id="draw-card">Draw Card</button>
+                        <button class="refresh-btn" id="run-flow">Run Flow</button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="card-game-board">
+                <div class="card-game-panel">
+                    <h2>System Flow Board</h2>
+                    <p class="section-note">Place cards into each stage. The flow token can only move when a stage is built.</p>
+                    <div class="flow-board" id="flow-board"></div>
+                </div>
+            </section>
+
+            <section class="card-game-hand">
+                <div class="card-game-panel">
+                    <div class="hand-header">
+                        <h2>Your Hand</h2>
+                        <button class="refresh-btn" id="play-card">Play Selected</button>
+                    </div>
+                    <div class="hand-grid" id="hand-grid"></div>
+                </div>
+            </section>
+
+            <section class="card-game-detail">
+                <div class="card-game-panel">
+                    <h2>Card Inspector</h2>
+                    <div class="card-inspector" id="card-inspector">
+                        <p class="section-note">Select a card to see how it maps to the codebase.</p>
+                    </div>
+                </div>
+                <div class="card-game-panel">
+                    <h2>Flow Log</h2>
+                    <div class="flow-log" id="flow-log"></div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="/static/card-game.js?v=1"></script>
+</body>
+
+</html>

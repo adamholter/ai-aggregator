@@ -1,0 +1,1544 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Model Analysis Dashboard</title>
+    <link rel="stylesheet" href="/static/styles.css?v=1766074500">
+    <link rel="stylesheet" href="/static/variants/sidebar.css?v=1766079000">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="stylesheet" href="/static/variants/overhaul.css">
+    <link rel="stylesheet" href="/static/variants/settings-variants.css">
+    <style>
+        /* iFrame wrapper for agent — fills available viewport height */
+        .agent-iframe-container {
+            width: 100%;
+            height: calc(100vh - 120px);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .agent-iframe-container iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            display: block;
+        }
+
+        .personal-index-iframe-container {
+            width: 100%;
+            min-height: 720px;
+            border: 0;
+            border-radius: 0;
+            overflow: visible;
+            background: var(--bg-color);
+        }
+
+        .personal-index-iframe-container iframe {
+            width: 100%;
+            height: 720px;
+            min-height: 720px;
+            border: 0;
+            display: block;
+        }
+    </style>
+</head>
+
+<body class="variant-rail">
+    <div style="position:sticky;top:0;z-index:10000;padding:16px 20px;background:#f4c95d;color:#1e2530;text-align:center;font:700 16px/1.45 Arial,sans-serif;box-shadow:0 2px 10px rgba(0,0,0,.25);">
+        AI Dashboard has moved to
+        <a href="https://ai-model-analysis-dashboard.adamholter.chatgpt.site" style="color:#122640;text-decoration:underline;">
+            ai-model-analysis-dashboard.adamholter.chatgpt.site
+        </a>.
+        This Render copy is being retired.
+    </div>
+    <script>
+        /* Runs synchronously before body renders — no flash */
+        (function () {
+            var saved = localStorage.getItem('ui-layout');
+            if (saved && saved !== 'variant-rail') {
+                document.body.classList.remove('variant-rail');
+                document.body.classList.add(saved);
+            }
+        })();
+    </script>
+    <div class="container">
+        {% include 'partials/header.html' %}
+
+        {% include 'partials/navigation.html' %}
+
+
+        <main class="main-content">
+            <!-- LLMs Section -->
+            <section id="llms" class="content-section active">
+                <div class="section-header">
+                    <h2>Large Language Models</h2>
+                    <div class="controls">
+                        <input type="text" id="llm-search" autocomplete="off" placeholder="Search models..."
+                            oninput="filterLLMData()">
+                        <select id="llm-sort" onchange="filterLLMData()">
+                            <option value="intelligence">Intelligence Index</option>
+                            <option value="speed">Output Speed</option>
+                            <option value="cost">Cost (Cheapest)</option>
+                            <option value="name">Name (A-Z)</option>
+                        </select>
+                        <button class="refresh-btn" onclick="loadLLMData()">Refresh Data</button>
+                    </div>
+                </div>
+                <div class="loading" id="llms-loading">
+                    <div class="loading-spinner"></div>
+                </div>
+                <div class="error" id="llms-error" style="display: none;"></div>
+                <div class="results-info" id="llms-results-info"></div>
+                <div class="data-container" id="llms-data"></div>
+            </section>
+
+            <!-- Pinned Section -->
+            <section id="pinned" class="content-section">
+                <div class="section-header">
+                    <h2>Pinned</h2>
+                    <div class="controls">
+                        <button class="refresh-btn" id="pinned-refresh">Refresh Pins</button>
+                    </div>
+                </div>
+                <p class="section-note">Quick access to cards you’ve pinned across the dashboard.</p>
+                <div class="empty-state" id="pinned-empty">You haven’t pinned any cards yet.</div>
+                <div class="data-container" id="pinned-data"></div>
+            </section>
+
+            <!-- Latest Section -->
+            <section id="latest" class="content-section">
+                <div class="section-header">
+                    <h2>Latest 24h Activity</h2>
+                    <div class="controls">
+                        <button class="refresh-btn" id="latest-refresh">Refresh Feed</button>
+                    </div>
+                </div>
+                <p class="section-note">Experimental aggregation of Blog, Hype, OpenRouter, Replicate, and fal.ai
+                    updates from the last 24 hours.</p>
+                <div class="loading" id="latest-loading">
+                    <div class="loading-spinner"></div>
+                </div>
+                <div class="error" id="latest-error" style="display: none;"></div>
+                <div class="results-info" id="latest-results-info" style="display:none;"></div>
+                <div class="data-container" id="latest-data"></div>
+            </section>
+
+            <!-- Blog Section -->
+            <section id="blog" class="content-section">
+                <div class="section-header">
+                    <h2>Latest Blog Posts</h2>
+                    <div class="controls">
+                        <select id="blog-sort" aria-label="Sort blog posts">
+                            <option value="newest" selected>Newest</option>
+                            <option value="oldest">Oldest</option>
+                        </select>
+                        <button class="refresh-btn" id="blog-refresh">Refresh Posts</button>
+                    </div>
+                </div>
+                <p class="section-note">Experimental feed direct from adam.holter.com.</p>
+                <div class="loading" id="blog-loading">
+                    <div class="loading-spinner"></div>
+                </div>
+                <div class="error" id="blog-error" style="display: none;"></div>
+                <div class="results-info" id="blog-results-info" style="display:none;"></div>
+                <div class="data-container" id="blog-data"></div>
+            </section>
+
+            <!-- Text-to-Image Section -->
+            <section id="text-to-image" class="content-section">
+                <div class="section-header">
+                    <h2>Text-to-Image Models</h2>
+                    <div class="controls">
+                        <input type="text" id="text-to-image-search" autocomplete="off" placeholder="Search models..."
+                            oninput="filterTextToImageData()">
+                        <select id="text-to-image-sort" onchange="filterTextToImageData()">
+                            <option value="elo">Overall ELO</option>
+                            <option value="avg-style">Average Style ELO</option>
+                            <option value="best-style">Best Style Performance</option>
+                            <option value="diversity">Style Diversity</option>
+                            <option value="confidence">Confidence Interval (Tightest)</option>
+                            <option value="name">Name (A-Z)</option>
+                        </select>
+                        <button class="refresh-btn" onclick="loadTextToImageData()">Refresh Data</button>
+                    </div>
+                </div>
+                <div class="loading" id="text-to-image-loading">
+                    <div class="loading-spinner"></div>
+                </div>
+                <div class="error" id="text-to-image-error" style="display: none;"></div>
+                <div class="results-info" id="text-to-image-results-info"></div>
+                <div class="data-container" id="text-to-image-data"></div>
+            </section>
+
+            <!-- Image Editing Section -->
+            <section id="image-editing" class="content-section">
+                <div class="section-header">
+                    <h2>Image Editing Models</h2>
+                    <button class="refresh-btn" onclick="loadImageEditingData()">Refresh Data</button>
+                </div>
+                <div class="loading" id="image-editing-loading">
+                    <div class="loading-spinner"></div>
+                </div>
+                <div class="error" id="image-editing-error" style="display: none;"></div>
+                <div class="data-container" id="image-editing-data"></div>
+            </section>
+
+            <!-- Text-to-Speech Section -->
+            <section id="text-to-speech" class="content-section">
+                <div class="section-header">
+                    <h2>Text-to-Speech Models</h2>
+                    <button class="refresh-btn" onclick="loadTextToSpeechData()">Refresh Data</button>
+                </div>
+                <div class="loading" id="text-to-speech-loading">
+                    <div class="loading-spinner"></div>
+                </div>
+                <div class="error" id="text-to-speech-error" style="display: none;"></div>
+                <div class="data-container" id="text-to-speech-data"></div>
+            </section>
+
+            <!-- Text-to-Video Section -->
+            <section id="text-to-video" class="content-section">
+                <div class="section-header">
+                    <h2>Text-to-Video Models</h2>
+                    <button class="refresh-btn" onclick="loadTextToVideoData()">Refresh Data</button>
+                </div>
+                <div class="loading" id="text-to-video-loading">
+                    <div class="loading-spinner"></div>
+                </div>
+                <div class="error" id="text-to-video-error" style="display: none;"></div>
+                <div class="data-container" id="text-to-video-data"></div>
+            </section>
+
+            <!-- Image-to-Video Section -->
+            <section id="image-to-video" class="content-section">
+                <div class="section-header">
+                    <h2>Image-to-Video Models</h2>
+                    <button class="refresh-btn" onclick="loadImageToVideoData()">Refresh Data</button>
+                </div>
+                <div class="loading" id="image-to-video-loading">
+                    <div class="loading-spinner"></div>
+                </div>
+                <div class="error" id="image-to-video-error" style="display: none;"></div>
+                <div class="data-container" id="image-to-video-data"></div>
+            </section>
+
+            <!-- Fal.ai Models Section -->
+            <section id="fal-models" class="content-section">
+                <div class="section-header">
+                    <h2>Fal.ai Media Generation Models</h2>
+                    <div class="controls">
+                        <input type="text" id="fal-models-search" autocomplete="off" placeholder="Search models..."
+                            oninput="filterFalModelsData()">
+                        <select id="fal-models-sort" onchange="filterFalModelsData()">
+                            <option value="date">Release Date (Newest)</option>
+                            <option value="category">Category</option>
+                            <option value="name">Name (A-Z)</option>
+                        </select>
+                        <select id="fal-models-category" onchange="filterFalModelsData()">
+                            <option value="">All Categories</option>
+                            <option value="text-to-image">Text-to-Image</option>
+                            <option value="image-to-image">Image-to-Image</option>
+                            <option value="text-to-video">Text-to-Video</option>
+                            <option value="image-to-video">Image-to-Video</option>
+                            <option value="video-to-video">Video-to-Video</option>
+                            <option value="text-to-speech">Text-to-Speech</option>
+                            <option value="image-to-3d">Image-to-3D</option>
+                            <option value="vision">Vision</option>
+                            <option value="llm">LLM</option>
+                        </select>
+                        <button class="refresh-btn" onclick="loadFalModelsData()">Refresh Data</button>
+                    </div>
+                </div>
+                <div class="loading" id="fal-models-loading">
+                    <div class="loading-spinner"></div>
+                </div>
+                <div class="error" id="fal-models-error" style="display: none;"></div>
+                <div class="results-info" id="fal-models-results-info"></div>
+                <div class="data-container" id="fal-models-data"></div>
+            </section>
+
+            <!-- Replicate Models Section -->
+            <section id="replicate-models" class="content-section">
+                <div class="section-header">
+                    <h2>Replicate Models</h2>
+                    <div class="controls">
+                        <input type="text" id="replicate-models-search" autocomplete="off"
+                            placeholder="Search models..." oninput="filterReplicateModelsData()">
+                        <select id="replicate-models-sort" onchange="filterReplicateModelsData()">
+                            <option value="date">Newest</option>
+                            <option value="popularity">Popularity</option>
+                            <option value="latency-asc">Latency (Fastest)</option>
+                            <option value="latency-desc">Latency (Slowest)</option>
+                            <option value="name">Name</option>
+                            <option value="category">Category</option>
+                        </select>
+                        <select id="replicate-models-category" onchange="filterReplicateModelsData()">
+                            <option value="">All Categories</option>
+                            <option value="image-generation">Image Generation</option>
+                            <option value="video-generation">Video Generation</option>
+                            <option value="audio-generation">Audio Generation</option>
+                            <option value="image-enhancement">Image Enhancement</option>
+                            <option value="text-generation">Text Generation</option>
+                            <option value="other">Other</option>
+                        </select>
+                        <button class="refresh-btn" onclick="location.reload()">Refresh Data</button>
+                    </div>
+                </div>
+
+                <div id="replicate-models-results-info" class="results-info"></div>
+
+                <div id="replicate-models-loading" class="loading">
+                    <div class="loading-spinner"></div>
+                </div>
+                <div id="replicate-models-error" class="error" style="display: none;"></div>
+                <div id="replicate-models-data" class="data-container"></div>
+            </section>
+
+            <!-- OpenRouter Models Section -->
+            <section id="openrouter-models" class="content-section">
+                <div class="section-header">
+                    <h2>OpenRouter Models</h2>
+                    <div class="controls">
+                        <input type="text" id="openrouter-search" autocomplete="off" placeholder="Search models...">
+                        <select id="openrouter-sort">
+                            <option value="newest">Newest</option>
+                            <option value="name">Name (A-Z)</option>
+                            <option value="vendor">Provider</option>
+                            <option value="context-desc">Context (Largest)</option>
+                            <option value="context-asc">Context (Smallest)</option>
+                            <option value="price">Prompt Price (Lowest)</option>
+                        </select>
+                        <input type="text" id="openrouter-vendor" placeholder="Filter provider..."
+                            list="openrouter-vendor-options">
+                        <datalist id="openrouter-vendor-options"></datalist>
+                        <label class="legend-item" data-source="openrouter" style="cursor: pointer;">
+                            <span class="legend-dot"></span>
+                            <input type="checkbox" id="openrouter-media-toggle" style="margin-right: 6px;">
+                            Image-capable only
+                        </label>
+                        <button class="refresh-btn" id="openrouter-refresh">Refresh Data</button>
+                    </div>
+                </div>
+                <div class="loading" id="openrouter-models-loading">
+                    <div class="loading-spinner"></div>
+                </div>
+                <div class="error" id="openrouter-models-error" style="display: none;"></div>
+                <div class="results-info" id="openrouter-models-results-info"></div>
+                <div class="data-container" id="openrouter-models-data"></div>
+            </section>
+
+            <!-- models.dev Section -->
+            <section id="models-dev" class="content-section">
+                <div class="section-header">
+                    <h2>models.dev Catalogue</h2>
+                    <div class="controls">
+                        <input type="text" id="models-dev-search" autocomplete="off" placeholder="Search models..."
+                            oninput="filterModelsDevData()">
+                        <select id="models-dev-sort" onchange="filterModelsDevData()">
+                            <option value="updated" selected>Last Updated</option>
+                            <option value="name">Name (A-Z)</option>
+                            <option value="provider">Provider</option>
+                            <option value="context-desc">Context Length</option>
+                            <option value="input-cost">Input Cost</option>
+                        </select>
+                        <input type="text" id="models-dev-provider" list="models-dev-provider-options"
+                            autocomplete="off" placeholder="Provider" oninput="filterModelsDevData()">
+                        <datalist id="models-dev-provider-options"></datalist>
+                        <button class="refresh-btn" id="models-dev-refresh">Refresh Data</button>
+                    </div>
+                </div>
+                <p class="section-note">Provider-normalized model specs, costs, limits, modalities, and capabilities
+                    from models.dev.</p>
+                <div class="loading" id="models-dev-loading">
+                    <div class="loading-spinner"></div>
+                </div>
+                <div class="error" id="models-dev-error" style="display: none;"></div>
+                <div class="results-info" id="models-dev-results-info"></div>
+                <div class="data-container" id="models-dev-data"></div>
+            </section>
+
+            <!-- Hype Section -->
+            <section id="personal-index" class="content-section">
+                <div class="personal-index-iframe-container">
+                    <iframe src="/static/frontier-index-lab.html" title="Personal benchmark index builder"></iframe>
+                </div>
+            </section>
+
+            <!-- Hype Section -->
+            <section id="hype" class="content-section">
+                <div class="section-header">
+                    <h2>Hype Tracker</h2>
+                    <div class="controls">
+                        <select id="hype-sort" aria-label="Sort hype feed">
+                            <option value="newest" selected>Newest</option>
+                            <option value="top">Top Ranked</option>
+                        </select>
+                        <button class="refresh-btn" id="hype-refresh">Refresh Feed</button>
+                    </div>
+                </div>
+                <p class="section-note">Pulse-check trending repositories and releases across GitHub, Hugging Face,
+                    Replicate, and Reddit.</p>
+                <div class="loading" id="hype-loading">
+                    <div class="loading-spinner"></div>
+                </div>
+                <div class="error" id="hype-error" style="display: none;"></div>
+                <div class="results-info" id="hype-results-info" style="display:none;"></div>
+                <div class="data-container" id="hype-data"></div>
+            </section>
+
+            <!-- Testing Catalog Section -->
+            <section id="testing-catalog" class="content-section">
+                <div class="section-header">
+                    <h2>Testing Catalog</h2>
+                    <div class="controls">
+                        <select id="testing-catalog-tag-filter" aria-label="Filter Testing Catalog by tag">
+                            <option value="__all" selected>All Tags</option>
+                        </select>
+                        <button class="refresh-btn" id="testing-catalog-refresh">Refresh Feed</button>
+                    </div>
+                </div>
+                <p class="section-note">Fresh Android testing news sourced from TestingCatalog (updated daily).</p>
+                <div class="loading" id="testing-catalog-loading">
+                    <div class="loading-spinner"></div>
+                </div>
+                <div class="error" id="testing-catalog-error" style="display: none;"></div>
+                <div class="results-info" id="testing-catalog-results-info" style="display:none;"></div>
+                <div class="data-container" id="testing-catalog-data"></div>
+            </section>
+
+            <!-- Agent Section -->
+            <section id="agent-exp" class="content-section">
+                <div class="agent-iframe-container">
+                    <iframe src="/static/agent.html" title="Agent"></iframe>
+                </div>
+            </section>
+
+            <!-- About Section -->
+            <section id="about" class="content-section">
+                <div class="section-header">
+                    <h2>About Adam Holter</h2>
+                </div>
+                <div class="about-layout">
+                    <div class="about-primary">
+                        <div class="about-intro">
+                            <figure class="about-portrait">
+                                <img src="https://v3b.fal.media/files/b/lion/YilDe98aGgKJu4VDe4bs-_b4617f81692b4ee2b14ebb7f7281b6fe.png"
+                                    alt="Illustrated portrait of Adam Holter">
+                            </figure>
+                            <div class="about-text">
+                                <h3 class="about-heading">Hi, I'm Adam Holter</h3>
+                                <p class="about-subtitle">I'm co-founder and CTO of <a href="https://www.ironwoodai.com"
+                                        target="_blank" rel="noopener noreferrer">Ironwood AI</a>.</p>
+                                <p class="about-lede">
+                                    This dashboard is meant to centralize the data sources I check all the time:
+                                </p>
+                                <ol class="about-source-list">
+                                    <li>OpenRouter</li>
+                                    <li>Replicate</li>
+                                    <li>Fal.ai</li>
+                                    <li>Artificial Analysis</li>
+                                </ol>
+                                <p class="about-lede">
+                                    This way, I can access everything from one place and chat with that data through an
+                                    agent that retrieves what it needs. I built the tool for myself, and now I'm making
+                                    it public—if it brings you value, please consider supporting it.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <aside class="about-card">
+                        <h4>Fuel the roadmap</h4>
+                        <p>If this dashboard saves you time, a donation helps keep the data connections and updates
+                            flowing.</p>
+                        <a class="about-cta" href="https://buymeacoffee.com/adamholter" target="_blank"
+                            rel="noopener noreferrer">
+                            <span class="about-icon about-icon-invert">
+                                <svg viewBox="0 0 24 24" aria-hidden="true">
+                                    <path d="M5 9h9v5a3 3 0 01-3 3H8a3 3 0 01-3-3z" fill="none" stroke="currentColor"
+                                        stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+                                    <path d="M14 11h2.8a2.2 2.2 0 010 4.4H14" fill="none" stroke="currentColor"
+                                        stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+                                    <path d="M8 5.5c0-.8.6-1.1.6-1.9" fill="none" stroke="currentColor"
+                                        stroke-width="1.6" stroke-linecap="round" />
+                                    <path d="M11 5.5c0-.8.6-1.1.6-1.9" fill="none" stroke="currentColor"
+                                        stroke-width="1.6" stroke-linecap="round" />
+                                    <path d="M5 18.5h9.5" fill="none" stroke="currentColor" stroke-width="1.6"
+                                        stroke-linecap="round" />
+                                </svg>
+                            </span>
+                            <span>Buy Me a Coffee</span>
+                        </a>
+                        <a class="about-cta" href="https://x.com/AdamHoltererer" target="_blank"
+                            rel="noopener noreferrer" aria-label="Follow Adam Holter on X">
+                            <span class="about-icon about-icon-invert" aria-hidden="true">X</span>
+                            <span>Follow me on X</span>
+                        </a>
+                    </aside>
+                </div>
+                <div class="about-links-grid">
+                    <a class="about-link-tile" href="https://adam.holter.com" target="_blank" rel="noopener noreferrer">
+                        <span class="about-icon">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M5 4h14" fill="none" stroke="currentColor" stroke-width="1.6"
+                                    stroke-linecap="round" />
+                                <path d="M7 8h10" fill="none" stroke="currentColor" stroke-width="1.6"
+                                    stroke-linecap="round" />
+                                <path d="M7 12h6" fill="none" stroke="currentColor" stroke-width="1.6"
+                                    stroke-linecap="round" />
+                                <path d="M7 16h10" fill="none" stroke="currentColor" stroke-width="1.6"
+                                    stroke-linecap="round" />
+                                <path d="M5 20h14" fill="none" stroke="currentColor" stroke-width="1.6"
+                                    stroke-linecap="round" />
+                            </svg>
+                        </span>
+                        <span class="about-link-content">
+                            <span class="about-link-title">Follow the AI news</span>
+                            <span class="about-link-subtitle">Blog: adam.holter.com</span>
+                        </span>
+                    </a>
+                    <a class="about-link-tile" href="https://www.linkedin.com/in/adam-holter-b5334327a/" target="_blank"
+                        rel="noopener noreferrer">
+                        <span class="about-icon">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <circle cx="7" cy="7" r="3" fill="none" stroke="currentColor" stroke-width="1.6" />
+                                <path d="M4.5 20v-6.5A3.5 3.5 0 018 10h0a3.5 3.5 0 013.5 3.5V20" fill="none"
+                                    stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+                                <path d="M16 11.5a3.5 3.5 0 013.5 3.5V20" fill="none" stroke="currentColor"
+                                    stroke-width="1.6" stroke-linecap="round" />
+                                <circle cx="16" cy="7" r="3" fill="none" stroke="currentColor" stroke-width="1.6" />
+                            </svg>
+                        </span>
+                        <span class="about-link-content">
+                            <span class="about-link-title">Connect and follow me on LinkedIn</span>
+                            <span class="about-link-subtitle">linkedin.com/in/adam-holter-b5334327a</span>
+                        </span>
+                    </a>
+                    <a class="about-link-tile" href="https://www.ironwoodai.com" target="_blank"
+                        rel="noopener noreferrer">
+                        <span class="about-icon about-icon-logo">
+                            <img src="https://i.ibb.co/mrYS0RkJ/download-91.png" alt="Ironwood AI logo">
+                        </span>
+                        <span class="about-link-content">
+                            <span class="about-link-title">Explore Ironwood AI</span>
+                            <span class="about-link-subtitle">IronwoodAI.com</span>
+                        </span>
+                    </a>
+                </div>
+            </section>
+
+            {% include 'partials/upgrade.html' %}
+        </main>
+    </div>
+
+    <!-- Settings button (hidden-away) -->
+    <button id="settings-btn" class="settings-button" title="Settings" aria-label="Settings">
+        <img src="/static/gear-icon.png" alt="Settings" class="settings-icon" width="18" height="18" />
+    </button>
+
+    <div id="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+    {% include 'modals/settings.html' %}
+    {% include 'modals/chart.html' %}
+    {% include 'modals/command_palette.html' %}
+    {% include 'modals/hotkeys.html' %}
+
+    <script src="/static/script.js?v=1766078500"></script>
+    <script>
+        /* UI Layout variant — populate select on open, apply on save */
+        document.addEventListener('DOMContentLoaded', function () {
+            var ALL_VARIANTS = ['variant-rail', 'variant-sidebar'];
+
+            function getCurrentVariant() {
+                for (var i = 0; i < ALL_VARIANTS.length; i++) {
+                    if (document.body.classList.contains(ALL_VARIANTS[i])) return ALL_VARIANTS[i];
+                }
+                return 'variant-rail';
+            }
+
+            function applyVariant(v) {
+                ALL_VARIANTS.forEach(function (c) { document.body.classList.remove(c); });
+                document.body.classList.add(v);
+                localStorage.setItem('ui-layout', v);
+            }
+
+            /* Populate select when settings opens */
+            var settingsBtn = document.getElementById('settings-btn');
+            if (settingsBtn) {
+                settingsBtn.addEventListener('click', function () {
+                    var sel = document.getElementById('setting-ui-layout');
+                    if (sel) sel.value = getCurrentVariant();
+                });
+            }
+
+            /* Apply on save */
+            var saveBtn = document.getElementById('settings-save');
+            if (saveBtn) {
+                saveBtn.addEventListener('click', function () {
+                    var sel = document.getElementById('setting-ui-layout');
+                    if (sel) applyVariant(sel.value);
+                });
+            }
+        });
+    </script>
+
+<!-- dashboard-overrides -->
+<style>
+/* Auth button dropdown */
+#auth-button-wrap { position: relative; display: inline-block; }
+#auth-dropdown {
+  position: absolute; right: 0; top: calc(100% + 6px);
+  background: var(--bg-color); border: 1px solid var(--border-color);
+  border-radius: 6px; box-shadow: 0 4px 16px rgba(0,0,0,.12);
+  min-width: 170px; z-index: 9999; display: none; flex-direction: column; overflow: hidden;
+}
+#auth-dropdown.open { display: flex; }
+.auth-drop-item {
+  padding: 9px 16px; font-size: 0.85rem; cursor: pointer;
+  color: var(--text-color); border: none; background: none;
+  text-align: left; width: 100%; transition: background .12s;
+}
+.auth-drop-item:hover { background: var(--hover-color, #f3f4f6); }
+.auth-drop-item.danger { color: #dc2626; }
+/* Match Log In button styling to the other header buttons */
+.auth-button {
+  background: var(--button-bg) !important;
+  color: var(--button-text) !important;
+  border: 1px solid var(--border-color) !important;
+  padding: 8px 12px !important;
+  border-radius: 4px !important;
+  font-size: 0.8rem !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  transition: all 0.3s ease !important;
+  opacity: 1 !important;
+  min-height: 39px !important;
+  line-height: 23px !important;
+}
+.auth-button:hover { background: var(--button-hover-bg) !important; opacity: 1 !important; }
+
+/* Compact LLM modal layout */
+.compact-stats-row { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+.compact-stat-pill { display:flex; flex-direction:column; align-items:center; gap:1px; padding:8px 14px; background:var(--surface-color,var(--bg-color)); border:1px solid var(--border-color); border-radius:10px; min-width:72px; }
+.csp-label { font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-secondary); font-weight:600; }
+.csp-value { font-size:15px; font-weight:700; color:var(--text-color); line-height:1.2; }
+.csp-unit { font-size:10px; color:var(--text-secondary); }
+.compact-bench-wrap { margin:2px 0 16px; }
+.compact-bench-heading { font-size:12px; text-transform:uppercase; letter-spacing:.07em; font-weight:600; color:var(--text-secondary); margin-bottom:8px; }
+.compact-radar-frame { position:relative; height:430px; width:100%; max-width:650px; margin:0 auto; }
+.compact-radar-frame canvas { width:100% !important; height:100% !important; }
+.compact-bench-table { position:absolute !important; width:1px !important; height:1px !important; padding:0 !important; margin:-1px !important; overflow:hidden !important; clip:rect(0,0,0,0) !important; white-space:nowrap !important; border:0 !important; }
+@media (max-width: 640px) {
+    .compact-radar-frame { height:340px; width:calc(100% + 12px); margin-left:-6px; }
+}
+/* Analysis chart wrapper */
+.chart-wrap { position:relative; margin:16px 0; background:var(--surface-color,#f8f9fa); border:1px solid var(--border-color); border-radius:10px; padding:16px; }
+.chart-wrap canvas { display:block !important; width:100% !important; height:260px !important; }
+/* Analysis code blocks with copy button */
+.analysis-code-block { position:relative; margin:12px 0; }
+.analysis-code-block pre { margin:0; padding:12px 40px 12px 16px; background:var(--surface-color,#f5f5f5); border:1px solid var(--border-color,#e5e7eb); border-radius:8px; overflow-x:auto; font-size:12px; line-height:1.6; white-space:pre-wrap; word-break:break-all; }
+.analysis-code-block code { font-family:ui-monospace,monospace; color:var(--text-color); }
+.analysis-copy-btn { position:absolute; top:7px; right:8px; padding:2px 8px; font-size:11px; font-family:system-ui,sans-serif; background:var(--bg-color,#fff); border:1px solid var(--border-color,#d1d5db); border-radius:4px; cursor:pointer; color:var(--text-secondary,#6b7280); line-height:1.6; transition:color .15s,border-color .15s; }
+.analysis-copy-btn:hover { color:var(--text-color); border-color:var(--text-secondary,#9ca3af); }
+.analysis-copy-btn.copied { color:#16a34a; border-color:#16a34a; }
+.streaming-text { opacity: 0.9; }
+.streaming-text p:last-child::after { content: '▋'; animation: blink .7s step-end infinite; display:inline-block; }
+@keyframes blink { 50% { opacity:0; } }
+/* Analysis markdown tables */
+.analysis-text table { width:100%; border-collapse:collapse; margin:16px 0; font-size:13px; }
+.analysis-text th { background:var(--surface-color,#f8f9fa); font-weight:600; text-align:left; padding:8px 12px; border:1px solid var(--border-color,#e5e7eb); color:var(--text-color); white-space:nowrap; }
+.analysis-text td { padding:7px 12px; border:1px solid var(--border-color,#e5e7eb); color:var(--text-color); vertical-align:top; line-height:1.45; }
+.analysis-text tr:nth-child(even) td { background:var(--surface-color,#fafafa); }
+.analysis-text tr:hover td { background:var(--hover-color,#f3f4f6); }
+</style>
+<script>
+(function() {
+// ── Compact LLM modal layout ──────────────────────────────────────────────────
+var EVAL_DISPLAY_NAMES = {
+    artificial_analysis_intelligence_index: 'Intelligence',
+    artificial_analysis_coding_index: 'Coding',
+    artificial_analysis_math_index: 'Math',
+    gpqa: 'GPQA', hle: 'HLE', ifbench: 'IFBench', lcr: 'LCR',
+    livecodebench: 'LiveCodeBench', math_500: 'MATH 500', mmlu_pro: 'MMLU Pro',
+    scicode: 'SciCode', tau2: 'TAU2', tau_banking: 'Tau Banking',
+    terminalbench_hard: 'TerminalBench Hard', terminalbench_v2_1: 'TerminalBench V2.1',
+    aime: 'AIME', aime_25: 'AIME 25'
+};
+window.getEvalDisplayName = function(key) {
+    return EVAL_DISPLAY_NAMES[key] || key.split('_').map(function(w){return w.charAt(0).toUpperCase()+w.slice(1);}).join(' ');
+};
+window.makeEl = function(tag, cls, text) {
+    var el = document.createElement(tag);
+    if (cls) el.className = cls;
+    if (text !== undefined) el.textContent = text;
+    return el;
+};
+window.renderLLMOverview = function(container, model) {
+    container.classList.add('llm-overview-compact');
+    var speed = model.median_output_tokens_per_second;
+    var ttft = model.median_time_to_first_token_seconds;
+    var fmtIn = formatPricePerMillion(model.pricing && model.pricing.price_1m_input_tokens);
+    var fmtOut = formatPricePerMillion(model.pricing && model.pricing.price_1m_output_tokens);
+    var statDefs = [
+        speed ? { label: 'Speed', value: String(speed), unit: 'tok/s' } : null,
+        ttft ? { label: 'Latency', value: String(ttft), unit: 's TTFT' } : null,
+        (fmtIn && fmtIn !== 'Not provided') ? { label: 'Input', value: fmtIn, unit: '/1M' } : null,
+        (fmtOut && fmtOut !== 'Not provided') ? { label: 'Output', value: fmtOut, unit: '/1M' } : null
+    ].filter(Boolean);
+    if (statDefs.length) {
+        var statsRow = makeEl('div', 'compact-stats-row');
+        statDefs.forEach(function(s) {
+            var pill = makeEl('div', 'compact-stat-pill');
+            pill.appendChild(makeEl('span', 'csp-label', s.label));
+            pill.appendChild(makeEl('span', 'csp-value', s.value));
+            pill.appendChild(makeEl('span', 'csp-unit', s.unit));
+            statsRow.appendChild(pill);
+        });
+        container.appendChild(statsRow);
+    }
+    var evaluations = model.evaluations || {};
+    var validEvals = Object.entries(evaluations)
+        .filter(function(r){ return r[1] !== null && r[1] !== undefined; })
+        .sort(function(a, b) {
+            var aAA = a[0].startsWith('artificial_analysis');
+            var bAA = b[0].startsWith('artificial_analysis');
+            if (aAA !== bAA) return aAA ? -1 : 1;
+            return Number(b[1]) - Number(a[1]);
+        });
+    if (validEvals.length) {
+        var wrap = makeEl('div', 'compact-bench-wrap');
+        wrap.appendChild(makeEl('div', 'compact-bench-heading', 'Benchmarks'));
+        var radarEntries = validEvals.map(function(entry) {
+            var n = Number(entry[1]);
+            return {
+                label: getEvalDisplayName(entry[0]),
+                normalized: Number.isFinite(n) ? Math.max(0, Math.min(100, n > 1 ? n : n * 100)) : 0,
+                display: Number.isFinite(n) ? (n > 1 ? n.toFixed(1) : n.toFixed(3)) : String(entry[1])
+            };
+        });
+        var frame = makeEl('div', 'compact-radar-frame');
+        var canvas = makeEl('canvas', 'compact-radar-canvas');
+        canvas.setAttribute('role', 'img');
+        canvas.setAttribute('aria-label', 'Radar chart of model benchmark scores, normalized to a 0 to 100 scale');
+        frame.appendChild(canvas);
+        wrap.appendChild(frame);
+
+        var accessibleTable = makeEl('table', 'compact-bench-table');
+        accessibleTable.innerHTML = '<caption>Exact benchmark scores</caption><thead><tr><th>Benchmark</th><th>Score</th></tr></thead><tbody></tbody>';
+        radarEntries.forEach(function(entry) {
+            var row = document.createElement('tr');
+            row.appendChild(makeEl('th', '', entry.label));
+            row.appendChild(makeEl('td', '', entry.display));
+            accessibleTable.tBodies[0].appendChild(row);
+        });
+        wrap.appendChild(accessibleTable);
+        container.appendChild(wrap);
+
+        if (typeof Chart === 'function') {
+            var styles = getComputedStyle(document.documentElement);
+            var ink = styles.getPropertyValue('--text-color').trim() || '#111827';
+            var border = styles.getPropertyValue('--border-color').trim() || '#d1d5db';
+            var accent = styles.getPropertyValue('--accent-color').trim() || '#2563eb';
+            var wrapLabel = function(label) {
+                var words = label.split(' '), lines = [], line = '';
+                words.forEach(function(word) {
+                    if ((line + ' ' + word).trim().length > 15 && line) { lines.push(line); line = word; }
+                    else { line = (line + ' ' + word).trim(); }
+                });
+                if (line) lines.push(line);
+                return lines;
+            };
+            new Chart(canvas, {
+                type: 'radar',
+                data: {
+                    labels: radarEntries.map(function(entry) { return wrapLabel(entry.label); }),
+                    datasets: [{
+                        label: 'Benchmark score',
+                        data: radarEntries.map(function(entry) { return entry.normalized; }),
+                        borderColor: accent,
+                        backgroundColor: 'rgba(37, 99, 235, 0.14)',
+                        pointBackgroundColor: accent,
+                        pointBorderColor: '#ffffff',
+                        pointBorderWidth: 1.5,
+                        pointRadius: 3,
+                        pointHoverRadius: 5,
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: { duration: 280 },
+                    scales: { r: {
+                        min: 0, max: 100,
+                        beginAtZero: true,
+                        ticks: { display: false, stepSize: 20 },
+                        grid: { color: border },
+                        angleLines: { color: border },
+                        pointLabels: { color: ink, font: { size: 11, weight: '500' }, padding: 8 }
+                    } },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { callbacks: {
+                            title: function(items) { return radarEntries[items[0].dataIndex].label; },
+                            label: function(context) { return 'Score: ' + radarEntries[context.dataIndex].display; },
+                            afterLabel: function(context) { return 'Normalized: ' + radarEntries[context.dataIndex].normalized.toFixed(1) + '/100'; }
+                        } }
+                    }
+                }
+            });
+        }
+    }
+};
+
+// ── Agent-powered model analysis ──────────────────────────────────────────────
+var _analysisChartId = 0;
+
+function _analysisStripFnStrings(obj) {
+    if (typeof obj === 'string') return /=>/.test(obj) ? undefined : obj;
+    if (Array.isArray(obj)) { var r = obj.map(_analysisStripFnStrings).filter(function(v){return v!==undefined;}); return r.length?r:undefined; }
+    if (obj && typeof obj === 'object') {
+        var res = {};
+        Object.entries(obj).forEach(function(kv){ var c=_analysisStripFnStrings(kv[1]); if(c!==undefined) res[kv[0]]=c; });
+        return Object.keys(res).length?res:undefined;
+    }
+    return obj;
+}
+
+function _analysisPalette(i, a) {
+    var c = ['rgba(37,99,235,'+a+')','rgba(16,185,129,'+a+')','rgba(245,158,11,'+a+')','rgba(239,68,68,'+a+')','rgba(139,92,246,'+a+')','rgba(236,72,153,'+a+')'];
+    if (typeof i === 'number') return c[i % c.length];
+    return (i||[]).map(function(_,idx){return c[idx%c.length];});
+}
+
+function _analysisRenderMd(text) {
+    if (!text) return '';
+    var html;
+    try { html = marked.parse(text, { breaks: true, gfm: true }); }
+    catch(_) { html = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    html = html.replace(/<pre><code[^>]*>([\s\S]*?)<\/code><\/pre>/g, function(match, inner) {
+        var decoded = inner.replace(/&quot;/g,'"').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&#39;/g,"'").trim();
+        try {
+            var obj = JSON.parse(decoded);
+            var datasets = obj.datasets || (obj.data && obj.data.datasets);
+            if (obj && obj.type && datasets) {
+                var id = 'analysis-chart-'+(++_analysisChartId);
+                var flat = { type:obj.type, labels:obj.labels||(obj.data&&obj.data.labels)||[], datasets:datasets, scales:(obj.options&&obj.options.scales)||null };
+                var safe = JSON.stringify(flat).replace(/"/g,'&quot;');
+                return '<div class="chart-wrap"><canvas id="'+id+'" data-cfg="'+safe+'"></canvas></div>';
+            }
+        } catch(_) {}
+        // Non-chart code block: add copy button
+        var escapedForAttr = decoded.replace(/"/g,'&quot;').replace(/\n/g,'&#10;');
+        return '<div class="analysis-code-block"><button class="analysis-copy-btn" onclick="(function(btn){var t=btn.closest(\'.analysis-code-block\').querySelector(\'code\').textContent;navigator.clipboard.writeText(t).then(function(){btn.textContent=\'Copied!\';btn.classList.add(\'copied\');setTimeout(function(){btn.textContent=\'Copy\';btn.classList.remove(\'copied\');},1500);});})(this)">Copy</button><pre><code>'+inner+'</code></pre></div>';
+    });
+    html = html.replace(/\[\[model:([^:\]]+):([^\]]+)\]\]/g, function(_m, src, name) {
+        function esc(s){return s.replace(/[<>"'&]/g,function(c){return({'<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','&':'&amp;'}[c]);});}
+        return '<span class="model-badge" data-model-name="'+esc(name)+'" data-model-source="'+esc(src)+'">'+esc(name)+'</span>';
+    });
+    return html;
+}
+
+function _analysisRenderCharts(container) {
+    if (typeof Chart === 'undefined') return;
+    container.querySelectorAll('canvas[data-cfg]').forEach(function(cv) {
+        try {
+            var cfg = JSON.parse(cv.getAttribute('data-cfg').replace(/&quot;/g,'"'));
+            var isScatter = cfg.type==='scatter', isPie = cfg.type==='pie'||cfg.type==='doughnut';
+            var scales;
+            if (isPie) { scales={}; }
+            else if (cfg.scales) {
+                var cleaned = _analysisStripFnStrings(cfg.scales)||{};
+                ['x','y'].forEach(function(axis){ if(cleaned[axis]){cleaned[axis].ticks=Object.assign({font:{size:11},color:'#6b7280'},cleaned[axis].ticks||{});cleaned[axis].grid=cleaned[axis].grid||{color:'#f3f4f6'};}});
+                scales = cleaned;
+            } else {
+                scales={x:{ticks:{font:{size:11},color:'#6b7280',maxRotation:30},grid:{color:'#f3f4f6'}},y:{ticks:{font:{size:11},color:'#6b7280'},grid:{color:'#f3f4f6'}}};
+            }
+            new Chart(cv, {
+                type: cfg.type||'bar',
+                data: {
+                    labels: cfg.labels||[],
+                    datasets: (cfg.datasets||[]).map(function(ds,i){
+                        var rawData=ds.data||[];
+                        var data=isScatter?rawData.map(function(pt){return Array.isArray(pt)?{x:pt[0],y:pt[1]}:pt;}):rawData;
+                        var d={label:ds.label||'',data:data,backgroundColor:ds.backgroundColor||_analysisPalette(i,isPie?0.8:0.7),borderColor:ds.borderColor||_analysisPalette(i,1),borderWidth:ds.borderWidth!=null?ds.borderWidth:1};
+                        if(isScatter){d.pointRadius=5;d.pointHoverRadius=7;}
+                        return d;
+                    })
+                },
+                options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{font:{size:11,family:'system-ui'},color:'#374151'}},tooltip:isScatter?{callbacks:{label:function(ctx){var r=ctx.raw;var n=r.label||r.name||'';return n?n+' ('+r.x+', '+r.y+')':'('+r.x+', '+r.y+')';}}}:{}},scales:scales}
+            });
+        } catch(e){ console.warn('Analysis chart error', e); }
+    });
+}
+
+window.buildAnalysisUserMessage = function(model, type) {
+    var name = model.name || model.id || 'Unknown';
+    var provider = (model.model_creator && model.model_creator.name) || model.vendor || '';
+    var lines = ['Please provide a concise analysis of **' + name + '**' + (provider ? ' by ' + provider : '') + '.'];
+    lines.push('\nHere is the available structured data for this model:');
+    lines.push('```json');
+    lines.push(JSON.stringify(model, null, 2));
+    lines.push('```');
+    lines.push('\nThe structured data above already contains benchmarks, pricing, and performance. Use it as your primary source.');
+    lines.push('Call fetch_llm_benchmarks once to get peer rankings for context. That should be sufficient — only use ask_perplexity if this model is so new that the structured data above is mostly empty.');
+    lines.push('\nInclude a Chart.js chart comparing this model to 4-6 peers. Reference related models using [[model:openrouter:provider/model-id]] syntax.');
+    return lines.join('\n');
+};
+
+window.streamModelAnalysis = async function(analysisContainer, model, type, options) {
+    options = options || {};
+    var apiKey = getUserOpenRouterKey();
+    var analysisModel = localStorage.getItem('dashboard-analysis-model') || 'openai/gpt-oss-120b';
+    var systemOverride = '## MODEL ANALYSIS MODE\nYou are producing a concise analysis of a specific AI model for a user browsing an AI leaderboard dashboard.\n\nTOOL USAGE RULES:\n- The user message already includes full structured data (benchmarks, pricing, speed) for the model. Use it.\n- Call fetch_llm_benchmarks ONCE to get peer context. That is usually all you need.\n- Do NOT call ask_perplexity unless the model is brand-new and the structured data is mostly empty/null. Perplexity is slow and unnecessary when benchmark data is already available.\n- Never call the same tool twice. All results are in your context.\n- After at most 2 tool calls, write your analysis immediately.\n\nStructure your response with ## sections: Overview, Performance (with a benchmark comparison chart), Speed & Cost, Strengths & Weaknesses, Best Use Cases.\n\nChart syntax — JSON code block:\n```json\n{"type":"bar","labels":["Model A","Model B"],"datasets":[{"label":"Score","data":[72,85]}]}\n```\nReference related models with [[model:openrouter:provider/model-id]] for clickable cards.\n\nBe concise. Synthesize from available data — do not wait for web search results you don\'t need.';
+    var response = await fetch('/api/agent-v2/chat/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            settings: Object.assign({ model: analysisModel, mode: 'quick', system_prompt_override: systemOverride }, apiKey ? { api_key: apiKey } : {}),
+            messages: [{ role: 'user', content: buildAnalysisUserMessage(model, type) }]
+        })
+    });
+    if (!response.ok) {
+        var msg = 'HTTP error ' + response.status;
+        try { var p = await response.json(); msg = p.error || p.message || msg; } catch(_) {}
+        if (response.status === 402) msg = 'OpenRouter access required. Add your own key in Settings or use a paid plan with server-side access.';
+        throw new Error(msg);
+    }
+    var reader = response.body && response.body.getReader();
+    if (!reader) throw new Error('Response body is not readable');
+    var decoder = new TextDecoder('utf-8');
+    var buffer = '';
+    var toolCalls = [];
+    var streamingContent = '';
+    var streamingEl = null;
+
+    function setStatus(text) { var el = analysisContainer.querySelector('.loading-text'); if(el) el.textContent = text; }
+
+    function showStreamingChunk(text) {
+        // Remove spinner on first content
+        var spinner = analysisContainer.querySelector('.initial-loading');
+        if (spinner) spinner.remove();
+        if (!streamingEl) {
+            streamingEl = document.createElement('div');
+            streamingEl.className = 'analysis-content streaming';
+            var inner = document.createElement('div');
+            inner.className = 'analysis-text streaming-text';
+            streamingEl.appendChild(inner);
+            analysisContainer.appendChild(streamingEl);
+        }
+        streamingContent += text;
+        var inner = streamingEl.querySelector('.streaming-text');
+        try { inner.innerHTML = marked.parse(streamingContent, { breaks: true, gfm: true }); }
+        catch(_) { inner.textContent = streamingContent; }
+    }
+
+    try {
+        while (true) {
+            var chunk = await reader.read();
+            if (chunk.done) break;
+            buffer += decoder.decode(chunk.value, { stream: true });
+            var nl;
+            while ((nl = buffer.indexOf('\n')) !== -1) {
+                var line = buffer.slice(0, nl).trim();
+                buffer = buffer.slice(nl + 1);
+                if (!line.startsWith('data: ')) continue;
+                var payload = line.slice(6);
+                if (payload === '[DONE]') return;
+                var parsed;
+                try { parsed = JSON.parse(payload); } catch(_) { continue; }
+                if (parsed.type === 'status') { setStatus(parsed.label || 'Analyzing...'); }
+                else if (parsed.type === 'tool_start') {
+                    setStatus('Using ' + (parsed.tool_name||'tool').replace(/_/g,' ') + '\u2026');
+                    toolCalls.push({ name: parsed.tool_name, args: parsed.args, status: 'running' });
+                } else if (parsed.type === 'tool_result') {
+                    setStatus('Writing analysis\u2026');
+                    var tc = toolCalls.find(function(t){return t.name===parsed.tool_name&&t.status==='running';});
+                    if (tc) { tc.status = parsed.status||'done'; tc.preview = parsed.result_preview; }
+                } else if (parsed.type === 'content_chunk' && parsed.delta) {
+                    showStreamingChunk(parsed.delta);
+                } else if (parsed.type === 'done') {
+                    var finalContent = fixEncodingArtifacts(parsed.response || streamingContent);
+                    finalizeModalAnalysis(analysisContainer, finalContent, toolCalls, { model: model, type: type });
+                    saveAnalysisToCache(model, type, { analysis: finalContent, traces: toolCalls, saved_at: new Date().toISOString() });
+                    return;
+                } else if (parsed.type === 'error') { throw new Error(parsed.error); }
+            }
+        }
+    } finally { reader.cancel(); }
+};
+
+window.renderAnalysisPayload = function(analysisContainer, result, options) {
+    options = options || {};
+    if (!analysisContainer || !result) return;
+    var rawAnalysis = (typeof fixEncodingArtifacts === 'function') ? fixEncodingArtifacts(result.analysis || '') : (result.analysis || '');
+    analysisContainer.innerHTML = '';
+    var analysisContent = document.createElement('div');
+    analysisContent.className = 'analysis-content';
+    if (result.saved_at) {
+        var meta = document.createElement('div');
+        meta.className = 'analysis-meta';
+        var d = new Date(result.saved_at);
+        if (!isNaN(d)) { meta.textContent = 'Generated ' + d.toLocaleString(); analysisContent.appendChild(meta); }
+    }
+    var textBlock = document.createElement('div');
+    textBlock.className = 'analysis-text';
+    textBlock.innerHTML = _analysisRenderMd(rawAnalysis);
+    analysisContent.appendChild(textBlock);
+    _analysisRenderCharts(textBlock);
+    var actions = document.createElement('div');
+    actions.className = 'analysis-actions';
+    var regenBtn = document.createElement('button');
+    regenBtn.type = 'button'; regenBtn.className = 'primary-btn secondary'; regenBtn.textContent = 'Regenerate Analysis';
+    regenBtn.addEventListener('click', function(){ startModelAnalysis(analysisContainer, options.model, options.type, {force:true}); });
+    actions.appendChild(regenBtn);
+    analysisContent.appendChild(actions);
+    var traces = result.traces || [];
+    if (traces.length) {
+        var tracesContainer = document.createElement('details');
+        tracesContainer.className = 'analysis-trace';
+        var summary = document.createElement('summary');
+        summary.textContent = 'Research steps (' + traces.length + ')';
+        tracesContainer.appendChild(summary);
+        var traceContent = document.createElement('div');
+        traceContent.className = 'trace-content';
+        traces.forEach(function(tc, i) {
+            var item = document.createElement('div'); item.className = 'trace-item';
+            var step = document.createElement('div'); step.className = 'trace-step';
+            step.textContent = (i+1) + '. ' + (tc.name||tc.tool||tc.step||'Step').replace(/_/g,' ');
+            item.appendChild(step);
+            if (tc.preview||tc.description) { var desc=document.createElement('div'); desc.className='trace-description'; desc.textContent=tc.preview||tc.description; item.appendChild(desc); }
+            if (tc.status) { var st=document.createElement('div'); st.className='trace-status status-'+tc.status; st.textContent=tc.status; item.appendChild(st); }
+            traceContent.appendChild(item);
+        });
+        tracesContainer.appendChild(traceContent);
+        analysisContent.appendChild(tracesContainer);
+    }
+    analysisContainer.appendChild(analysisContent);
+};
+})();
+</script>
+<!-- Clerk auth integration -->
+<style>
+#clerk-auth-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 12050;
+  background: rgba(0,0,0,.6);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  align-items: center;
+  justify-content: center;
+}
+#clerk-auth-card {
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 24px 80px rgba(0,0,0,.22), 0 4px 16px rgba(0,0,0,.1);
+  overflow: hidden;
+  width: 400px;
+  max-width: calc(100vw - 32px);
+  display: flex;
+  flex-direction: column;
+}
+#clerk-auth-header {
+  padding: 20px 24px 12px;
+  border-bottom: 1px solid #f0f0f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+#clerk-auth-header-left { display: flex; align-items: center; gap: 10px; }
+#clerk-auth-logo { width: 28px; height: 28px; }
+#clerk-auth-title { font-size: 15px; font-weight: 600; color: #111; margin: 0; }
+#clerk-auth-close-btn {
+  background: none; border: none; cursor: pointer; padding: 4px;
+  color: #888; border-radius: 6px; line-height: 1; font-size: 18px;
+  transition: background .15s, color .15s;
+}
+#clerk-auth-close-btn:hover { background: #f0f0f0; color: #111; }
+#clerk-sign-in-container { padding: 8px 0; }
+.clerk-auth-loading,
+.clerk-auth-error {
+  padding: 20px 24px;
+  text-align: center;
+  color: #444;
+  font-size: 13px;
+}
+.clerk-auth-error { color: #b91c1c; }
+.clerk-auth-retry {
+  margin-top: 10px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  border-radius: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+.clerk-auth-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 10px;
+  margin-left: 8px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  border-radius: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: #111;
+  text-decoration: none;
+}
+#clerk-auth-footer {
+  padding: 10px 24px 14px;
+  border-top: 1px solid #f0f0f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+#clerk-auth-footer span { font-size: 11px; color: #aaa; }
+#clerk-auth-footer a {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 11px; font-weight: 600; color: #6c47ff;
+  text-decoration: none;
+}
+#clerk-auth-footer a:hover { text-decoration: underline; }
+#clerk-auth-footer svg { width: 14px; height: 14px; }
+</style>
+<div id="clerk-auth-overlay">
+  <div id="clerk-auth-card">
+    <div id="clerk-auth-header">
+      <div id="clerk-auth-header-left">
+        <svg id="clerk-auth-logo" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="28" height="28" rx="8" fill="#6c47ff"/>
+          <path d="M20 8.5L17.5 11a4.95 4.95 0 0 1 0 6l2.5 2.5A8.5 8.5 0 0 0 20 8.5Z" fill="white" opacity=".5"/>
+          <path d="M17.5 11A4.95 4.95 0 0 0 14 9.5a4.95 4.95 0 0 0-3.5 1.5L13 13.5a1.5 1.5 0 0 1 2.1 0L17.5 11Z" fill="white" opacity=".75"/>
+          <circle cx="14" cy="14" r="2" fill="white"/>
+          <path d="M10.5 11L8 8.5A8.5 8.5 0 0 0 8 19.5L10.5 17a4.95 4.95 0 0 1 0-6Z" fill="white"/>
+        </svg>
+        <p id="clerk-auth-title">Sign in to AI Dashboard</p>
+      </div>
+      <button id="clerk-auth-close-btn" aria-label="Close">&#x2715;</button>
+    </div>
+    <div id="clerk-sign-in-container"></div>
+    <div id="clerk-auth-footer">
+      <span>Secured by</span>
+      <a href="https://clerk.com" target="_blank" rel="noopener">
+        <svg viewBox="0 0 60 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <text x="0" y="15" font-family="system-ui,sans-serif" font-size="14" font-weight="700" fill="#6c47ff">Clerk</text>
+        </svg>
+      </a>
+    </div>
+  </div>
+</div>
+<script>
+(function() {
+  'use strict';
+
+  var clerkInstance = null;
+  var clerkPublishableKey = null;
+  var clerkInitPromise = null;
+  var _origFetch = window.fetch.bind(window);
+
+  function decodeClerkFrontendApi(publishableKey) {
+    if (!publishableKey) return '';
+    var b64 = publishableKey.split('_')[2] || '';
+    while (b64.length % 4) b64 += '=';
+    try { return atob(b64).replace(/\$$/, ''); } catch(e) { return ''; }
+  }
+
+  function withTimeout(promise, timeoutMs, message) {
+    var timer = null;
+    return Promise.race([
+      promise,
+      new Promise(function(_, reject) {
+        timer = setTimeout(function() {
+          reject(new Error(message || 'Operation timed out.'));
+        }, timeoutMs || 10000);
+      })
+    ]).finally(function() {
+      if (timer) clearTimeout(timer);
+    });
+  }
+
+  function getClerkRedirectUrl() {
+    return window.location.origin + '/';
+  }
+
+  function getSafeAuthReturnPath() {
+    var value = new URLSearchParams(window.location.search).get('return_to') || '/';
+    return value.charAt(0) === '/' && value.slice(0, 2) !== '//' ? value : '/';
+  }
+
+  function isClerkApplicationSignIn() {
+    return window.top === window && new URLSearchParams(window.location.search).get('auth') === 'sign-in';
+  }
+
+  function openClerkApplicationSignIn() {
+    var url = window.location.origin + '/dashboard.html?auth=sign-in&return_to=' + encodeURIComponent('/');
+    if (window.top && window.top !== window) window.top.location.assign(url);
+    else window.location.assign(url);
+  }
+
+  function completeClerkApplicationSignIn() {
+    if (isClerkApplicationSignIn()) window.location.replace(getSafeAuthReturnPath());
+  }
+
+  function getClerkRedirectOptions() {
+    var redirectUrl = getClerkRedirectUrl();
+    return {
+      signInForceRedirectUrl: redirectUrl,
+      signUpForceRedirectUrl: redirectUrl,
+      signInFallbackRedirectUrl: redirectUrl,
+      signUpFallbackRedirectUrl: redirectUrl,
+      allowedRedirectOrigins: [window.location.origin]
+    };
+  }
+
+  function injectClerkScript(src, publishableKey) {
+    return withTimeout(new Promise(function(resolve, reject) {
+      if (window.Clerk) { resolve(window.Clerk); return; }
+      var s = document.createElement('script');
+      s.setAttribute('data-clerk-publishable-key', publishableKey);
+      s.setAttribute('data-clerk-loader', 'dynamic');
+      s.src = src;
+      s.crossOrigin = 'anonymous';
+      s.onload = function() { resolve(window.Clerk); };
+      s.onerror = function() {
+        if (s.parentNode) s.parentNode.removeChild(s);
+        reject(new Error('Secure sign in script failed to load.'));
+      };
+      document.head.appendChild(s);
+    }), 8000, 'Secure sign in timed out while loading.');
+  }
+
+  async function initClerk(publishableKey) {
+    if (publishableKey) clerkPublishableKey = publishableKey;
+    if (clerkInstance) return clerkInstance;
+    if (clerkInitPromise) return clerkInitPromise;
+    if (!clerkPublishableKey) throw new Error('Clerk publishable key is missing');
+
+    clerkInitPromise = (async function() {
+    var pk = clerkPublishableKey;
+    var frontendApi = decodeClerkFrontendApi(pk);
+    var primaryUrl = frontendApi
+      ? 'https://' + frontendApi + '/npm/@clerk/clerk-js@latest/dist/clerk.browser.js'
+      : '';
+    var fallbackUrl = 'https://cdn.jsdelivr.net/npm/@clerk/clerk-js@5/dist/clerk.browser.js';
+
+    if (!window.Clerk) {
+      try {
+        if (primaryUrl) {
+          await injectClerkScript(primaryUrl, pk);
+        } else {
+          await injectClerkScript(fallbackUrl, pk);
+        }
+      } catch (primaryErr) {
+        if (!window.Clerk && (!primaryUrl || primaryUrl !== fallbackUrl)) {
+          await injectClerkScript(fallbackUrl, pk);
+        } else {
+          throw primaryErr;
+        }
+      }
+    }
+
+    clerkInstance = window.Clerk;
+    if (!clerkInstance || !clerkInstance.load) {
+      throw new Error('Secure sign in failed to initialize.');
+    }
+    await withTimeout(
+      clerkInstance.load(getClerkRedirectOptions()),
+      10000,
+      'Secure sign in timed out while initializing.'
+    );
+    if (clerkInstance.session) {
+      await syncClerkSession();
+      refreshAuthUI();
+      completeClerkApplicationSignIn();
+    }
+    clerkInstance.addListener(function(state) {
+      if (state.session) {
+        syncClerkSession().then(function() {
+          refreshAuthUI();
+          // Tell script.js to re-fetch /api/me so its currentUser is updated
+          if (typeof window.refreshAuthState === 'function') window.refreshAuthState();
+          completeClerkApplicationSignIn();
+        });
+      } else {
+        refreshAuthUI();
+        if (typeof window.refreshAuthState === 'function') window.refreshAuthState();
+      }
+    });
+    return clerkInstance;
+    })();
+    try {
+      return await clerkInitPromise;
+    } catch (e) {
+      clerkInstance = null;
+      clerkInitPromise = null;
+      throw e;
+    }
+  }
+
+  function renderClerkLoading() {
+    var container = document.getElementById('clerk-sign-in-container');
+    if (!container) return;
+    container.innerHTML = '<div class="clerk-auth-loading">Preparing secure sign in…</div>';
+  }
+
+  function renderClerkError(message) {
+    var container = document.getElementById('clerk-sign-in-container');
+    if (!container) return;
+    var safeMsg = String(message || 'Unable to load sign in. Please retry.');
+    container.innerHTML = '<div class="clerk-auth-error">' + safeMsg + '<div><button class="clerk-auth-retry" type="button" id="clerk-auth-retry-btn">Retry</button></div></div>';
+    var retryBtn = document.getElementById('clerk-auth-retry-btn');
+    if (retryBtn) retryBtn.addEventListener('click', function() { showClerkSignIn(); });
+  }
+
+  async function ensureClerkPublishableKey() {
+    if (!clerkPublishableKey) {
+      try {
+        var meResp = await _origFetch('/api/me');
+        var meData = await meResp.json();
+        clerkPublishableKey = meData && meData.clerk_publishable_key ? meData.clerk_publishable_key : null;
+      } catch(e) {}
+    }
+    if (!clerkPublishableKey) {
+      throw new Error('Secure sign in is unavailable right now.');
+    }
+    return clerkPublishableKey;
+  }
+
+  async function ensureClerkReady() {
+    if (clerkInstance) return clerkInstance;
+    await ensureClerkPublishableKey();
+    return initClerk(clerkPublishableKey);
+  }
+
+  function mountClerkSignIn() {
+    var container = document.getElementById('clerk-sign-in-container');
+    if (!container || !clerkInstance || !clerkInstance.mountSignIn) return;
+    while (container.firstChild) container.removeChild(container.firstChild);
+    clerkInstance.mountSignIn(container, Object.assign({
+      appearance: {
+        elements: {
+          rootBox: { fontFamily: 'inherit', width: '100%' },
+          card: { boxShadow: 'none', border: 'none', borderRadius: '0', margin: '0' },
+          footer: { display: 'none' },
+        }
+      }
+    }, getClerkRedirectOptions()));
+  }
+
+  async function getClerkTokenWithTimeout(timeoutMs) {
+    if (!clerkInstance || !clerkInstance.session || !clerkInstance.session.getToken) return null;
+    var tokenPromise = clerkInstance.session.getToken().catch(function() { return null; });
+    var timeoutPromise = new Promise(function(resolve) {
+      setTimeout(function() { resolve(null); }, timeoutMs || 1200);
+    });
+    return Promise.race([tokenPromise, timeoutPromise]);
+  }
+
+  async function syncClerkSession() {
+    if (!clerkInstance || !clerkInstance.session) return null;
+    try {
+      var token = await getClerkTokenWithTimeout(3000);
+      if (!token) return null;
+      var resp = await _origFetch('/auth/clerk-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Clerk-Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ token: token }),
+      });
+      return resp.ok ? resp.json() : null;
+    } catch(e) { return null; }
+  }
+
+  function showClerkSignIn() {
+    var overlay = document.getElementById('clerk-auth-overlay');
+    var oldModal = document.getElementById('auth-modal');
+    if (typeof window.endTour === 'function') {
+      try { window.endTour(); } catch (e) {}
+    }
+    if (oldModal) oldModal.style.display = 'none';
+    if (!overlay) return;
+    overlay.style.display = 'flex';
+    renderClerkLoading();
+    // The Sites shell embeds dashboard.html. Move to a first-party, top-level
+    // dashboard sign-in page so Clerk authenticates the application itself,
+    // not its separate Account Portal.
+    if (window.top && window.top !== window) {
+      openClerkApplicationSignIn();
+      return;
+    }
+    ensureClerkReady()
+      .then(function() { mountClerkSignIn(); })
+      .catch(function(err) {
+        var message = err && err.message ? err.message : 'Unable to load sign in.';
+        renderClerkError(message);
+      });
+  }
+
+  function hideClerkSignIn() {
+    var overlay = document.getElementById('clerk-auth-overlay');
+    if (overlay) overlay.style.display = 'none';
+    var container = document.getElementById('clerk-sign-in-container');
+    if (clerkInstance && container) {
+      try { clerkInstance.unmountSignIn(container); } catch(e) {}
+    }
+  }
+
+  function _ensureAuthWrap() {
+    var btn = document.getElementById('auth-button');
+    if (!btn || document.getElementById('auth-button-wrap')) return;
+    var wrap = document.createElement('div');
+    wrap.id = 'auth-button-wrap';
+    btn.parentNode.insertBefore(wrap, btn);
+    wrap.appendChild(btn);
+    var drop = document.createElement('div');
+    drop.id = 'auth-dropdown';
+    var items = [
+      { text: 'Upgrade', cls: '', action: function() { _closeDropdown(); var nb = document.querySelector('[data-section="upgrade"]'); if (nb) nb.click(); } },
+      { text: 'Manage Account', cls: '', action: function() { _closeDropdown(); if (clerkInstance && clerkInstance.openUserProfile) clerkInstance.openUserProfile(); } },
+      { text: 'Log Out', cls: 'danger', action: function() { _closeDropdown(); clerkSignOut(); } },
+    ];
+    items.forEach(function(item) {
+      var b = document.createElement('button');
+      b.className = 'auth-drop-item' + (item.cls ? ' ' + item.cls : '');
+      b.textContent = item.text;
+      b.addEventListener('click', item.action);
+      drop.appendChild(b);
+    });
+    wrap.appendChild(drop);
+    document.addEventListener('click', function(e) {
+      if (!wrap.contains(e.target)) _closeDropdown();
+    });
+  }
+
+  function _closeDropdown() {
+    var d = document.getElementById('auth-dropdown');
+    if (d) d.classList.remove('open');
+  }
+
+  function refreshAuthUI() {
+    var isSignedIn = !!(clerkInstance && clerkInstance.session);
+    if (isSignedIn) { hideClerkSignIn(); _ensureAuthWrap(); }
+    var btn = document.getElementById('auth-button');
+    if (!btn) return;
+    if (isSignedIn) {
+      var email = (clerkInstance.user && clerkInstance.user.primaryEmailAddress)
+        ? clerkInstance.user.primaryEmailAddress.emailAddress : '';
+      var name = (clerkInstance.user && clerkInstance.user.firstName) || email.split('@')[0] || 'Account';
+      btn.textContent = name;
+      // Toggle dropdown on click (capture phase handles nav, but button is inside wrap)
+      btn._clerkDropHandler = btn._clerkDropHandler || function(e) {
+        if (!clerkInstance || !clerkInstance.session) return;
+        e.stopImmediatePropagation();
+        var d = document.getElementById('auth-dropdown');
+        if (d) d.classList.toggle('open');
+      };
+    } else {
+      _closeDropdown();
+      btn.textContent = 'Log In';
+    }
+  }
+
+  async function clerkSignOut() {
+    await _origFetch('/auth/logout', { method: 'POST' }).catch(function(){});
+    if (clerkInstance) await clerkInstance.signOut();
+    refreshAuthUI();
+    if (typeof window.refreshAuthState === 'function') window.refreshAuthState();
+  }
+
+  // Override updateAuthButton so script.js's version defers to Clerk state
+  var _origUpdateAuthButton = window.updateAuthButton;
+  window.updateAuthButton = function(user) {
+    if (clerkInstance && clerkInstance.session) {
+      // Clerk is authoritative — apply our text but respect script.js for other side effects
+      refreshAuthUI();
+    } else if (typeof _origUpdateAuthButton === 'function') {
+      _origUpdateAuthButton(user);
+    } else {
+      var btn = document.getElementById('auth-button');
+      if (btn) btn.textContent = user ? 'Sign Out' : 'Log In';
+    }
+  };
+
+  window.openAuthModal = function(_mode) { showClerkSignIn(); };
+  window.showAuthModal = function(_mode) { showClerkSignIn(); };
+  window.showClerkSignIn = showClerkSignIn;
+  window.hideClerkSignIn = hideClerkSignIn;
+  window.getClerkTokenWithTimeout = getClerkTokenWithTimeout;
+  window.clerkSignOut = clerkSignOut;
+
+  // Capture-phase listener intercepts #auth-button clicks before script.js fires
+  document.addEventListener('click', function(e) {
+    var btn = e.target.closest && e.target.closest('#auth-button');
+    if (!btn) return;
+    e.stopImmediatePropagation();
+    if (clerkInstance && clerkInstance.session) {
+      // Toggle dropdown
+      var d = document.getElementById('auth-dropdown');
+      if (d) d.classList.toggle('open');
+    } else {
+      showClerkSignIn();
+    }
+  }, true);
+
+  document.addEventListener('keydown', function(e) { if (e.key === 'Escape') hideClerkSignIn(); });
+  document.addEventListener('DOMContentLoaded', function() {
+    var closeBtn = document.getElementById('clerk-auth-close-btn');
+    if (closeBtn) closeBtn.addEventListener('click', hideClerkSignIn);
+    var overlay = document.getElementById('clerk-auth-overlay');
+    if (overlay) overlay.addEventListener('click', function(e) {
+      if (e.target === overlay) hideClerkSignIn();
+    });
+    if (isClerkApplicationSignIn()) showClerkSignIn();
+  });
+
+  // Inject Clerk app-auth token into /api/ and /auth/ requests without
+  // overloading Authorization, which is reserved for explicit user API keys.
+  window.fetch = async function(input, init) {
+    init = init || {};
+    var rawUrl = typeof input === 'string' ? input : (input && input.url) || '';
+    var urlObj = null;
+    try { urlObj = new URL(rawUrl, window.location.origin); } catch(e) {}
+    var path = urlObj ? urlObj.pathname : rawUrl;
+    var isApi = path && (path.startsWith('/api/') || path.startsWith('/auth/'));
+    var isSameOrigin = !urlObj || urlObj.origin === window.location.origin;
+    if (isApi && isSameOrigin && clerkInstance && clerkInstance.session) {
+      try {
+        var token = await getClerkTokenWithTimeout(800);
+        if (token) {
+          init.headers = Object.assign({}, init.headers, { 'X-Clerk-Authorization': 'Bearer ' + token });
+        }
+      } catch(e) {}
+    }
+    return _origFetch(input, init);
+  };
+
+  // Boot — load Clerk publishable key from /api/me
+  _origFetch('/api/me')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.clerk_publishable_key) {
+        clerkPublishableKey = data.clerk_publishable_key;
+        initClerk(data.clerk_publishable_key).catch(function(){});
+      }
+    })
+    .catch(function(){});
+})();
+</script>
+<!-- /dashboard-overrides -->
+</body>
+
+</html>

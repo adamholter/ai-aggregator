@@ -1,0 +1,20 @@
+{
+  "collected_at": "2026-07-20T12:34:21.692Z",
+  "sources": [
+    {
+      "source": "EQ-Bench 3",
+      "sourceUrl": "https://eqbench.com/eqbench3.js",
+      "status": "ok",
+      "rowCount": 247,
+      "rawPath": "static/frontier-data/raw/eq-bench-3.json"
+    },
+    {
+      "source": "LMArena Text",
+      "sourceUrl": "https://arena.ai/leaderboard/text",
+      "artifactUrl": "https://api.wulong.dev/arena-ai-leaderboards/v1/leaderboard?name=text",
+      "status": "ok",
+      "rowCount": 10,
+      "rawPath": "static/frontier-data/raw/lmarena-text.json"
+    }
+  ]
+}

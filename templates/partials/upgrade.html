@@ -1,0 +1,354 @@
+<!-- Upgrade / Billing Tab -->
+<style>
+.upgrade-wrap { max-width: 780px; margin: 0 auto; padding: 32px 16px 64px; }
+.upgrade-plan-banner {
+  background: var(--surface-color, #f8f9fa); border: 1px solid var(--border-color);
+  border-radius: 10px; padding: 18px 22px; margin-bottom: 28px;
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;
+}
+.upgrade-plan-badge {
+  display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px;
+  font-weight: 700; text-transform: uppercase; letter-spacing: .06em; margin-left: 8px;
+}
+.upgrade-plan-badge.free { background: #f3f4f6; color: #6b7280; }
+.upgrade-plan-badge.starter { background: #dbeafe; color: #1d4ed8; }
+.upgrade-plan-badge.pro { background: #d1fae5; color: #065f46; }
+.upgrade-plan-badge.max { background: #fef3c7; color: #92400e; }
+.upgrade-plan-label { font-size: 15px; font-weight: 600; color: var(--text-color); }
+.upgrade-plan-sub { font-size: 13px; color: var(--text-secondary, #6b7280); margin-top: 2px; }
+.upgrade-usage-wrap { margin-bottom: 28px; }
+.upgrade-usage-label { font-size: 13px; color: var(--text-secondary); margin-bottom: 6px; display: flex; justify-content: space-between; }
+.upgrade-usage-bar-bg { height: 8px; background: var(--border-color); border-radius: 4px; overflow: hidden; }
+.upgrade-usage-bar-fill { height: 100%; border-radius: 4px; background: #2563eb; transition: width .4s ease; }
+.upgrade-usage-bar-fill.warn { background: #f59e0b; }
+.upgrade-usage-bar-fill.danger { background: #ef4444; }
+.upgrade-billing-toggle { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; font-size: 13px; color: var(--text-secondary); }
+.upgrade-billing-toggle button {
+  padding: 5px 14px; border-radius: 20px; border: 1px solid var(--border-color);
+  background: var(--bg-color); color: var(--text-color); cursor: pointer; font-size: 12px;
+  font-weight: 500; transition: all .15s;
+}
+.upgrade-billing-toggle button.active { background: #111; color: #fff; border-color: #111; }
+.upgrade-pricing-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 16px; margin-bottom: 28px; }
+.upgrade-card {
+  border: 1px solid var(--border-color); border-radius: 12px; padding: 22px 18px;
+  background: var(--bg-color); display: flex; flex-direction: column; gap: 10px;
+  position: relative; transition: box-shadow .15s;
+}
+.upgrade-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.08); }
+.upgrade-card.current { border-color: #2563eb; box-shadow: 0 0 0 2px rgba(37,99,235,.15); }
+.upgrade-card-name { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--text-secondary); }
+.upgrade-card-price { font-size: 26px; font-weight: 800; color: var(--text-color); line-height: 1.1; }
+.upgrade-card-price small { font-size: 14px; font-weight: 400; color: var(--text-secondary); }
+.upgrade-card-desc { font-size: 12px; color: var(--text-secondary); line-height: 1.5; flex: 1; }
+.upgrade-card-current-badge {
+  display: inline-block; padding: 2px 8px; background: #2563eb; color: #fff;
+  font-size: 10px; font-weight: 700; border-radius: 4px; letter-spacing: .05em; text-transform: uppercase;
+}
+.upgrade-cta-btn {
+  padding: 9px 0; border-radius: 7px; border: none; cursor: pointer; font-size: 13px;
+  font-weight: 600; width: 100%; transition: all .15s;
+}
+.upgrade-cta-btn.primary { background: #111; color: #fff; }
+.upgrade-cta-btn.primary:hover { background: #333; }
+.upgrade-cta-btn.secondary { background: var(--border-color); color: var(--text-color); }
+.upgrade-cta-btn.secondary:hover { background: var(--hover-color, #e5e7eb); }
+.upgrade-cta-btn:disabled { opacity: .5; cursor: default; }
+.upgrade-manage { text-align: center; margin-top: 8px; }
+.upgrade-manage a { font-size: 13px; color: var(--text-secondary); text-decoration: underline; cursor: pointer; }
+.upgrade-manage a:hover { color: var(--text-color); }
+</style>
+
+<section id="upgrade" class="content-section">
+  <div class="upgrade-wrap">
+    <div class="section-header" style="margin-bottom:24px;">
+      <h2>Upgrade</h2>
+      <p style="color:var(--text-secondary);font-size:14px;margin-top:4px;">Support the project — or use your own OpenRouter key for free.</p>
+    </div>
+
+    <div class="upgrade-plan-banner" id="upgrade-plan-banner">
+      <div>
+        <div class="upgrade-plan-label">Current plan: <span id="upgrade-tier-badge" class="upgrade-plan-badge free">Free</span></div>
+        <div class="upgrade-plan-sub" id="upgrade-plan-sub">Bring your own OpenRouter key for full access.</div>
+      </div>
+    </div>
+
+    <div class="upgrade-usage-wrap" id="upgrade-usage-wrap" style="display:none;">
+      <div class="upgrade-usage-label">
+        <span>Server credit used this month</span>
+        <span id="upgrade-usage-text">$0.00 / $0.00</span>
+      </div>
+      <div class="upgrade-usage-bar-bg"><div class="upgrade-usage-bar-fill" id="upgrade-usage-bar" style="width:0%"></div></div>
+    </div>
+
+    <div class="upgrade-billing-toggle">
+      <button class="active" id="upgrade-toggle-monthly" onclick="window.upgradeSetBilling('monthly')">Monthly</button>
+      <button id="upgrade-toggle-annual" onclick="window.upgradeSetBilling('annual')">Annual</button>
+      <span id="upgrade-billing-note" style="display:none;color:var(--text-secondary);font-size:12px;">Same price as monthly — no discount, just annual billing.</span>
+    </div>
+
+    <div class="upgrade-pricing-grid" id="upgrade-pricing-grid"></div>
+    <p style="color:var(--text-secondary);font-size:12px;margin:-12px 0 22px;">
+      Promo codes are entered in the Stripe checkout page after you click Subscribe.
+    </p>
+
+    <div class="upgrade-manage" id="upgrade-manage-wrap" style="display:none;">
+      <a onclick="window.upgradeOpenBillingPortal()">Manage billing &amp; invoices &#8599;</a>
+    </div>
+  </div>
+</section>
+
+<script>
+(function() {
+  'use strict';
+  var _billing = 'monthly';
+  var _userData = null;
+  var UPGRADE_USER_CACHE_KEY = 'dashboard-upgrade-user-cache-v1';
+
+  var PLANS = [
+    { key: 'free',    name: 'Free',    monthly: 0,  annual: 0,
+      desc: 'Full dashboard access. Bring your own OpenRouter key for AI features.' },
+    { key: 'starter', name: 'Starter', monthly: 3,  annual: 36,
+      desc: '$3/mo of server-side inference credit. Great for light usage.' },
+    { key: 'pro',     name: 'Pro',     monthly: 8,  annual: 96,
+      desc: '$8/mo of server-side inference credit. Covers daily use comfortably.' },
+    { key: 'max',     name: 'Max',     monthly: 20, annual: 240,
+      desc: '$20/mo of server-side inference credit. For heavy research workloads.' },
+  ];
+
+  function _readCachedUser() {
+    try {
+      var raw = localStorage.getItem(UPGRADE_USER_CACHE_KEY);
+      if (!raw) return null;
+      var parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object' || !parsed.user) return null;
+      return parsed.user;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function _writeCachedUser(user) {
+    try {
+      localStorage.setItem(UPGRADE_USER_CACHE_KEY, JSON.stringify({
+        ts: Date.now(),
+        user: user || null
+      }));
+    } catch (e) {}
+  }
+
+  window.upgradeSetBilling = function(period) {
+    _billing = period;
+    var mBtn = document.getElementById('upgrade-toggle-monthly');
+    var aBtn = document.getElementById('upgrade-toggle-annual');
+    var note = document.getElementById('upgrade-billing-note');
+    if (mBtn) mBtn.classList.toggle('active', period === 'monthly');
+    if (aBtn) aBtn.classList.toggle('active', period === 'annual');
+    if (note) note.style.display = period === 'annual' ? '' : 'none';
+    _renderCards();
+  };
+
+  function _makeCardEl(plan, currentTier) {
+    var isCurrent = plan.key === currentTier;
+    var price = _billing === 'annual' ? plan.annual : plan.monthly;
+    var card = document.createElement('div');
+    card.className = 'upgrade-card' + (isCurrent ? ' current' : '');
+
+    var nameEl = document.createElement('div');
+    nameEl.className = 'upgrade-card-name';
+    nameEl.textContent = plan.name;
+    card.appendChild(nameEl);
+
+    var priceEl = document.createElement('div');
+    priceEl.className = 'upgrade-card-price';
+    if (price === 0) {
+      var freeSmall = document.createElement('small');
+      freeSmall.textContent = 'free';
+      priceEl.appendChild(freeSmall);
+    } else {
+      priceEl.appendChild(document.createTextNode('$' + price));
+      var unit = document.createElement('small');
+      unit.textContent = _billing === 'annual' ? '/yr' : '/mo';
+      priceEl.appendChild(unit);
+    }
+    card.appendChild(priceEl);
+
+    var descEl = document.createElement('div');
+    descEl.className = 'upgrade-card-desc';
+    descEl.textContent = plan.desc;
+    card.appendChild(descEl);
+
+    if (isCurrent) {
+      var badge = document.createElement('span');
+      badge.className = 'upgrade-card-current-badge';
+      badge.textContent = 'Current';
+      card.appendChild(badge);
+    }
+
+    var btn = document.createElement('button');
+    btn.className = 'upgrade-cta-btn';
+    if (plan.key === 'free') {
+      btn.className += ' secondary';
+      btn.textContent = isCurrent ? 'Current plan' : 'Downgrade';
+      if (isCurrent) btn.disabled = true;
+      else btn.addEventListener('click', function() { window.upgradeOpenBillingPortal(); });
+    } else if (isCurrent) {
+      btn.className += ' secondary';
+      btn.textContent = 'Manage';
+      btn.addEventListener('click', function() { window.upgradeOpenBillingPortal(); });
+    } else {
+      btn.className += ' primary';
+      btn.textContent = 'Subscribe';
+      var pk = plan.key + '_' + _billing;
+      btn.addEventListener('click', function() { window.upgradeSubscribe(pk); });
+    }
+    card.appendChild(btn);
+    return card;
+  }
+
+  function _renderCards() {
+    var sub = _userData && _userData.subscription;
+    var currentTier = (sub && sub.tier) || 'free';
+    var grid = document.getElementById('upgrade-pricing-grid');
+    if (!grid) return;
+    while (grid.firstChild) grid.removeChild(grid.firstChild);
+    PLANS.forEach(function(plan) {
+      grid.appendChild(_makeCardEl(plan, currentTier));
+    });
+  }
+
+  function _updateBanner(sub) {
+    var tier = (sub && sub.tier) || 'free';
+    var badge = document.getElementById('upgrade-tier-badge');
+    var planSub = document.getElementById('upgrade-plan-sub');
+    var usageWrap = document.getElementById('upgrade-usage-wrap');
+    var manageWrap = document.getElementById('upgrade-manage-wrap');
+    if (badge) {
+      badge.textContent = tier.charAt(0).toUpperCase() + tier.slice(1);
+      badge.className = 'upgrade-plan-badge ' + tier;
+    }
+    if (planSub) {
+      if (tier === 'free') {
+        planSub.textContent = 'Bring your own OpenRouter key for full access.';
+      } else {
+        var endTs = sub && sub.current_period_end;
+        var endStr = endTs ? ' Renews ' + new Date(endTs * 1000).toLocaleDateString() + '.' : '';
+        var rem = (sub && sub.credit_remaining != null) ? sub.credit_remaining : 0;
+        planSub.textContent = 'Server credit: $' + rem.toFixed(2) + ' remaining this month.' + endStr;
+      }
+    }
+    if (usageWrap) {
+      if (sub && sub.credit_limit > 0) {
+        usageWrap.style.display = '';
+        var pct = sub.credit_limit > 0 ? Math.min(100, (sub.credit_used / sub.credit_limit) * 100) : 0;
+        var bar = document.getElementById('upgrade-usage-bar');
+        var txt = document.getElementById('upgrade-usage-text');
+        if (bar) {
+          bar.style.width = pct.toFixed(1) + '%';
+          bar.className = 'upgrade-usage-bar-fill' + (pct >= 90 ? ' danger' : pct >= 70 ? ' warn' : '');
+        }
+        if (txt) txt.textContent = '$' + (sub.credit_used || 0).toFixed(4) + ' / $' + (sub.credit_limit || 0).toFixed(2);
+      } else {
+        usageWrap.style.display = 'none';
+      }
+    }
+    if (manageWrap) {
+      manageWrap.style.display = (tier !== 'free') ? '' : 'none';
+    }
+  }
+
+  window.upgradeLoadTab = function() {
+    if (!_userData) {
+      _userData = _readCachedUser();
+      if (_userData) {
+        _updateBanner(_userData && _userData.subscription);
+      }
+    }
+    _renderCards();
+    fetch('/api/me').then(function(r) { return r.json(); }).then(function(data) {
+      _userData = data.user || null;
+      _writeCachedUser(_userData);
+      _updateBanner(_userData && _userData.subscription);
+      _renderCards();
+    }).catch(function() {});
+  };
+
+  window.upgradeSubscribe = function(priceKey) {
+    var btn = document.activeElement;
+    if (btn && btn.classList && btn.classList.contains('upgrade-cta-btn')) {
+      btn.disabled = true;
+      btn.dataset.originalText = btn.textContent || 'Subscribe';
+      btn.textContent = 'Starting…';
+    }
+    var checkoutRequest = fetch('/api/create-checkout-session', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ price_key: priceKey })
+    });
+    var checkoutTimeout = new Promise(function(_, reject) {
+      setTimeout(function() {
+        reject(new Error('checkout_timeout'));
+      }, 15000);
+    });
+    Promise.race([checkoutRequest, checkoutTimeout]).then(function(r) {
+      return r.json().catch(function() { return { error: 'Checkout failed' }; }).then(function(data) {
+        return { ok: r.ok, status: r.status, data: data };
+      });
+    }).then(function(res) {
+      var data = res.data || {};
+      if (data.url) { window.location.href = data.url; }
+      else if (res.status === 401 && typeof window.openAuthModal === 'function') {
+        window.openAuthModal('login');
+        if (typeof window.showToast === 'function') {
+          window.showToast('Please sign in to continue checkout.');
+        } else {
+          alert('Please sign in to continue checkout.');
+        }
+      } else {
+        var msg = data.error || 'Checkout failed. Please try again.';
+        if (typeof window.showToast === 'function') {
+          window.showToast(msg);
+        } else {
+          alert(msg);
+        }
+      }
+    }).catch(function(err) {
+      if (err && (err.name === 'AbortError' || err.message === 'checkout_timeout')) {
+        if (typeof window.showToast === 'function') {
+          window.showToast('Checkout is taking longer than expected. Please try again.');
+        } else {
+          alert('Checkout is taking longer than expected. Please try again.');
+        }
+      } else {
+        if (typeof window.showToast === 'function') {
+          window.showToast('Checkout failed. Please try again.');
+        } else {
+          alert('Checkout failed. Please try again.');
+        }
+      }
+    })
+      .finally(function() {
+        if (btn && btn.classList && btn.classList.contains('upgrade-cta-btn')) {
+          btn.disabled = false;
+          btn.textContent = btn.dataset.originalText || 'Subscribe';
+          delete btn.dataset.originalText;
+        }
+      });
+  };
+
+  window.upgradeOpenBillingPortal = function() {
+    fetch('/api/billing-portal', { method: 'POST' })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.url) { window.location.href = data.url; }
+        else { alert(data.error || 'Could not open billing portal'); }
+      }).catch(function() { alert('Failed to open billing portal.'); });
+  };
+
+  document.addEventListener('click', function(e) {
+    var btn = e.target.closest && e.target.closest('[data-section="upgrade"]');
+    if (btn) { setTimeout(window.upgradeLoadTab, 50); }
+  });
+})();
+</script>

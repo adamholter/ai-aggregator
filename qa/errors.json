@@ -1,0 +1,156 @@
+[
+  {
+    "id": "ERR-001",
+    "severity": "Blocker",
+    "surface": "Hosted dashboard",
+    "error": "Uncaught JavaScript errors",
+    "observed": "Four errors on fresh load, including an invalid token and repeated blogPrefetching declarations.",
+    "root_cause": "Template replacement interpreted JavaScript replacement tokens and duplicated source fragments.",
+    "fix": "Use a replacement function for literal partial insertion and assert exactly one override block.",
+    "fix_status": "Fixed",
+    "post_fix_status": "Pass"
+  },
+  {
+    "id": "ERR-002",
+    "severity": "Blocker",
+    "surface": "Hosted dashboard",
+    "error": "Duplicate DOM IDs",
+    "observed": "42 duplicate IDs made modal and listener behavior nondeterministic.",
+    "root_cause": "The generated dashboard contained five copies of override and modal blocks.",
+    "fix": "Rebuild from source and regression-test unique IDs.",
+    "fix_status": "Fixed",
+    "post_fix_status": "Pass"
+  },
+  {
+    "id": "ERR-003",
+    "severity": "High",
+    "surface": "Hosted dashboard",
+    "error": "Retired auth and billing controls exposed",
+    "observed": "Log In and Upgrade contradicted the read-only public banner.",
+    "root_cause": "The Sites generator only hid retired flows with CSS.",
+    "fix": "Remove retired controls and Upgrade content from generated markup.",
+    "fix_status": "Fixed",
+    "post_fix_status": "Pass"
+  },
+  {
+    "id": "ERR-004",
+    "severity": "High",
+    "surface": "Hosted dashboard",
+    "error": "Upgrade navigation revealed no content",
+    "observed": "Upgrade became active while computed display remained none.",
+    "root_cause": "Retired content and navigation remained wired inconsistently.",
+    "fix": "Remove the retired route from the Sites edition.",
+    "fix_status": "Fixed",
+    "post_fix_status": "Pass"
+  },
+  {
+    "id": "ERR-005",
+    "severity": "Medium",
+    "surface": "Python test runner",
+    "error": "Default pytest failed collection",
+    "observed": "Imports failed unless PYTHONPATH=. was manually supplied.",
+    "root_cause": "Repository root was not configured as a pytest import path.",
+    "fix": "Add pytest.ini with pythonpath and testpaths.",
+    "fix_status": "Fixed",
+    "post_fix_status": "Pass"
+  },
+  {
+    "id": "ERR-006",
+    "severity": "High",
+    "surface": "Standalone docs page",
+    "error": "Maintained documentation files returned 404",
+    "observed": "/docs loaded its shell, but API_DOCS.md and LLM.txt both failed to load.",
+    "root_cause": "Flask served docs.html but did not expose either source document URL consumed by the page.",
+    "fix": "Add explicit UTF-8 Flask routes for API_DOCS.md and LLM.txt plus endpoint regression coverage.",
+    "fix_status": "Fixed",
+    "post_fix_status": "Pass"
+  },
+  {
+    "id": "ERR-007",
+    "severity": "Blocker",
+    "surface": "Hosted Latest feed",
+    "error": "Latest returned a hard-coded empty success payload",
+    "observed": "The production route reported count 0 and items [] while the live upstream feed contained current items; the UI appeared empty without an honest failure.",
+    "root_cause": "Sites app/latest/route.ts and the Agent compatibility route defined static empty Latest objects instead of querying the live aggregator.",
+    "fix": "Replace both routes and preview with transparent live proxies, preserve upstream errors as 502 responses, use live cache for normal loads, and reserve forced refresh for the Refresh action.",
+    "fix_status": "Fixed",
+    "post_fix_status": "Pass"
+  },
+  {
+    "id": "ERR-008",
+    "severity": "Medium",
+    "surface": "Replicate search",
+    "error": "Nullable model fields crashed search filtering",
+    "observed": "Typing flux left all 250 cards visible after toLowerCase was called on null metadata.",
+    "root_cause": "The filter assumed name, description, and owner were always strings.",
+    "fix": "Normalize every searchable field before case folding.",
+    "fix_status": "Fixed",
+    "post_fix_status": "Pass"
+  },
+  {
+    "id": "ERR-009",
+    "severity": "Medium",
+    "surface": "OpenRouter filters",
+    "error": "Vendor matching was case-sensitive",
+    "observed": "claude plus anthropic produced zero results despite matching records.",
+    "root_cause": "Typed vendor text was compared exactly against title-cased provider values.",
+    "fix": "Trim and case-normalize both vendor values.",
+    "fix_status": "Fixed",
+    "post_fix_status": "Pass"
+  },
+  {
+    "id": "ERR-010",
+    "severity": "High",
+    "surface": "Testing Catalog",
+    "error": "Live records had no usable tag taxonomy",
+    "observed": "All 360 live records rendered with an All Tags-only selector.",
+    "root_cause": "The upstream feed currently returns empty tag arrays.",
+    "fix": "Add a disclosed deterministic inferred taxonomy and populate tags during preview and full loads.",
+    "fix_status": "Fixed",
+    "post_fix_status": "Pass"
+  },
+  {
+    "id": "ERR-011",
+    "severity": "Medium",
+    "surface": "Global search to Agent",
+    "error": "Agent query could be lost during iframe navigation",
+    "observed": "The Agent section opened but the unmatched query was absent.",
+    "root_cause": "A single delayed delivery raced iframe creation and load.",
+    "fix": "Deliver on iframe load and retry during the navigation settle window.",
+    "fix_status": "Fixed",
+    "post_fix_status": "Pass"
+  },
+  {
+    "id": "ERR-012",
+    "severity": "High",
+    "surface": "Share and direct links",
+    "error": "Generated links targeted an unreliable outer root route",
+    "observed": "Copied section and shared-view URLs could open an empty root instead of the dashboard state.",
+    "root_cause": "Link generation used location.origin plus / while the functional app is dashboard.html.",
+    "fix": "Generate explicit dashboard.html section and view URLs and preserve search restoration.",
+    "fix_status": "Fixed",
+    "post_fix_status": "Pass"
+  },
+  {
+    "id": "ERR-013",
+    "severity": "High",
+    "surface": "Hosted dashboard chrome",
+    "error": "Migration notice covered important controls",
+    "observed": "The sticky AI Dashboard has moved notice occupied the top interaction area.",
+    "root_cause": "A migration notice was injected into every generated dashboard page.",
+    "fix": "Remove the notice entirely from generated markup.",
+    "fix_status": "Fixed",
+    "post_fix_status": "Pass"
+  },
+  {
+    "id": "ERR-014",
+    "severity": "Blocker",
+    "surface": "Dashboard Agent",
+    "error": "Agent advertised demo mode and substituted fake fallback models",
+    "observed": "The model selector said Dashboard Data Demo and code could return invented Demo model rows or a fake Latest item.",
+    "root_cause": "The Agent surface was built around a local demonstration fallback.",
+    "fix": "Remove all fabricated model/news fallbacks, label the live Agent honestly, and surface upstream errors without sample substitution.",
+    "fix_status": "Fixed",
+    "post_fix_status": "Pass"
+  }
+]

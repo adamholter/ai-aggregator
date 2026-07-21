@@ -1,0 +1,1960 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Frontier Index Lab</title>
+  <link rel="icon" href="data:,">
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.6.0/dist/echarts.min.js"></script>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #ffffff;
+      --panel: #ffffff;
+      --panel-soft: #f8fafc;
+      --ink: #111827;
+      --muted: #4b5563;
+      --quiet: #6b7280;
+      --line: #e5e7eb;
+      --line-strong: #d1d5db;
+      --dark: #111111;
+      --blue: #2563eb;
+      --blue-light: #eff6ff;
+      --green: #059669;
+      --amber: #d97706;
+      --red: #dc2626;
+      --active-bg: #111111;
+      --active-ink: #ffffff;
+      --track: rgba(15, 23, 42, 0.055);
+      --row-hover: rgba(241, 245, 249, 0.55);
+      --shadow: none;
+      --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    [data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #0b0f14;
+      --panel: #0b0f14;
+      --panel-soft: #0f131a;
+      --ink: #f3f4f6;
+      --muted: #aeb8c8;
+      --quiet: #8490a2;
+      --line: #273140;
+      --line-strong: #3a4657;
+      --dark: #f3f4f6;
+      --blue: #60a5fa;
+      --blue-light: #172554;
+      --green: #34d399;
+      --amber: #fbbf24;
+      --red: #fb7185;
+      --active-bg: #f3f4f6;
+      --active-ink: #0b0f14;
+      --track: rgba(148, 163, 184, 0.16);
+      --row-hover: rgba(51, 65, 85, 0.34);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      background: var(--bg);
+      color: var(--ink);
+      font-family: var(--sans);
+    }
+
+    button, input, textarea, select { font: inherit; }
+    button {
+      border: 1px solid var(--line-strong);
+      border-radius: 6px;
+      background: var(--panel);
+      color: var(--ink);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      min-height: 34px;
+      padding: 0 14px;
+      transition: all 0.15s ease;
+    }
+    button:hover {
+      border-color: var(--dark);
+      background: var(--panel-soft);
+    }
+    button.active {
+      background: var(--active-bg);
+      color: var(--active-ink);
+      border-color: var(--active-bg);
+    }
+    input, textarea, select {
+      width: 100%;
+      border: 1px solid var(--line-strong);
+      border-radius: 6px;
+      background: var(--panel);
+      color: var(--ink);
+      padding: 9px 12px;
+      min-width: 0;
+      transition: border-color 0.15s ease;
+    }
+    input:focus, textarea:focus, select:focus {
+      outline: none;
+      border-color: var(--blue);
+    }
+    textarea { min-height: 86px; resize: vertical; line-height: 1.45; }
+
+    .page { width: min(1520px, 100%); margin: 0 auto; padding: 12px 16px 56px; }
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      min-height: 56px;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 12px;
+    }
+    .brand { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
+    .brand strong { font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; font-weight: 800; color: var(--quiet); }
+    .brand span, .hint, .small { color: var(--muted); font-size: 12px; line-height: 1.45; }
+    .save-status { color: var(--quiet); font-size: 11px; white-space: nowrap; }
+    .save-status.error { color: var(--red); }
+    h1 { margin: 0; font-size: clamp(22px, 2.5vw, 32px); line-height: 1.1; letter-spacing: -0.02em; font-weight: 800; }
+    h2, h3, p { margin: 0; }
+    h2 { font-size: 16px; font-weight: 700; letter-spacing: -0.010em; }
+    h3 { font-size: 13px; font-weight: 600; }
+    .top-actions { display: flex; gap: 8px; align-items: center; }
+    .top-left { display: flex; align-items: center; gap: 20px; }
+
+    /* View switcher */
+    .view-switcher {
+      display: flex;
+      gap: 0;
+      border: 1px solid var(--line-strong);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .view-switcher button {
+      border: none;
+      border-radius: 0;
+      min-height: 34px;
+      padding: 0 18px;
+      font-size: 12px;
+      font-weight: 600;
+      background: var(--panel);
+      color: var(--ink);
+    }
+    .view-switcher button + button { border-left: 1px solid var(--line-strong); }
+    .view-switcher button.active { background: var(--active-bg); color: var(--active-ink); }
+    .view-switcher button:hover:not(.active) { background: var(--panel-soft); }
+
+    /* Metrics row */
+    .metrics-row {
+      display: flex;
+      gap: 24px;
+      padding: 14px 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .metric-item span { color: var(--quiet); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; }
+    .metric-item strong { display: block; font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+    /* Builder two-col */
+    .builder {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 360px;
+      gap: 28px;
+      padding: 20px 0;
+      align-items: start;
+    }
+    .builder > aside {
+      position: sticky;
+      top: 12px;
+      border-left: 1px solid var(--line);
+      padding-left: 28px;
+    }
+
+    .panel {
+      background: transparent;
+      border: 0;
+      border-top: 1px solid var(--line);
+      border-radius: 0;
+      box-shadow: none;
+      min-width: 0;
+      overflow: visible;
+      display: flex;
+      flex-direction: column;
+    }
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 16px 0 10px;
+    }
+    .panel-head span, .label {
+      display: block;
+      color: var(--quiet);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 2px;
+    }
+    .panel-body { padding: 10px 0 28px; flex-grow: 1; min-width: 0; }
+    .lede { color: var(--muted); font-size: 14px; line-height: 1.55; max-width: 72ch; }
+
+    .stack { display: grid; gap: 28px; }
+    .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .editable-index-name {
+      cursor: pointer;
+      border-bottom: 1px dashed var(--line-strong);
+      padding-bottom: 1px;
+      transition: border-color 0.15s ease, color 0.15s ease;
+    }
+    .editable-index-name:hover {
+      color: var(--blue);
+      border-bottom-color: var(--blue);
+    }
+    .index-name-input {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--ink);
+      border: 1px solid var(--blue);
+      border-radius: 6px;
+      padding: 2px 6px;
+      background: var(--panel);
+      width: 260px;
+      font-family: var(--sans);
+    }
+    .index-switcher-select {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      border: 1px solid var(--line-strong);
+      border-radius: 6px;
+      background: var(--panel);
+      padding: 6px 28px 6px 12px;
+      cursor: pointer;
+      width: auto;
+      max-width: 200px;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23475569' stroke-width='2.5'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19.5 8.25l-7.5 7.5-7.5-7.5'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 8px center;
+      background-size: 12px;
+      -webkit-appearance: none;
+      appearance: none;
+      transition: all 0.15s ease;
+    }
+    .index-switcher-select:hover {
+      border-color: var(--quiet);
+      background-color: var(--panel-soft);
+    }
+    [data-theme="dark"] .index-switcher-select {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23cbd5e1' stroke-width='2.5'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19.5 8.25l-7.5 7.5-7.5-7.5'/%3E%3C/svg%3E");
+    }
+    .add-index-inline-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      min-height: 32px;
+      padding: 0;
+      font-size: 18px;
+      font-weight: 500;
+      border-radius: 50%;
+      border: 1px solid var(--line-strong);
+      background: var(--panel);
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .add-index-inline-btn:hover {
+      border-color: var(--dark);
+      background: var(--panel-soft);
+      color: var(--ink);
+      transform: scale(1.05);
+    }
+
+    .gate-status-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      background: transparent;
+      border: 0;
+      border-bottom: 1px solid var(--line);
+      border-radius: 0;
+      transition: background-color 0.2s ease;
+    }
+    .gate-status-name {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--ink);
+    }
+    .gate-status-count {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--red);
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      background: var(--line);
+      height: 6px;
+      border-radius: 3px;
+      outline: none;
+      padding: 0;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--dark);
+      cursor: pointer;
+      transition: transform 0.1s ease;
+    }
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+
+    .chart { width: 100%; height: 360px; min-width: 0; overflow: visible; }
+    .chart.small { height: 240px; }
+    .chart.tall { height: 480px; }
+    .chart.medium { height: 420px; }
+    .mix-chart { height: 200px; }
+    .mix-legend { display: grid; gap: 0; border-top: 1px solid var(--line); }
+    .mix-legend-item {
+      display: grid;
+      grid-template-columns: 10px minmax(0, 1fr) auto;
+      align-items: start;
+      gap: 9px;
+      padding: 7px 0;
+      border-bottom: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+    }
+    .mix-legend-item:last-child { border-bottom: 0; }
+    .mix-legend-swatch { width: 8px; height: 8px; margin-top: 3px; border-radius: 2px; }
+    .mix-legend-label { color: var(--ink); overflow-wrap: anywhere; }
+    .mix-legend-value { color: var(--quiet); font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+    .rank-list { display: grid; gap: 0; }
+    .model-row {
+      display: grid;
+      grid-template-columns: 28px minmax(150px, 220px) minmax(0, 1fr) 56px;
+      gap: 10px;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--line);
+      cursor: pointer;
+      border-radius: 6px;
+      transition: background 0.15s ease, box-shadow 0.15s ease;
+    }
+    .model-row:hover, .model-row:focus-visible { background: var(--panel-soft); box-shadow: 0 0 0 4px var(--panel-soft); outline: none; }
+    .model-row:last-child { border-bottom: 0; }
+    .rank-no { font-family: var(--mono); color: var(--quiet); font-size: 12px; font-weight: 600; }
+    .model-name { font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink); }
+    .model-sub { margin-top: 2px; color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .rank-bar-track {
+      height: 18px;
+      background: var(--track);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .rank-bar-fill { height: 100%; min-width: 2px; border-radius: 4px; }
+    .score { text-align: right; font-family: var(--mono); font-size: 14px; font-weight: 700; color: var(--blue); }
+
+    .bench-list { display: grid; gap: 10px; }
+    .bench-section { display: grid; gap: 10px; }
+    .bench-accordion {
+      margin-top: 12px;
+      border-top: 1px solid var(--line);
+      padding-top: 12px;
+    }
+    .bench-accordion summary {
+      cursor: pointer;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      list-style-position: outside;
+    }
+    .bench-accordion summary span {
+      color: var(--quiet);
+      font-weight: 600;
+    }
+    .bench-accordion[open] summary { margin-bottom: 10px; }
+    .bench-control {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) 54px;
+      gap: 10px;
+      align-items: center;
+    }
+    .bench-control input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      margin: 0;
+      accent-color: var(--dark);
+      cursor: pointer;
+    }
+    .bench-title { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 2px; }
+    .bench-title strong { font-size: 12px; font-weight: 600; color: var(--ink); }
+    .bench-title span { color: var(--quiet); font-size: 11px; }
+    .bench-control input[type="number"] { padding: 5px 6px; text-align: right; font-family: var(--mono); font-size: 12px; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
+    th { color: var(--quiet); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; background: var(--panel-soft); }
+    td { color: var(--ink); }
+    tr:hover td { background: var(--row-hover); }
+    .num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+    .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+
+    /* Collapsible section */
+    .collapsible-toggle {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .collapsible-toggle::before {
+      content: '▸';
+      font-size: 10px;
+      color: var(--quiet);
+      transition: transform 0.15s ease;
+    }
+    .collapsible-toggle.open::before { transform: rotate(90deg); }
+    .collapsible-body { display: none; }
+    .collapsible-body.open { display: block; }
+
+    /* Index page — full-width */
+    .index-page { display: none; padding: 20px 0; }
+    .index-page.visible { display: block; }
+    .index-page-editor {
+      display: grid;
+      grid-template-columns: 280px minmax(0, 1fr);
+      gap: 32px;
+      align-items: start;
+    }
+    .index-sidebar { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; min-width: 0; position: sticky; top: 12px; padding-right: 28px; border-right: 1px solid var(--line); }
+    .index-sidebar label { display: block; }
+    .index-content { display: grid; grid-template-columns: minmax(0, 1fr); gap: 32px; min-width: 0; }
+    .index-content > *, .index-sidebar > * { min-width: 0; }
+    .index-charts-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 32px;
+    }
+    .index-charts-grid .scatter-panel { grid-column: 1 / -1; }
+    .index-header {
+      padding: 24px 0 16px;
+    }
+    .index-header h2 { font-size: 28px; font-weight: 800; letter-spacing: -0.02em; }
+    .index-header p { color: var(--muted); font-size: 14px; line-height: 1.55; margin-top: 6px; max-width: 72ch; }
+    .index-header .credit { color: var(--quiet); font-size: 12px; margin-top: 4px; }
+    .index-stats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 24px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 8px;
+    }
+    .index-stat span { display: block; color: var(--quiet); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; }
+    .index-stat strong { font-size: 20px; font-weight: 700; }
+    .index-ranking-table { margin-top: 4px; }
+
+    .preview.classic { font-family: Georgia, serif; }
+    .preview.terminal { background: #0f172a; color: #f8fafc; border-color: #1e293b; }
+    .preview.editorial { background: #fffaf0; color: #2c2520; }
+
+    .empty { padding: 24px 0; color: var(--muted); border-top: 1px dashed var(--line-strong); border-bottom: 1px dashed var(--line-strong); background: transparent; text-align: center; border-radius: 0; }
+    .ok { color: var(--green); font-weight: 600; }
+    .warn { color: var(--amber); font-weight: 600; }
+    .bad { color: var(--red); font-weight: 600; }
+
+    .model-modal { position: fixed; inset: 0; z-index: 100; display: none; align-items: center; justify-content: center; padding: 24px; background: rgba(15, 23, 42, 0.58); }
+    .model-modal.open { display: flex; }
+    .model-modal-card { width: min(880px, 100%); max-height: 92vh; overflow: auto; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); box-shadow: 0 30px 80px rgba(15, 23, 42, 0.25); }
+    .model-modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; padding: 20px 24px; border-bottom: 1px solid var(--line); }
+    .model-modal-body { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(220px, 0.8fr); gap: 20px; padding: 24px; }
+    .model-modal-chart { height: 440px; min-width: 0; }
+    .model-modal-results { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; align-self: start; }
+    .model-modal-result { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 11px; border-bottom: 1px solid var(--line); font-size: 12px; }
+    .model-modal-result:last-child { border-bottom: 0; }
+    @media (max-width: 760px) { .model-modal-body { grid-template-columns: 1fr; } .model-modal-chart { height: 340px; } }
+
+    /* Custom Scrollbar styling */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--quiet); }
+
+    @media (max-width: 1180px) {
+      .builder, .index-page-editor { grid-template-columns: 1fr; }
+      .index-charts-grid { grid-template-columns: 1fr; }
+      .builder > aside { position: static; border-left: 0; border-top: 1px solid var(--line); padding: 24px 0 0; }
+      .index-sidebar { position: static; border-right: 0; border-bottom: 1px solid var(--line); padding: 0 0 24px; }
+      .chart.tall { height: 440px; }
+    }
+    @media (max-width: 720px) {
+      .page { padding: 10px 12px 40px; }
+      .topbar { flex-wrap: wrap; }
+      .metrics-row { flex-wrap: wrap; gap: 12px; }
+      .index-stats { gap: 14px 18px; }
+      .chart { height: 360px; }
+      .chart.tall { height: 420px; }
+      .chart.medium { height: 380px; }
+      .model-row { grid-template-columns: 24px minmax(0, 1fr) 58px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="topbar">
+      <div class="top-left">
+        <div class="brand"><strong>AI Dashboard</strong></div>
+        <h1>Frontier Index Lab</h1>
+      </div>
+      <div class="top-actions">
+        <span id="save-status" class="save-status" role="status" aria-live="polite">Loading saved index…</span>
+        <div class="view-switcher">
+          <button data-view="builder" class="active">Builder</button>
+          <button data-view="index">Index page</button>
+        </div>
+        <button id="export-config">Copy config</button>
+        <button id="refresh-data">Refresh data</button>
+      </div>
+    </header>
+
+    <div class="metrics-row" id="readouts"></div>
+
+    <!-- ═══ BUILDER VIEW ═══ -->
+    <main id="builder-view" class="builder">
+      <!-- Top header spanning both columns -->
+      <div class="builder-header" style="grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); padding-bottom: 14px; margin-bottom: 8px;">
+        <div class="index-selector-container" style="display: flex; align-items: center; gap: 12px;">
+          <h2 class="index-title-group" style="font-size: 20px; font-weight: 700; display: flex; align-items: center; gap: 8px; margin: 0;">
+            <span class="index-prefix" style="color: var(--quiet); font-weight: 500;">Index:</span>
+            <span id="active-index-name-inline" class="editable-index-name" style="cursor: pointer; border-bottom: 1px dashed var(--line-strong); padding-bottom: 1px;" title="Double-click to edit name">My Personal Index</span>
+            <input id="active-index-name-input" class="index-name-input" type="text" style="display: none; font-size: 20px; font-weight: 700; color: var(--ink); border: 1px solid var(--blue); border-radius: 6px; padding: 2px 6px; background: var(--panel); width: 260px; font-family: var(--sans);" />
+          </h2>
+          <select id="index-switcher-select" class="index-switcher-select" style="display: none;"></select>
+          <button id="add-index" class="add-index-inline-btn" title="Add another index">+</button>
+        </div>
+      </div>
+
+      <!-- Left: rankings + charts -->
+      <div class="stack">
+        <section class="panel">
+          <div class="panel-head">
+            <div><span>Main ranking</span><h2>Qualified models</h2></div>
+            <div class="small" id="qualified-count">...</div>
+          </div>
+          <div class="panel-body stack" style="gap: 16px;">
+            <div id="ranking-list" class="rank-list"></div>
+            <div id="required-gate-status" style="display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--line); padding-top: 12px;"></div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div><span>Index visualization</span><h2 id="distribution-title">Index leaderboard</h2></div>
+            <div class="row"><button id="show-histogram" class="active">Leaderboard</button><button id="show-pareto">Cost frontier</button></div>
+          </div>
+          <div class="panel-body"><div id="pareto-chart" class="chart tall"></div></div>
+        </section>
+
+        <!-- Diagnostics: collapsed by default -->
+        <section class="panel">
+          <div class="panel-head">
+            <div class="collapsible-toggle" id="diag-toggle"><span>Diagnostics</span><h2>Data table & disqualified</h2></div>
+            <div class="small" id="disqualified-count">...</div>
+          </div>
+          <div class="collapsible-body" id="diag-body">
+            <div class="panel-body stack" style="gap: 20px;">
+              <div>
+                <h3 style="margin-bottom:8px;">Intelligence, speed, cost</h3>
+                <div class="table-wrap"><table id="aa-table"></table></div>
+              </div>
+              <div>
+                <h3 style="margin-bottom:8px;">Disqualified models</h3>
+                <div class="table-wrap"><table id="disqualified-table"></table></div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- Right: benchmark weights -->
+      <aside class="stack">
+        <section class="panel">
+          <div class="panel-head">
+            <div><span>Benchmark mix</span><h2>Adjust weights</h2></div>
+            <div class="small" id="weight-total">100%</div>
+          </div>
+          <div class="panel-body stack">
+            <div id="mix-chart" class="chart small mix-chart" aria-label="Benchmark weight chart"></div>
+            <div id="mix-legend" class="mix-legend" aria-label="Benchmark weights"></div>
+
+            <!-- Active Benchmarks (weighted > 0) -->
+            <div class="bench-list" id="active-bench-controls"></div>
+
+            <!-- Accordion for all benchmarks (including zero-weight) -->
+            <details class="bench-accordion" style="margin-top: 14px; border-top: 1px solid var(--line); padding-top: 14px;">
+              <summary style="cursor: pointer; color: var(--muted); font-size: 12px; font-weight: 700;">
+                Add hidden benchmarks
+              </summary>
+              <div class="bench-list" id="all-bench-controls" style="margin-top: 12px; max-height: 280px; overflow-y: auto; padding-right: 4px; display: grid; gap: 10px;"></div>
+            </details>
+
+            <div class="row" style="margin-top:10px; border-top: 1px solid var(--line); padding-top: 14px;">
+              <button id="normalize">Normalize</button>
+              <button id="zero">Clear</button>
+            </div>
+          </div>
+        </section>
+      </aside>
+    </main>
+
+    <!-- ═══ INDEX PAGE VIEW ═══ -->
+    <main id="index-view" class="index-page">
+      <div class="index-page-editor">
+        <aside class="index-sidebar">
+          <div class="panel">
+            <div class="panel-head"><div><span>Page editor</span><h2>Index settings</h2></div></div>
+            <div class="panel-body" style="display:grid; gap:10px;">
+              <label><span class="label">Title</span><input id="page-title"></label>
+              <label><span class="label">Description</span><textarea id="page-intro" style="min-height:60px;"></textarea></label>
+              <label><span class="label">Leaderboard heading</span><input id="ranking-section-name"></label>
+              <label><span class="label">Charts heading</span><input id="chart-section-name"></label>
+              <label><span class="label">Credit / links</span><input id="social-links" placeholder="x.com/name, site.com"></label>
+              <label><span class="label">Style</span><select id="page-style"><option value="clean">Clean</option><option value="editorial">Editorial</option><option value="terminal">Terminal</option><option value="classic">Classic</option></select></label>
+              <button id="apply-page">Update index page</button>
+              <button id="copy-share-link">Copy public index URL</button>
+            </div>
+          </div>
+        </aside>
+
+        <section class="index-content" id="index-content">
+          <!-- Rendered by JS -->
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <div id="model-modal" class="model-modal" role="dialog" aria-modal="true" aria-labelledby="model-modal-title">
+    <section class="model-modal-card">
+      <header class="model-modal-head">
+        <div><span class="label">Personal index detail</span><h2 id="model-modal-title"></h2><p id="model-modal-subtitle" class="hint" style="margin-top:6px"></p></div>
+        <button id="close-model-modal" aria-label="Close model details">Close</button>
+      </header>
+      <div class="model-modal-body">
+        <div id="model-radar-chart" class="model-modal-chart"></div>
+        <div><span class="label">Included benchmarks</span><div id="model-modal-results" class="model-modal-results"></div></div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    let BENCHMARKS = [];
+    const STORAGE_KEY = 'ai-dashboard:personal-index:v1';
+    const OWNER_STORAGE_KEY = 'ai-dashboard:personal-index-owner:v1';
+    const STATE_ENDPOINT = '/api/personal-index-state';
+    let restoredFromLocal = false;
+    let restoredFromShare = false;
+    let serverStorageReady = false;
+    let serverStorageHydrated = false;
+    let serverSaveTimer = null;
+    let serverSaveGeneration = 0;
+    let serverSaveQueue = Promise.resolve();
+
+    const INDEXES = [
+      { id: crypto.randomUUID(), name: 'My Personal Index', required: [], weights: {} }
+    ];
+
+    const state = {
+      indexes: INDEXES,
+      activeId: INDEXES[0].id,
+      models: [],
+      deepV1Rows: [],
+      deepV11Rows: [],
+      bsRows: [],
+      page: {
+        title: 'Custom Model Frontier Index',
+        intro: 'A custom model leaderboard and index featuring Artificial Analysis-style charts and multi-benchmark ranking.',
+        rankingSection: 'Model Leaderboard',
+        chartSection: 'Benchmark Performance',
+        socials: 'x.com/yourname',
+        style: 'clean'
+      },
+      charts: {},
+      indexCharts: {},
+      chartMode: 'histogram',
+      currentQualified: [],
+      activeModelId: null
+    };
+    window.frontierState = state;
+
+    const $ = id => document.getElementById(id);
+    const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'": '&#039;' }[char]));
+    const fmt = (value, digits = 1) => Number.isFinite(value) ? value.toFixed(digits) : 'n/a';
+    const pct = value => Number.isFinite(value) ? `${Math.round(value * 100)}%` : 'n/a';
+    const money = value => Number.isFinite(value) && value > 0 ? `$${value.toFixed(value < 10 ? 2 : 0)}` : 'n/a';
+
+    function displayText(value) {
+      const decoder = document.createElement('textarea');
+      decoder.innerHTML = String(value ?? '');
+      return decoder.value
+        .replace(/â€“/g, '–')
+        .replace(/â€”/g, '—')
+        .replace(/â€˜/g, '‘')
+        .replace(/â€™/g, '’')
+        .replace(/â€œ/g, '“')
+        .replace(/â€/g, '”')
+        .replace(/â€¦/g, '…')
+        .replace(/Â(?=\s|[$%°])/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+
+    function activeIndex() { return state.indexes.find(index => index.id === state.activeId) || state.indexes[0]; }
+    function weightTotal(index = activeIndex()) { return Object.values(index.weights).reduce((sum, value) => sum + Number(value || 0), 0); }
+    function scoreValue(value) {
+      if (value === null || value === undefined || value === '') return null;
+      const n = Number(value);
+      if (!Number.isFinite(n)) return null;
+      return n <= 1 ? n * 100 : n;
+    }
+
+    const EFFORT_WORDS = new Set(['none', 'low', 'medium', 'high', 'xhigh', 'max']);
+    const BENCHMARK_PRIORITY = new Map([
+      ['deepswe', 0],
+      ['artificial_analysis_intelligence_index', 1],
+      ['bsbench_v2', 2],
+      ['terminalbench_v2_1', 3],
+      ['hle', 4]
+    ]);
+    const PROVIDER_COLORS = {
+      OpenAI: '#24845b',
+      Anthropic: '#d26a1b',
+      Google: '#2f7de1',
+      Meta: '#1877f2',
+      DeepSeek: '#7c4dd8',
+      Mistral: '#f97316',
+      Kimi: '#d4495d',
+      MiniMax: '#c75ab9',
+      xAI: '#596d9f',
+      'Z AI': '#169b8f',
+      Qwen: '#2296b8',
+      Alibaba: '#ff6a00',
+      Xiaomi: '#9f8d00',
+      Unknown: '#64748b'
+    };
+    const MIX_COLORS = ['#2563eb','#059669','#d97706','#7c3aed','#be123c','#0f766e','#9333ea','#155e75','#64748b','#dc2626','#1d4ed8','#15803d'];
+
+    function positiveNumber(value) {
+      const n = Number(value);
+      return Number.isFinite(n) && n > 0 ? n : null;
+    }
+
+    function providerColor(provider) {
+      return PROVIDER_COLORS[provider] || PROVIDER_COLORS.Unknown;
+    }
+
+    function chartThemeTokens() {
+      const styles = getComputedStyle(document.documentElement);
+      const token = name => styles.getPropertyValue(name).trim();
+      return {
+        ink: token('--ink'),
+        muted: token('--muted'),
+        quiet: token('--quiet'),
+        line: token('--line'),
+        panel: token('--panel'),
+        panelSoft: token('--panel-soft')
+      };
+    }
+
+    function themeAxis(axis, theme) {
+      if (Array.isArray(axis)) return axis.map(item => themeAxis(item, theme));
+      if (!axis) return axis;
+      return {
+        ...axis,
+        nameTextStyle: { color: theme.muted, ...(axis.nameTextStyle || {}) },
+        axisLabel: { color: theme.quiet, ...(axis.axisLabel || {}) },
+        axisLine: { ...(axis.axisLine || {}), lineStyle: { color: theme.line, ...(axis.axisLine?.lineStyle || {}) } },
+        axisTick: { ...(axis.axisTick || {}), lineStyle: { color: theme.line, ...(axis.axisTick?.lineStyle || {}) } },
+        splitLine: { ...(axis.splitLine || {}), lineStyle: { color: theme.line, ...(axis.splitLine?.lineStyle || {}) } }
+      };
+    }
+
+    function themedChartOption(option) {
+      const theme = chartThemeTokens();
+      return {
+        ...option,
+        backgroundColor: 'transparent',
+        textStyle: { color: theme.muted, fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif', ...(option.textStyle || {}) },
+        tooltip: option.tooltip ? {
+          backgroundColor: theme.panel,
+          borderColor: theme.line,
+          textStyle: { color: theme.ink, ...(option.tooltip.textStyle || {}) },
+          ...(option.tooltip || {})
+        } : option.tooltip,
+        legend: option.legend ? {
+          textStyle: { color: theme.muted, ...(option.legend.textStyle || {}) },
+          ...(option.legend || {})
+        } : option.legend,
+        xAxis: themeAxis(option.xAxis, theme),
+        yAxis: themeAxis(option.yAxis, theme),
+        radar: option.radar ? {
+          ...option.radar,
+          axisName: { color: theme.muted, ...(option.radar.axisName || {}) },
+          axisLine: { ...(option.radar.axisLine || {}), lineStyle: { color: theme.line, ...(option.radar.axisLine?.lineStyle || {}) } },
+          splitLine: { ...(option.radar.splitLine || {}), lineStyle: { color: theme.line, ...(option.radar.splitLine?.lineStyle || {}) } },
+          splitArea: { ...(option.radar.splitArea || {}), areaStyle: { color: ['transparent', theme.panelSoft], ...(option.radar.splitArea?.areaStyle || {}) } }
+        } : option.radar,
+        series: (option.series || []).map(series => ({
+          ...series,
+          label: series.label ? { color: theme.ink, ...(series.label || {}) } : series.label
+        }))
+      };
+    }
+
+    function setChartOption(chart, option, replace = false) {
+      chart.setOption(themedChartOption(option), replace);
+    }
+
+    function chartModelLabel(name, maxLength = 27) {
+      const original = displayText(name || 'Unknown model');
+      const effortMatch = original.match(/\b(none|low|medium|high|xhigh|max)(?:\s+effort)?\b/i);
+      const base = original
+        .replace(/\s*\([^)]*\)/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      const suffix = effortMatch && effortMatch[1].toLowerCase() !== 'none'
+        ? ` · ${effortMatch[1].toLowerCase()}`
+        : '';
+      const available = Math.max(10, maxLength - suffix.length);
+      const compact = base.length > available ? `${base.slice(0, available - 1).trimEnd()}…` : base;
+      return `${compact}${suffix}`;
+    }
+
+    function paretoFrontier(points, xDirection = 'min', yDirection = 'max') {
+      const xBetter = (candidate, current) => xDirection === 'min' ? candidate <= current : candidate >= current;
+      const yBetter = (candidate, current) => yDirection === 'min' ? candidate <= current : candidate >= current;
+      const xStrict = (candidate, current) => xDirection === 'min' ? candidate < current : candidate > current;
+      const yStrict = (candidate, current) => yDirection === 'min' ? candidate < current : candidate > current;
+      return points
+        .filter(point => !points.some(candidate => candidate !== point
+          && xBetter(candidate[0], point[0])
+          && yBetter(candidate[1], point[1])
+          && (xStrict(candidate[0], point[0]) || yStrict(candidate[1], point[1]))))
+        .sort((a, b) => a[0] - b[0]);
+    }
+
+    function frontierLine(points) {
+      return {
+        name: 'Pareto frontier',
+        type: 'line',
+        data: points,
+        symbol: 'circle',
+        symbolSize: 5,
+        silent: true,
+        connectNulls: true,
+        lineStyle: { type: 'dotted', width: 2, color: '#64748b' },
+        itemStyle: { color: '#64748b' },
+        emphasis: { disabled: true },
+        z: 2
+      };
+    }
+
+    function labeledScatter(chart, data, nameIndex, providerIndex, symbolSize = 10) {
+      const theme = chartThemeTokens();
+      return {
+        name: 'Models',
+        type: 'scatter',
+        symbolSize,
+        data,
+        label: {
+          show: true,
+          position: 'right',
+          distance: 5,
+          minMargin: 2,
+          color: theme.ink,
+          fontSize: 10,
+          lineHeight: 12,
+          backgroundColor: theme.panel,
+          padding: [2, 3],
+          formatter: params => chartModelLabel((params.data.value || params.data)[nameIndex], chart.getWidth() < 620 ? 17 : 27)
+        },
+        labelLayout: () => ({
+          x: chart.getWidth() - (chart.getWidth() < 620 ? 136 : 190),
+          moveOverlap: 'shiftY',
+          hideOverlap: false
+        }),
+        labelLine: {
+          show: true,
+          length2: 5,
+          lineStyle: { color: theme.quiet, width: 1 }
+        },
+        itemStyle: { color: params => providerColor((params.data.value || params.data)[providerIndex]), opacity: 0.88 },
+        z: 3
+      };
+    }
+
+    function paddedExtent(points, valueIndex, minimumPadding = 1) {
+      const values = points.map(point => Number(point[valueIndex])).filter(Number.isFinite);
+      if (!values.length) return [0, 100];
+      const min = Math.min(...values);
+      const max = Math.max(...values);
+      const padding = Math.max(minimumPadding, (max - min) * 0.16);
+      return [Math.max(0, Math.floor((min - padding) * 10) / 10), Math.ceil((max + padding) * 10) / 10];
+    }
+
+    function setChartHeight(id, rows, rowHeight = 28, minimum = 360) {
+      const el = $(id);
+      if (!el) return;
+      el.style.height = `${Math.max(minimum, rows * rowHeight + 88)}px`;
+    }
+
+    function formatLogTick(value, unit = '') {
+      const number = Number(value);
+      if (!Number.isFinite(number)) return '';
+      const formatted = number >= 1000 ? `${(number / 1000).toFixed(number >= 10000 ? 0 : 1)}k`
+        : number >= 10 ? number.toFixed(0)
+          : number >= 1 ? number.toFixed(1).replace(/\.0$/, '')
+            : number.toPrecision(1);
+      return `${unit}${formatted}`;
+    }
+
+    function canonicalModel(value, options = {}) {
+      const keepEffort = Boolean(options.keepEffort);
+      return String(value || '')
+        .toLowerCase()
+        .replace(/\s*\([^)]*\)/g, ' ')
+        .replace(/@reasoning=/g, ' ')
+        .replace(/[_/.-]+/g, ' ')
+        .replace(/[^a-z0-9]+/g, ' ')
+        .split(/\s+/)
+        .filter(Boolean)
+        .filter(token => !['anthropic', 'openai', 'google', 'xai', 'meta', 'mistral', 'alibaba', 'moonshot', 'swe', 'agent', 'preview', 'latest', 'instruct', 'chat', 'reasoning', 'thinking', 'adaptive', 'effort', 'fallback', 'default'].includes(token))
+        .filter(token => keepEffort || !EFFORT_WORDS.has(token))
+        .join(' ');
+    }
+
+    function canonicalDeepConfig(row) {
+      const raw = row.config || [row.harness, row.model, row.reasoning_effort].filter(Boolean).join(' ');
+      return canonicalModel(raw.replace(/^mini[_-]swe[_-]agent[_-]?/i, ''), { keepEffort: true });
+    }
+
+    function extractReasoningEffort(value) {
+      const text = String(value || '').toLowerCase();
+      if (/\bxhigh\b|x-high|extra high/.test(text)) return 'xhigh';
+      if (/\bmax\b|maximum/.test(text)) return 'max';
+      if (/\bmedium\b/.test(text)) return 'medium';
+      if (/\blow\b|minimal/.test(text)) return 'low';
+      if (/\bhigh\b/.test(text)) return 'high';
+      if (/\bnone\b|non reasoning|non-reasoning/.test(text)) return 'none';
+      return '';
+    }
+
+    function canonicalAaForDeep(name) {
+      const base = String(name || '').replace(/\s*\([^)]*\)/g, ' ');
+      const effort = extractReasoningEffort(name);
+      return [canonicalModel(base), effort].filter(Boolean).join(' ');
+    }
+
+    function findDeepSweRow(name, rows) {
+      const target = canonicalAaForDeep(name);
+      if (!target) return null;
+      const exact = rows.find(row => canonicalDeepConfig(row) === target);
+      if (exact) return exact;
+
+      const baseTarget = canonicalModel(name);
+      const targetEffort = extractReasoningEffort(name);
+      return rows.find(row => {
+        const hasExplicitEffort = Boolean(row.reasoning_effort);
+        return !hasExplicitEffort && (!targetEffort || targetEffort === 'max') && canonicalModel(row.model || row.config) === baseTarget;
+      }) || null;
+    }
+
+    function findCombinedDeepSweRow(name) {
+      const v11 = findDeepSweRow(name, state.deepV11Rows);
+      if (v11) return { row: v11, version: 'v1.1' };
+      const v1 = findDeepSweRow(name, state.deepV1Rows);
+      if (v1) return { row: v1, version: 'v1' };
+      return { row: null, version: null };
+    }
+
+    function findBsBenchRow(name) {
+      const target = canonicalModel(name);
+      if (!target) return null;
+      return state.bsRows.find(row => canonicalModel(row.model_base || row.model || row.name) === target) || null;
+    }
+
+    function hydrateModels(aaRows, warehouseModels) {
+      const warehouseById = new Map((warehouseModels || []).map(model => [model.id, model]));
+      const warehouseByName = new Map((warehouseModels || []).map(model => [model.name, model]));
+      state.models = aaRows.map(row => {
+        const warehouseModel = warehouseById.get(row.slug || row.id) || warehouseByName.get(row.name);
+        const deepMetadata = warehouseModel?.scoreMetadata?.deepswe || null;
+        const ev = row.evaluations || {};
+        const pricing = row.pricing || {};
+        const metrics = Object.fromEntries(BENCHMARKS.map(bench => [
+          bench.id,
+          scoreValue(warehouseModel?.scores?.[bench.id] ?? ev[bench.id]),
+        ]));
+        return {
+          id: row.id || row.slug || row.name,
+          name: row.name,
+          provider: row.model_creator?.name || row.provider || 'Unknown',
+          metrics,
+          outputPrice: positiveNumber(pricing.price_1m_output_tokens),
+          inputPrice: positiveNumber(pricing.price_1m_input_tokens),
+          speed: positiveNumber(row.median_output_tokens_per_second),
+          ttft: positiveNumber(row.median_time_to_first_token_seconds),
+          taskCostEstimate: positiveNumber(deepMetadata?.costPerTask),
+          outputTokens: positiveNumber(deepMetadata?.outputTokens),
+          agentSteps: positiveNumber(deepMetadata?.agentSteps),
+          deep: deepMetadata,
+          deepVersion: deepMetadata?.version || null,
+          bs: warehouseModel?.scoreMetadata?.bsbench_v2 || null
+        };
+      });
+    }
+
+    function scoreModels(index = activeIndex()) {
+      const total = weightTotal(index);
+      const active = BENCHMARKS.filter(bench => Number(index.weights[bench.id] || 0) > 0);
+      const required = index.required || [];
+      const scoreRanges = Object.fromEntries(active.map(bench => [bench.id, state.models.map(model => model.metrics[bench.id]).filter(Number.isFinite).sort((a, b) => a - b)]));
+      const percentile = (benchId, value) => {
+        const values = scoreRanges[benchId] || [];
+        if (!values.length) return null;
+        if (values.length === 1) return 100;
+        let below = 0;
+        let equal = 0;
+        for (const item of values) { if (item < value) below += 1; else if (item === value) equal += 1; }
+        return ((below + Math.max(0, equal - 1) / 2) / (values.length - 1)) * 100;
+      };
+
+      const scored = state.models.map(model => {
+        let weighted = 0;
+        let available = 0;
+        const contributions = {};
+        const rawContributions = {};
+        const missingRequired = [];
+
+        for (const reqId of required) {
+          if (!Number.isFinite(model.metrics[reqId])) {
+            missingRequired.push(reqId);
+          }
+        }
+
+        for (const bench of active) {
+          const w = Number(index.weights[bench.id] || 0);
+          const value = model.metrics[bench.id];
+          if (Number.isFinite(value)) {
+            const normalized = percentile(bench.id, value);
+            weighted += normalized * w;
+            available += w;
+            contributions[bench.id] = normalized;
+            rawContributions[bench.id] = value;
+          }
+        }
+        const coverage = total > 0 ? available / total : 0;
+        const score = available > 0 ? weighted / available : 0;
+        const taskCost = model.taskCostEstimate;
+        return { ...model, score, coverage, contributions, rawContributions, taskCost, missingRequired, hasAllRequired: missingRequired.length === 0 };
+      }).filter(model => model.coverage > 0);
+
+      const qualified = scored.filter(model => model.missingRequired.length === 0).sort((a, b) => b.score - a.score);
+      const disqualified = scored.filter(model => model.missingRequired.length > 0).sort((a, b) => b.coverage - a.coverage || b.score - a.score);
+      return { qualified, disqualified };
+    }
+
+    function initCharts() {
+      for (const id of ['pareto-chart', 'mix-chart']) {
+        state.charts[id] = echarts.init($(id), null, { renderer: 'canvas' });
+      }
+      window.addEventListener('resize', () => {
+        Object.values(state.charts).forEach(chart => chart.resize());
+        Object.values(state.indexCharts).forEach(chart => chart.resize());
+      });
+    }
+
+    function renderReadouts(scored) {
+      const index = activeIndex();
+      $('readouts').innerHTML = [
+        ['Qualified', scored.qualified.length],
+        ['AA models', state.models.length],
+        ['Necessary', (index.required || []).length],
+        ['Weight total', `${weightTotal(index)}%`]
+      ].map(([label, value]) => `<div class="metric-item"><span>${label}</span><strong>${value}</strong></div>`).join('');
+    }
+
+    function renderIndexList() {
+      const index = activeIndex();
+      const nameInline = $('active-index-name-inline');
+      if (nameInline) nameInline.textContent = index.name;
+      const nameInput = $('active-index-name-input');
+      if (nameInput) nameInput.value = index.name;
+
+      const select = $('index-switcher-select');
+      if (select) {
+        if (state.indexes.length > 1) {
+          select.innerHTML = state.indexes.map(idx => `
+            <option value="${idx.id}" ${idx.id === state.activeId ? 'selected' : ''}>
+              ${esc(idx.name)}
+            </option>
+          `).join('');
+          select.style.display = 'inline-block';
+        } else {
+          select.style.display = 'none';
+        }
+      }
+    }
+
+    function renderRequiredGateStatus() {
+      const index = activeIndex();
+      const container = $('required-gate-status');
+      if (!container) return;
+
+      if (!index.required || index.required.length === 0) {
+        container.innerHTML = `<div style="font-size: 12px; color: var(--quiet); font-style: italic; padding: 4px 0;">No necessary benchmarks set. All models with data qualify.</div>`;
+        return;
+      }
+
+      container.innerHTML = index.required.map(reqId => {
+        const bench = BENCHMARKS.find(b => b.id === reqId);
+        if (!bench) return '';
+        const missingCount = state.models.filter(model => !Number.isFinite(model.metrics[reqId])).length;
+        return `
+          <div class="gate-status-item">
+            <span class="gate-status-name">${esc(bench.label)}</span>
+            <span class="gate-status-count">${missingCount} missing</span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderControls() {
+      const index = activeIndex();
+      $('weight-total').textContent = `${weightTotal(index)}%`;
+
+      const activeBenchmarks = BENCHMARKS.filter(bench => Number(index.weights[bench.id] || 0) > 0);
+      const availableBenchmarks = BENCHMARKS.filter(bench => Number(index.weights[bench.id] || 0) <= 0);
+      const renderBench = bench => {
+        const isRequired = index.required && index.required.includes(bench.id);
+        const weight = index.weights[bench.id] || 0;
+        return `
+          <div style="border-bottom: 1px solid var(--panel-soft); padding-bottom: 8px; margin-bottom: 2px;">
+            <div class="bench-title">
+              <strong>${esc(bench.label)} ${isRequired ? '<span style="color:var(--blue);font-weight:700;">[Necessary]</span>' : ''}</strong>
+              <span>${esc(bench.group)}</span>
+            </div>
+            <div class="bench-control">
+              <input type="checkbox" data-required="${bench.id}" ${isRequired ? 'checked' : ''} title="Mark as necessary benchmark">
+              <input type="range" min="0" max="60" step="1" value="${weight}" data-weight="${bench.id}">
+              <input type="number" min="0" max="100" step="1" value="${weight}" data-weight-number="${bench.id}">
+            </div>
+          </div>
+        `;
+      };
+
+      // 1. Render active benchmarks (weight > 0)
+      $('active-bench-controls').innerHTML = activeBenchmarks.length
+        ? activeBenchmarks.map(renderBench).join('')
+        : '<div class="empty" style="padding: 16px; font-size: 11px;">No active benchmarks. Drag sliders in the list below to add.</div>';
+
+      // 2. Render zero-weight benchmarks inside the accordion so they can be added.
+      $('all-bench-controls').innerHTML = availableBenchmarks.length
+        ? availableBenchmarks.map(renderBench).join('')
+        : '<div class="empty" style="padding: 16px; font-size: 11px;">Every benchmark is already in this mix.</div>';
+
+      // Store focus state before re-wiring event listeners
+      let activeElementSelector = null;
+      let selectionStart = null;
+      let selectionEnd = null;
+      if (document.activeElement) {
+        const dataset = document.activeElement.dataset;
+        const parentContainer = document.activeElement.closest('#active-bench-controls') ? 'active-bench-controls' : 'all-bench-controls';
+        if (dataset.weight) {
+          activeElementSelector = `#${parentContainer} [data-weight="${dataset.weight}"]`;
+        } else if (dataset.weightNumber) {
+          activeElementSelector = `#${parentContainer} [data-weight-number="${dataset.weightNumber}"]`;
+          selectionStart = document.activeElement.selectionStart;
+          selectionEnd = document.activeElement.selectionEnd;
+        } else if (dataset.required) {
+          activeElementSelector = `#${parentContainer} [data-required="${dataset.required}"]`;
+        }
+      }
+
+      // Wire up event listeners for both containers
+      const containers = [$('active-bench-controls'), $('all-bench-controls')];
+      containers.forEach(container => {
+        if (!container) return;
+
+        container.querySelectorAll('[data-weight], [data-weight-number]').forEach(input => input.addEventListener('input', event => {
+          const id = event.target.dataset.weight || event.target.dataset.weightNumber;
+          index.weights[id] = Math.max(0, Math.min(100, Number(event.target.value || 0)));
+          renderAll(true);
+        }));
+
+        container.querySelectorAll('[data-required]').forEach(cb => cb.addEventListener('change', event => {
+          const id = event.target.dataset.required;
+          if (!index.required) index.required = [];
+          if (event.target.checked) {
+            if (!index.required.includes(id)) {
+              index.required.push(id);
+            }
+          } else {
+            index.required = index.required.filter(x => x !== id);
+          }
+          renderAll(true);
+        }));
+      });
+
+      // Restore focus state
+      if (activeElementSelector) {
+        const el = document.querySelector(activeElementSelector);
+        if (el) {
+          el.focus();
+          if (selectionStart !== null && selectionEnd !== null && typeof el.setSelectionRange === 'function') {
+            try { el.setSelectionRange(selectionStart, selectionEnd); } catch(e) {}
+          }
+        }
+      }
+
+      renderRequiredGateStatus();
+    }
+
+    function renderMixChart() {
+      const index = activeIndex();
+      const data = BENCHMARKS
+        .filter(bench => (index.weights[bench.id] || 0) > 0)
+        .map((bench, position) => ({
+          name: displayText(bench.label),
+          value: index.weights[bench.id],
+          itemStyle: { color: MIX_COLORS[position % MIX_COLORS.length] }
+        }));
+      const total = data.reduce((sum, item) => sum + Number(item.value || 0), 0);
+      setChartOption(state.charts['mix-chart'], {
+        animation: false,
+        tooltip: { trigger: 'item', formatter: params => `${esc(displayText(params.name))}: ${fmt(Number(params.value), 0)}%` },
+        graphic: data.length ? [{
+          type: 'text',
+          left: 'center',
+          top: 'middle',
+          silent: true,
+          style: {
+            text: `${fmt(total, 0)}%\ntotal`,
+            textAlign: 'center',
+            textVerticalAlign: 'middle',
+            fill: chartThemeTokens().muted,
+            font: '600 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+            lineHeight: 16
+          }
+        }] : [],
+        series: [{
+          type: 'pie',
+          radius: ['48%', '74%'],
+          center: ['50%', '50%'],
+          avoidLabelOverlap: true,
+          label: { show: false },
+          labelLine: { show: false },
+          emphasis: { scaleSize: 4 },
+          data
+        }]
+      }, true);
+      $('mix-legend').innerHTML = data.length
+        ? data.map(item => `
+          <div class="mix-legend-item" title="${esc(item.name)}: ${fmt(Number(item.value), 0)}%">
+            <span class="mix-legend-swatch" style="background:${esc(item.itemStyle.color)}"></span>
+            <span class="mix-legend-label">${esc(item.name)}</span>
+            <span class="mix-legend-value">${fmt(Number(item.value), 0)}%</span>
+          </div>
+        `).join('')
+        : '<div class="empty" style="padding:12px 0;border-top:0;">Add a benchmark weight to build the mix.</div>';
+    }
+
+    function renderRanking(qualified) {
+      $('qualified-count').textContent = `${qualified.length} qualified`;
+      const top = qualified.slice(0, 14);
+      const maxScore = Math.max(...top.map(model => model.score), 1);
+      $('ranking-list').innerHTML = top.length ? top.map((model, i) => `
+        <div class="model-row" role="button" tabindex="0" data-model-id="${esc(model.id)}" aria-label="View ${esc(model.name)} index details">
+          <div class="rank-no">${String(i + 1).padStart(2, '0')}</div>
+          <div><div class="model-name">${esc(model.name)}</div><div class="model-sub">${esc(model.provider)} · cost ${money(model.taskCost)} · speed ${fmt(model.speed, 0)} t/s</div></div>
+          <div class="rank-bar-track"><div class="rank-bar-fill" style="width:${Math.max(2, (model.score / maxScore) * 100)}%; background:${providerColor(model.provider)}"></div></div>
+          <div class="score">${fmt(model.score, 1)}</div>
+        </div>
+      `).join('') : `<div class="empty">${weightTotal() === 0 ? 'No benchmarks selected. Add weight to the benchmarks that matter to you.' : 'No models meet the selected benchmark coverage rules. Adjust weights or necessary benchmarks.'}</div>`;
+    }
+
+    function renderDistribution(qualified) {
+      if (state.chartMode === 'histogram') {
+        const leaders = qualified.slice(0, 20).reverse();
+        $('distribution-title').textContent = 'Index leaderboard';
+        setChartHeight('pareto-chart', leaders.length, 29, 430);
+        state.charts['pareto-chart'].resize();
+        setChartOption(state.charts['pareto-chart'], {
+          animation: false,
+          grid: { left: 12, right: 68, top: 12, bottom: 46, containLabel: true },
+          tooltip: {
+            trigger: 'axis',
+            axisPointer: { type: 'shadow' },
+            formatter: params => {
+              const model = leaders[params[0]?.dataIndex];
+              if (!model) return '';
+              return `<b>${esc(model.name)}</b><br>${esc(model.provider)}<br>Index: ${fmt(model.score)}<br>DeepSWE task cost: ${money(model.taskCost)}<br>Speed: ${fmt(model.speed, 0)} t/s`;
+            }
+          },
+          xAxis: { type: 'value', name: 'Personal index score', nameLocation: 'middle', nameGap: 30, min: 0, max: 100 },
+          yAxis: {
+            type: 'category',
+            data: leaders.map(model => model.name),
+            axisLabel: { fontSize: 11, width: 178, overflow: 'truncate', formatter: value => chartModelLabel(value, 30) }
+          },
+          series: [{
+            type: 'bar',
+            data: leaders.map(model => ({ value: +model.score.toFixed(1), itemStyle: { color: providerColor(model.provider) } })),
+            barMaxWidth: 24,
+            label: { show: true, position: 'right', fontSize: 11, formatter: params => fmt(params.value) }
+          }]
+        }, true);
+        return;
+      }
+      const data = qualified.filter(model => Number.isFinite(model.taskCost) && model.taskCost > 0).slice(0, 24).map(model => [model.taskCost, model.score, model.name, model.provider, model.coverage, model.speed]);
+      const frontier = paretoFrontier(data, 'min', 'max');
+      const scoreExtent = paddedExtent(data, 1, 1.5);
+      $('distribution-title').textContent = 'Cost vs intelligence frontier';
+      setChartHeight('pareto-chart', 0, 28, 520);
+      state.charts['pareto-chart'].resize();
+      const option = {
+        animation: false,
+        grid: { left: 68, right: window.innerWidth < 620 ? 150 : 210, top: 44, bottom: 58, containLabel: true },
+        tooltip: { formatter: p => { const value = p.data.value || p.data; return `<b>${esc(value[2])}</b><br>${esc(value[3])}<br>Personal index: ${fmt(value[1])}<br>DeepSWE task cost: ${money(value[0])}<br>Speed: ${fmt(value[5], 0)} t/s`; } },
+        xAxis: { type: 'log', name: 'DeepSWE cost per task · log scale', nameLocation: 'middle', nameGap: 38, axisLabel: { formatter: v => formatLogTick(v, '$') } },
+        yAxis: { type: 'value', name: 'Personal intelligence index', nameLocation: 'middle', nameGap: 48, min: scoreExtent[0], max: scoreExtent[1] },
+        series: [frontierLine(frontier), labeledScatter(state.charts['pareto-chart'], data, 2, 3, p => Math.max(8, Math.min(18, (p[5] || 0) / 12)))]
+      };
+      setChartOption(state.charts['pareto-chart'], option, true);
+    }
+
+    function openModelDetail(modelId) {
+      const model = state.currentQualified.find(item => String(item.id) === String(modelId));
+      if (!model) return;
+      state.activeModelId = model.id;
+      const active = BENCHMARKS.filter(bench => Number(activeIndex().weights[bench.id] || 0) > 0 && Number.isFinite(model.contributions[bench.id]));
+      $('model-modal-title').textContent = model.name;
+      $('model-modal-subtitle').textContent = `${model.provider} · personal index ${fmt(model.score, 1)} · ${pct(model.coverage)} coverage`;
+      $('model-modal-results').innerHTML = active.map(bench => `<div class="model-modal-result"><span>${esc(bench.label)}<br><span class="hint">Raw ${fmt(model.rawContributions[bench.id], 3)}</span></span><strong>${fmt(model.contributions[bench.id], 1)}</strong></div>`).join('');
+      $('model-modal').classList.add('open');
+      const chart = state.charts.modelRadar || (state.charts.modelRadar = echarts.init($('model-radar-chart'), null, { renderer: 'canvas' }));
+      setChartOption(chart, {
+        tooltip: {},
+        radar: { indicator: active.map(bench => ({ name: bench.label, max: 100 })), radius: '66%', splitNumber: 5 },
+        series: [{ type: 'radar', data: [{ value: active.map(bench => model.contributions[bench.id]), name: model.name, areaStyle: { color: 'rgba(37,99,235,.18)' }, lineStyle: { color: '#2563eb', width: 2 }, itemStyle: { color: '#2563eb' } }] }]
+      }, true);
+      setTimeout(() => chart.resize(), 0);
+    }
+
+    function renderTables(qualified, disqualified) {
+      $('aa-table').innerHTML = `<thead><tr><th>Model</th><th>Provider</th><th class="num">Intelligence</th><th class="num">Speed</th><th class="num">Cost/task</th><th class="num">Completeness</th></tr></thead><tbody>${
+        qualified.slice(0, 24).map(model => `<tr><td>${esc(model.name)}</td><td>${esc(model.provider)}</td><td class="num">${fmt(model.score)}</td><td class="num">${fmt(model.speed, 0)} t/s</td><td class="num">${money(model.taskCost)}</td><td class="num">${pct(model.coverage)}</td></tr>`).join('')
+      }</tbody>`;
+      $('disqualified-count').textContent = `${disqualified.length} disqualified`;
+      const benchLabels = Object.fromEntries(BENCHMARKS.map(bench => [bench.id, bench.label]));
+      $('disqualified-table').innerHTML = `<thead><tr><th>Model</th><th>Missing necessary data</th><th class="num">Completeness</th><th class="num">Index</th></tr></thead><tbody>${
+        disqualified.slice(0, 18).map(model => `<tr><td>${esc(model.name)}<br><span class="hint">${esc(model.provider)}</span></td><td>${esc(model.missingRequired.map(id => benchLabels[id] || id).join(', '))}</td><td class="num bad">${pct(model.coverage)}</td><td class="num">${fmt(model.score)}</td></tr>`).join('')
+      }</tbody>`;
+    }
+
+    /* ─── Index page rendering (Artificial Analysis-style charts) ─── */
+
+    const INDEX_CHART_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#be123c', '#0f766e', '#9333ea', '#155e75', '#64748b', '#0f172a', '#dc2626', '#1d4ed8', '#15803d', '#a21caf'];
+
+    function ensureIndexChart(id) {
+      const el = document.getElementById(id);
+      if (!el) return null;
+      if (!state.indexCharts[id]) {
+        state.indexCharts[id] = echarts.init(el, null, { renderer: 'canvas' });
+      }
+      return state.indexCharts[id];
+    }
+
+    function renderIndexPage(qualified) {
+      const index = activeIndex();
+      const top = qualified[0];
+      Object.values(state.indexCharts).forEach(chart => chart.dispose());
+      state.indexCharts = {};
+
+      // Populate editor fields
+      $('page-title').value = state.page.title;
+      $('page-intro').value = state.page.intro;
+      $('ranking-section-name').value = state.page.rankingSection;
+      $('chart-section-name').value = state.page.chartSection;
+      $('social-links').value = state.page.socials;
+      $('page-style').value = state.page.style;
+
+      const topModels = qualified.slice(0, 16);
+      const withPrice = topModels.filter(m => Number.isFinite(m.outputPrice) && m.outputPrice > 0);
+      const withSpeed = topModels.filter(m => Number.isFinite(m.speed) && m.speed > 0);
+      const withCost = topModels.filter(m => Number.isFinite(m.taskCost) && m.taskCost > 0);
+
+      $('index-content').innerHTML = `
+        <div class="index-header">
+          <h2>${esc(state.page.title)}</h2>
+          <p>${esc(state.page.intro)}</p>
+          <div class="credit">${esc(state.page.socials)}</div>
+        </div>
+        <div class="index-stats">
+          <div class="index-stat"><span>Index</span><strong>${esc(index.name)}</strong></div>
+          <div class="index-stat"><span>Top model</span><strong>${esc(top?.name || 'n/a')}</strong></div>
+          <div class="index-stat"><span>Qualified</span><strong>${qualified.length}</strong></div>
+          <div class="index-stat"><span>Necessary</span><strong>${(index.required || []).length}</strong></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head"><div><span>${esc(state.page.rankingSection)}</span><h2>Intelligence ranking</h2></div></div>
+          <div class="panel-body"><div id="idx-intelligence-bar" class="chart tall"></div></div>
+        </div>
+
+        <div class="index-charts-grid">
+          <div class="panel">
+            <div class="panel-head"><div><span>${esc(state.page.chartSection)}</span><h2>Speed (tokens/sec)</h2></div></div>
+            <div class="panel-body"><div id="idx-speed-bar" class="chart medium"></div></div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><div><span>${esc(state.page.chartSection)}</span><h2>Cost per task</h2></div></div>
+            <div class="panel-body"><div id="idx-cost-bar" class="chart medium"></div></div>
+          </div>
+          <div class="panel scatter-panel">
+            <div class="panel-head"><div><span>Frontier</span><h2>Intelligence vs cost</h2></div></div>
+            <div class="panel-body"><div id="idx-intel-cost" class="chart medium"></div></div>
+          </div>
+          <div class="panel scatter-panel">
+            <div class="panel-head"><div><span>Frontier</span><h2>Intelligence vs speed</h2></div></div>
+            <div class="panel-body"><div id="idx-intel-speed" class="chart medium"></div></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head"><div><span>Comparison</span><h2>Cost & speed overview</h2></div></div>
+          <div class="panel-body"><div id="idx-cost-speed" class="chart tall"></div></div>
+        </div>
+
+        <div class="panel index-ranking-table">
+          <div class="panel-head"><div><span>Full data</span><h2>All qualified models</h2></div></div>
+          <div class="panel-body table-wrap"><table id="idx-full-table"></table></div>
+        </div>
+      `;
+
+      // ── 1. Intelligence ranking horizontal bar ──
+      const intChart = ensureIndexChart('idx-intelligence-bar');
+      if (intChart) {
+        const intData = topModels.slice().reverse();
+        setChartHeight('idx-intelligence-bar', intData.length, 27, 430);
+        intChart.resize();
+        setChartOption(intChart, {
+          grid: { left: 10, right: 68, top: 12, bottom: 42, containLabel: true },
+          tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, formatter: p => `<b>${esc(p[0].name)}</b><br>Intelligence: ${fmt(p[0].value)}` },
+          xAxis: { type: 'value', name: 'Intelligence index', nameLocation: 'middle', nameGap: 28 },
+          yAxis: { type: 'category', data: intData.map(m => m.name), axisLabel: { fontSize: 11, width: 165, overflow: 'truncate', formatter: value => chartModelLabel(value, 28) } },
+          series: [{ type: 'bar', data: intData.map(m => ({ value: +m.score.toFixed(1), itemStyle: { color: providerColor(m.provider) } })), barMaxWidth: 24, label: { show: true, position: 'right', fontSize: 11, formatter: p => fmt(p.value) } }]
+        });
+      }
+
+      // ── 2. Speed bar ──
+      const spdChart = ensureIndexChart('idx-speed-bar');
+      if (spdChart) {
+        const spdData = withSpeed.sort((a, b) => b.speed - a.speed).slice(0, 12).reverse();
+        setChartHeight('idx-speed-bar', spdData.length, 28, 400);
+        spdChart.resize();
+        setChartOption(spdChart, {
+          grid: { left: 8, right: 70, top: 12, bottom: 46, containLabel: true },
+          tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+          xAxis: { type: 'log', min: 1, name: 'Output speed (tokens/sec) · log scale', nameLocation: 'middle', nameGap: 30, axisLabel: { formatter: value => formatLogTick(value) } },
+          yAxis: { type: 'category', data: spdData.map(m => m.name), axisLabel: { fontSize: 11, width: 154, overflow: 'truncate', formatter: value => chartModelLabel(value, 26) } },
+          series: [{ type: 'bar', data: spdData.map(m => +m.speed.toFixed(0)), barMaxWidth: 20, itemStyle: { color: '#059669' }, label: { show: true, position: 'right', fontSize: 10, formatter: p => `${p.value} t/s` } }]
+        });
+      }
+
+      // ── 3. Cost per task bar ──
+      const cstChart = ensureIndexChart('idx-cost-bar');
+      if (cstChart) {
+        const cstData = withCost.sort((a, b) => a.taskCost - b.taskCost).slice(0, 12).reverse();
+        setChartHeight('idx-cost-bar', cstData.length, 28, 400);
+        cstChart.resize();
+        setChartOption(cstChart, {
+          grid: { left: 8, right: 70, top: 12, bottom: 46, containLabel: true },
+          tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+          xAxis: { type: 'value', name: 'Cost per task ($)', nameLocation: 'middle', nameGap: 30 },
+          yAxis: { type: 'category', data: cstData.map(m => m.name), axisLabel: { fontSize: 11, width: 154, overflow: 'truncate', formatter: value => chartModelLabel(value, 26) } },
+          series: [{ type: 'bar', data: cstData.map(m => +m.taskCost.toFixed(4)), barMaxWidth: 20, itemStyle: { color: '#d97706' }, label: { show: true, position: 'right', fontSize: 10, formatter: p => `$${p.value.toFixed(3)}` } }]
+        });
+      }
+
+      // ── 4. Intelligence vs cost scatter ──
+      const icChart = ensureIndexChart('idx-intel-cost');
+      if (icChart) {
+        const icData = withCost.map(m => [m.taskCost, m.score, m.name, m.provider]);
+        const icFrontier = paretoFrontier(icData, 'min', 'max');
+        const icScoreExtent = paddedExtent(icData, 1);
+        setChartHeight('idx-intel-cost', 0, 28, 480);
+        icChart.resize();
+        setChartOption(icChart, {
+          grid: { left: 60, right: window.innerWidth < 620 ? 150 : 210, top: 44, bottom: 58, containLabel: true },
+          tooltip: { formatter: p => { const value = p.data.value || p.data; return `<b>${esc(value[2])}</b><br>${esc(value[3])}<br>Intelligence: ${fmt(value[1])}<br>Run cost: ${money(value[0])}`; } },
+          xAxis: { type: 'log', name: 'Cost per task · log scale', nameLocation: 'middle', nameGap: 36, axisLabel: { formatter: v => formatLogTick(v, '$') } },
+          yAxis: { type: 'value', name: 'Intelligence index', nameLocation: 'middle', nameGap: 46, min: icScoreExtent[0], max: icScoreExtent[1] },
+          series: [frontierLine(icFrontier), labeledScatter(icChart, icData, 2, 3)]
+        });
+      }
+
+      // ── 5. Intelligence vs speed scatter ──
+      const isChart = ensureIndexChart('idx-intel-speed');
+      if (isChart) {
+        const isData = withSpeed.filter(m => m.speed > 0).map(m => [m.speed, m.score, m.name, m.provider]);
+        const isFrontier = paretoFrontier(isData, 'max', 'max');
+        const isScoreExtent = paddedExtent(isData, 1);
+        setChartHeight('idx-intel-speed', 0, 28, 480);
+        isChart.resize();
+        setChartOption(isChart, {
+          grid: { left: 60, right: window.innerWidth < 620 ? 150 : 210, top: 44, bottom: 58, containLabel: true },
+          tooltip: { formatter: p => { const value = p.data.value || p.data; return `<b>${esc(value[2])}</b><br>${esc(value[3])}<br>Intelligence: ${fmt(value[1])}<br>Speed: ${fmt(value[0], 0)} t/s`; } },
+          xAxis: { type: 'log', min: 1, name: 'Output speed (t/s) · log scale', nameLocation: 'middle', nameGap: 36, axisLabel: { formatter: value => formatLogTick(value) } },
+          yAxis: { type: 'value', name: 'Intelligence index', nameLocation: 'middle', nameGap: 46, min: isScoreExtent[0], max: isScoreExtent[1] },
+          series: [frontierLine(isFrontier), labeledScatter(isChart, isData, 2, 3)]
+        });
+      }
+
+      // ── 6. Cost/speed comparison bubble ──
+      const csChart = ensureIndexChart('idx-cost-speed');
+      if (csChart) {
+        const csData = withCost.filter(m => Number.isFinite(m.speed) && m.speed > 0).map(m => [m.speed, m.taskCost, m.score, m.name, m.provider]);
+        const csFrontier = paretoFrontier(csData, 'max', 'min');
+        setChartHeight('idx-cost-speed', 0, 28, 520);
+        csChart.resize();
+        setChartOption(csChart, {
+          grid: { left: 60, right: window.innerWidth < 620 ? 150 : 210, top: 44, bottom: 62, containLabel: true },
+          tooltip: { formatter: p => { const value = p.data.value || p.data; return `<b>${esc(value[3])}</b><br>${esc(value[4])}<br>Speed: ${fmt(value[0], 0)} t/s<br>Run cost: ${money(value[1])}<br>Intelligence: ${fmt(value[2])}`; } },
+          xAxis: { type: 'log', min: 1, name: 'Output speed (tokens/sec) · log scale', nameLocation: 'middle', nameGap: 38, axisLabel: { formatter: value => formatLogTick(value) } },
+          yAxis: { type: 'log', name: 'Cost per task · log scale', nameLocation: 'middle', nameGap: 50, axisLabel: { formatter: v => formatLogTick(v, '$') } },
+          series: [frontierLine(csFrontier), labeledScatter(csChart, csData, 3, 4, p => Math.max(8, Math.min(20, (p[2] || 0) / 4)))]
+        });
+      }
+
+      // ── Full table ──
+      const fullTable = document.getElementById('idx-full-table');
+      if (fullTable) {
+        fullTable.innerHTML = `<thead><tr><th>#</th><th>Model</th><th>Provider</th><th class="num">Intelligence</th><th class="num">Speed</th><th class="num">Cost/task</th><th class="num">Output tok</th></tr></thead><tbody>${
+          qualified.slice(0, 30).map((m, i) => `<tr><td>${i+1}</td><td>${esc(m.name)}</td><td>${esc(m.provider)}</td><td class="num">${fmt(m.score)}</td><td class="num">${fmt(m.speed, 0)} t/s</td><td class="num">${money(m.taskCost)}</td><td class="num">${Number.isFinite(m.outputTokens) ? `${fmt(m.outputTokens / 1000, 0)}k` : 'n/a'}</td></tr>`).join('')
+        }</tbody>`;
+      }
+    }
+
+    function exportState() {
+      return {
+        version: 1,
+        savedAt: new Date().toISOString(),
+        indexes: state.indexes,
+        activeId: state.activeId,
+        page: state.page,
+        chartMode: state.chartMode
+      };
+    }
+
+    function setSaveStatus(message, isError = false) {
+      const status = $('save-status');
+      if (!status) return;
+      status.textContent = message;
+      status.classList.toggle('error', isError);
+    }
+
+    function storageOwnerKey() {
+      try {
+        const existing = localStorage.getItem(OWNER_STORAGE_KEY);
+        if (existing && /^[A-Za-z0-9_-]{16,128}$/.test(existing)) return existing;
+        const created = crypto.randomUUID();
+        localStorage.setItem(OWNER_STORAGE_KEY, created);
+        return created;
+      } catch (_) {
+        return crypto.randomUUID();
+      }
+    }
+
+    function storageRequestHeaders(includeJson = false) {
+      const headers = { 'x-personal-index-owner': storageOwnerKey() };
+      if (includeJson) headers['content-type'] = 'application/json';
+      return headers;
+    }
+
+    function applyStatePayload(payload) {
+      if (!payload || typeof payload !== 'object') return false;
+      if (Array.isArray(payload.indexes) && payload.indexes.length) {
+        const seenIds = new Set();
+        state.indexes = payload.indexes.map((idx, index) => {
+          const rawWeights = idx?.weights && typeof idx.weights === 'object' ? idx.weights : {};
+          const weights = Object.fromEntries(Object.entries(rawWeights).map(([id, value]) => [id, Math.max(0, Math.min(100, Number(value) || 0))]));
+          if ('deepswe_v1' in weights || 'deepswe_v1_1' in weights) {
+            weights.deepswe = weights.deepswe_v1 || weights.deepswe_v1_1 || 0;
+            delete weights.deepswe_v1;
+            delete weights.deepswe_v1_1;
+          }
+          const required = [...new Set((Array.isArray(idx?.required) ? idx.required : []).map(reqId => {
+            if (reqId === 'deepswe_v1' || reqId === 'deepswe_v1_1') return 'deepswe';
+            return String(reqId);
+          }))];
+          let id = typeof idx?.id === 'string' && idx.id ? idx.id : crypto.randomUUID();
+          if (seenIds.has(id)) id = crypto.randomUUID();
+          seenIds.add(id);
+          return {
+            id,
+            name: typeof idx?.name === 'string' && idx.name.trim() ? idx.name.trim() : `Custom Index ${index + 1}`,
+            required,
+            weights
+          };
+        });
+      }
+      state.activeId = state.indexes.some(index => index.id === payload.activeId) ? payload.activeId : state.indexes[0].id;
+      if (payload.page && typeof payload.page === 'object') state.page = { ...state.page, ...payload.page };
+      if (payload.chartMode === 'histogram' || payload.chartMode === 'pareto') state.chartMode = payload.chartMode;
+      return true;
+    }
+
+    function scheduleServerSave() {
+      if (!serverStorageReady) return;
+      const generation = ++serverSaveGeneration;
+      clearTimeout(serverSaveTimer);
+      setSaveStatus('Saved immediately · syncing app storage…');
+      serverSaveTimer = setTimeout(() => {
+        serverSaveQueue = serverSaveQueue.catch(() => {}).then(async () => {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          const payload = raw ? JSON.parse(raw) : exportState();
+          const response = await fetch(STATE_ENDPOINT, {
+            method: 'POST',
+            credentials: 'same-origin',
+            cache: 'no-store',
+            headers: storageRequestHeaders(true),
+            body: JSON.stringify({ state: payload })
+          });
+          if (!response.ok) throw new Error(`App storage returned HTTP ${response.status}`);
+          const result = await response.json();
+          if (generation === serverSaveGeneration) {
+            setSaveStatus(result.scope === 'account' ? 'Saved to your account' : 'Saved to app storage');
+          }
+        }).catch(error => {
+          console.warn('Could not sync Personal Index state', error);
+          if (generation === serverSaveGeneration) setSaveStatus('Saved on this device · app sync unavailable', true);
+        });
+      }, 180);
+    }
+
+    function persistState(syncServer = true) {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(exportState()));
+        setSaveStatus(serverStorageReady ? 'Saved immediately · syncing app storage…' : 'Saved immediately · connecting app storage…');
+        if (syncServer) scheduleServerSave();
+        return true;
+      } catch (error) {
+        console.warn('Could not save Personal Index state', error);
+        setSaveStatus('Could not save on this device', true);
+        return false;
+      }
+    }
+
+    function loadPersistedState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) {
+          setSaveStatus('Saved on this device');
+          return false;
+        }
+        const restored = applyStatePayload(JSON.parse(raw));
+        setSaveStatus(restored ? 'Restored from this device' : 'Saved on this device');
+        return restored;
+      } catch (error) {
+        console.warn('Could not restore Personal Index state', error);
+        setSaveStatus('Saved on this device');
+        return false;
+      }
+    }
+
+    function loadSharedState() {
+      if (!location.hash.startsWith('#index=')) return false;
+      try {
+        return applyStatePayload(JSON.parse(decodeURIComponent(escape(atob(location.hash.slice('#index='.length))))));
+      } catch (error) {
+        console.warn('Could not load shared index state', error);
+        return false;
+      }
+    }
+
+    function alignIndexWeights() {
+      state.indexes.forEach(index => {
+        index.weights = Object.fromEntries(BENCHMARKS.map(bench => [bench.id, Number(index.weights?.[bench.id] || 0)]));
+        index.required = (index.required || []).filter(id => BENCHMARKS.some(bench => bench.id === id));
+      });
+    }
+
+    async function hydrateServerState() {
+      if (serverStorageHydrated) return;
+      serverStorageHydrated = true;
+      const localSnapshotAtStart = (() => {
+        try { return localStorage.getItem(STORAGE_KEY); } catch (_) { return null; }
+      })();
+      try {
+        const response = await fetch(STATE_ENDPOINT, {
+          method: 'GET',
+          credentials: 'same-origin',
+          cache: 'no-store',
+          headers: storageRequestHeaders()
+        });
+        if (!response.ok) throw new Error(`App storage returned HTTP ${response.status}`);
+        const result = await response.json();
+        const localChangedWhileLoading = (() => {
+          try { return localStorage.getItem(STORAGE_KEY) !== localSnapshotAtStart; } catch (_) { return true; }
+        })();
+        if (!restoredFromLocal && !restoredFromShare && !localChangedWhileLoading && result.state && applyStatePayload(result.state)) {
+          alignIndexWeights();
+          renderAll(false, false);
+          setSaveStatus(result.scope === 'account' ? 'Restored from your account' : 'Restored from app storage');
+        }
+        serverStorageReady = true;
+        if (restoredFromLocal || restoredFromShare || localChangedWhileLoading || !result.state) scheduleServerSave();
+      } catch (error) {
+        console.warn('Could not load Personal Index app storage', error);
+        serverStorageReady = true;
+        setSaveStatus('Saved on this device · app sync unavailable', true);
+      }
+    }
+
+    function shareUrl() {
+      const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(exportState()))));
+      return `${location.origin}${location.pathname}#index=${encoded}`;
+    }
+
+    function normalizeWeights() {
+      const index = activeIndex();
+      const total = weightTotal(index);
+      if (!total) return;
+      let entries = Object.entries(index.weights).map(([id, value]) => [id, Math.round((value / total) * 100)]);
+      let diff = 100 - entries.reduce((sum, [, value]) => sum + value, 0);
+      entries = entries.sort((a, b) => b[1] - a[1]);
+      let cursor = 0;
+      while (diff !== 0 && entries.length) {
+        entries[cursor % entries.length][1] += diff > 0 ? 1 : -1;
+        diff += diff > 0 ? -1 : 1;
+        cursor += 1;
+      }
+      index.weights = Object.fromEntries(entries);
+      renderAll();
+    }
+
+    function renderAll(skipIndexList = false, syncServer = true) {
+      const index = activeIndex();
+      const { qualified, disqualified } = scoreModels(index);
+      state.currentQualified = qualified;
+      $('show-histogram').classList.toggle('active', state.chartMode === 'histogram');
+      $('show-pareto').classList.toggle('active', state.chartMode === 'pareto');
+      if (!skipIndexList) renderIndexList();
+      renderControls();
+      renderReadouts({ qualified, disqualified });
+      renderMixChart();
+      renderRanking(qualified);
+      renderDistribution(qualified);
+      renderTables(qualified, disqualified);
+      // Only render index page charts when the view is visible;
+      // ECharts can't compute dimensions on display:none containers.
+      if ($('index-view').classList.contains('visible')) {
+        renderIndexPage(qualified);
+      }
+      persistState(syncServer);
+      requestAnimationFrame(reportParentHeight);
+    }
+
+    function refreshPersonalIndexTheme() {
+      if (!state.models.length) return;
+      renderAll(true, false);
+      if ($('model-modal').classList.contains('open') && state.activeModelId) openModelDetail(state.activeModelId);
+    }
+    window.refreshPersonalIndexTheme = refreshPersonalIndexTheme;
+
+    function reportParentHeight() {
+      if (window.parent === window) return;
+      const height = Math.ceil(Math.max(document.body.scrollHeight, document.documentElement.scrollHeight));
+      window.parent.postMessage({ type: 'personal-index:resize', height }, location.origin);
+    }
+
+    function syncParentTheme() {
+      if (window.parent === window) return;
+      try {
+        const parentRoot = window.parent.document.documentElement;
+        const applyTheme = () => {
+          const nextTheme = parentRoot.getAttribute('data-theme') || 'light';
+          const changed = document.documentElement.getAttribute('data-theme') !== nextTheme;
+          document.documentElement.setAttribute('data-theme', nextTheme);
+          if (changed) requestAnimationFrame(refreshPersonalIndexTheme);
+        };
+        applyTheme();
+        new MutationObserver(applyTheme).observe(parentRoot, { attributes: true, attributeFilter: ['data-theme'] });
+      } catch (_) {
+        // The lab also works standalone; cross-origin embeds simply keep the light theme.
+      }
+    }
+
+    async function fetchJson(url) {
+      const response = await fetch(url, { cache: 'no-store' });
+      if (!response.ok) throw new Error(`${url} returned HTTP ${response.status}`);
+      return response.json();
+    }
+
+    async function load() {
+      initCharts();
+      const [aa, warehouse] = await Promise.all([
+        fetchJson('/api/llms'),
+        fetchJson('/static/frontier-data/benchmark-warehouse.json')
+      ]);
+      BENCHMARKS = (warehouse.benchmarks || [])
+        .filter(bench => bench.status === 'available' && Number(bench.coverage || 0) > 0)
+        .map(bench => ({
+          id: bench.id,
+          label: displayText(bench.label),
+          group: displayText(bench.source),
+          source: displayText(bench.source),
+          defaultWeight: 0
+        }))
+        .sort((a, b) => {
+          const aPriority = BENCHMARK_PRIORITY.get(a.id) ?? 1000;
+          const bPriority = BENCHMARK_PRIORITY.get(b.id) ?? 1000;
+          return aPriority - bPriority || a.label.localeCompare(b.label);
+        });
+      alignIndexWeights();
+      hydrateModels(aa.data || aa, warehouse.models || []);
+      renderAll();
+      await hydrateServerState();
+    }
+
+    /* ─── Event listeners ─── */
+    $('normalize').addEventListener('click', normalizeWeights);
+    $('zero').addEventListener('click', () => { activeIndex().weights = Object.fromEntries(BENCHMARKS.map(bench => [bench.id, 0])); renderAll(); });
+    $('show-histogram').addEventListener('click', () => { state.chartMode = 'histogram'; $('show-histogram').classList.add('active'); $('show-pareto').classList.remove('active'); renderDistribution(state.currentQualified); persistState(); });
+    $('show-pareto').addEventListener('click', () => { state.chartMode = 'pareto'; $('show-pareto').classList.add('active'); $('show-histogram').classList.remove('active'); renderDistribution(state.currentQualified); persistState(); });
+    $('ranking-list').addEventListener('click', event => { const row = event.target.closest('[data-model-id]'); if (row) openModelDetail(row.dataset.modelId); });
+    $('ranking-list').addEventListener('keydown', event => { const row = event.target.closest('[data-model-id]'); if (row && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); openModelDetail(row.dataset.modelId); } });
+    $('close-model-modal').addEventListener('click', () => $('model-modal').classList.remove('open'));
+    $('model-modal').addEventListener('click', event => { if (event.target === $('model-modal')) $('model-modal').classList.remove('open'); });
+    document.addEventListener('keydown', event => { if (event.key === 'Escape') $('model-modal').classList.remove('open'); });
+
+    // Add index inline
+    $('add-index').addEventListener('click', () => {
+      const base = activeIndex();
+      const copy = { id: crypto.randomUUID(), name: `Custom Index ${state.indexes.length + 1}`, required: [...(base.required || [])], weights: { ...base.weights } };
+      state.indexes.push(copy);
+      state.activeId = copy.id;
+      renderAll();
+    });
+
+    // Switch index dropdown selector
+    $('index-switcher-select').addEventListener('change', e => {
+      state.activeId = e.target.value;
+      renderAll();
+    });
+
+    // Inline index name editing
+    const nameInline = $('active-index-name-inline');
+    const nameInput = $('active-index-name-input');
+
+    nameInline.addEventListener('dblclick', () => {
+      nameInline.style.display = 'none';
+      nameInput.value = nameInline.textContent;
+      nameInput.style.display = 'inline-block';
+      nameInput.focus();
+      nameInput.select();
+    });
+
+    function saveInlineName() {
+      const val = nameInput.value.trim();
+      const index = activeIndex();
+      if (val) {
+        index.name = val;
+      }
+      nameInline.textContent = index.name;
+      nameInline.style.display = 'inline-block';
+      nameInput.style.display = 'none';
+      renderAll();
+    }
+
+    nameInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        saveInlineName();
+      } else if (e.key === 'Escape') {
+        nameInline.style.display = 'inline-block';
+        nameInput.style.display = 'none';
+      }
+    });
+
+    nameInput.addEventListener('blur', () => {
+      saveInlineName();
+    });
+    $('apply-page').addEventListener('click', () => {
+      state.page.title = $('page-title').value;
+      state.page.intro = $('page-intro').value;
+      state.page.rankingSection = $('ranking-section-name').value;
+      state.page.chartSection = $('chart-section-name').value;
+      state.page.socials = $('social-links').value;
+      state.page.style = $('page-style').value;
+      renderAll(true);
+    });
+    $('copy-share-link').addEventListener('click', async () => {
+      await navigator.clipboard.writeText(shareUrl());
+      $('copy-share-link').textContent = 'Copied';
+      setTimeout(() => $('copy-share-link').textContent = 'Copy public index URL', 1200);
+    });
+
+    // View switching
+    document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => {
+      document.querySelectorAll('[data-view]').forEach(btn => btn.classList.toggle('active', btn === button));
+      $('builder-view').style.display = button.dataset.view === 'builder' ? 'grid' : 'none';
+      $('index-view').style.display = button.dataset.view === 'index' ? 'block' : 'none';
+      $('index-view').classList.toggle('visible', button.dataset.view === 'index');
+      if (button.dataset.view === 'index') {
+        // Re-render index charts now that the container is visible
+        const { qualified } = scoreModels();
+        renderIndexPage(qualified);
+      }
+      setTimeout(() => {
+        Object.values(state.charts).forEach(chart => chart.resize());
+        Object.values(state.indexCharts).forEach(chart => chart.resize());
+      }, 30);
+    }));
+
+    // Collapsible diagnostics
+    $('diag-toggle').addEventListener('click', () => {
+      $('diag-toggle').classList.toggle('open');
+      $('diag-body').classList.toggle('open');
+    });
+
+    $('export-config').addEventListener('click', async () => {
+      await navigator.clipboard.writeText(JSON.stringify(exportState(), null, 2));
+      $('export-config').textContent = 'Copied';
+      setTimeout(() => $('export-config').textContent = 'Copy config', 1200);
+    });
+    $('refresh-data').addEventListener('click', () => load().catch(error => alert(error.message)));
+
+    restoredFromLocal = loadPersistedState();
+    restoredFromShare = loadSharedState();
+    syncParentTheme();
+    if ('ResizeObserver' in window) {
+      new ResizeObserver(() => requestAnimationFrame(reportParentHeight)).observe(document.body);
+    }
+    window.addEventListener('load', reportParentHeight);
+    load().catch(error => {
+      document.body.insertAdjacentHTML('beforeend', `<div class="page"><div class="empty">Failed to load: ${esc(error.message)}</div></div>`);
+      console.error(error);
+    });
+  </script>
+</body>
+</html>

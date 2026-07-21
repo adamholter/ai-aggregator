@@ -1,0 +1,23 @@
+{
+  "tested_at": "2026-07-10T19:15:00Z",
+  "target": "https://ai-model-analysis-dashboard.adamholter.chatgpt.site/",
+  "browser": "isolated headless Chromium (Playwright); production v13; real production data except one explicitly mocked 503 upstream response",
+  "stories": [
+    {"id":"DASH-REP-002","status":"Pass","result":"Production v13 Replicate search rerendered the real 250-record catalog to 42 flux matches; category and sort controls remained operable.","errors":[]},
+    {"id":"DASH-OR-002","status":"Pass","result":"Production v13 combined claude search and anthropic provider filtering rendered 17 real matching OpenRouter cards.","errors":[]},
+    {"id":"DASH-TEST-002","status":"Pass","result":"Production v13 rendered 360 Testing Catalog cards and immediately populated 10 tag choices: All Tags plus nine real categories including Agents, Coding, Enterprise, Model releases, and Voice and audio.","errors":[]},
+    {"id":"DASH-SEARCH-002","status":"Fail","result":"The unmatched query offered Ask Agent and activated agent-exp, but zzq-v13-handoff-9912 was not present in the visible Agent surface after the handoff.","errors":["Ask Agent still drops the original unmatched query."]},
+    {"id":"DASH-SHARE-001","status":"Pass","result":"A searched Mercury LLM view called the real shared-views API and copied an expiring ?view= URL instead of a plain section URL.","errors":[]},
+    {"id":"DASH-SHARE-002","status":"Pass","result":"Opening the copied shared URL propagated the view id into the dashboard route, restored search=Mercury, rendered one matching card, and showed Loaded shared view with 1 items.","errors":[]},
+    {"id":"DASH-CHANGE-001","status":"Pass","result":"Using the source-defined dashboard-whatsnew-snapshot key, saveDataSnapshot stored a 45,976-byte snapshot with timestamp, openrouter, llms, and falModels fields.","errors":[]},
+    {"id":"DASH-NAV-002","status":"Pass","result":"Production v13 propagated ?section=blog into the dashboard frame and activated Blog; an invalid section safely retained LLMs.","errors":[]},
+    {"id":"AUDIT-LIVE-003","status":"Pass","result":"The rendered production dashboard and Agent contain no AI Dashboard has moved notice.","errors":[]},
+    {"id":"DASH-AGENT-001","status":"Pass","result":"A real Top LLMs prompt called /api/llms with HTTP 200 and rendered current named models plus tool/result/chart content from live dashboard data.","errors":[]},
+    {"id":"DASH-AGENT-COPY-001","status":"Fail","result":"No visible Demo label remains, but normal Agent introduction still says sample output and the honest mocked-failure state says No sample output was substituted. This violates the explicit requirement for no visible Demo model/sample copy anywhere in Agent.","errors":["Visible sample output wording remains in both normal and upstream-error Agent states."]},
+    {"id":"DASH-AGENT-ERROR-001","status":"Pass","result":"With /api/llms deterministically intercepted to return HTTP 503 (mocked QA response), Agent displayed The live request failed and Live LLM leaderboard unavailable: HTTP 503; it did not fabricate model rows.","errors":[]}
+  ],
+  "discovered_errors": [
+    {"severity":"Medium","story_ids":["DASH-SEARCH-002"],"observed":"Ask Agent activates the Agent section but the original unmatched query is absent.","reproduction":"Search zzq-v13-handoff-9912 globally and choose Ask Agent; inspect the Agent transcript/input."},
+    {"severity":"Medium","story_ids":["DASH-AGENT-COPY-001"],"observed":"Agent still visibly uses sample output wording in normal introductory copy and in honest upstream failure copy.","reproduction":"Open Agent and read its intro; then force /api/llms to HTTP 503 and submit Top LLMs. Both surfaces contain sample output."}
+  ]
+}

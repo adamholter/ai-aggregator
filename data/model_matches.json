@@ -1,0 +1,1810 @@
+{
+  "artificial-analysis::openrouter::gpt-4o::openai": {
+    "result": {
+      "match": {
+        "id": "openai/gpt-4o:extended",
+        "confidence": 0.95,
+        "reason": "Target is 'GPT-4o' and provider hint is 'OpenAI'. Found 'openai/gpt-4o:extended' which is a direct match for the model name and provider.",
+        "target": "openrouter",
+        "metadata": {
+          "id": "openai/gpt-4o:extended",
+          "slug": "openai/gpt-4o",
+          "name": "OpenAI: GPT-4o (extended)",
+          "vendor": "OpenAI",
+          "base_name": "GPT-4o (extended)",
+          "created": 1715558400,
+          "description": "GPT-4o (\"o\" for \"omni\") is OpenAI's latest AI model, supporting both text and image inputs with text outputs. It maintains the intelligence level of [GPT-4 Turbo](/models/openai/gpt-4-turbo) while being twice as fast and 50% more cost-effective. GPT-4o also offers improved performance in processing non-English languages and enhanced visual capabilities.\n\nFor benchmarking against other models, it was briefly called [\"im-also-a-good-gpt2-chatbot\"](https://twitter.com/LiamFedus/status/1790064963966370209)\n\n#multimodal",
+          "context_length": 128000,
+          "hugging_face_id": null,
+          "architecture": {
+            "modality": "text+image->text",
+            "input_modalities": [
+              "text",
+              "image",
+              "file"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "tokenizer": "GPT",
+            "instruct_type": null
+          },
+          "pricing": {
+            "prompt": "0.000006",
+            "completion": "0.000018",
+            "request": "0",
+            "image": "0.007225",
+            "web_search": "0",
+            "internal_reasoning": "0"
+          },
+          "top_provider": {
+            "context_length": 128000,
+            "max_completion_tokens": 64000,
+            "is_moderated": true
+          },
+          "per_request_limits": null,
+          "supported_parameters": [
+            "frequency_penalty",
+            "logit_bias",
+            "logprobs",
+            "max_tokens",
+            "presence_penalty",
+            "response_format",
+            "seed",
+            "stop",
+            "structured_outputs",
+            "temperature",
+            "tool_choice",
+            "tools",
+            "top_logprobs",
+            "top_p",
+            "web_search_options"
+          ],
+          "default_parameters": {},
+          "tags": [],
+          "display_url": "https://openrouter.ai/models/openai/gpt-4o"
+        }
+      },
+      "persisted_at": "2025-10-15T11:51:20.785431"
+    },
+    "saved_at": "2025-10-15T11:51:20.785473"
+  },
+  "openrouter::artificial-analysis::openai: gpt-4o (extended)::openai": {
+    "result": {
+      "match": {
+        "id": "e98e911e-9fb2-4a9a-826e-3d681d0cdca8",
+        "confidence": 0.95,
+        "reason": "Target name 'OpenAI: GPT-4o (extended)' is a strong match for 'OpenAI: GPT-4o (May '24)' given the provider and model family, suggesting a specific version of GPT-4o.",
+        "target": "artificial-analysis",
+        "metadata": {
+          "id": "e98e911e-9fb2-4a9a-826e-3d681d0cdca8",
+          "name": "GPT-4o (May '24)",
+          "slug": "gpt-4o-2024-05-13",
+          "release_date": "2024-05-13",
+          "model_creator": {
+            "id": "e67e56e3-15cd-43db-b679-da4660a69f41",
+            "name": "OpenAI",
+            "slug": "openai"
+          },
+          "evaluations": {
+            "artificial_analysis_intelligence_index": 26.3,
+            "artificial_analysis_coding_index": 24.2,
+            "artificial_analysis_math_index": null,
+            "mmlu_pro": 0.74,
+            "gpqa": 0.526,
+            "hle": 0.028,
+            "livecodebench": 0.334,
+            "scicode": 0.309,
+            "math_500": 0.791,
+            "aime": 0.11,
+            "aime_25": null,
+            "ifbench": null,
+            "lcr": null,
+            "terminalbench_hard": null,
+            "tau2": null
+          },
+          "pricing": {
+            "price_1m_blended_3_to_1": 7.5,
+            "price_1m_input_tokens": 5,
+            "price_1m_output_tokens": 15
+          },
+          "median_output_tokens_per_second": 85.616,
+          "median_time_to_first_token_seconds": 0.527,
+          "median_time_to_first_answer_token": 0.527
+        }
+      },
+      "persisted_at": "2025-10-15T11:52:18.006163"
+    },
+    "saved_at": "2025-10-15T11:52:18.006185"
+  },
+  "openrouter::artificial-analysis::gpt-5 image mini::openai": {
+    "result": {
+      "match": {
+        "id": "bc26bfdb-4923-4442-a6ca-e77392923581",
+        "confidence": 0.95,
+        "reason": "Target name 'GPT-5 Image Mini' strongly suggests 'GPT-5 mini' from OpenAI, which is present in the catalogue.",
+        "target": "artificial-analysis",
+        "metadata": {
+          "id": "bc26bfdb-4923-4442-a6ca-e77392923581",
+          "name": "GPT-5 mini (minimal)",
+          "slug": "gpt-5-mini-minimal",
+          "release_date": "2025-08-07",
+          "model_creator": {
+            "id": "e67e56e3-15cd-43db-b679-da4660a69f41",
+            "name": "OpenAI",
+            "slug": "openai"
+          },
+          "evaluations": {
+            "artificial_analysis_intelligence_index": 41.6,
+            "artificial_analysis_coding_index": 35,
+            "artificial_analysis_math_index": 46.7,
+            "mmlu_pro": 0.775,
+            "gpqa": 0.687,
+            "hle": 0.05,
+            "livecodebench": 0.545,
+            "scicode": 0.369,
+            "math_500": null,
+            "aime": null,
+            "aime_25": 0.467,
+            "ifbench": 0.456,
+            "lcr": 0.357,
+            "terminalbench_hard": 0.135,
+            "tau2": 0.319
+          },
+          "pricing": {
+            "price_1m_blended_3_to_1": 0.688,
+            "price_1m_input_tokens": 0.25,
+            "price_1m_output_tokens": 2
+          },
+          "median_output_tokens_per_second": 81.633,
+          "median_time_to_first_token_seconds": 1.307,
+          "median_time_to_first_answer_token": 1.307
+        }
+      },
+      "persisted_at": "2025-10-16T17:47:00.147889"
+    },
+    "saved_at": "2025-10-16T17:47:00.147914"
+  },
+  "openrouter::artificial-analysis::claude haiku 4.5::anthropic": {
+    "result": {
+      "match": {
+        "id": "a6340098-d7ae-462d-b372-0a0a67fc44b4",
+        "confidence": 1.0,
+        "reason": "Target model 'Claude Haiku 4.5' strongly matches 'Anthropic: Claude 4.5 Haiku (Reasoning)' and provider hint is Anthropic.",
+        "target": "artificial-analysis",
+        "metadata": {
+          "id": "a6340098-d7ae-462d-b372-0a0a67fc44b4",
+          "name": "Claude 4.5 Haiku (Reasoning)",
+          "slug": "claude-4-5-haiku-reasoning",
+          "release_date": "2025-10-15",
+          "model_creator": {
+            "id": "f0aa413f-e8ae-4fcd-9c48-0e049f4f3128",
+            "name": "Anthropic",
+            "slug": "anthropic"
+          },
+          "evaluations": {
+            "artificial_analysis_intelligence_index": 54.6,
+            "artificial_analysis_coding_index": 43.4,
+            "artificial_analysis_math_index": 83.7,
+            "mmlu_pro": 0.76,
+            "gpqa": 0.672,
+            "hle": 0.097,
+            "livecodebench": 0.615,
+            "scicode": 0.433,
+            "math_500": null,
+            "aime": null,
+            "aime_25": 0.837,
+            "ifbench": 0.543,
+            "lcr": 0.703,
+            "terminalbench_hard": 0.255,
+            "tau2": 0.547
+          },
+          "pricing": {
+            "price_1m_blended_3_to_1": 2,
+            "price_1m_input_tokens": 1,
+            "price_1m_output_tokens": 5
+          },
+          "median_output_tokens_per_second": 48.681,
+          "median_time_to_first_token_seconds": 0.675,
+          "median_time_to_first_answer_token": 41.759
+        }
+      },
+      "persisted_at": "2025-10-16T17:48:37.944915"
+    },
+    "saved_at": "2025-10-16T17:48:37.945195"
+  },
+  "artificial-analysis::openrouter::claude 4.5 sonnet (reasoning)::anthropic": {
+    "result": {
+      "match": {
+        "id": "anthropic/claude-sonnet-4.5",
+        "confidence": 1.0,
+        "reason": "Exact match found for 'Claude 4.5 Sonnet' from provider 'Anthropic'.",
+        "target": "openrouter",
+        "metadata": {
+          "id": "anthropic/claude-sonnet-4.5",
+          "slug": "anthropic/claude-4.5-sonnet-20250929",
+          "name": "Anthropic: Claude Sonnet 4.5",
+          "vendor": "Anthropic",
+          "base_name": "Claude Sonnet 4.5",
+          "created": 1759161676,
+          "description": "Claude Sonnet 4.5 is Anthropic’s most advanced Sonnet model to date, optimized for real-world agents and coding workflows. It delivers state-of-the-art performance on coding benchmarks such as SWE-bench Verified, with improvements across system design, code security, and specification adherence. The model is designed for extended autonomous operation, maintaining task continuity across sessions and providing fact-based progress tracking.\n\nSonnet 4.5 also introduces stronger agentic capabilities, including improved tool orchestration, speculative parallel execution, and more efficient context and memory management. With enhanced context tracking and awareness of token usage across tool calls, it is particularly well-suited for multi-context and long-running workflows. Use cases span software engineering, cybersecurity, financial analysis, research agents, and other domains requiring sustained reasoning and tool use.",
+          "context_length": 1000000,
+          "hugging_face_id": "",
+          "architecture": {
+            "modality": "text+image->text",
+            "input_modalities": [
+              "text",
+              "image",
+              "file"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "tokenizer": "Claude",
+            "instruct_type": null
+          },
+          "pricing": {
+            "prompt": "0.000003",
+            "completion": "0.000015",
+            "request": "0",
+            "image": "0",
+            "web_search": "0",
+            "internal_reasoning": "0"
+          },
+          "top_provider": {
+            "context_length": 1000000,
+            "max_completion_tokens": 64000,
+            "is_moderated": false
+          },
+          "per_request_limits": null,
+          "supported_parameters": [
+            "include_reasoning",
+            "max_tokens",
+            "reasoning",
+            "stop",
+            "temperature",
+            "tool_choice",
+            "tools",
+            "top_k",
+            "top_p"
+          ],
+          "default_parameters": {
+            "temperature": 1,
+            "top_p": 1,
+            "frequency_penalty": null
+          },
+          "tags": [],
+          "display_url": "https://openrouter.ai/models/anthropic/claude-4.5-sonnet-20250929"
+        }
+      },
+      "persisted_at": "2025-10-16T17:48:53.993458"
+    },
+    "saved_at": "2025-10-16T17:48:53.993467"
+  },
+  "openrouter::artificial-analysis::claude sonnet 4.5::anthropic": {
+    "result": {
+      "match": {
+        "id": "90e078f2-051b-4c63-8919-76618971cb3f",
+        "confidence": 0.95,
+        "reason": "Target name 'Claude Sonnet 4.5' strongly suggests 'Anthropic: Claude 4.5 Sonnet (Reasoning)' or its non-reasoning counterpart. Since 4.5 is the version, and Sonnet is the tier, this is the closest match available.",
+        "target": "artificial-analysis",
+        "metadata": {
+          "id": "90e078f2-051b-4c63-8919-76618971cb3f",
+          "name": "Claude 4.5 Sonnet (Reasoning)",
+          "slug": "claude-4-5-sonnet-thinking",
+          "release_date": "2025-09-29",
+          "model_creator": {
+            "id": "f0aa413f-e8ae-4fcd-9c48-0e049f4f3128",
+            "name": "Anthropic",
+            "slug": "anthropic"
+          },
+          "evaluations": {
+            "artificial_analysis_intelligence_index": 62.7,
+            "artificial_analysis_coding_index": 49.8,
+            "artificial_analysis_math_index": 88,
+            "mmlu_pro": 0.875,
+            "gpqa": 0.834,
+            "hle": 0.173,
+            "livecodebench": 0.714,
+            "scicode": 0.447,
+            "math_500": null,
+            "aime": null,
+            "aime_25": 0.88,
+            "ifbench": 0.573,
+            "lcr": 0.657,
+            "terminalbench_hard": 0.333,
+            "tau2": 0.781
+          },
+          "pricing": {
+            "price_1m_blended_3_to_1": 6,
+            "price_1m_input_tokens": 3,
+            "price_1m_output_tokens": 15
+          },
+          "median_output_tokens_per_second": 58.088,
+          "median_time_to_first_token_seconds": 1.818,
+          "median_time_to_first_answer_token": 36.248
+        }
+      },
+      "persisted_at": "2025-10-16T17:49:30.373794"
+    },
+    "saved_at": "2025-10-16T17:49:30.373822"
+  },
+  "openrouter::artificial-analysis::glm 4.6::z.ai": {
+    "result": {
+      "match": {
+        "id": "6a5d56e1-bb68-4205-8d9b-26b97888bc84",
+        "confidence": 1.0,
+        "reason": "Exact match for 'GLM 4.6' with provider hint 'Z.AI'.",
+        "target": "artificial-analysis",
+        "metadata": {
+          "id": "6a5d56e1-bb68-4205-8d9b-26b97888bc84",
+          "name": "GLM-4.6 (Reasoning)",
+          "slug": "glm-4-6-reasoning",
+          "release_date": "2025-09-30",
+          "model_creator": {
+            "id": "67437eb6-7dc1-4e93-befd-22c8b8ec2065",
+            "name": "Z AI",
+            "slug": "zai"
+          },
+          "evaluations": {
+            "artificial_analysis_intelligence_index": 56,
+            "artificial_analysis_coding_index": 43.8,
+            "artificial_analysis_math_index": 86,
+            "mmlu_pro": 0.829,
+            "gpqa": 0.78,
+            "hle": 0.133,
+            "livecodebench": 0.695,
+            "scicode": 0.384,
+            "math_500": null,
+            "aime": null,
+            "aime_25": 0.86,
+            "ifbench": 0.434,
+            "lcr": 0.543,
+            "terminalbench_hard": 0.234,
+            "tau2": 0.705
+          },
+          "pricing": {
+            "price_1m_blended_3_to_1": 0.975,
+            "price_1m_input_tokens": 0.6,
+            "price_1m_output_tokens": 2.1
+          },
+          "median_output_tokens_per_second": 54.311,
+          "median_time_to_first_token_seconds": 0.634,
+          "median_time_to_first_answer_token": 37.459
+        }
+      },
+      "persisted_at": "2025-10-16T17:49:43.610532"
+    },
+    "saved_at": "2025-10-16T17:49:43.610545"
+  },
+  "artificial-analysis::openrouter::gpt-5 (medium)::openai": {
+    "result": {
+      "match": {
+        "id": "openai/gpt-5",
+        "confidence": 0.9,
+        "reason": "Exact match found for 'GPT-5' from provider 'OpenAI', although the target specifies '(medium)' which is not present in the catalogue entry.",
+        "target": "openrouter",
+        "metadata": {
+          "id": "openai/gpt-5",
+          "slug": "openai/gpt-5-2025-08-07",
+          "name": "OpenAI: GPT-5",
+          "vendor": "OpenAI",
+          "base_name": "GPT-5",
+          "created": 1754587413,
+          "description": "GPT-5 is OpenAI’s most advanced model, offering major improvements in reasoning, code quality, and user experience. It is optimized for complex tasks that require step-by-step reasoning, instruction following, and accuracy in high-stakes use cases. It supports test-time routing features and advanced prompt understanding, including user-specified intent like \"think hard about this.\" Improvements include reductions in hallucination, sycophancy, and better performance in coding, writing, and health-related tasks.",
+          "context_length": 400000,
+          "hugging_face_id": "",
+          "architecture": {
+            "modality": "text+image->text",
+            "input_modalities": [
+              "text",
+              "image",
+              "file"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "tokenizer": "GPT",
+            "instruct_type": null
+          },
+          "pricing": {
+            "prompt": "0.00000125",
+            "completion": "0.00001",
+            "request": "0",
+            "image": "0",
+            "web_search": "0.01",
+            "internal_reasoning": "0",
+            "input_cache_read": "0.000000125"
+          },
+          "top_provider": {
+            "context_length": 400000,
+            "max_completion_tokens": 128000,
+            "is_moderated": true
+          },
+          "per_request_limits": null,
+          "supported_parameters": [
+            "include_reasoning",
+            "max_tokens",
+            "reasoning",
+            "response_format",
+            "seed",
+            "structured_outputs",
+            "tool_choice",
+            "tools"
+          ],
+          "default_parameters": {
+            "temperature": null,
+            "top_p": null,
+            "frequency_penalty": null
+          },
+          "tags": [],
+          "display_url": "https://openrouter.ai/models/openai/gpt-5-2025-08-07"
+        }
+      },
+      "persisted_at": "2025-10-16T17:54:04.254335"
+    },
+    "saved_at": "2025-10-16T17:54:04.254369"
+  },
+  "artificial-analysis::openrouter::qwen3 max::alibaba": {
+    "result": {
+      "match": {
+        "id": "qwen/qwen3-max",
+        "confidence": 1.0,
+        "reason": "Exact match found in the catalogue for 'Qwen3 Max'.",
+        "target": "openrouter",
+        "metadata": {
+          "id": "qwen/qwen3-max",
+          "slug": "qwen/qwen3-max",
+          "name": "Qwen: Qwen3 Max",
+          "vendor": "Qwen",
+          "base_name": "Qwen3 Max",
+          "created": 1758662808,
+          "description": "Qwen3-Max is an updated release built on the Qwen3 series, offering major improvements in reasoning, instruction following, multilingual support, and long-tail knowledge coverage compared to the January 2025 version. It delivers higher accuracy in math, coding, logic, and science tasks, follows complex instructions in Chinese and English more reliably, reduces hallucinations, and produces higher-quality responses for open-ended Q&A, writing, and conversation. The model supports over 100 languages with stronger translation and commonsense reasoning, and is optimized for retrieval-augmented generation (RAG) and tool calling, though it does not include a dedicated “thinking” mode.",
+          "context_length": 256000,
+          "hugging_face_id": "",
+          "architecture": {
+            "modality": "text->text",
+            "input_modalities": [
+              "text"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "tokenizer": "Qwen3",
+            "instruct_type": null
+          },
+          "pricing": {
+            "prompt": "0.0000012",
+            "completion": "0.000006",
+            "request": "0",
+            "image": "0",
+            "web_search": "0",
+            "internal_reasoning": "0",
+            "input_cache_read": "0.00000024"
+          },
+          "top_provider": {
+            "context_length": 256000,
+            "max_completion_tokens": 32768,
+            "is_moderated": false
+          },
+          "per_request_limits": null,
+          "supported_parameters": [
+            "max_tokens",
+            "presence_penalty",
+            "response_format",
+            "seed",
+            "temperature",
+            "tool_choice",
+            "tools",
+            "top_p"
+          ],
+          "default_parameters": {},
+          "tags": [],
+          "display_url": "https://openrouter.ai/models/qwen/qwen3-max"
+        }
+      },
+      "persisted_at": "2025-10-16T17:54:11.421531"
+    },
+    "saved_at": "2025-10-16T17:54:11.421545"
+  },
+  "artificial-analysis::openrouter::grok 4::xai": {
+    "result": {
+      "match": {
+        "id": "x-ai/grok-4",
+        "confidence": 1.0,
+        "reason": "Exact match found for 'Grok 4' from provider 'xAI'.",
+        "target": "openrouter",
+        "metadata": {
+          "id": "x-ai/grok-4",
+          "slug": "x-ai/grok-4-07-09",
+          "name": "xAI: Grok 4",
+          "vendor": "xAI",
+          "base_name": "Grok 4",
+          "created": 1752087689,
+          "description": "Grok 4 is xAI's latest reasoning model with a 256k context window. It supports parallel tool calling, structured outputs, and both image and text inputs. Note that reasoning is not exposed, reasoning cannot be disabled, and the reasoning effort cannot be specified. Pricing increases once the total tokens in a given request is greater than 128k tokens. See more details on the [xAI docs](https://docs.x.ai/docs/models/grok-4-0709)",
+          "context_length": 256000,
+          "hugging_face_id": "",
+          "architecture": {
+            "modality": "text+image->text",
+            "input_modalities": [
+              "image",
+              "text"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "tokenizer": "Grok",
+            "instruct_type": null
+          },
+          "pricing": {
+            "prompt": "0.000003",
+            "completion": "0.000015",
+            "request": "0",
+            "image": "0",
+            "web_search": "0",
+            "internal_reasoning": "0",
+            "input_cache_read": "0.00000075"
+          },
+          "top_provider": {
+            "context_length": 256000,
+            "max_completion_tokens": null,
+            "is_moderated": false
+          },
+          "per_request_limits": null,
+          "supported_parameters": [
+            "include_reasoning",
+            "logprobs",
+            "max_tokens",
+            "reasoning",
+            "response_format",
+            "seed",
+            "structured_outputs",
+            "temperature",
+            "tool_choice",
+            "tools",
+            "top_logprobs",
+            "top_p"
+          ],
+          "default_parameters": {},
+          "tags": [],
+          "display_url": "https://openrouter.ai/models/x-ai/grok-4-07-09"
+        }
+      },
+      "persisted_at": "2025-10-16T20:56:07.884286"
+    },
+    "saved_at": "2025-10-16T20:56:07.884308"
+  },
+  "openrouter::artificial-analysis::mistral 7b instruct v0.1::mistral": {
+    "result": {
+      "match": {
+        "id": "217b34ec-5920-4fc1-8886-6a70a324837d",
+        "confidence": 1.0,
+        "reason": "Exact match for 'Mistral 7B Instruct v0.1' found as 'Mistral: Mistral 7B Instruct'.",
+        "target": "artificial-analysis",
+        "metadata": {
+          "id": "217b34ec-5920-4fc1-8886-6a70a324837d",
+          "name": "Mistral 7B Instruct",
+          "slug": "mistral-7b-instruct",
+          "release_date": "2023-09-27",
+          "model_creator": {
+            "id": "b5c0639a-cc9c-443b-a07e-bae6b7088933",
+            "name": "Mistral",
+            "slug": "mistral"
+          },
+          "evaluations": {
+            "artificial_analysis_intelligence_index": 1,
+            "artificial_analysis_coding_index": null,
+            "artificial_analysis_math_index": null,
+            "mmlu_pro": 0.245,
+            "gpqa": 0.177,
+            "hle": 0.043,
+            "livecodebench": 0.046,
+            "scicode": 0.024,
+            "math_500": 0.121,
+            "aime": 0,
+            "aime_25": null,
+            "ifbench": null,
+            "lcr": null,
+            "terminalbench_hard": null,
+            "tau2": null
+          },
+          "pricing": {
+            "price_1m_blended_3_to_1": 0.25,
+            "price_1m_input_tokens": 0.25,
+            "price_1m_output_tokens": 0.25
+          },
+          "median_output_tokens_per_second": 115.416,
+          "median_time_to_first_token_seconds": 0.291,
+          "median_time_to_first_answer_token": 0.291
+        }
+      },
+      "persisted_at": "2025-10-16T21:00:50.248048"
+    },
+    "saved_at": "2025-10-16T21:00:50.248093"
+  },
+  "openrouter::artificial-analysis::grok 4 fast::xai": {
+    "result": {
+      "match": {
+        "id": "573bbd93-114c-4b71-9ede-a73a7d4bdf84",
+        "confidence": 1.0,
+        "reason": "Exact match for 'Grok 4 Fast' with the provider hint 'xAI' and the specific 'Reasoning' variant listed in the catalogue.",
+        "target": "artificial-analysis",
+        "metadata": {
+          "id": "573bbd93-114c-4b71-9ede-a73a7d4bdf84",
+          "name": "Grok 4 Fast (Reasoning)",
+          "slug": "grok-4-fast-reasoning",
+          "release_date": "2025-09-19",
+          "model_creator": {
+            "id": "a1e3ddcf-d3e4-44a5-9e8f-029a69850875",
+            "name": "xAI",
+            "slug": "xai"
+          },
+          "evaluations": {
+            "artificial_analysis_intelligence_index": 60.3,
+            "artificial_analysis_coding_index": 48.4,
+            "artificial_analysis_math_index": 89.7,
+            "mmlu_pro": 0.85,
+            "gpqa": 0.847,
+            "hle": 0.17,
+            "livecodebench": 0.832,
+            "scicode": 0.442,
+            "math_500": null,
+            "aime": null,
+            "aime_25": 0.897,
+            "ifbench": 0.505,
+            "lcr": 0.647,
+            "terminalbench_hard": 0.177,
+            "tau2": 0.658
+          },
+          "pricing": {
+            "price_1m_blended_3_to_1": 0.275,
+            "price_1m_input_tokens": 0.2,
+            "price_1m_output_tokens": 0.5
+          },
+          "median_output_tokens_per_second": 96.431,
+          "median_time_to_first_token_seconds": 7.636,
+          "median_time_to_first_answer_token": 7.636
+        }
+      },
+      "persisted_at": "2025-10-17T07:58:56.190245"
+    },
+    "saved_at": "2025-10-17T07:58:56.190287"
+  },
+  "artificial-analysis::openrouter::gpt-5 mini (high)::openai": {
+    "result": {
+      "match": {
+        "id": "openai/gpt-5-mini",
+        "confidence": 1.0,
+        "reason": "Exact match found for 'GPT-5 mini' from provider 'OpenAI'.",
+        "target": "openrouter",
+        "metadata": {
+          "id": "openai/gpt-5-mini",
+          "slug": "openai/gpt-5-mini-2025-08-07",
+          "name": "OpenAI: GPT-5 Mini",
+          "vendor": "OpenAI",
+          "base_name": "GPT-5 Mini",
+          "created": 1754587407,
+          "description": "GPT-5 Mini is a compact version of GPT-5, designed to handle lighter-weight reasoning tasks. It provides the same instruction-following and safety-tuning benefits as GPT-5, but with reduced latency and cost. GPT-5 Mini is the successor to OpenAI's o4-mini model.",
+          "context_length": 400000,
+          "hugging_face_id": "",
+          "architecture": {
+            "modality": "text+image->text",
+            "input_modalities": [
+              "text",
+              "image",
+              "file"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "tokenizer": "GPT",
+            "instruct_type": null
+          },
+          "pricing": {
+            "prompt": "0.00000025",
+            "completion": "0.000002",
+            "request": "0",
+            "image": "0",
+            "web_search": "0.01",
+            "internal_reasoning": "0",
+            "input_cache_read": "0.000000025"
+          },
+          "top_provider": {
+            "context_length": 400000,
+            "max_completion_tokens": 128000,
+            "is_moderated": true
+          },
+          "per_request_limits": null,
+          "supported_parameters": [
+            "include_reasoning",
+            "max_tokens",
+            "reasoning",
+            "response_format",
+            "seed",
+            "structured_outputs",
+            "tool_choice",
+            "tools"
+          ],
+          "default_parameters": {},
+          "tags": [],
+          "display_url": "https://openrouter.ai/models/openai/gpt-5-mini-2025-08-07"
+        }
+      },
+      "persisted_at": "2025-10-17T09:21:48.081082"
+    },
+    "saved_at": "2025-10-17T09:21:48.081100"
+  },
+  "artificial-analysis::openrouter::kimi k2.5 (reasoning)::kimi": {
+    "result": {
+      "match": {
+        "id": "moonshotai/kimi-k2.5",
+        "confidence": 1.0,
+        "reason": "Exact match found in the catalogue for Target Model Name 'Kimi K2.5 (Reasoning)' and Provider Hint 'Kimi'.",
+        "target": "openrouter",
+        "metadata": {
+          "id": "moonshotai/kimi-k2.5",
+          "slug": "moonshotai/kimi-k2.5-0127",
+          "name": "MoonshotAI: Kimi K2.5",
+          "vendor": "MoonshotAI",
+          "base_name": "Kimi K2.5",
+          "created": 1769487076,
+          "created_at": "2026-01-27T04:11:16Z",
+          "description": "Kimi K2.5 is Moonshot AI's native multimodal model, delivering state-of-the-art visual coding capability and a self-directed agent swarm paradigm. Built on Kimi K2 with continued pretraining over approximately 15T mixed visual and text tokens, it delivers strong performance in general reasoning, visual coding, and agentic tool-calling.",
+          "context_length": 262144,
+          "hugging_face_id": "moonshotai/Kimi-K2.5",
+          "architecture": {
+            "modality": "text+image->text",
+            "input_modalities": [
+              "text",
+              "image"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "tokenizer": "Other",
+            "instruct_type": null
+          },
+          "pricing": {
+            "prompt": "0.00000023",
+            "completion": "0.000003"
+          },
+          "top_provider": {
+            "context_length": 262144,
+            "max_completion_tokens": 262144,
+            "is_moderated": false
+          },
+          "per_request_limits": null,
+          "supported_parameters": [
+            "frequency_penalty",
+            "include_reasoning",
+            "logit_bias",
+            "logprobs",
+            "max_tokens",
+            "min_p",
+            "parallel_tool_calls",
+            "presence_penalty",
+            "reasoning",
+            "reasoning_effort",
+            "repetition_penalty",
+            "response_format",
+            "seed",
+            "stop",
+            "structured_outputs",
+            "temperature",
+            "tool_choice",
+            "tools",
+            "top_k",
+            "top_logprobs",
+            "top_p"
+          ],
+          "default_parameters": {
+            "temperature": null,
+            "top_p": null,
+            "frequency_penalty": null
+          },
+          "tags": [],
+          "display_url": "https://openrouter.ai/models/moonshotai/kimi-k2.5-0127"
+        }
+      },
+      "persisted_at": "2026-02-17T11:05:19.218248"
+    },
+    "saved_at": "2026-02-17T11:05:19.218271"
+  },
+  "artificial-analysis::openrouter::gemini 3.1 pro preview::google": {
+    "result": {
+      "match": {
+        "id": "google/gemini-3.1-pro-preview",
+        "confidence": 1.0,
+        "reason": "Exact match found in catalogue: google/gemini-3.1-pro-preview | Google: Gemini 3.1 Pro Preview.",
+        "target": "openrouter",
+        "metadata": {
+          "id": "google/gemini-3.1-pro-preview",
+          "slug": "google/gemini-3.1-pro-preview-20260219",
+          "name": "Google: Gemini 3.1 Pro Preview",
+          "vendor": "Google",
+          "base_name": "Gemini 3.1 Pro Preview",
+          "created": 1771509627,
+          "created_at": "2026-02-19T14:00:27Z",
+          "description": "Gemini 3.1 Pro Preview is Google’s frontier reasoning model, delivering enhanced software engineering performance, improved agentic reliability, and more efficient token usage across complex workflows. Building on the multimodal foundation of the Gemini 3 series, it combines high-precision reasoning across text, image, video, audio, and code with a 1M-token context window. Reasoning Details must be preserved when using multi-turn tool calling, see our docs here: https://openrouter.ai/docs/use-cases/reasoning-tokens#preserving-reasoning. The 3.1 update introduces measurable gains in SWE benchmarks and real-world coding environments, along with stronger autonomous task execution in structured domains such as finance and spreadsheet-based workflows.\n\nDesigned for advanced development and agentic systems, Gemini 3.1 Pro Preview improves long-horizon stability and tool orchestration while increasing token efficiency. It introduces a new medium thinking level to better balance cost, speed, and performance. The model excels in agentic coding, structured planning, multimodal analysis, and workflow automation, making it well-suited for autonomous agents, financial modeling, spreadsheet automation, and high-context enterprise tasks.",
+          "context_length": 1048576,
+          "hugging_face_id": "",
+          "architecture": {
+            "modality": "text+image+file+audio+video->text",
+            "input_modalities": [
+              "audio",
+              "file",
+              "image",
+              "text",
+              "video"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "tokenizer": "Gemini",
+            "instruct_type": null
+          },
+          "pricing": {
+            "prompt": "0.000002",
+            "completion": "0.000012",
+            "image": "0.000002",
+            "audio": "0.000002",
+            "internal_reasoning": "0.000012",
+            "input_cache_read": "0.0000002",
+            "input_cache_write": "0.000000375"
+          },
+          "top_provider": {
+            "context_length": 1048576,
+            "max_completion_tokens": 65536,
+            "is_moderated": false
+          },
+          "per_request_limits": null,
+          "supported_parameters": [
+            "include_reasoning",
+            "max_tokens",
+            "reasoning",
+            "response_format",
+            "seed",
+            "stop",
+            "structured_outputs",
+            "temperature",
+            "tool_choice",
+            "tools",
+            "top_p"
+          ],
+          "default_parameters": {
+            "temperature": null,
+            "top_p": null,
+            "frequency_penalty": null
+          },
+          "tags": [],
+          "display_url": "https://openrouter.ai/models/google/gemini-3.1-pro-preview-20260219"
+        }
+      },
+      "persisted_at": "2026-02-19T15:33:33.595233"
+    },
+    "saved_at": "2026-02-19T15:33:33.595244"
+  },
+  "artificial-analysis::openrouter::claude opus 4.6 (adaptive reasoning, max effort)::anthropic": {
+    "result": {
+      "match": {
+        "id": "anthropic/claude-opus-4.6",
+        "confidence": 1.0,
+        "reason": "Exact match found in the catalogue for the target model name and provider hint.",
+        "target": "openrouter",
+        "metadata": {
+          "id": "anthropic/claude-opus-4.6",
+          "slug": "anthropic/claude-4.6-opus-20260205",
+          "name": "Anthropic: Claude Opus 4.6",
+          "vendor": "Anthropic",
+          "base_name": "Claude Opus 4.6",
+          "created": 1770219050,
+          "created_at": "2026-02-04T15:30:50Z",
+          "description": "Opus 4.6 is Anthropic’s strongest model for coding and long-running professional tasks. It is built for agents that operate across entire workflows rather than single prompts, making it especially effective for large codebases, complex refactors, and multi-step debugging that unfolds over time. The model shows deeper contextual understanding, stronger problem decomposition, and greater reliability on hard engineering tasks than prior generations.\n\nBeyond coding, Opus 4.6 excels at sustained knowledge work. It produces near-production-ready documents, plans, and analyses in a single pass, and maintains coherence across very long outputs and extended sessions. This makes it a strong default for tasks that require persistence, judgment, and follow-through, such as technical design, migration planning, and end-to-end project execution.\n\nFor users upgrading from earlier Opus versions, see our [official migration guide here](https://openrouter.ai/docs/guides/guides/model-migrations/claude-4-6-opus)\n",
+          "context_length": 1000000,
+          "hugging_face_id": "",
+          "architecture": {
+            "modality": "text+image->text",
+            "input_modalities": [
+              "text",
+              "image"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "tokenizer": "Claude",
+            "instruct_type": null
+          },
+          "pricing": {
+            "prompt": "0.000005",
+            "completion": "0.000025",
+            "web_search": "0.01",
+            "input_cache_read": "0.0000005",
+            "input_cache_write": "0.00000625"
+          },
+          "top_provider": {
+            "context_length": 1000000,
+            "max_completion_tokens": 128000,
+            "is_moderated": true
+          },
+          "per_request_limits": null,
+          "supported_parameters": [
+            "include_reasoning",
+            "max_tokens",
+            "reasoning",
+            "response_format",
+            "stop",
+            "structured_outputs",
+            "temperature",
+            "tool_choice",
+            "tools",
+            "top_k",
+            "top_p",
+            "verbosity"
+          ],
+          "default_parameters": {
+            "temperature": null,
+            "top_p": null,
+            "frequency_penalty": null
+          },
+          "tags": [],
+          "display_url": "https://openrouter.ai/models/anthropic/claude-4.6-opus-20260205"
+        }
+      },
+      "persisted_at": "2026-02-20T10:48:36.563453"
+    },
+    "saved_at": "2026-02-20T10:48:36.563462"
+  },
+  "artificial-analysis::openrouter::mimo-v2-flash (feb 2026)::xiaomi": {
+    "result": {
+      "match": {
+        "id": "xiaomi/mimo-v2-flash",
+        "confidence": 1.0,
+        "reason": "Exact match found in the catalogue for Target Model Name 'MiMo-V2-Flash (Feb 2026)' and Provider Hint 'Xiaomi'.",
+        "target": "openrouter",
+        "metadata": {
+          "id": "xiaomi/mimo-v2-flash",
+          "slug": "xiaomi/mimo-v2-flash-20251210",
+          "name": "Xiaomi: MiMo-V2-Flash",
+          "vendor": "Xiaomi",
+          "base_name": "MiMo-V2-Flash",
+          "created": 1765731308,
+          "created_at": "2025-12-14T16:55:08Z",
+          "description": "MiMo-V2-Flash is an open-source foundation language model developed by Xiaomi. It is a Mixture-of-Experts model with 309B total parameters and 15B active parameters, adopting hybrid attention architecture. MiMo-V2-Flash supports a hybrid-thinking toggle and a 256K context window, and excels at reasoning, coding, and agent scenarios. On SWE-bench Verified and SWE-bench Multilingual, MiMo-V2-Flash ranks as the top #1 open-source model globally, delivering performance comparable to Claude Sonnet 4.5 while costing only about 3.5% as much.\n\nUsers can control the reasoning behaviour with the `reasoning` `enabled` boolean. [Learn more in our docs](https://openrouter.ai/docs/use-cases/reasoning-tokens#enable-reasoning-with-default-config).",
+          "context_length": 262144,
+          "hugging_face_id": "XiaomiMiMo/MiMo-V2-Flash",
+          "architecture": {
+            "modality": "text->text",
+            "input_modalities": [
+              "text"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "tokenizer": "Other",
+            "instruct_type": null
+          },
+          "pricing": {
+            "prompt": "0.00000009",
+            "completion": "0.00000029",
+            "input_cache_read": "0.000000045"
+          },
+          "top_provider": {
+            "context_length": 262144,
+            "max_completion_tokens": 65536,
+            "is_moderated": false
+          },
+          "per_request_limits": null,
+          "supported_parameters": [
+            "frequency_penalty",
+            "include_reasoning",
+            "max_tokens",
+            "presence_penalty",
+            "reasoning",
+            "repetition_penalty",
+            "response_format",
+            "seed",
+            "stop",
+            "structured_outputs",
+            "temperature",
+            "tool_choice",
+            "tools",
+            "top_k",
+            "top_p"
+          ],
+          "default_parameters": {
+            "temperature": null,
+            "top_p": 0.95,
+            "frequency_penalty": null
+          },
+          "tags": [],
+          "display_url": "https://openrouter.ai/models/xiaomi/mimo-v2-flash-20251210"
+        }
+      },
+      "persisted_at": "2026-02-20T10:48:48.344516"
+    },
+    "saved_at": "2026-02-20T10:48:48.344540"
+  },
+  "artificial-analysis::openrouter::glm-5 (non-reasoning)::z ai": {
+    "result": {
+      "match": {
+        "id": "z-ai/glm-5",
+        "confidence": 1.0,
+        "reason": "Exact match found for Target Model Name 'GLM-5 (Non-reasoning)' and Provider Hint 'Z AI'.",
+        "target": "openrouter",
+        "metadata": {
+          "id": "z-ai/glm-5",
+          "slug": "z-ai/glm-5-20260211",
+          "name": "Z.ai: GLM 5",
+          "vendor": "Z.ai",
+          "base_name": "GLM 5",
+          "created": 1770829182,
+          "created_at": "2026-02-11T16:59:42Z",
+          "description": "GLM-5 is Z.ai’s flagship open-source foundation model engineered for complex systems design and long-horizon agent workflows. Built for expert developers, it delivers production-grade performance on large-scale programming tasks, rivaling leading closed-source models. With advanced agentic planning, deep backend reasoning, and iterative self-correction, GLM-5 moves beyond code generation to full-system construction and autonomous execution.",
+          "context_length": 204800,
+          "hugging_face_id": "zai-org/GLM-5",
+          "architecture": {
+            "modality": "text->text",
+            "input_modalities": [
+              "text"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "tokenizer": "Other",
+            "instruct_type": null
+          },
+          "pricing": {
+            "prompt": "0.0000003",
+            "completion": "0.00000255"
+          },
+          "top_provider": {
+            "context_length": 204800,
+            "max_completion_tokens": 131072,
+            "is_moderated": false
+          },
+          "per_request_limits": null,
+          "supported_parameters": [
+            "frequency_penalty",
+            "include_reasoning",
+            "logit_bias",
+            "logprobs",
+            "max_tokens",
+            "min_p",
+            "presence_penalty",
+            "reasoning",
+            "repetition_penalty",
+            "response_format",
+            "seed",
+            "stop",
+            "structured_outputs",
+            "temperature",
+            "tool_choice",
+            "tools",
+            "top_k",
+            "top_logprobs",
+            "top_p"
+          ],
+          "default_parameters": {
+            "temperature": 1,
+            "top_p": 0.95,
+            "frequency_penalty": null
+          },
+          "tags": [],
+          "display_url": "https://openrouter.ai/models/z-ai/glm-5-20260211"
+        }
+      },
+      "persisted_at": "2026-02-20T10:54:12.348050"
+    },
+    "saved_at": "2026-02-20T10:54:12.348063"
+  },
+  "artificial-analysis::openrouter::claude opus 4.5 (non-reasoning)::anthropic": {
+    "result": {
+      "match": {
+        "id": "anthropic/claude-opus-4.5",
+        "confidence": 1.0,
+        "reason": "Exact match found for 'Claude Opus 4.5' from provider 'Anthropic'.",
+        "target": "openrouter",
+        "metadata": {
+          "id": "anthropic/claude-opus-4.5",
+          "slug": "anthropic/claude-4.5-opus-20251124",
+          "name": "Anthropic: Claude Opus 4.5",
+          "vendor": "Anthropic",
+          "base_name": "Claude Opus 4.5",
+          "created": 1764010580,
+          "created_at": "2025-11-24T18:56:20Z",
+          "description": "Claude Opus 4.5 is Anthropic’s frontier reasoning model optimized for complex software engineering, agentic workflows, and long-horizon computer use. It offers strong multimodal capabilities, competitive performance across real-world coding and reasoning benchmarks, and improved robustness to prompt injection. The model is designed to operate efficiently across varied effort levels, enabling developers to trade off speed, depth, and token usage depending on task requirements. It comes with a new parameter to control token efficiency, which can be accessed using the OpenRouter Verbosity parameter with low, medium, or high.\n\nOpus 4.5 supports advanced tool use, extended context management, and coordinated multi-agent setups, making it well-suited for autonomous research, debugging, multi-step planning, and spreadsheet/browser manipulation. It delivers substantial gains in structured reasoning, execution reliability, and alignment compared to prior Opus generations, while reducing token overhead and improving performance on long-running tasks.",
+          "context_length": 200000,
+          "hugging_face_id": "",
+          "architecture": {
+            "modality": "text+image+file->text",
+            "input_modalities": [
+              "file",
+              "image",
+              "text"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "tokenizer": "Claude",
+            "instruct_type": null
+          },
+          "pricing": {
+            "prompt": "0.000005",
+            "completion": "0.000025",
+            "web_search": "0.01",
+            "input_cache_read": "0.0000005",
+            "input_cache_write": "0.00000625"
+          },
+          "top_provider": {
+            "context_length": 200000,
+            "max_completion_tokens": 64000,
+            "is_moderated": true
+          },
+          "per_request_limits": null,
+          "supported_parameters": [
+            "include_reasoning",
+            "max_tokens",
+            "reasoning",
+            "response_format",
+            "stop",
+            "structured_outputs",
+            "temperature",
+            "tool_choice",
+            "tools",
+            "top_k",
+            "verbosity"
+          ],
+          "default_parameters": {
+            "temperature": null,
+            "top_p": null,
+            "frequency_penalty": null
+          },
+          "tags": [],
+          "display_url": "https://openrouter.ai/models/anthropic/claude-4.5-opus-20251124"
+        }
+      },
+      "persisted_at": "2026-02-20T10:58:00.869872"
+    },
+    "saved_at": "2026-02-20T10:58:00.869882"
+  },
+  "artificial-analysis::openrouter::claude opus 4.5 (reasoning)::anthropic": {
+    "result": {
+      "match": {
+        "id": "anthropic/claude-opus-4.5",
+        "confidence": 1.0,
+        "reason": "Exact match found for 'Claude Opus 4.5' from provider 'Anthropic'.",
+        "target": "openrouter",
+        "metadata": {
+          "id": "anthropic/claude-opus-4.5",
+          "slug": "anthropic/claude-4.5-opus-20251124",
+          "name": "Anthropic: Claude Opus 4.5",
+          "vendor": "Anthropic",
+          "base_name": "Claude Opus 4.5",
+          "created": 1764010580,
+          "created_at": "2025-11-24T18:56:20Z",
+          "description": "Claude Opus 4.5 is Anthropic’s frontier reasoning model optimized for complex software engineering, agentic workflows, and long-horizon computer use. It offers strong multimodal capabilities, competitive performance across real-world coding and reasoning benchmarks, and improved robustness to prompt injection. The model is designed to operate efficiently across varied effort levels, enabling developers to trade off speed, depth, and token usage depending on task requirements. It comes with a new parameter to control token efficiency, which can be accessed using the OpenRouter Verbosity parameter with low, medium, or high.\n\nOpus 4.5 supports advanced tool use, extended context management, and coordinated multi-agent setups, making it well-suited for autonomous research, debugging, multi-step planning, and spreadsheet/browser manipulation. It delivers substantial gains in structured reasoning, execution reliability, and alignment compared to prior Opus generations, while reducing token overhead and improving performance on long-running tasks.",
+          "context_length": 200000,
+          "hugging_face_id": "",
+          "architecture": {
+            "modality": "text+image+file->text",
+            "input_modalities": [
+              "file",
+              "image",
+              "text"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "tokenizer": "Claude",
+            "instruct_type": null
+          },
+          "pricing": {
+            "prompt": "0.000005",
+            "completion": "0.000025",
+            "web_search": "0.01",
+            "input_cache_read": "0.0000005",
+            "input_cache_write": "0.00000625"
+          },
+          "top_provider": {
+            "context_length": 200000,
+            "max_completion_tokens": 64000,
+            "is_moderated": true
+          },
+          "per_request_limits": null,
+          "supported_parameters": [
+            "include_reasoning",
+            "max_tokens",
+            "reasoning",
+            "response_format",
+            "stop",
+            "structured_outputs",
+            "temperature",
+            "tool_choice",
+            "tools",
+            "top_k",
+            "verbosity"
+          ],
+          "default_parameters": {
+            "temperature": null,
+            "top_p": null,
+            "frequency_penalty": null
+          },
+          "tags": [],
+          "display_url": "https://openrouter.ai/models/anthropic/claude-4.5-opus-20251124"
+        }
+      },
+      "persisted_at": "2026-02-20T12:15:55.783375"
+    },
+    "saved_at": "2026-02-20T12:15:55.783393"
+  },
+  "artificial-analysis::openrouter::claude sonnet 4.6 (adaptive reasoning, max effort)::anthropic": {
+    "result": {
+      "match": {
+        "id": "anthropic/claude-sonnet-4.6",
+        "confidence": 1.0,
+        "reason": "Exact match found in catalogue for Anthropic Claude Sonnet 4.6.",
+        "target": "openrouter",
+        "metadata": {
+          "id": "anthropic/claude-sonnet-4.6",
+          "slug": "anthropic/claude-4.6-sonnet-20260217",
+          "name": "Anthropic: Claude Sonnet 4.6",
+          "vendor": "Anthropic",
+          "base_name": "Claude Sonnet 4.6",
+          "created": 1771342990,
+          "created_at": "2026-02-17T15:43:10Z",
+          "description": "Sonnet 4.6 is Anthropic's most capable Sonnet-class model yet, with frontier performance across coding, agents, and professional work. It excels at iterative development, complex codebase navigation, end-to-end project management with memory, polished document creation, and confident computer use for web QA and workflow automation.",
+          "context_length": 1000000,
+          "hugging_face_id": "",
+          "architecture": {
+            "modality": "text+image->text",
+            "input_modalities": [
+              "text",
+              "image"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "tokenizer": "Claude",
+            "instruct_type": null
+          },
+          "pricing": {
+            "prompt": "0.000003",
+            "completion": "0.000015",
+            "web_search": "0.01",
+            "input_cache_read": "0.0000003",
+            "input_cache_write": "0.00000375"
+          },
+          "top_provider": {
+            "context_length": 1000000,
+            "max_completion_tokens": 128000,
+            "is_moderated": true
+          },
+          "per_request_limits": null,
+          "supported_parameters": [
+            "include_reasoning",
+            "max_tokens",
+            "reasoning",
+            "response_format",
+            "stop",
+            "structured_outputs",
+            "temperature",
+            "tool_choice",
+            "tools",
+            "top_k",
+            "top_p",
+            "verbosity"
+          ],
+          "default_parameters": {
+            "temperature": null,
+            "top_p": null,
+            "frequency_penalty": null
+          },
+          "tags": [],
+          "display_url": "https://openrouter.ai/models/anthropic/claude-4.6-sonnet-20260217"
+        }
+      },
+      "persisted_at": "2026-02-21T09:07:16.203886"
+    },
+    "saved_at": "2026-02-21T09:07:16.203896"
+  },
+  "artificial-analysis::openrouter::gpt-5.2 (xhigh)::openai": {
+    "result": {
+      "match": {
+        "id": "openai/gpt-5.2",
+        "confidence": 1.0,
+        "reason": "Exact match found in catalogue: openai/gpt-5.2, matching target name 'GPT-5.2 (xhigh)' and provider hint 'OpenAI'.",
+        "target": "openrouter",
+        "metadata": {
+          "id": "openai/gpt-5.2",
+          "slug": "openai/gpt-5.2-20251211",
+          "name": "OpenAI: GPT-5.2",
+          "vendor": "OpenAI",
+          "base_name": "GPT-5.2",
+          "created": 1765389775,
+          "created_at": "2025-12-10T18:02:55Z",
+          "description": "GPT-5.2 is the latest frontier-grade model in the GPT-5 series, offering stronger agentic and long context perfomance compared to GPT-5.1. It uses adaptive reasoning to allocate computation dynamically, responding quickly to simple queries while spending more depth on complex tasks.\n\nBuilt for broad task coverage, GPT-5.2 delivers consistent gains across math, coding, sciende, and tool calling workloads, with more coherent long-form answers and improved tool-use reliability.",
+          "context_length": 400000,
+          "hugging_face_id": "",
+          "architecture": {
+            "modality": "text+image+file->text",
+            "input_modalities": [
+              "file",
+              "image",
+              "text"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "tokenizer": "GPT",
+            "instruct_type": null
+          },
+          "pricing": {
+            "prompt": "0.00000175",
+            "completion": "0.000014",
+            "web_search": "0.01",
+            "input_cache_read": "0.000000175"
+          },
+          "top_provider": {
+            "context_length": 400000,
+            "max_completion_tokens": 128000,
+            "is_moderated": true
+          },
+          "per_request_limits": null,
+          "supported_parameters": [
+            "include_reasoning",
+            "max_tokens",
+            "reasoning",
+            "response_format",
+            "seed",
+            "structured_outputs",
+            "tool_choice",
+            "tools"
+          ],
+          "default_parameters": {
+            "temperature": null,
+            "top_p": null,
+            "frequency_penalty": null
+          },
+          "tags": [],
+          "display_url": "https://openrouter.ai/models/openai/gpt-5.2-20251211"
+        }
+      },
+      "persisted_at": "2026-02-21T09:18:53.232702"
+    },
+    "saved_at": "2026-02-21T09:18:53.232711"
+  },
+  "artificial-analysis::openrouter::glm-5 (reasoning)::z ai": {
+    "result": {
+      "match": {
+        "id": "z-ai/glm-5",
+        "confidence": 1.0,
+        "reason": "Exact match found for 'GLM-5' from provider 'Z.ai'.",
+        "target": "openrouter",
+        "metadata": {
+          "id": "z-ai/glm-5",
+          "slug": "z-ai/glm-5-20260211",
+          "name": "Z.ai: GLM 5",
+          "vendor": "Z.ai",
+          "base_name": "GLM 5",
+          "created": 1770829182,
+          "created_at": "2026-02-11T16:59:42Z",
+          "description": "GLM-5 is Z.ai’s flagship open-source foundation model engineered for complex systems design and long-horizon agent workflows. Built for expert developers, it delivers production-grade performance on large-scale programming tasks, rivaling leading closed-source models. With advanced agentic planning, deep backend reasoning, and iterative self-correction, GLM-5 moves beyond code generation to full-system construction and autonomous execution.",
+          "context_length": 204800,
+          "hugging_face_id": "zai-org/GLM-5",
+          "architecture": {
+            "modality": "text->text",
+            "input_modalities": [
+              "text"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "tokenizer": "Other",
+            "instruct_type": null
+          },
+          "pricing": {
+            "prompt": "0.0000003",
+            "completion": "0.00000255"
+          },
+          "top_provider": {
+            "context_length": 204800,
+            "max_completion_tokens": 131072,
+            "is_moderated": false
+          },
+          "per_request_limits": null,
+          "supported_parameters": [
+            "frequency_penalty",
+            "include_reasoning",
+            "logit_bias",
+            "logprobs",
+            "max_tokens",
+            "min_p",
+            "presence_penalty",
+            "reasoning",
+            "repetition_penalty",
+            "response_format",
+            "seed",
+            "stop",
+            "structured_outputs",
+            "temperature",
+            "tool_choice",
+            "tools",
+            "top_k",
+            "top_logprobs",
+            "top_p"
+          ],
+          "default_parameters": {
+            "temperature": 1,
+            "top_p": 0.95,
+            "frequency_penalty": null
+          },
+          "tags": [],
+          "display_url": "https://openrouter.ai/models/z-ai/glm-5-20260211"
+        }
+      },
+      "persisted_at": "2026-02-21T09:18:58.132315"
+    },
+    "saved_at": "2026-02-21T09:18:58.132334"
+  },
+  "artificial-analysis::openrouter::gpt-5.2 codex (xhigh)::openai": {
+    "result": {
+      "match": {
+        "id": "openai/gpt-5.2-codex",
+        "confidence": 1.0,
+        "reason": "Exact match found for target model name 'GPT-5.2 Codex (xhigh)' with provider 'OpenAI'.",
+        "target": "openrouter",
+        "metadata": {
+          "id": "openai/gpt-5.2-codex",
+          "slug": "openai/gpt-5.2-codex-20260114",
+          "name": "OpenAI: GPT-5.2-Codex",
+          "vendor": "OpenAI",
+          "base_name": "GPT-5.2-Codex",
+          "created": 1768409315,
+          "created_at": "2026-01-14T16:48:35Z",
+          "description": "GPT-5.2-Codex is an upgraded version of GPT-5.1-Codex optimized for software engineering and coding workflows. It is designed for both interactive development sessions and long, independent execution of complex engineering tasks. The model supports building projects from scratch, feature development, debugging, large-scale refactoring, and code review. Compared to GPT-5.1-Codex, 5.2-Codex is more steerable, adheres closely to developer instructions, and produces cleaner, higher-quality code outputs. Reasoning effort can be adjusted with the `reasoning.effort` parameter. Read the [docs here](https://openrouter.ai/docs/use-cases/reasoning-tokens#reasoning-effort-level)\n\nCodex integrates into developer environments including the CLI, IDE extensions, GitHub, and cloud tasks. It adapts reasoning effort dynamically—providing fast responses for small tasks while sustaining extended multi-hour runs for large projects. The model is trained to perform structured code reviews, catching critical flaws by reasoning over dependencies and validating behavior against tests. It also supports multimodal inputs such as images or screenshots for UI development and integrates tool use for search, dependency installation, and environment setup. Codex is intended specifically for agentic coding applications.",
+          "context_length": 400000,
+          "hugging_face_id": "",
+          "architecture": {
+            "modality": "text+image->text",
+            "input_modalities": [
+              "text",
+              "image"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "tokenizer": "GPT",
+            "instruct_type": null
+          },
+          "pricing": {
+            "prompt": "0.00000175",
+            "completion": "0.000014",
+            "web_search": "0.01",
+            "input_cache_read": "0.000000175"
+          },
+          "top_provider": {
+            "context_length": 400000,
+            "max_completion_tokens": 128000,
+            "is_moderated": true
+          },
+          "per_request_limits": null,
+          "supported_parameters": [
+            "include_reasoning",
+            "max_tokens",
+            "reasoning",
+            "response_format",
+            "seed",
+            "structured_outputs",
+            "tool_choice",
+            "tools"
+          ],
+          "default_parameters": {
+            "temperature": null,
+            "top_p": null,
+            "frequency_penalty": null
+          },
+          "tags": [],
+          "display_url": "https://openrouter.ai/models/openai/gpt-5.2-codex-20260114"
+        }
+      },
+      "persisted_at": "2026-02-21T09:19:00.010163"
+    },
+    "saved_at": "2026-02-21T09:19:00.010174"
+  },
+  "artificial-analysis::openrouter::gemini 3 pro preview (high)::google": {
+    "result": {
+      "match": {
+        "id": "google/gemini-3.1-pro-preview",
+        "confidence": 0.9,
+        "reason": "Target name 'Gemini 3 Pro Preview (high)' is a very close match to 'google/gemini-3.1-pro-preview' and the provider hint matches Google.",
+        "target": "openrouter",
+        "metadata": {
+          "id": "google/gemini-3.1-pro-preview",
+          "slug": "google/gemini-3.1-pro-preview-20260219",
+          "name": "Google: Gemini 3.1 Pro Preview",
+          "vendor": "Google",
+          "base_name": "Gemini 3.1 Pro Preview",
+          "created": 1771509627,
+          "created_at": "2026-02-19T14:00:27Z",
+          "description": "Gemini 3.1 Pro Preview is Google’s frontier reasoning model, delivering enhanced software engineering performance, improved agentic reliability, and more efficient token usage across complex workflows. Building on the multimodal foundation of the Gemini 3 series, it combines high-precision reasoning across text, image, video, audio, and code with a 1M-token context window. Reasoning Details must be preserved when using multi-turn tool calling, see our docs here: https://openrouter.ai/docs/use-cases/reasoning-tokens#preserving-reasoning. The 3.1 update introduces measurable gains in SWE benchmarks and real-world coding environments, along with stronger autonomous task execution in structured domains such as finance and spreadsheet-based workflows.\n\nDesigned for advanced development and agentic systems, Gemini 3.1 Pro Preview improves long-horizon stability and tool orchestration while increasing token efficiency. It introduces a new medium thinking level to better balance cost, speed, and performance. The model excels in agentic coding, structured planning, multimodal analysis, and workflow automation, making it well-suited for autonomous agents, financial modeling, spreadsheet automation, and high-context enterprise tasks.",
+          "context_length": 1048576,
+          "hugging_face_id": "",
+          "architecture": {
+            "modality": "text+image+file+audio+video->text",
+            "input_modalities": [
+              "audio",
+              "file",
+              "image",
+              "text",
+              "video"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "tokenizer": "Gemini",
+            "instruct_type": null
+          },
+          "pricing": {
+            "prompt": "0.000002",
+            "completion": "0.000012",
+            "image": "0.000002",
+            "audio": "0.000002",
+            "internal_reasoning": "0.000012",
+            "input_cache_read": "0.0000002",
+            "input_cache_write": "0.000000375"
+          },
+          "top_provider": {
+            "context_length": 1048576,
+            "max_completion_tokens": 65536,
+            "is_moderated": false
+          },
+          "per_request_limits": null,
+          "supported_parameters": [
+            "include_reasoning",
+            "max_tokens",
+            "reasoning",
+            "response_format",
+            "seed",
+            "stop",
+            "structured_outputs",
+            "temperature",
+            "tool_choice",
+            "tools",
+            "top_p"
+          ],
+          "default_parameters": {
+            "temperature": null,
+            "top_p": null,
+            "frequency_penalty": null
+          },
+          "tags": [],
+          "display_url": "https://openrouter.ai/models/google/gemini-3.1-pro-preview-20260219"
+        }
+      },
+      "persisted_at": "2026-02-21T09:19:02.498884"
+    },
+    "saved_at": "2026-02-21T09:19:02.498981"
+  },
+  "artificial-analysis::openrouter::gpt-5.1 (high)::openai": {
+    "result": {
+      "match": {
+        "id": "openai/gpt-5.1",
+        "confidence": 1.0,
+        "reason": "Exact match found for target model name 'GPT-5.1' from provider 'OpenAI'.",
+        "target": "openrouter",
+        "metadata": {
+          "id": "openai/gpt-5.1",
+          "slug": "openai/gpt-5.1-20251113",
+          "name": "OpenAI: GPT-5.1",
+          "vendor": "OpenAI",
+          "base_name": "GPT-5.1",
+          "created": 1763060305,
+          "created_at": "2025-11-13T18:58:25Z",
+          "description": "GPT-5.1 is the latest frontier-grade model in the GPT-5 series, offering stronger general-purpose reasoning, improved instruction adherence, and a more natural conversational style compared to GPT-5. It uses adaptive reasoning to allocate computation dynamically, responding quickly to simple queries while spending more depth on complex tasks. The model produces clearer, more grounded explanations with reduced jargon, making it easier to follow even on technical or multi-step problems.\n\nBuilt for broad task coverage, GPT-5.1 delivers consistent gains across math, coding, and structured analysis workloads, with more coherent long-form answers and improved tool-use reliability. It also features refined conversational alignment, enabling warmer, more intuitive responses without compromising precision. GPT-5.1 serves as the primary full-capability successor to GPT-5",
+          "context_length": 400000,
+          "hugging_face_id": "",
+          "architecture": {
+            "modality": "text+image+file->text",
+            "input_modalities": [
+              "image",
+              "text",
+              "file"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "tokenizer": "GPT",
+            "instruct_type": null
+          },
+          "pricing": {
+            "prompt": "0.00000125",
+            "completion": "0.00001",
+            "web_search": "0.01",
+            "input_cache_read": "0.000000125"
+          },
+          "top_provider": {
+            "context_length": 400000,
+            "max_completion_tokens": 128000,
+            "is_moderated": true
+          },
+          "per_request_limits": null,
+          "supported_parameters": [
+            "include_reasoning",
+            "max_tokens",
+            "reasoning",
+            "response_format",
+            "seed",
+            "structured_outputs",
+            "tool_choice",
+            "tools"
+          ],
+          "default_parameters": {
+            "temperature": null,
+            "top_p": null,
+            "frequency_penalty": null
+          },
+          "tags": [],
+          "display_url": "https://openrouter.ai/models/openai/gpt-5.1-20251113"
+        }
+      },
+      "persisted_at": "2026-02-21T09:19:05.997725"
+    },
+    "saved_at": "2026-02-21T09:19:05.997735"
+  },
+  "artificial-analysis::openrouter::gemini 3 flash preview (reasoning)::google": {
+    "result": {
+      "match": {
+        "id": "google/gemini-3-flash-preview",
+        "confidence": 1.0,
+        "reason": "Exact match found in the catalogue for 'Gemini 3 Flash Preview' and provider is Google.",
+        "target": "openrouter",
+        "metadata": {
+          "id": "google/gemini-3-flash-preview",
+          "slug": "google/gemini-3-flash-preview-20251217",
+          "name": "Google: Gemini 3 Flash Preview",
+          "vendor": "Google",
+          "base_name": "Gemini 3 Flash Preview",
+          "created": 1765987078,
+          "created_at": "2025-12-17T15:57:58Z",
+          "description": "Gemini 3 Flash Preview is a high speed, high value thinking model designed for agentic workflows, multi turn chat, and coding assistance. It delivers near Pro level reasoning and tool use performance with substantially lower latency than larger Gemini variants, making it well suited for interactive development, long running agent loops, and collaborative coding tasks. Compared to Gemini 2.5 Flash, it provides broad quality improvements across reasoning, multimodal understanding, and reliability.\n\nThe model supports a 1M token context window and multimodal inputs including text, images, audio, video, and PDFs, with text output. It includes configurable reasoning via thinking levels (minimal, low, medium, high), structured output, tool use, and automatic context caching. Gemini 3 Flash Preview is optimized for users who want strong reasoning and agentic behavior without the cost or latency of full scale frontier models.",
+          "context_length": 1048576,
+          "hugging_face_id": "",
+          "architecture": {
+            "modality": "text+image+file+audio+video->text",
+            "input_modalities": [
+              "text",
+              "image",
+              "file",
+              "audio",
+              "video"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "tokenizer": "Gemini",
+            "instruct_type": null
+          },
+          "pricing": {
+            "prompt": "0.0000005",
+            "completion": "0.000003",
+            "image": "0.0000005",
+            "audio": "0.000001",
+            "internal_reasoning": "0.000003",
+            "input_cache_read": "0.00000005",
+            "input_cache_write": "0.00000008333333333333334"
+          },
+          "top_provider": {
+            "context_length": 1048576,
+            "max_completion_tokens": 65535,
+            "is_moderated": false
+          },
+          "per_request_limits": null,
+          "supported_parameters": [
+            "include_reasoning",
+            "max_tokens",
+            "reasoning",
+            "response_format",
+            "seed",
+            "stop",
+            "structured_outputs",
+            "temperature",
+            "tool_choice",
+            "tools",
+            "top_p"
+          ],
+          "default_parameters": {
+            "temperature": null,
+            "top_p": null,
+            "frequency_penalty": null
+          },
+          "tags": [],
+          "display_url": "https://openrouter.ai/models/google/gemini-3-flash-preview-20251217"
+        }
+      },
+      "persisted_at": "2026-02-21T09:19:08.966357"
+    },
+    "saved_at": "2026-02-21T09:19:08.966409"
+  },
+  "artificial-analysis::openrouter::claude opus 4.6 (non-reasoning, high effort)::anthropic": {
+    "result": {
+      "match": {
+        "id": "anthropic/claude-opus-4.6",
+        "confidence": 1.0,
+        "reason": "Exact match found in catalogue for Claude Opus 4.6 from Anthropic.",
+        "target": "openrouter",
+        "metadata": {
+          "id": "anthropic/claude-opus-4.6",
+          "slug": "anthropic/claude-4.6-opus-20260205",
+          "name": "Anthropic: Claude Opus 4.6",
+          "vendor": "Anthropic",
+          "base_name": "Claude Opus 4.6",
+          "created": 1770219050,
+          "created_at": "2026-02-04T15:30:50Z",
+          "description": "Opus 4.6 is Anthropic’s strongest model for coding and long-running professional tasks. It is built for agents that operate across entire workflows rather than single prompts, making it especially effective for large codebases, complex refactors, and multi-step debugging that unfolds over time. The model shows deeper contextual understanding, stronger problem decomposition, and greater reliability on hard engineering tasks than prior generations.\n\nBeyond coding, Opus 4.6 excels at sustained knowledge work. It produces near-production-ready documents, plans, and analyses in a single pass, and maintains coherence across very long outputs and extended sessions. This makes it a strong default for tasks that require persistence, judgment, and follow-through, such as technical design, migration planning, and end-to-end project execution.\n\nFor users upgrading from earlier Opus versions, see our [official migration guide here](https://openrouter.ai/docs/guides/guides/model-migrations/claude-4-6-opus)\n",
+          "context_length": 1000000,
+          "hugging_face_id": "",
+          "architecture": {
+            "modality": "text+image->text",
+            "input_modalities": [
+              "text",
+              "image"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "tokenizer": "Claude",
+            "instruct_type": null
+          },
+          "pricing": {
+            "prompt": "0.000005",
+            "completion": "0.000025",
+            "web_search": "0.01",
+            "input_cache_read": "0.0000005",
+            "input_cache_write": "0.00000625"
+          },
+          "top_provider": {
+            "context_length": 1000000,
+            "max_completion_tokens": 128000,
+            "is_moderated": true
+          },
+          "per_request_limits": null,
+          "supported_parameters": [
+            "include_reasoning",
+            "max_tokens",
+            "reasoning",
+            "response_format",
+            "stop",
+            "structured_outputs",
+            "temperature",
+            "tool_choice",
+            "tools",
+            "top_k",
+            "top_p",
+            "verbosity"
+          ],
+          "default_parameters": {
+            "temperature": null,
+            "top_p": null,
+            "frequency_penalty": null
+          },
+          "tags": [],
+          "display_url": "https://openrouter.ai/models/anthropic/claude-4.6-opus-20260205"
+        }
+      },
+      "persisted_at": "2026-02-21T09:19:11.400532"
+    },
+    "saved_at": "2026-02-21T09:19:11.400547"
+  },
+  "artificial-analysis::openrouter::gpt-5 (high)::openai": {
+    "result": {
+      "match": null,
+      "decision": {
+        "match": "",
+        "confidence": 0.0,
+        "reason": "Target model 'GPT-5 (high)' does not have a clear, high-confidence match in the catalogue. OpenAI models listed are GPT-5.2, GPT-5.1, GPT-5, and various GPT-4/3.5 versions, but none explicitly labeled as 'GPT-5 (high)'."
+      },
+      "persisted_at": "2026-02-21T09:19:14.852209"
+    },
+    "saved_at": "2026-02-21T09:19:14.852222"
+  }
+}

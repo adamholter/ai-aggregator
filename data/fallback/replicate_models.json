@@ -1,0 +1,28 @@
+[
+  {
+    "id": "sample-labs/sample-video-generator",
+    "name": "Sample Video Generator",
+    "owner": "sample-labs",
+    "description": "Fallback sample entry representing a Replicate model when the live catalogue cannot be fetched.",
+    "url": "https://replicate.com/sample-labs/sample-video-generator",
+    "github_url": "https://github.com/sample-labs/sample-video-generator",
+    "paper_url": "",
+    "created_at": "2024-09-12T09:30:00Z",
+    "run_count": 125,
+    "visibility": "public",
+    "category": "video-generation"
+  },
+  {
+    "id": "sample-labs/sample-audio-synth",
+    "name": "Sample Audio Synth",
+    "owner": "sample-labs",
+    "description": "Synthesises short musical clips from text prompts. Provided as offline fallback metadata.",
+    "url": "https://replicate.com/sample-labs/sample-audio-synth",
+    "github_url": "https://github.com/sample-labs/sample-audio-synth",
+    "paper_url": "",
+    "created_at": "2024-09-11T15:05:00Z",
+    "run_count": 64,
+    "visibility": "public",
+    "category": "audio-generation"
+  }
+]

@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Life Agent Sandbox</title>
+<link rel="stylesheet" href="/static/life-agent.css">
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <div>
+      <h1>Life Agent Sandbox</h1>
+      <p id="rule-summary">B3 / S23</p>
+    </div>
+    <div class="top-actions">
+      <button id="play-btn" class="primary">Play</button>
+      <button id="step-btn">Step</button>
+      <button id="clear-btn">Clear</button>
+      <button id="random-btn">Random</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="sim-pane">
+      <div class="board-wrap">
+        <canvas id="life-canvas" width="960" height="720" aria-label="Interactive Game of Life grid"></canvas>
+      </div>
+      <div class="statusbar">
+        <span>Generation <strong id="generation">0</strong></span>
+        <span>Living <strong id="living-count">0</strong></span>
+        <span>Rule step <strong id="rule-step">A</strong></span>
+        <span id="agent-status">Agent idle</span>
+      </div>
+    </section>
+
+    <aside class="side">
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Simulation</h2>
+          <button id="undo-btn" title="Undo last applied agent patch">Undo</button>
+        </div>
+        <div class="control-grid">
+          <label>Rows <input id="rows-input" type="number" min="12" max="120" value="48"></label>
+          <label>Cols <input id="cols-input" type="number" min="12" max="160" value="64"></label>
+          <label>Speed <input id="speed-input" type="range" min="30" max="1000" value="120"></label>
+          <label>Density <input id="density-input" type="range" min="0" max="100" value="28"></label>
+        </div>
+        <label class="check"><input id="wrap-input" type="checkbox" checked> Wrap edges</label>
+        <div class="rule-editor">
+          <label>Birth counts <input id="birth-input" value="3" spellcheck="false"></label>
+          <label>Survival counts <input id="survive-input" value="2,3" spellcheck="false"></label>
+          <button id="apply-rule-btn">Apply rule</button>
+        </div>
+      </div>
+
+      <div class="panel agent-panel">
+        <div class="panel-head">
+          <h2>Agent</h2>
+          <select id="model-select" title="OpenRouter model">
+            <option value="google/gemma-3-27b-it">Gemma 3 27B</option>
+            <option value="google/gemini-2.5-flash">Gemini 2.5 Flash</option>
+            <option value="anthropic/claude-sonnet-4-5">Claude Sonnet 4.5</option>
+            <option value="~openai/gpt-latest">OpenAI latest</option>
+          </select>
+        </div>
+        <textarea id="prompt-input" rows="5" placeholder="Ask for a rule, pattern, or meta simulation..."></textarea>
+        <div class="prompt-row">
+          <button data-prompt="Make spawning happen with only two neighbors and keep normal survival unless you think it should change.">B2 variant</button>
+          <button data-prompt="Alternate HighLife and Seeds on every time step.">Alternating</button>
+          <button data-prompt="Create a rule where older cells become harder to keep alive and the center behaves differently every fifth generation.">Meta rule</button>
+        </div>
+        <button id="agent-btn" class="primary wide">Ask agent</button>
+        <div id="proposal" class="proposal empty">Agent proposals will appear here before they are applied.</div>
+      </div>
+    </aside>
+  </main>
+</div>
+<script src="/static/life-agent.js"></script>
+</body>
+</html>

@@ -1,0 +1,36 @@
+[
+  {
+    "id": "fal/sample-video-diffusion",
+    "title": "Sample Video Diffusion",
+    "shortDescription": "Fallback entry providing sample fal.ai release metadata when the live API is unavailable.",
+    "description": "Generates short looping video clips from text prompts using a distilled diffusion architecture.",
+    "category": "video-generation",
+    "tags": ["video", "diffusion", "fallback"],
+    "date": "2024-09-12T10:00:00Z",
+    "modelUrl": "https://fal.ai/models/sample-video-diffusion",
+    "thumbnailUrl": "",
+    "group": {
+      "name": "fal.ai"
+    },
+    "pricing": "Requires 20 credits per render.",
+    "creditsRequired": 20,
+    "highlighted": false
+  },
+  {
+    "id": "fal/sample-audio-vocoder",
+    "title": "Sample Audio Vocoder",
+    "shortDescription": "Fallback sample describing an audio-focused fal.ai deployment.",
+    "description": "Produces high-fidelity speech from phoneme sequences using a lightweight neural vocoder.",
+    "category": "audio-generation",
+    "tags": ["audio", "speech", "fallback"],
+    "date": "2024-09-11T18:30:00Z",
+    "modelUrl": "https://fal.ai/models/sample-audio-vocoder",
+    "thumbnailUrl": "",
+    "group": {
+      "name": "fal.ai"
+    },
+    "pricing": "Requires 12 credits per conversion.",
+    "creditsRequired": 12,
+    "highlighted": false
+  }
+]

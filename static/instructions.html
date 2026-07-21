@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Instructions - AI Model Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .instructions-container {
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+
+        .instructions-section {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 24px;
+        }
+
+        .instructions-section h2 {
+            margin-top: 0;
+            color: var(--text-primary);
+            font-size: 1.5rem;
+            margin-bottom: 16px;
+        }
+
+        .instructions-section h3 {
+            color: var(--text-primary);
+            font-size: 1.1rem;
+            margin-top: 24px;
+            margin-bottom: 8px;
+        }
+
+        .instructions-content p {
+            color: var(--text-secondary);
+            line-height: 1.6;
+            margin-bottom: 12px;
+        }
+
+        .feature-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .feature-item {
+            margin-bottom: 16px;
+            padding-left: 24px;
+            position: relative;
+        }
+
+        .feature-item::before {
+            content: "•";
+            color: var(--button-bg);
+            position: absolute;
+            left: 0;
+            font-weight: bold;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .back-link:hover {
+            color: var(--text-primary);
+        }
+
+        .shortcut {
+            background: var(--bg-body);
+            padding: 2px 6px;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+            font-family: monospace;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="instructions-container">
+        <a href="/" class="back-link">← Back to Dashboard</a>
+
+        <header style="margin-bottom: 40px;">
+            <h1>Dashboard Guide</h1>
+            <p style="color: var(--text-secondary); font-size: 1.1rem;">How to get the most out of the AI Model
+                Dashboard.</p>
+        </header>
+
+        <section class="instructions-section">
+            <h2>🔍 Global Search</h2>
+            <div class="instructions-content">
+                <p>The global search bar in the header is your gateway to the entire ecosystem. It allows you to find
+                    models across all categories (LLMs, Image, Video, Voice) instantly.</p>
+                <ul class="feature-list">
+                    <li class="feature-item">
+                        <strong>Smart Prefetching:</strong> Start typing, and the dashboard automatically connects to
+                        external catalogs (Fal.ai, Replicate, Testing Catalog) to find fresh results.
+                    </li>
+                    <li class="feature-item">
+                        <strong>Deep Linking:</strong> Clicking a result instantly navigates to the correct tab and
+                        scrolls the item into view.
+                    </li>
+                </ul>
+            </div>
+        </section>
+
+        <section class="instructions-section">
+            <h2>⚖️ Compare System</h2>
+            <div class="instructions-content">
+                <p>Compare models side-by-side to make informed decisions. This feature works best when comparing models
+                    within the same category (e.g., LLM vs LLM), but supports cross-category comparison for pricing and
+                    speed attributes.</p>
+                <h3>How to use:</h3>
+                <ol style="color: var(--text-secondary); line-height: 1.6; padding-left: 20px;">
+                    <li>Click the <strong>Compare</strong> button on any model card.</li>
+                    <li>The <strong>Compare Tray</strong> will appear at the bottom of the screen.</li>
+                    <li>Add up to 5 models.</li>
+                    <li>Click <strong>Open Comparison</strong> on the tray to view the detailed table.</li>
+                </ol>
+            </div>
+        </section>
+
+        <section class="instructions-section">
+            <h2>💾 Saved Views</h2>
+            <div class="instructions-content">
+                <p>Don't lose your filter context. You can save specific combinations of filters for quick access later.
+                </p>
+                <h3>Workflow:</h3>
+                <ul class="feature-list">
+                    <li class="feature-item">
+                        Set your filters (e.g., "OpenRouter models provided by Microsoft").
+                    </li>
+                    <li class="feature-item">
+                        Click <strong>Save view</strong> in the section header.
+                    </li>
+                    <li class="feature-item">
+                        Name your view (e.g., "Microsoft Models").
+                    </li>
+                    <li class="feature-item">
+                        Restore it anytime from the <strong>Views...</strong> dropdown.
+                    </li>
+                </ul>
+            </div>
+        </section>
+
+        <section class="instructions-section">
+            <h2>⚡ Power Features</h2>
+            <div class="instructions-content">
+                <h3>Monitor Tab</h3>
+                <p>A curated feed of updates from specific high-signal sources (Discord, X). Good for catching breaking
+                    news before it hits the main feeds.</p>
+
+                <h3>Hype Tab</h3>
+                <p>Tracks "trending" repos and models based on community engagement (stars, forks, mentions). Use the
+                    toggle in the <strong>Latest</strong> tab to blend Hype data into your daily feed.</p>
+
+                <h3>Agent Mode</h3>
+                <p>The <strong>Agent</strong> tab accepts natural language ("Show me cheap coding models") and attempts
+                    to control the dashboard to show you the answer.</p>
+            </div>
+        </section>
+    </div>
+    <script>
+        // Theme initialization
+        const theme = localStorage.getItem('dashboard-theme') || 'light';
+        document.documentElement.setAttribute('data-theme', theme);
+    </script>
+</body>
+
+</html>

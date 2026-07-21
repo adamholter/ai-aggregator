@@ -1,0 +1,131 @@
+{
+  "stories": [
+    {
+      "id": "PAGE-ABOUT-001",
+      "status": "Pass",
+      "result": "About content rendered; theme changed from light to dark and persisted after reload.",
+      "errors": []
+    },
+    {
+      "id": "PAGE-DOCS-001",
+      "status": "Pass",
+      "result": "API docs and LLM reference rendered; Copy LLM.md wrote 5306 characters of documentation.",
+      "errors": []
+    },
+    {
+      "id": "PAGE-CARD-001",
+      "status": "Pass",
+      "result": "Draw, inspect, play/run flow controls changed game state; Reset restored the 22-card starting state.",
+      "errors": []
+    },
+    {
+      "id": "PAGE-CORK-001",
+      "status": "Pass",
+      "result": "Pinned and connected two evidence items, observed linked status, and Reset cleared the board.",
+      "errors": []
+    },
+    {
+      "id": "PAGE-LIFE-001",
+      "status": "Pass",
+      "result": "Step advanced generation 0->1; play/pause, randomize, undo, and clear all updated simulation state; clear left 0 live cells.",
+      "errors": []
+    },
+    {
+      "id": "PAGE-LIFE-002",
+      "status": "Pass",
+      "result": "Mocked Agent received free text and returned a visible HighLife proposal; Apply changed birth rule to 3,6; status was Agent proposal ready.",
+      "errors": []
+    },
+    {
+      "id": "PAGE-AGENT-001",
+      "status": "Pass",
+      "result": "Model/settings/key/deeper controls submitted a mocked streaming chat; final response rendered and New conversation reset state.",
+      "errors": []
+    },
+    {
+      "id": "PAGE-AGENT-002",
+      "status": "Pass",
+      "result": "Mocked tool trace opened the activity sidebar with search_models details; referenced model card opened its model modal.",
+      "errors": []
+    },
+    {
+      "id": "PAGE-AGENT-003",
+      "status": "Pass",
+      "result": "Mocked HTML artifact opened in sandboxed preview, toggled to source, copied exact content, initiated .html download, and closed cleanly.",
+      "errors": []
+    },
+    {
+      "id": "PAGE-AGENTVAR-001",
+      "status": "Pass",
+      "result": "Alternative Agent UI loaded with 398 visible characters and no page/console errors.",
+      "errors": []
+    },
+    {
+      "id": "PAGE-AREN-001",
+      "status": "Pass",
+      "result": "Current catalog search selected 2 models; rendered 2 charts and 2 comparison rows; removal left 1 model.",
+      "errors": []
+    },
+    {
+      "id": "PAGE-AREN-002",
+      "status": "Pass",
+      "result": "Copy Markdown produced a populated comparison table (181 chars; Markdown copied to clipboard!); CSV download initiated as model-comparison.csv.",
+      "errors": []
+    },
+    {
+      "id": "PAGE-AREN-003",
+      "status": "Pass",
+      "result": "Mocked grounded AI question included both selected models and the user question; assistant response rendered visibly.",
+      "errors": []
+    },
+    {
+      "id": "PAGE-INSPECT-001",
+      "status": "Pass",
+      "result": "Quick/heavy mode controls and system/tools/skills configuration views rendered their matching mocked configuration.",
+      "errors": []
+    },
+    {
+      "id": "PAGE-INSPECT-002",
+      "status": "Pass",
+      "result": "Selected search_models, edited JSON arguments, ran mocked isolated tool endpoint, and displayed a successful result.",
+      "errors": []
+    },
+    {
+      "id": "PAGE-DEBUG-001",
+      "status": "Pass",
+      "result": "Mocked debug SSE run rendered model start, inference/tool activity, timing context, and inspector system prompt.",
+      "errors": []
+    },
+    {
+      "id": "PAGE-TIME-001",
+      "status": "Pass",
+      "result": "Timeline rendered substantial event content; search and filter controls changed the visible visualization/content.",
+      "errors": []
+    },
+    {
+      "id": "PAGE-FRONT-001",
+      "status": "Pass",
+      "result": "Created/switched/renamed a custom index to QA Index; normalize reported 100%, clear reported 0%.",
+      "errors": []
+    },
+    {
+      "id": "PAGE-FRONT-002",
+      "status": "Pass",
+      "result": "Edited the page title, applied it, switched to Index view, and verified the rendered page immediately showed the saved value.",
+      "errors": []
+    },
+    {
+      "id": "PAGE-FRONT-003",
+      "status": "Pass",
+      "result": "Rendered 14 ranking rows and 2 chart surfaces; diagnostics/disqualified content was visible after toggle.",
+      "errors": []
+    },
+    {
+      "id": "PAGE-FRONT-004",
+      "status": "Pass",
+      "result": "Copied current JSON config (832 chars), copied encoded public index URL, refreshed data, and retained 14 rankings.",
+      "errors": []
+    }
+  ],
+  "discovered_errors": []
+}

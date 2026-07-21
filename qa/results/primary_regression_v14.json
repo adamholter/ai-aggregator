@@ -1,0 +1,20 @@
+{
+  "tested_at": "2026-07-10T19:21:00Z",
+  "target": "https://ai-model-analysis-dashboard.adamholter.chatgpt.site/",
+  "browser": "isolated headless Chromium (Playwright); production v14; one explicitly mocked HTTP 503 upstream response for deterministic error-copy verification",
+  "stories": [
+    {
+      "id": "DASH-SEARCH-002",
+      "status": "Pass",
+      "result": "An unmatched global query offered Ask Agent, activated agent-exp, encoded query=zzq-v14-handoff-1437&submit=0 into the Agent iframe URL, and populated the Agent input with the exact original query.",
+      "errors": []
+    },
+    {
+      "id": "DASH-AGENT-COPY-001",
+      "status": "Pass",
+      "result": "Normal Agent UI contains no visible Demo, sample, or AI Dashboard has moved copy. With /api/llms deterministically mocked to HTTP 503, the Agent honestly displayed The live request failed, No fabricated result was substituted, and Live LLM leaderboard unavailable: HTTP 503, also with no Demo or sample wording.",
+      "errors": []
+    }
+  ],
+  "discovered_errors": []
+}

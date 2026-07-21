@@ -1,0 +1,103 @@
+{
+  "meta": {
+    "leaderboard": "text",
+    "source_url": "https://arena.ai/leaderboard/text",
+    "fetched_at": "2026-07-20T05:20:57.476578+00:00",
+    "last_updated": "Jul 16, 2026",
+    "model_count": 10
+  },
+  "models": [
+    {
+      "rank": 1,
+      "model": "claude-fable-5",
+      "vendor": "Anthropic",
+      "license": "proprietary",
+      "score": 1507,
+      "ci": 7,
+      "votes": 8819
+    },
+    {
+      "rank": 2,
+      "model": "claude-opus-4-6-thinking",
+      "vendor": "Anthropic",
+      "license": "proprietary",
+      "score": 1504,
+      "ci": 4,
+      "votes": 61003
+    },
+    {
+      "rank": 3,
+      "model": "claude-opus-4-7-thinking",
+      "vendor": "Anthropic",
+      "license": "proprietary",
+      "score": 1503,
+      "ci": 4,
+      "votes": 48292
+    },
+    {
+      "rank": 4,
+      "model": "claude-opus-4-6",
+      "vendor": "Anthropic",
+      "license": "proprietary",
+      "score": 1498,
+      "ci": 4,
+      "votes": 64747
+    },
+    {
+      "rank": 5,
+      "model": "claude-opus-4-7",
+      "vendor": "Anthropic",
+      "license": "proprietary",
+      "score": 1494,
+      "ci": 4,
+      "votes": 49467
+    },
+    {
+      "rank": 6,
+      "model": "muse-spark-1.1",
+      "vendor": "Meta",
+      "license": "proprietary",
+      "score": 1493,
+      "ci": 8,
+      "votes": 5729
+    },
+    {
+      "rank": 7,
+      "model": "muse-spark",
+      "vendor": "Meta",
+      "license": "proprietary",
+      "score": 1487,
+      "ci": 6,
+      "votes": 13572
+    },
+    {
+      "rank": 8,
+      "model": "gemini-3-pro",
+      "vendor": "Google",
+      "license": "proprietary",
+      "score": 1486,
+      "ci": 4,
+      "votes": 41290
+    },
+    {
+      "rank": 9,
+      "model": "kimi-k3",
+      "vendor": "Moonshot",
+      "license": "proprietary",
+      "score": 1486,
+      "ci": 11,
+      "votes": 3024
+    },
+    {
+      "rank": 10,
+      "model": "gpt-5.6-sol-xhigh",
+      "vendor": "OpenAI",
+      "license": "proprietary",
+      "score": 1486,
+      "ci": 9,
+      "votes": 4095
+    }
+  ],
+  "artifact_url": "https://api.wulong.dev/arena-ai-leaderboards/v1/leaderboard?name=text",
+  "collected_at": "2026-07-20T12:34:21.692Z"
+}

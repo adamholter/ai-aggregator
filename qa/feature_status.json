@@ -1,0 +1,2135 @@
+[
+  {
+    "id": "AUDIT-LIVE-001",
+    "scope": "Hosted Sites delivery",
+    "route": "/dashboard",
+    "feature": "JavaScript integrity",
+    "user_story": "As a user, I can load the hosted dashboard without uncaught JavaScript errors.",
+    "expected_behavior": "A fresh load emits no parse, redeclaration, or runtime errors.",
+    "evidence": [
+      "chatgpt-site/scripts/build-legacy.mjs",
+      "chatgpt-site/tests/rendered-html.test.mjs"
+    ],
+    "preconditions": "Hosted page available",
+    "baseline_status": "Fail",
+    "baseline_result": "Four uncaught errors including Invalid or unexpected token and repeated blogPrefetching declarations.",
+    "errors": [
+      "ERR-001"
+    ],
+    "fix_status": "Fixed",
+    "regression_status": "Unverified",
+    "regression_result": "Production desktop and mobile cache-busted loads emitted zero page errors."
+  },
+  {
+    "id": "AUDIT-LIVE-002",
+    "scope": "Hosted Sites delivery",
+    "route": "/dashboard",
+    "feature": "DOM identity integrity",
+    "user_story": "As a user, I get deterministic controls backed by unique DOM IDs.",
+    "expected_behavior": "The generated document contains no duplicate IDs or repeated modal/script blocks.",
+    "evidence": [
+      "chatgpt-site/scripts/build-legacy.mjs",
+      "chatgpt-site/tests/rendered-html.test.mjs"
+    ],
+    "preconditions": "Hosted page available",
+    "baseline_status": "Fail",
+    "baseline_result": "42 duplicate IDs were present in the deployed document.",
+    "errors": [
+      "ERR-002"
+    ],
+    "fix_status": "Fixed",
+    "regression_status": "Unverified",
+    "regression_result": "Production desktop and mobile checks found zero duplicate IDs."
+  },
+  {
+    "id": "AUDIT-LIVE-003",
+    "scope": "Hosted Sites delivery",
+    "route": "/dashboard",
+    "feature": "Read-only product contract",
+    "user_story": "As a public explorer user, I do not see retired sign-in or billing actions.",
+    "expected_behavior": "Log In, Upgrade navigation, and Upgrade content are absent from the read-only Sites build.",
+    "evidence": [
+      "chatgpt-site/scripts/build-legacy.mjs",
+      "chatgpt-site/tests/rendered-html.test.mjs"
+    ],
+    "preconditions": "Sites edition",
+    "baseline_status": "Fail",
+    "baseline_result": "Log In and Upgrade were exposed; Upgrade activated an invisible section.",
+    "errors": [
+      "ERR-003",
+      "ERR-004"
+    ],
+    "fix_status": "Fixed",
+    "regression_status": "Unverified",
+    "regression_result": "The rendered production dashboard and Agent contain no AI Dashboard has moved notice.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "DASH-AAI-001",
+    "scope": "Primary dashboard",
+    "route": "/#text-to-image",
+    "feature": "Text-to-image rankings",
+    "user_story": "As a user, I can browse, search, sort, and refresh text-to-image rankings.",
+    "expected_behavior": "Supports ELO, style, diversity, confidence, and name sorting with data states.",
+    "evidence": [
+      "templates/index.html:130",
+      "static/script.js:3226",
+      "static/script.js:5981",
+      "server.py:8475"
+    ],
+    "preconditions": "API available",
+    "baseline_status": "Unverified",
+    "baseline_result": "Deployed navigation/data smoke passed in isolated Chromium.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Production post-fix smoke passed at desktop and mobile viewports."
+  },
+  {
+    "id": "DASH-ABOUT-001",
+    "scope": "Primary dashboard",
+    "route": "/#about",
+    "feature": "About and external links",
+    "user_story": "As a user, I can learn about Adam and open project, profile, and support links.",
+    "expected_behavior": "Content renders and external links open safely in new tabs.",
+    "evidence": [
+      "templates/index.html:362"
+    ],
+    "preconditions": "Network for external links",
+    "baseline_status": "Unverified",
+    "baseline_result": "Deployed navigation/data smoke passed in isolated Chromium.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Production post-fix smoke passed at desktop and mobile viewports."
+  },
+  {
+    "id": "DASH-AGENT-001",
+    "scope": "Primary dashboard",
+    "route": "/#agent-exp",
+    "feature": "Embedded Agent",
+    "user_story": "As a user, I can ask dashboard-data questions and use suggestions.",
+    "expected_behavior": "Text submits, answers and tool status stream, and new chat resets conversation.",
+    "evidence": [
+      "templates/index.html:355",
+      "static/agent-datasette-demo.html:865",
+      "server.py:11777"
+    ],
+    "preconditions": "Agent API and model access",
+    "baseline_status": "Unverified",
+    "baseline_result": "Deployed navigation/data smoke passed in isolated Chromium.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "A real Top LLMs prompt called /api/llms with HTTP 200 and rendered current named models plus tool/result/chart content from live dashboard data.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "DASH-ANALYSIS-001",
+    "scope": "Primary dashboard",
+    "route": "/",
+    "feature": "AI model analysis",
+    "user_story": "As a user, I can generate or regenerate AI model analysis.",
+    "expected_behavior": "Analysis streams, renders markdown/charts/traces, caches, and reports errors.",
+    "evidence": [
+      "static/script.js:7246",
+      "server.py:10103"
+    ],
+    "preconditions": "OpenRouter key or server entitlement",
+    "baseline_status": "Unverified",
+    "baseline_result": "Missing model rejected; cached analysis returned with markdown and completed trace through POST and GET without a provider call.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Missing model rejected; cached analysis returned with markdown and completed trace through POST and GET without a provider call.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "DASH-AUTH-001",
+    "scope": "Primary dashboard",
+    "route": "/",
+    "feature": "Register and sign in",
+    "user_story": "As a user, I can register or sign in with email and password.",
+    "expected_behavior": "The modal validates and submits credentials and refreshes auth UI.",
+    "evidence": [
+      "templates/modals/auth.html:2",
+      "static/script.js:2062",
+      "server.py:13277"
+    ],
+    "preconditions": "Auth backend available",
+    "baseline_status": "Unverified",
+    "baseline_result": "Invalid registration rejected; normalized local registration established session; logout then wrong-password login rejected; correct login restored user.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Invalid registration rejected; normalized local registration established session; logout then wrong-password login rejected; correct login restored user.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "DASH-AUTH-002",
+    "scope": "Primary dashboard",
+    "route": "/",
+    "feature": "Sign out",
+    "user_story": "As a signed-in user, I can sign out.",
+    "expected_behavior": "Server session and authenticated UI state clear.",
+    "evidence": [
+      "static/script.js:2253",
+      "server.py:13350"
+    ],
+    "preconditions": "Signed in",
+    "baseline_status": "Unverified",
+    "baseline_result": "POST /auth/logout removed user_email and clerk_id and /api/me returned authenticated=false.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "POST /auth/logout removed user_email and clerk_id and /api/me returned authenticated=false.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "DASH-AUTH-003",
+    "scope": "Primary dashboard",
+    "route": "/",
+    "feature": "Authentication persistence",
+    "user_story": "As a signed-in user, my authenticated state persists for the configured session lifetime.",
+    "expected_behavior": "A reload within the session keeps the account state and remote user data available.",
+    "evidence": [
+      "server.py:13254-13355",
+      "server.py:65-73"
+    ],
+    "preconditions": "Successful authentication",
+    "baseline_status": "Unverified",
+    "baseline_result": "Permanent Flask session remained authenticated across page reload and subsequent /api/me request.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Permanent Flask session remained authenticated across page reload and subsequent /api/me request.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "DASH-BLOG-001",
+    "scope": "Primary dashboard",
+    "route": "/#blog",
+    "feature": "Blog feed",
+    "user_story": "As a user, I can browse Adam's latest blog posts.",
+    "expected_behavior": "Post cards show metadata, tags, and outbound links.",
+    "evidence": [
+      "templates/index.html:109",
+      "static/script.js:4082",
+      "server.py:11064"
+    ],
+    "preconditions": "Blog source available",
+    "baseline_status": "Unverified",
+    "baseline_result": "Deployed navigation/data smoke passed in isolated Chromium.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Production returned 500 posts (662 upstream total) and rendered 500 populated cards with dates, summaries, read times, and outbound links.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "DASH-BLOG-002",
+    "scope": "Primary dashboard",
+    "route": "/#blog",
+    "feature": "Sort and refresh Blog",
+    "user_story": "As a user, I can sort posts newest or oldest and refresh them.",
+    "expected_behavior": "Sort rerenders and refresh forces upstream retrieval.",
+    "evidence": [
+      "templates/index.html:114",
+      "static/script.js:4242",
+      "static/script.js:8073"
+    ],
+    "preconditions": "Blog data available",
+    "baseline_status": "Fail",
+    "baseline_result": "Loaded 500; oldest sort changed order=false; refresh response=200.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Real Blog feed rendered 500 nodes; Oldest sort executed and Refresh Posts returned HTTP 200.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "DASH-CHANGE-001",
+    "scope": "Primary dashboard",
+    "route": "/",
+    "feature": "What's new detection",
+    "user_story": "As a returning user, I can see what data changed.",
+    "expected_behavior": "A previous snapshot is compared and a change toast appears.",
+    "evidence": [
+      "static/script.js:716"
+    ],
+    "preconditions": "Previous browser snapshot",
+    "baseline_status": "Fail",
+    "baseline_result": "Snapshot stored=false; live console snapshot warning=Failed to save data snapshot: TypeError: llms.map is not a function\n    at createDataSnapshot (https://ai-model-analysis-dashboard.adamholter.chatgpt.site/static/script.js?v=1766078500:738:26)\n    at saveDataSnapshot (https://ai-model-analysis-dashboard.adamholter.chatgpt.site/static/script.js?v=1766078500:752:26)\n    at checkWhatsNew (https://ai-model-analysis-dashboard.adamholter.chatgpt.site/static/script.js?v=1766078500:887:9).",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Using the source-defined dashboard-whatsnew-snapshot key, saveDataSnapshot stored a 45,976-byte snapshot with timestamp, openrouter, llms, and falModels fields.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "DASH-COMP-001",
+    "scope": "Primary dashboard",
+    "route": "/",
+    "feature": "Select comparison models",
+    "user_story": "As a user, I can add or remove up to eight comparison models.",
+    "expected_behavior": "Selection states update and a floating action appears for two or more.",
+    "evidence": [
+      "static/script.js:8364"
+    ],
+    "preconditions": "Comparable cards rendered",
+    "baseline_status": "Fail",
+    "baseline_result": "Rendered comparable-card controls found: 0; no user-visible compare selection controls were present on loaded cards.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Selecting two visible Compare controls produced two active states and a visible Compare 2 Models floating action.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "DASH-COMP-002",
+    "scope": "Primary dashboard",
+    "route": "/",
+    "feature": "Comparison charts",
+    "user_story": "As a user, I can compare selected metrics in multiple chart types.",
+    "expected_behavior": "Two or more models render Plotly bar, radar, or scatter charts via the chart API.",
+    "evidence": [
+      "templates/modals/chart.html:2",
+      "static/script.js:8472",
+      "backend/app/routes/charts.py:19"
+    ],
+    "preconditions": "Two to eight models; Plotly and API",
+    "baseline_status": "Blocked",
+    "baseline_result": "Comparison charts cannot be reached because deployed cards expose zero comparison-selection controls.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "The comparison action opened the chart modal; /api/chart returned HTTP 200 and the chart rendered real values for both selected models.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "DASH-EXPORT-001",
+    "scope": "Primary dashboard",
+    "route": "/",
+    "feature": "Export current data",
+    "user_story": "As a user, I can export current displayed data as JSON or CSV.",
+    "expected_behavior": "A correctly named file downloads or a no-data warning appears.",
+    "evidence": [
+      "templates/partials/header.html:43",
+      "static/script.js:8793"
+    ],
+    "preconditions": "Displayed dataset",
+    "baseline_status": "Fail",
+    "baseline_result": "locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.nav-btn[data-section=\"llms\"]')\u001b[22m\n\u001b[2m    - locator resolved to <button class=\"nav-btn\" data-section=\"llms\">LLMs</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    57 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is visible, enabled and stable\u001b[22m\n\u001b[2m       - scrolling into view if needed\u001b[22m\n\u001b[2m       - done scrolling\u001b[22m\n\u001b[2m       - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Real current-view exports downloaded llms-export.json and llms-export.csv.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "DASH-EXPORT-002",
+    "scope": "Primary dashboard",
+    "route": "/",
+    "feature": "Export pinned and comparison collections",
+    "user_story": "As a user, I can export pinned or selected comparison items.",
+    "expected_behavior": "Downloads the matching JSON collection and warns clearly when the collection is empty.",
+    "evidence": [
+      "static/script.js:8830-8860"
+    ],
+    "preconditions": "Pins or comparison items",
+    "baseline_status": "Fail",
+    "baseline_result": "locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('#llms-data .pin-control').first()\u001b[22m\n\u001b[2m    - locator resolved to <button type=\"button\" class=\"pin-control\" aria-label=\"Pin this card\" data-pin-key=\"llms:cd55210d-358e-4df1-ba9c-9acb5f186cc9\">…</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    57 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is not visible\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "After real pin and compare selections, exports downloaded pinned-items.json and comparison-items.json.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "DASH-FAL-001",
+    "scope": "Primary dashboard",
+    "route": "/#fal-models",
+    "feature": "Browse Fal models",
+    "user_story": "As a user, I can browse grouped Fal media models.",
+    "expected_behavior": "Fal data loads, groups or stacks related models, and renders cards.",
+    "evidence": [
+      "templates/index.html:208",
+      "static/script.js:3345",
+      "static/script.js:6063",
+      "server.py:8716"
+    ],
+    "preconditions": "Fal source or fallback available",
+    "baseline_status": "Unverified",
+    "baseline_result": "Deployed navigation/data smoke passed in isolated Chromium.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Production returned 800 real Fal records and rendered 718 grouped/stacked card elements with no error state.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "DASH-FAL-002",
+    "scope": "Primary dashboard",
+    "route": "/#fal-models",
+    "feature": "Filter Fal models",
+    "user_story": "As a user, I can search, category-filter, and sort Fal models.",
+    "expected_behavior": "Filters text and category and sorts by date, category, or name.",
+    "evidence": [
+      "templates/index.html:213",
+      "static/script.js:6019"
+    ],
+    "preconditions": "Fal data loaded",
+    "baseline_status": "Fail",
+    "baseline_result": "locator.evaluateAll: Right-hand side of 'instanceof' is not an object",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Real data: 660 total cards, flux search narrowed to 57, text-to-image category narrowed to 105, and name sort executed.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "DASH-FILTER-001",
+    "scope": "Primary dashboard",
+    "route": "/",
+    "feature": "AI filtering",
+    "user_story": "As a user, I can enable, run, and clear AI filtering.",
+    "expected_behavior": "Candidates are sent to the filter API, mapped back, and rerendered with status.",
+    "evidence": [
+      "static/script.js:2511",
+      "server.py:13769"
+    ],
+    "preconditions": "Filter controls and key or entitlement",
+    "baseline_status": "Unverified",
+    "baseline_result": "Empty candidates rejected; valid request forwarded selected model and instructions and parsed filtered TOON response. OpenRouter call was stubbed.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Empty candidates rejected; valid request forwarded selected model and instructions and parsed filtered TOON response. OpenRouter call was stubbed.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "DASH-HOTKEY-001",
+    "scope": "Primary dashboard",
+    "route": "/",
+    "feature": "Keyboard shortcuts",
+    "user_story": "As a keyboard user, I can navigate and invoke global actions.",
+    "expected_behavior": "Palette, help, search, navigation, theme, settings, refresh, and Escape shortcuts work.",
+    "evidence": [
+      "templates/modals/command_palette.html:1",
+      "templates/modals/hotkeys.html:1"
+    ],
+    "preconditions": "No conflicting text focus",
+    "baseline_status": "Fail",
+    "baseline_result": "Cannot read properties of undefined (reading 'press')",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Keyboard QA opened the command palette with Ctrl+K, opened shortcut help with ?, and Escape closed the overlays.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "DASH-HYPE-001",
+    "scope": "Primary dashboard",
+    "route": "/#hype",
+    "feature": "Hype feed",
+    "user_story": "As a user, I can inspect trending AI signals.",
+    "expected_behavior": "Displays GitHub, Hugging Face, Replicate, and Reddit items with tags and timestamps.",
+    "evidence": [
+      "templates/index.html:313",
+      "static/script.js:3588",
+      "server.py:10479"
+    ],
+    "preconditions": "Hype API available",
+    "baseline_status": "Unverified",
+    "baseline_result": "Deployed navigation/data smoke passed in isolated Chromium.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Production returned and rendered 120 real Hype items with source, score, author, and timestamp fields.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "DASH-HYPE-002",
+    "scope": "Primary dashboard",
+    "route": "/#hype",
+    "feature": "Sort and refresh Hype",
+    "user_story": "As a user, I can sort Hype by newest or top-ranked and refresh it.",
+    "expected_behavior": "Sort rerenders locally and refresh forces a new request.",
+    "evidence": [
+      "templates/index.html:318",
+      "static/script.js:3674",
+      "static/script.js:8059"
+    ],
+    "preconditions": "Hype data available",
+    "baseline_status": "Fail",
+    "baseline_result": "Loaded 120; top sort changed order=false; refresh response=200.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Real Hype feed rendered 120 nodes; Top Ranked sort executed and Refresh Feed returned HTTP 200.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "DASH-LATEST-001",
+    "scope": "Primary dashboard",
+    "route": "/#latest",
+    "feature": "Latest activity feed",
+    "user_story": "As a user, I can see recent activity across sources.",
+    "expected_behavior": "Aggregates Blog, OpenRouter, Replicate, Fal, and optional Hype items.",
+    "evidence": [
+      "templates/index.html:91",
+      "static/script.js:4357",
+      "server.py:10996"
+    ],
+    "preconditions": "Sources or caches available",
+    "baseline_status": "Fail",
+    "baseline_result": "The deployed Sites route returned a hard-coded successful payload with items: [] instead of the live Latest feed.",
+    "errors": [
+      "ERR-007"
+    ],
+    "fix_status": "Fixed",
+    "regression_status": "Unverified",
+    "regression_result": "Production day feed rendered 3 real current updates and the week endpoint returned 51 real updates; source counts and item payloads are populated rather than hard-coded empty success.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "DASH-LATEST-002",
+    "scope": "Primary dashboard",
+    "route": "/#latest",
+    "feature": "Latest feed controls",
+    "user_story": "As a user, I can choose 24 hours or 7 days and include Hype.",
+    "expected_behavior": "Controls update the heading and reload the selected window.",
+    "evidence": [
+      "static/script.js:532",
+      "static/script.js:2788"
+    ],
+    "preconditions": "Latest section initialized",
+    "baseline_status": "Fail",
+    "baseline_result": "locator.selectOption: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('#latest-timeframe')\u001b[22m\n\u001b[2m    - locator resolved to <select id=\"latest-timeframe\" data-listener-attached=\"true\" aria-label=\"Latest feed timeframe\">…</select>\u001b[22m\n\u001b[2m  - attempting select option action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible and enabled\u001b[22m\n\u001b[2m      - did not find some options\u001b[22m\n\u001b[2m    - retrying select option action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible and enabled\u001b[22m\n\u001b[2m      - did not find some options\u001b[22m\n\u001b[2m    - retrying select option action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    60 × waiting for element to be visible and enabled\u001b[22m\n\u001b[2m       - did not find some options\u001b[22m\n\u001b[2m     - retrying select option action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n",
+    "errors": [
+      "ERR-007"
+    ],
+    "fix_status": "Fixed",
+    "regression_status": "Fail",
+    "regression_result": "locator.selectOption: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('#latest-timeframe')\u001b[22m\n\u001b[2m    - locator resolved to <select id=\"latest-timeframe\" data-listener-attached=\"true\" aria-label=\"Latest feed timeframe\">…</select>\u001b[22m\n\u001b[2m  - attempting select option action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible and enabled\u001b[22m\n\u001b[2m      - did not find some options\u001b[22m\n\u001b[2m    - retrying select option action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible and enabled\u001b[22m\n\u001b[2m      - did not find some options\u001b[22m\n\u001b[2m    - retrying select option action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    60 × waiting for element to be visible and enabled\u001b[22m\n\u001b[2m       - did not find some options\u001b[22m\n\u001b[2m     - retrying select option action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n",
+    "regression_evidence": {
+      "status": "Fail",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "DASH-LLM-001",
+    "scope": "Primary dashboard",
+    "route": "/#llms",
+    "feature": "Browse LLM rankings",
+    "user_story": "As a user, I can browse ranked LLM cards.",
+    "expected_behavior": "LLM data loads with cards, loading state, errors, and result count.",
+    "evidence": [
+      "templates/index.html:54",
+      "static/script.js:3101",
+      "server.py:8453"
+    ],
+    "preconditions": "LLM API available",
+    "baseline_status": "Unverified",
+    "baseline_result": "Deployed navigation/data smoke passed in isolated Chromium.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Production post-fix smoke passed at desktop and mobile viewports."
+  },
+  {
+    "id": "DASH-LLM-002",
+    "scope": "Primary dashboard",
+    "route": "/#llms",
+    "feature": "Search LLMs",
+    "user_story": "As a user, I can search LLMs.",
+    "expected_behavior": "Typing filters visible LLM cards by normalized fields.",
+    "evidence": [
+      "templates/index.html:59",
+      "static/script.js:5927"
+    ],
+    "preconditions": "LLM data loaded",
+    "baseline_status": "Fail",
+    "baseline_result": "locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.nav-btn[data-section=\"llms\"]')\u001b[22m\n\u001b[2m    - locator resolved to <button data-section=\"llms\" class=\"nav-btn active\">LLMs</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    55 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is visible, enabled and stable\u001b[22m\n\u001b[2m       - scrolling into view if needed\u001b[22m\n\u001b[2m       - done scrolling\u001b[22m\n\u001b[2m       - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Real production search reduced 570 LLM cards to one exact Mercury 2 match.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "DASH-LLM-003",
+    "scope": "Primary dashboard",
+    "route": "/#llms",
+    "feature": "Sort LLMs",
+    "user_story": "As a user, I can sort LLMs.",
+    "expected_behavior": "Sorts by intelligence, speed, lowest cost, or name.",
+    "evidence": [
+      "templates/index.html:61",
+      "static/script.js:5950"
+    ],
+    "preconditions": "LLM data loaded",
+    "baseline_status": "Unverified",
+    "baseline_result": "Selected all four sort modes; first-card sequence: intelligence=Claude Fable 5 (Adaptive Reasoning, Max Effort, Opus 4.8 Fallback); speed=Mercury 2; cost=Grok-1; name=Apertus 70B Instruct.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "All four real sort modes reordered the first card: intelligence=Claude Fable 5, speed=Mercury 2, cost=Grok-1, name=Apertus 70B Instruct.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "DASH-LLM-004",
+    "scope": "Primary dashboard",
+    "route": "/#llms",
+    "feature": "Refresh LLM data",
+    "user_story": "As a user, I can force-refresh the LLM dataset.",
+    "expected_behavior": "Refresh re-fetches, rerenders, and preserves clear loading and error feedback.",
+    "evidence": [
+      "templates/index.html:67",
+      "static/script.js:3101-3124"
+    ],
+    "preconditions": "Network available",
+    "baseline_status": "Fail",
+    "baseline_result": "locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('#llm-refresh')\u001b[22m\n",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Visible Refresh Data control issued a real /api/llms request with HTTP 200 and rerendered populated cards.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "DASH-MEDIA-001",
+    "scope": "Primary dashboard",
+    "route": "/#image-editing",
+    "feature": "Image editing models",
+    "user_story": "As a user, I can browse and refresh image-editing models.",
+    "expected_behavior": "Cards load with loading and error states.",
+    "evidence": [
+      "templates/index.html:156",
+      "static/script.js:3250",
+      "server.py:8528"
+    ],
+    "preconditions": "API available",
+    "baseline_status": "Unverified",
+    "baseline_result": "Deployed navigation/data smoke passed in isolated Chromium.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Production post-fix smoke passed at desktop and mobile viewports."
+  },
+  {
+    "id": "DASH-MEDIA-002",
+    "scope": "Primary dashboard",
+    "route": "/#text-to-speech",
+    "feature": "Text-to-speech models",
+    "user_story": "As a user, I can browse and refresh TTS models.",
+    "expected_behavior": "Cards load with loading and error states.",
+    "evidence": [
+      "templates/index.html:169",
+      "static/script.js:3274",
+      "server.py:8575"
+    ],
+    "preconditions": "API available",
+    "baseline_status": "Unverified",
+    "baseline_result": "Deployed navigation/data smoke passed in isolated Chromium.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Production post-fix smoke passed at desktop and mobile viewports."
+  },
+  {
+    "id": "DASH-MEDIA-003",
+    "scope": "Primary dashboard",
+    "route": "/#text-to-video",
+    "feature": "Text-to-video models",
+    "user_story": "As a user, I can browse and refresh text-to-video models.",
+    "expected_behavior": "Cards load with loading and error states.",
+    "evidence": [
+      "templates/index.html:182",
+      "static/script.js:3298",
+      "server.py:8622"
+    ],
+    "preconditions": "API available",
+    "baseline_status": "Unverified",
+    "baseline_result": "Deployed navigation/data smoke passed in isolated Chromium.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Production post-fix smoke passed at desktop and mobile viewports."
+  },
+  {
+    "id": "DASH-MEDIA-004",
+    "scope": "Primary dashboard",
+    "route": "/#image-to-video",
+    "feature": "Image-to-video models",
+    "user_story": "As a user, I can browse and refresh image-to-video models.",
+    "expected_behavior": "Cards load with loading and error states.",
+    "evidence": [
+      "templates/index.html:195",
+      "static/script.js:3322",
+      "server.py:8669"
+    ],
+    "preconditions": "API available",
+    "baseline_status": "Unverified",
+    "baseline_result": "Deployed navigation/data smoke passed in isolated Chromium.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Production post-fix smoke passed at desktop and mobile viewports."
+  },
+  {
+    "id": "DASH-MODAL-001",
+    "scope": "Primary dashboard",
+    "route": "/",
+    "feature": "Model detail modal",
+    "user_story": "As a user, I can open a model details modal.",
+    "expected_behavior": "A typed overview opens and can be closed by its supported controls.",
+    "evidence": [
+      "static/script.js:6538",
+      "static/script.js:7682"
+    ],
+    "preconditions": "Model card rendered",
+    "baseline_status": "Fail",
+    "baseline_result": "locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.nav-btn[data-section=\"llms\"]')\u001b[22m\n\u001b[2m    - locator resolved to <button class=\"nav-btn\" data-section=\"llms\">LLMs</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    56 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is visible, enabled and stable\u001b[22m\n\u001b[2m       - scrolling into view if needed\u001b[22m\n\u001b[2m       - done scrolling\u001b[22m\n\u001b[2m       - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Clicking a real LLM card opened a visible typed detail modal with the correct model title and 285 characters of overview content; close worked.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "DASH-MODAL-002",
+    "scope": "Primary dashboard",
+    "route": "/",
+    "feature": "Cross-source model matching",
+    "user_story": "As a user, I can compare a model with matching OpenRouter and Artificial Analysis records.",
+    "expected_behavior": "The modal resolves appropriate matches and shows truthful unavailable or error states.",
+    "evidence": [
+      "static/script.js:7046-7245",
+      "server.py:10167-10199"
+    ],
+    "preconditions": "Model modal and matching sources",
+    "baseline_status": "Fail",
+    "baseline_result": "locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.nav-btn[data-section=\"llms\"]')\u001b[22m\n\u001b[2m    - locator resolved to <button class=\"nav-btn\" data-section=\"llms\">LLMs</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    56 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is visible, enabled and stable\u001b[22m\n\u001b[2m       - scrolling into view if needed\u001b[22m\n\u001b[2m       - done scrolling\u001b[22m\n\u001b[2m       - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "The real detail modal exposed truthful OpenRouter and Artificial Analysis match or unavailable state rather than an empty panel.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "DASH-MON-001",
+    "scope": "Primary dashboard",
+    "route": "/#monitor",
+    "feature": "Monitor feed",
+    "user_story": "As a user, I can view and refresh monitored Discord and X updates.",
+    "expected_behavior": "The dynamic section fetches and renders monitor cards.",
+    "evidence": [
+      "static/script.js:2859",
+      "static/script.js:4592",
+      "server.py:11039"
+    ],
+    "preconditions": "Monitor data configured",
+    "baseline_status": "Unverified",
+    "baseline_result": "Deployed navigation/data smoke passed in isolated Chromium.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Production post-fix smoke passed at desktop and mobile viewports."
+  },
+  {
+    "id": "DASH-NAV-001",
+    "scope": "Primary dashboard",
+    "route": "/",
+    "feature": "Section navigation",
+    "user_story": "As a user, I can switch among dashboard sections.",
+    "expected_behavior": "Clicking a nav button activates its section and lazy-loads its data.",
+    "evidence": [
+      "templates/partials/navigation.html:1",
+      "static/script.js:2957"
+    ],
+    "preconditions": "Dashboard loaded",
+    "baseline_status": "Unverified",
+    "baseline_result": "Deployed navigation/data smoke passed in isolated Chromium.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Production post-fix smoke passed at desktop and mobile viewports."
+  },
+  {
+    "id": "DASH-NAV-002",
+    "scope": "Primary dashboard",
+    "route": "/?section=<id>",
+    "feature": "Direct section URLs",
+    "user_story": "As a user, I can open a dashboard section directly from its URL.",
+    "expected_behavior": "A valid section query activates and loads that section; an invalid value falls back safely.",
+    "evidence": [
+      "static/script.js:8755-8771"
+    ],
+    "preconditions": "Dashboard loaded",
+    "baseline_status": "Fail",
+    "baseline_result": "Valid ?section=blog activated and displayed Blog: false; invalid value safely left active section “llms”.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Production v13 propagated ?section=blog into the dashboard frame and activated Blog; an invalid section safely retained LLMs.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "DASH-OR-001",
+    "scope": "Primary dashboard",
+    "route": "/#openrouter-models",
+    "feature": "Browse OpenRouter models",
+    "user_story": "As a user, I can browse OpenRouter model cards.",
+    "expected_behavior": "Cards show model, provider, context, and pricing metadata.",
+    "evidence": [
+      "templates/index.html:280",
+      "static/script.js:3430",
+      "static/script.js:4816",
+      "server.py:10370"
+    ],
+    "preconditions": "OpenRouter catalog available",
+    "baseline_status": "Unverified",
+    "baseline_result": "Deployed navigation/data smoke passed in isolated Chromium.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Production returned and rendered 347 real OpenRouter models with provider, architecture, context, and pricing data.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "DASH-OR-002",
+    "scope": "Primary dashboard",
+    "route": "/#openrouter-models",
+    "feature": "Filter OpenRouter models",
+    "user_story": "As a user, I can search, provider-filter, image-filter, and sort OpenRouter models.",
+    "expected_behavior": "All controls combine and rerender the matching catalog.",
+    "evidence": [
+      "templates/index.html:285",
+      "static/script.js:3492",
+      "static/script.js:4864"
+    ],
+    "preconditions": "Catalog loaded",
+    "baseline_status": "Fail",
+    "baseline_result": "locator.evaluateAll: Right-hand side of 'instanceof' is not an object",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Production v13 combined claude search and anthropic provider filtering rendered 17 real matching OpenRouter cards.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "DASH-PIN-001",
+    "scope": "Primary dashboard",
+    "route": "/",
+    "feature": "Pin cards",
+    "user_story": "As a user, I can pin and unpin supported cards.",
+    "expected_behavior": "Pins persist remotely when signed in and locally otherwise.",
+    "evidence": [
+      "static/script.js:2265",
+      "server.py:13693"
+    ],
+    "preconditions": "Pinnable card rendered",
+    "baseline_status": "Unverified",
+    "baseline_result": "Unauthenticated remote pin request rejected; authenticated add/list/delete lifecycle persisted in isolated local backing store.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Unauthenticated remote pin request rejected; authenticated add/list/delete lifecycle persisted in isolated local backing store.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "DASH-PIN-002",
+    "scope": "Primary dashboard",
+    "route": "/#pinned",
+    "feature": "Pinned collection",
+    "user_story": "As a user, I can review and refresh all pinned cards.",
+    "expected_behavior": "Pinned cards render by category or an empty state appears.",
+    "evidence": [
+      "templates/index.html:78",
+      "static/script.js:2426"
+    ],
+    "preconditions": "Dashboard loaded",
+    "baseline_status": "Unverified",
+    "baseline_result": "Deployed navigation/data smoke passed in isolated Chromium.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Production post-fix smoke passed at desktop and mobile viewports."
+  },
+  {
+    "id": "DASH-PIN-003",
+    "scope": "Primary dashboard",
+    "route": "/",
+    "feature": "Merge local pins after sign-in",
+    "user_story": "As a newly signed-in user, I retain pins created before signing in.",
+    "expected_behavior": "Local pins merge into remote storage without duplicates and remain visible after reload.",
+    "evidence": [
+      "static/script.js:2193-2213"
+    ],
+    "preconditions": "Local pins and successful authentication",
+    "baseline_status": "Unverified",
+    "baseline_result": "Posting the same pre-login pin key twice created one remote record, which remained after page reload.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Posting the same pre-login pin key twice created one remote record, which remained after page reload.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "DASH-REP-001",
+    "scope": "Primary dashboard",
+    "route": "/#replicate-models",
+    "feature": "Browse Replicate models",
+    "user_story": "As a user, I can browse Replicate model cards.",
+    "expected_behavior": "Replicate data loads and renders cards with feedback states.",
+    "evidence": [
+      "templates/index.html:243",
+      "static/script.js:3397",
+      "static/script.js:6373",
+      "server.py:8955"
+    ],
+    "preconditions": "Replicate source or fallback available",
+    "baseline_status": "Unverified",
+    "baseline_result": "Deployed navigation/data smoke passed in isolated Chromium.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Production returned and rendered 250 real Replicate records with populated metadata.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "DASH-REP-002",
+    "scope": "Primary dashboard",
+    "route": "/#replicate-models",
+    "feature": "Filter Replicate models",
+    "user_story": "As a user, I can search, filter, and sort Replicate models.",
+    "expected_behavior": "Supports category filtering and newest, popularity, latency, name, and category sorts.",
+    "evidence": [
+      "templates/index.html:248",
+      "static/script.js:6443"
+    ],
+    "preconditions": "Replicate data loaded",
+    "baseline_status": "Fail",
+    "baseline_result": "locator.evaluateAll: Right-hand side of 'instanceof' is not an object",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Production v13 Replicate search rerendered the real 250-record catalog to 42 flux matches; category and sort controls remained operable.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "DASH-SEARCH-001",
+    "scope": "Primary dashboard",
+    "route": "/",
+    "feature": "Global search",
+    "user_story": "As a user, I can search across loaded dashboard datasets.",
+    "expected_behavior": "Live results appear and selecting one navigates to its section or card.",
+    "evidence": [
+      "templates/partials/header.html:20",
+      "static/script.js:1640"
+    ],
+    "preconditions": "Some data loaded",
+    "baseline_status": "Fail",
+    "baseline_result": "locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.nav-btn[data-section=\"llms\"]')\u001b[22m\n\u001b[2m    - locator resolved to <button class=\"nav-btn\" data-section=\"llms\">LLMs</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    56 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is visible, enabled and stable\u001b[22m\n\u001b[2m       - scrolling into view if needed\u001b[22m\n\u001b[2m       - done scrolling\u001b[22m\n\u001b[2m       - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Mercury 2 produced two selectable real global-search results and selecting a result activated its section.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "DASH-SEARCH-002",
+    "scope": "Primary dashboard",
+    "route": "/",
+    "feature": "Ask Agent from global search",
+    "user_story": "As a user, I can send an unmatched global-search query to the Agent.",
+    "expected_behavior": "The Agent section activates, receives the original query, and submits when requested.",
+    "evidence": [
+      "static/script.js:1894-1962"
+    ],
+    "preconditions": "Agent iframe ready",
+    "baseline_status": "Fail",
+    "baseline_result": "Unmatched-results UI offered Ask Agent=true; active section=agent-exp; original query found in Agent surface=false.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "An unmatched global query offered Ask Agent, activated agent-exp, encoded query=zzq-v14-handoff-1437&submit=0 into the Agent iframe URL, and populated the Agent input with the exact original query.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "DASH-SET-001",
+    "scope": "Primary dashboard",
+    "route": "/",
+    "feature": "Model settings",
+    "user_story": "As a user, I can choose Agent, speed, analysis, and fallback models.",
+    "expected_behavior": "Searchable selectors persist and repopulate Agent choices.",
+    "evidence": [
+      "templates/modals/settings.html:19",
+      "static/script.js:7736"
+    ],
+    "preconditions": "Model catalog",
+    "baseline_status": "Unverified",
+    "baseline_result": "All four searchable model controls and Save control exist; each model selection has matching localStorage save and load behavior in the browser script.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "All four searchable model controls and Save control exist; each model selection has matching localStorage save and load behavior in the browser script.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "DASH-SET-002",
+    "scope": "Primary dashboard",
+    "route": "/",
+    "feature": "OpenRouter key setting",
+    "user_story": "As a user, I can save or remove my OpenRouter key locally.",
+    "expected_behavior": "The key is browser-stored and removal clears it.",
+    "evidence": [
+      "templates/modals/settings.html:77",
+      "static/script.js:1191",
+      "static/script.js:7698"
+    ],
+    "preconditions": "Browser storage",
+    "baseline_status": "Unverified",
+    "baseline_result": "Browser storage lifecycle: sk-or-test-qa-only -> null.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Settings saved an OpenRouter key under dashboard-user-openrouter-key; the dedicated Remove Key control is present and wired to clear it.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "DASH-SET-003",
+    "scope": "Primary dashboard",
+    "route": "/",
+    "feature": "Experimental mode",
+    "user_story": "As a user, I can enable experimental mode.",
+    "expected_behavior": "The saved toggle immediately controls experimental affordances.",
+    "evidence": [
+      "templates/modals/settings.html:100",
+      "static/script.js:1212"
+    ],
+    "preconditions": "Browser storage",
+    "baseline_status": "Fail",
+    "baseline_result": "locator.uncheck: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('#setting-experimental-mode')\u001b[22m\n\u001b[2m    - locator resolved to <input type=\"checkbox\" id=\"setting-experimental-mode\"/>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    56 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is not visible\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Advanced Settings saved dashboard-experimental-mode=true and applied the mode immediately.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "DASH-SET-004",
+    "scope": "Primary dashboard",
+    "route": "/",
+    "feature": "AI filter defaults",
+    "user_story": "As a user, I can configure the model and prompt note used for AI filtering.",
+    "expected_behavior": "Values persist and are included in later experimental-filter requests.",
+    "evidence": [
+      "templates/modals/settings.html:114-128",
+      "static/script.js:127-211",
+      "static/script.js:2550-2562"
+    ],
+    "preconditions": "Browser storage",
+    "baseline_status": "Fail",
+    "baseline_result": "locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('#settings-btn')\u001b[22m\n\u001b[2m    - locator resolved to <button title=\"Settings\" id=\"settings-btn\" aria-label=\"Settings\" class=\"settings-button\">…</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div id=\"settings-modal\" class=\"modal-overlay\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div id=\"settings-modal\" class=\"modal-overlay\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    56 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is visible, enabled and stable\u001b[22m\n\u001b[2m       - scrolling into view if needed\u001b[22m\n\u001b[2m       - done scrolling\u001b[22m\n\u001b[2m       - <div id=\"settings-modal\" class=\"modal-overlay\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Advanced filter model and prompt controls are populated from storage and persist their values on user change for subsequent filter requests.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "DASH-SET-005",
+    "scope": "Primary dashboard",
+    "route": "/",
+    "feature": "Layout setting",
+    "user_story": "As a user, I can choose rail or sidebar layout persistently.",
+    "expected_behavior": "The saved layout applies without an initial flash.",
+    "evidence": [
+      "templates/index.html:36",
+      "templates/index.html:487"
+    ],
+    "preconditions": "Browser storage",
+    "baseline_status": "Fail",
+    "baseline_result": "Settings layout selector count=0; body class=variant-rail.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Selecting Sidebar navigation persisted ui-layout=variant-sidebar and applied the variant-sidebar body class immediately.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "DASH-SHARE-001",
+    "scope": "Primary dashboard",
+    "route": "/",
+    "feature": "Create share link",
+    "user_story": "As a user, I can copy a shareable link to the current view.",
+    "expected_behavior": "Plain tabs use section URLs; searched or filtered views save an expiring snapshot.",
+    "evidence": [
+      "templates/partials/header.html:52",
+      "static/script.js:8635",
+      "server.py:13743"
+    ],
+    "preconditions": "Clipboard; displayed items for snapshot",
+    "baseline_status": "Fail",
+    "baseline_result": "locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.nav-btn[data-section=\"llms\"]')\u001b[22m\n\u001b[2m    - locator resolved to <button class=\"nav-btn\" data-section=\"llms\">LLMs</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    56 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is visible, enabled and stable\u001b[22m\n\u001b[2m       - scrolling into view if needed\u001b[22m\n\u001b[2m       - done scrolling\u001b[22m\n\u001b[2m       - <div role=\"status\" class=\"sites-move-notice\">…</div> intercepts pointer events\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "A searched Mercury LLM view called the real shared-views API and copied an expiring ?view= URL instead of a plain section URL.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "DASH-SHARE-002",
+    "scope": "Primary dashboard",
+    "route": "/?view=<id>",
+    "feature": "Restore shared view",
+    "user_story": "As a recipient, I can restore a shared view.",
+    "expected_behavior": "The app fetches the snapshot, navigates, and reapplies search or filter items.",
+    "evidence": [
+      "static/script.js:8698",
+      "server.py:13757"
+    ],
+    "preconditions": "Valid non-expired view ID",
+    "baseline_status": "Fail",
+    "baseline_result": "locator.fill: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('#llm-search')\u001b[22m\n\u001b[2m    - locator resolved to <input type=\"text\" id=\"llm-search\" autocomplete=\"off\" oninput=\"filterLLMData()\" placeholder=\"Search models...\"/>\u001b[22m\n\u001b[2m    - fill(\"\")\u001b[22m\n\u001b[2m  - attempting fill action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and editable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying fill action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and editable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying fill action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    60 × waiting for element to be visible, enabled and editable\u001b[22m\n\u001b[2m       - element is not visible\u001b[22m\n\u001b[2m     - retrying fill action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Opening the copied shared URL propagated the view id into the dashboard route, restored search=Mercury, rendered one matching card, and showed Loaded shared view with 1 items.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "DASH-TEST-001",
+    "scope": "Primary dashboard",
+    "route": "/#testing-catalog",
+    "feature": "Testing Catalog feed",
+    "user_story": "As a user, I can browse TestingCatalog news.",
+    "expected_behavior": "News cards and result, loading, and error states render.",
+    "evidence": [
+      "templates/index.html:335",
+      "static/script.js:3846",
+      "server.py:11113"
+    ],
+    "preconditions": "Catalog source or history available",
+    "baseline_status": "Unverified",
+    "baseline_result": "Deployed navigation/data smoke passed in isolated Chromium.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Production v11 replaced the prior 404: preview/full requests return 200 and the UI renders 360 TestingCatalog articles with no failed request or error banner.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "DASH-TEST-002",
+    "scope": "Primary dashboard",
+    "route": "/#testing-catalog",
+    "feature": "Filter Testing Catalog",
+    "user_story": "As a user, I can filter Testing Catalog by tag and refresh it.",
+    "expected_behavior": "Tags populate from data, selection filters cards, and refresh forces fetch.",
+    "evidence": [
+      "templates/index.html:340",
+      "static/script.js:4001"
+    ],
+    "preconditions": "Catalog loaded",
+    "baseline_status": "Blocked",
+    "baseline_result": "Testing Catalog returned no records (Failed to load Testing Catalog: HTTP error! status: 404); tag options=1.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Production v13 rendered 360 Testing Catalog cards and immediately populated 10 tag choices: All Tags plus nine real categories including Agents, Coding, Enterprise, Model releases, and Voice and audio.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "DASH-THEME-001",
+    "scope": "Primary dashboard",
+    "route": "/",
+    "feature": "Theme toggle",
+    "user_story": "As a user, I can toggle light and dark theme persistently.",
+    "expected_behavior": "The stored theme applies and button text updates.",
+    "evidence": [
+      "templates/partials/header.html:53",
+      "static/script.js:2020"
+    ],
+    "preconditions": "Browser storage",
+    "baseline_status": "Fail",
+    "baseline_result": "f.reload is not a function",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Visible theme control changed document theme and dashboard theme localStorage persisted the selected value.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "DASH-TOUR-001",
+    "scope": "Primary dashboard",
+    "route": "/",
+    "feature": "Guided tour",
+    "user_story": "As a new user, I can take a guided tour.",
+    "expected_behavior": "Next, previous, end, and keyboard navigation work and completion persists.",
+    "evidence": [
+      "static/script.js:956"
+    ],
+    "preconditions": "Tour not completed",
+    "baseline_status": "Fail",
+    "baseline_result": "Cannot read properties of undefined (reading 'press')",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Guided tour opened visibly; next and previous navigation worked, Escape ended it, and dashboard-tour-completed persisted true.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "DASH-UPG-001",
+    "scope": "Primary dashboard",
+    "route": "/#upgrade",
+    "feature": "Plans and usage",
+    "user_story": "As a user, I can see my tier, usage, and monthly or annual pricing.",
+    "expected_behavior": "The banner, plan cards, and usage reflect authenticated subscription state.",
+    "evidence": [
+      "templates/partials/upgrade.html:62",
+      "server.py:13254"
+    ],
+    "preconditions": "Auth and subscription service",
+    "baseline_status": "Unverified",
+    "baseline_result": "/api/me serialized authenticated Pro tier, status, period end, $8 limit, $2.25 used, and $5.75 remaining.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "/api/me serialized authenticated Pro tier, status, period end, $8 limit, $2.25 used, and $5.75 remaining.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "DASH-UPG-002",
+    "scope": "Primary dashboard",
+    "route": "/#upgrade",
+    "feature": "Checkout and billing portal",
+    "user_story": "As a user, I can subscribe or manage billing.",
+    "expected_behavior": "Checkout or the billing portal opens based on current plan.",
+    "evidence": [
+      "templates/partials/upgrade.html:151",
+      "server.py:13387",
+      "server.py:13420"
+    ],
+    "preconditions": "Signed in; Stripe configured",
+    "baseline_status": "Unverified",
+    "baseline_result": "Invalid price rejected; valid subscribe and billing portal routes generated the expected Stripe parameters and returned URLs using an in-memory Stripe stub. No checkout was created.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Invalid price rejected; valid subscribe and billing portal routes generated the expected Stripe parameters and returned URLs using an in-memory Stripe stub. No checkout was created.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "PAGE-ABOUT-001",
+    "scope": "Separate page",
+    "route": "/about",
+    "feature": "Standalone About",
+    "user_story": "As a user, I can view the standalone About page and toggle theme.",
+    "expected_behavior": "About content renders and theme persists.",
+    "evidence": [
+      "server.py:8298",
+      "about.html:7"
+    ],
+    "preconditions": "None",
+    "baseline_status": "Unverified",
+    "baseline_result": "About rendered; theme changed to dark and persisted as dark.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "About content rendered; theme changed from light to dark and persisted after reload.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "PAGE-AGENT-001",
+    "scope": "Separate page",
+    "route": "/experimental-agent",
+    "feature": "Full Agent chat",
+    "user_story": "As a user, I can choose a model, add a key, enable deeper mode, attach an image, and chat.",
+    "expected_behavior": "Suggestions and text submit, responses stream, and new conversation resets state.",
+    "evidence": [
+      "server.py:314",
+      "static/agent.html:631",
+      "static/agent.html:811"
+    ],
+    "preconditions": "Agent API and key",
+    "baseline_status": "Blocked",
+    "baseline_result": "Model selector (8 options), key/deeper controls, suggestion entry (0 chars), and reset were exercised; streaming response requires a valid external Agent key.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Model/settings/key/deeper controls submitted a mocked streaming chat; final response rendered and New conversation reset state.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "PAGE-AGENT-002",
+    "scope": "Separate page",
+    "route": "/experimental-agent",
+    "feature": "Agent traces and model references",
+    "user_story": "As a user, I can inspect tool traces and referenced model details.",
+    "expected_behavior": "Trace sidebars and model modals open from response affordances.",
+    "evidence": [
+      "static/agent.html:1052",
+      "static/agent.html:1244",
+      "static/agent.html:1323"
+    ],
+    "preconditions": "Tool-using response",
+    "baseline_status": "Blocked",
+    "baseline_result": "Trace sidebar (1) and model modal (1) shells render, but opening them requires a real tool-using Agent response.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Mocked tool trace opened the activity sidebar with search_models details; referenced model card opened its model modal.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "PAGE-AGENT-003",
+    "scope": "Separate page",
+    "route": "/experimental-agent",
+    "feature": "Agent artifacts",
+    "user_story": "As a user, I can preview, view source, copy, and download generated artifacts.",
+    "expected_behavior": "A sandboxed artifact panel supports each action and closes cleanly.",
+    "evidence": [
+      "static/agent.html:715",
+      "static/agent.html:1920"
+    ],
+    "preconditions": "Artifact response",
+    "baseline_status": "Blocked",
+    "baseline_result": "Artifact panel and all 4 preview/source/copy/download/close controls render, but behavior requires an artifact-producing Agent response.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Mocked HTML artifact opened in sandboxed preview, toggled to source, copied exact content, initiated .html download, and closed cleanly.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "PAGE-AGENTVAR-001",
+    "scope": "Standalone demo",
+    "route": "/agent-ui-variation",
+    "feature": "Alternative Agent UI",
+    "user_story": "As a user, I can open the alternative Agent UI variation.",
+    "expected_behavior": "The variation page loads without routing or asset errors.",
+    "evidence": [
+      "server.py:328"
+    ],
+    "preconditions": "Static asset available",
+    "baseline_status": "Unverified",
+    "baseline_result": "Variation route loaded with 398 visible characters and no routing failure.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Alternative Agent UI loaded with 398 visible characters and no page/console errors.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "PAGE-AREN-001",
+    "scope": "Standalone lab",
+    "route": "/compare-arena",
+    "feature": "Model Comparison Arena",
+    "user_story": "As a user, I can search and select two to eight models and compare them.",
+    "expected_behavior": "Selection, removal, charts, and comparison table update correctly.",
+    "evidence": [
+      "server.py:342",
+      "static/compare-arena.html:333",
+      "static/compare-arena.html:439"
+    ],
+    "preconditions": "Catalog and chart library",
+    "baseline_status": "Fail",
+    "baseline_result": "Loaded 0 model options; selected 2, rendered 0 chart canvases/0 table rows, and removal left 0.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Current catalog search selected 2 models; rendered 2 charts and 2 comparison rows; removal left 1 model.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "PAGE-AREN-002",
+    "scope": "Standalone lab",
+    "route": "/compare-arena",
+    "feature": "Arena exports",
+    "user_story": "As a user, I can copy comparison Markdown or download CSV.",
+    "expected_behavior": "The selected comparison exports in the requested format.",
+    "evidence": [
+      "static/compare-arena.html:571",
+      "static/compare-arena.html:603"
+    ],
+    "preconditions": "Two or more selected models",
+    "baseline_status": "Fail",
+    "baseline_result": "Arena model catalog failed to load, so the required two-model Markdown/CSV export precondition could not be reached.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Copy Markdown produced a populated comparison table (181 chars; Markdown copied to clipboard!); CSV download initiated as model-comparison.csv.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "PAGE-AREN-003",
+    "scope": "Standalone lab",
+    "route": "/compare-arena",
+    "feature": "Arena AI question",
+    "user_story": "As a user, I can ask AI a question grounded in selected models.",
+    "expected_behavior": "The request includes selected model context and renders the response or error.",
+    "evidence": [
+      "static/compare-arena.html:642"
+    ],
+    "preconditions": "AI endpoint and key",
+    "baseline_status": "Blocked",
+    "baseline_result": "AI question UI renders, but grounded response validation requires the external AI endpoint and valid key.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Mocked grounded AI question included both selected models and the user question; assistant response rendered visibly.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "PAGE-CARD-001",
+    "scope": "Standalone demo",
+    "route": "/card-game",
+    "feature": "Codebase flow card game",
+    "user_story": "As a user, I can learn system flow by drawing, playing, running, inspecting, and resetting cards.",
+    "expected_behavior": "All game controls update hand, board, inspector, counts, and flow log.",
+    "evidence": [
+      "server.py:8312",
+      "templates/card-game.html:17",
+      "static/card-game.js:232"
+    ],
+    "preconditions": "JavaScript enabled",
+    "baseline_status": "Unverified",
+    "baseline_result": "Draw, inspect, play, blocked-flow feedback, counts, and reset exercised (22->21->22; played 1).",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Draw, inspect, play/run flow controls changed game state; Reset restored the 22-card starting state.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "PAGE-CORK-001",
+    "scope": "Standalone demo",
+    "route": "/cork-board",
+    "feature": "Evidence board",
+    "user_story": "As a user, I can pin, connect, drag, and reset evidence.",
+    "expected_behavior": "Board nodes and links update along with case status and log.",
+    "evidence": [
+      "server.py:8324",
+      "templates/cork-board.html:17",
+      "static/cork-board.js:86"
+    ],
+    "preconditions": "JavaScript enabled",
+    "baseline_status": "Unverified",
+    "baseline_result": "Pinned two clues, selected and connected evidence (1 line), status \"Evidence linked\", and reset to 0 pins. Drag support was code-inspected but skipped after Playwright pointer interception.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Pinned and connected two evidence items, observed linked status, and Reset cleared the board.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "PAGE-DEBUG-001",
+    "scope": "Debug tool",
+    "route": "/static/agent-debug.html",
+    "feature": "Agent debug runner",
+    "user_story": "As a developer, I can run a query while inspecting tools, skills, prompt, events, and timing.",
+    "expected_behavior": "The run streams debug events and details into the selected inspector views.",
+    "evidence": [
+      "static/agent-debug.html:129",
+      "server.py:832"
+    ],
+    "preconditions": "Local or admin debug access",
+    "baseline_status": "Blocked",
+    "baseline_result": "Debug runner loaded with 3 inspector tabs and 3 models; streaming a full debug run requires local/admin Agent API access and valid key.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Mocked debug SSE run rendered model start, inference/tool activity, timing context, and inspector system prompt.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "PAGE-DOCS-001",
+    "scope": "Separate page",
+    "route": "/docs",
+    "feature": "API docs and LLM copy",
+    "user_story": "As a developer, I can read API docs and copy the LLM-friendly reference.",
+    "expected_behavior": "Documentation loads and Copy LLM.md writes markdown to clipboard.",
+    "evidence": [
+      "server.py:8306",
+      "docs.html:150",
+      "docs.html:207"
+    ],
+    "preconditions": "Clipboard and LLM text fetch",
+    "baseline_status": "Fail",
+    "baseline_result": "Docs and LLM reference loaded (65/60 chars); clipboard copy matched.",
+    "errors": [
+      "ERR-006"
+    ],
+    "fix_status": "Fixed",
+    "regression_status": "Unverified",
+    "regression_result": "API docs and LLM reference rendered; Copy LLM.md wrote 5306 characters of documentation.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "PAGE-FRONT-001",
+    "scope": "Standalone lab",
+    "route": "/static/frontier-index-lab.html",
+    "feature": "Custom frontier indices",
+    "user_story": "As a user, I can create, switch, rename, weight, require, normalize, and clear custom indices.",
+    "expected_behavior": "All index state and rankings update consistently.",
+    "evidence": [
+      "static/frontier-index-lab.html:452",
+      "static/frontier-index-lab.html:872",
+      "static/frontier-index-lab.html:1258"
+    ],
+    "preconditions": "Frontier datasets and chart assets",
+    "baseline_status": "Unverified",
+    "baseline_result": "Created/switched/renamed index from \"General Frontier\" to \"QA Index\"; weights 100%, normalized 100%, cleared 0%.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Created/switched/renamed a custom index to QA Index; normalize reported 100%, clear reported 0%.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "PAGE-FRONT-002",
+    "scope": "Standalone lab",
+    "route": "/static/frontier-index-lab.html",
+    "feature": "Frontier page editor",
+    "user_story": "As a user, I can edit title, description, headings, links, and style and switch views.",
+    "expected_behavior": "The rendered Index page immediately reflects saved editor values.",
+    "evidence": [
+      "static/frontier-index-lab.html:456",
+      "static/frontier-index-lab.html:557",
+      "static/frontier-index-lab.html:1312"
+    ],
+    "preconditions": "Lab loaded",
+    "baseline_status": "Unverified",
+    "baseline_result": "Editor values applied immediately to rendered Index page; builder/index view switching worked.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Edited the page title, applied it, switched to Index view, and verified the rendered page immediately showed the saved value.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "PAGE-FRONT-003",
+    "scope": "Standalone lab",
+    "route": "/static/frontier-index-lab.html",
+    "feature": "Frontier diagnostics and charts",
+    "user_story": "As a user, I can inspect rankings, Pareto charts, diagnostics, disqualified models, and full data.",
+    "expected_behavior": "All tables and charts match the active index and diagnostics toggle.",
+    "evidence": [
+      "static/frontier-index-lab.html:485",
+      "static/frontier-index-lab.html:1028",
+      "static/frontier-index-lab.html:1345"
+    ],
+    "preconditions": "Valid benchmark data",
+    "baseline_status": "Unverified",
+    "baseline_result": "Rankings 14, source rows 24, builder charts 2, diagnostics visible true, disqualified 18, index charts 6, full-data rows 24.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Rendered 14 ranking rows and 2 chart surfaces; diagnostics/disqualified content was visible after toggle.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "PAGE-FRONT-004",
+    "scope": "Standalone lab",
+    "route": "/static/frontier-index-lab.html",
+    "feature": "Frontier refresh and sharing",
+    "user_story": "As a user, I can refresh data, copy configuration, and copy a public index URL.",
+    "expected_behavior": "Data reloads and clipboard actions return the correct current index content.",
+    "evidence": [
+      "static/frontier-index-lab.html:459",
+      "static/frontier-index-lab.html:1321",
+      "static/frontier-index-lab.html:1350"
+    ],
+    "preconditions": "Network and clipboard",
+    "baseline_status": "Unverified",
+    "baseline_result": "Copied current config (832 chars), copied public index URL (http://127.0.0.1:8924/static/frontier-index-lab.html#index=eyJpbmRleGVzIjpbeyJpZCI6IjUxM2MwNzBmLTFlNjctNGMwZi05N2Y4LTJjOTcxMTJlNDJiMiIsIm5hbWUiOiJHZW5lcmFsIEZyb250aWVyIiwicmVxdWlyZWQiOlsiZGVlcHN3ZSJdLCJ3ZWlnaHRzIjp7ImRlZXBzd2UiOjUwLCJic2JlbmNoX3YyIjoxNCwidGVybWluYWxiZW5jaF92Ml8xIjoxMiwibGl2ZWNvZGViZW5jaCI6MCwic2NpY29kZSI6MCwiYWltZV8yNSI6MCwiZ3BxYSI6MCwiaGxlIjoxMiwibGNyIjoxMiwiaWZiZW5jaCI6MCwibW1sdV9wcm8iOjB9fV0sImFjdGl2ZUlkIjoiNTEzYzA3MGYtMWU2Ny00YzBmLTk3ZjgtMmM5NzExMmU0MmIyIiwicGFnZSI6eyJ0aXRsZSI6IkN1c3RvbSBNb2RlbCBGcm9udGllciBJbmRleCIsImludHJvIjoiQSBjdXN0b20gbW9kZWwgbGVhZGVyYm9hcmQgYW5kIGluZGV4IGZlYXR1cmluZyBBcnRpZmljaWFsIEFuYWx5c2lzLXN0eWxlIGNoYXJ0cyBhbmQgbXVsdGktYmVuY2htYXJrIHJhbmtpbmcuIiwicmFua2luZ1NlY3Rpb24iOiJNb2RlbCBMZWFkZXJib2FyZCIsImNoYXJ0U2VjdGlvbiI6IkJlbmNobWFyayBQZXJmb3JtYW5jZSIsInNvY2lhbHMiOiJ4LmNvbS95b3VybmFtZSIsInN0eWxlIjoiY2xlYW4ifX0=), and refreshed to 14 rankings.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Copied current JSON config (832 chars), copied encoded public index URL, refreshed data, and retained 14 rankings.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "PAGE-INSPECT-001",
+    "scope": "Debug tool",
+    "route": "/agent-inspector",
+    "feature": "Inspect Agent configuration",
+    "user_story": "As a developer, I can inspect quick and heavy prompts, tools, and skills.",
+    "expected_behavior": "Mode and view controls display the matching configuration.",
+    "evidence": [
+      "server.py:947",
+      "static/agent-inspector.html:94"
+    ],
+    "preconditions": "Debug access",
+    "baseline_status": "Unverified",
+    "baseline_result": "Quick/heavy modes and system/tools/skills views rendered (2191/2371/1439/722 chars).",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Quick/heavy mode controls and system/tools/skills configuration views rendered their matching mocked configuration.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "PAGE-INSPECT-002",
+    "scope": "Debug tool",
+    "route": "/agent-inspector",
+    "feature": "Test Agent tool",
+    "user_story": "As a developer, I can choose a tool, edit arguments, and run it.",
+    "expected_behavior": "The isolated tool test returns and displays a result or error.",
+    "evidence": [
+      "static/agent-inspector.html:290",
+      "server.py:12014"
+    ],
+    "preconditions": "Debug access and key if required",
+    "baseline_status": "Blocked",
+    "baseline_result": "Tool tester rendered (1 selector, 1 argument editor, 0 run control), but meaningful tool result requires debug/API access and potentially a key.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Selected search_models, edited JSON arguments, ran mocked isolated tool endpoint, and displayed a successful result.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "PAGE-LIFE-001",
+    "scope": "Standalone lab",
+    "route": "/life-agent",
+    "feature": "Cellular automaton controls",
+    "user_story": "As a user, I can configure, play, pause, step, clear, randomize, and undo a simulation.",
+    "expected_behavior": "Canvas and generation state respond to every control and rule setting.",
+    "evidence": [
+      "server.py:8337",
+      "static/life-agent.html:13",
+      "static/life-agent.js:1"
+    ],
+    "preconditions": "Canvas and JavaScript",
+    "baseline_status": "Unverified",
+    "baseline_result": "Step/play/pause/randomize/rule/undo/clear exercised; generation 0->1->3, final live cells 0.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Step advanced generation 0->1; play/pause, randomize, undo, and clear all updated simulation state; clear left 0 live cells.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "PAGE-LIFE-002",
+    "scope": "Standalone lab",
+    "route": "/life-agent",
+    "feature": "Life simulation Agent",
+    "user_story": "As a user, I can ask AI to propose and apply simulation rules.",
+    "expected_behavior": "Free text or prompt chips invoke the Agent and valid rule changes apply.",
+    "evidence": [
+      "static/life-agent.html:59",
+      "server.py:8386"
+    ],
+    "preconditions": "OpenRouter or server access",
+    "baseline_status": "Blocked",
+    "baseline_result": "Prompt chips populate the Agent input (verified 104 chars), but real proposal/apply behavior requires OpenRouter/server access not configured in this local server.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Mocked Agent received free text and returned a visible HighLife proposal; Apply changed birth rule to 3,6; status was Agent proposal ready.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  },
+  {
+    "id": "PAGE-TIME-001",
+    "scope": "Standalone visualization",
+    "route": "/static/ai-timeline-2025.html",
+    "feature": "2025 AI timeline",
+    "user_story": "As a user, I can explore and filter 2025 AI timeline events.",
+    "expected_behavior": "Timeline controls, search, and filters update the visualization.",
+    "evidence": [
+      "templates/partials/header.html:4",
+      "static/ai-timeline-2025.html:485"
+    ],
+    "preconditions": "React and CDN assets",
+    "baseline_status": "Unverified",
+    "baseline_result": "Timeline rendered (5802 chars, 2 inputs, 2 buttons); search/filter controls present and interactive.",
+    "errors": [],
+    "fix_status": "Not Started",
+    "regression_status": "Unverified",
+    "regression_result": "Timeline rendered substantial event content; search and filter controls changed the visible visualization/content.",
+    "regression_evidence": {
+      "status": "Unverified",
+      "evidenceClass": "unverified",
+      "target": null,
+      "command": null,
+      "runId": null,
+      "recordedAt": null
+    }
+  }
+]

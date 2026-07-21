@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Inspector</title>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:      #ffffff; --bg2: #f7f7f8; --bg3: #eeeeef;
+  --border:  #e0e0e5; --border2: #d0d0d8;
+  --text:    #111118; --text2: #555568; --text3: #999ab0;
+  --accent:  #4f46e5; --accent2: #3730a3;
+  --green:   #16a34a; --yellow: #b45309; --red: #dc2626;
+  --blue:    #2563eb; --cyan:   #0891b2; --orange: #ea580c;
+  --mono: 'SF Mono','Fira Code','Cascadia Code',monospace;
+}
+html, body { height: 100%; overflow: hidden; font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif; background: var(--bg); color: var(--text); font-size: 13px; }
+
+#app { display: flex; flex-direction: column; height: 100vh; }
+
+#topbar { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--border); background: var(--bg2); flex-shrink: 0; }
+.brand { font-size: 12px; font-weight: 700; color: var(--accent); letter-spacing: .04em; white-space: nowrap; }
+.brand em { color: var(--text2); font-weight: 400; font-style: normal; }
+
+#query-input { flex: 1; background: var(--bg); border: 1px solid var(--border2); color: var(--text); padding: 6px 10px; border-radius: 6px; font-size: 13px; font-family: inherit; outline: none; }
+#query-input:focus { border-color: var(--accent); }
+#query-input::placeholder { color: var(--text3); }
+.ctrl { background: var(--bg); border: 1px solid var(--border2); color: var(--text); padding: 6px 10px; border-radius: 6px; font-size: 12px; font-family: inherit; outline: none; }
+#api-key-input { width: 180px; }
+#model-select { width: 180px; }
+#deeper-label { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text2); cursor: pointer; white-space: nowrap; }
+#deeper-label input { accent-color: var(--accent); }
+#run-btn { background: var(--accent); color: #fff; border: none; padding: 6px 16px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: background .15s; }
+#run-btn:hover { background: var(--accent2); }
+#run-btn:disabled { background: var(--bg3); color: var(--text3); cursor: default; }
+
+#body { display: flex; flex: 1; min-height: 0; }
+
+/* Left */
+#left { width: 280px; flex-shrink: 0; display: flex; flex-direction: column; border-right: 1px solid var(--border); background: var(--bg2); }
+.ptabs { display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.ptab { flex: 1; padding: 8px 0; text-align: center; font-size: 11px; font-weight: 600; color: var(--text2); cursor: pointer; border-bottom: 2px solid transparent; transition: color .1s,border-color .1s; }
+.ptab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.panel-body { flex: 1; overflow-y: auto; }
+.psec { padding: 12px; border-bottom: 1px solid var(--border); }
+.psec-title { font-size: 10px; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; }
+
+.prompt-box { font-family: var(--mono); font-size: 10.5px; color: var(--text2); line-height: 1.6; white-space: pre-wrap; word-break: break-word; max-height: 300px; overflow-y: auto; background: var(--bg3); padding: 8px; border-radius: 4px; border: 1px solid var(--border); }
+
+.tool-item { padding: 8px 10px; border-radius: 6px; cursor: pointer; margin-bottom: 4px; border: 1px solid transparent; transition: background .1s,border-color .1s; }
+.tool-item:hover { background: var(--bg3); border-color: var(--border2); }
+.tool-item.selected { background: var(--bg3); border-color: var(--accent); }
+.tool-name { font-family: var(--mono); font-size: 11px; font-weight: 600; color: var(--cyan); margin-bottom: 3px; }
+.tool-desc-text { font-size: 10.5px; color: var(--text2); line-height: 1.4; }
+
+.skill-item { padding: 8px 10px; border-radius: 6px; margin-bottom: 4px; cursor: pointer; border: 1px solid var(--border); background: var(--bg3); }
+.skill-item:hover { border-color: var(--accent); }
+.skill-nm { font-size: 11px; font-weight: 600; color: var(--yellow); }
+.skill-preview { font-size: 10px; color: var(--text3); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Center */
+#center { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+#trace { flex: 1; overflow-y: auto; padding: 16px 20px; font-family: var(--mono); font-size: 12px; line-height: 1.6; }
+.trace-empty { color: var(--text3); text-align: center; padding: 60px 20px; font-family: inherit; font-size: 13px; }
+.iter-block { margin-bottom: 20px; }
+.iter-hdr { display: flex; align-items: center; gap: 8px; color: var(--text3); font-size: 10px; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 8px; }
+.iter-num { color: var(--accent); font-weight: 700; }
+.iter-line { flex: 1; height: 1px; background: var(--border); }
+.para-group { border-left: 2px solid var(--accent); padding-left: 12px; margin: 6px 0 10px; }
+.para-hdr { font-size: 10px; color: var(--accent); margin-bottom: 6px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
+.tc-row { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 5px; padding: 6px 10px; background: var(--bg2); border-radius: 5px; border: 1px solid var(--border); cursor: pointer; transition: border-color .1s,background .1s; }
+.tc-row:hover { border-color: var(--accent); background: var(--bg3); }
+.tc-row.inspecting { border-color: var(--accent); background: #ede9fe; }
+.tc-icon { color: var(--yellow); flex-shrink: 0; }
+.tc-name-el { color: var(--cyan); font-weight: 600; flex-shrink: 0; }
+.tc-args-el { color: var(--text3); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-status { flex-shrink: 0; }
+.tc-status.pending { color: var(--text3); }
+.tc-status.done { color: var(--green); }
+.tc-meta-el { color: var(--text3); flex-shrink: 0; font-size: 10px; }
+.assistant-box { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; margin-top: 8px; color: var(--text); font-family: inherit; font-size: 12.5px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
+.assistant-box.final { border-color: var(--green); background: #f0fdf4; }
+.thinking-row { display: flex; align-items: center; gap: 8px; color: var(--text3); font-size: 11px; padding: 5px 0; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+.blink { animation: blink 1s infinite; }
+.raw-line { color: var(--text3); font-size: 10px; padding: 2px 0; }
+
+/* Right — output history */
+#right { width: 340px; flex-shrink: 0; display: flex; flex-direction: column; border-left: 1px solid var(--border); background: var(--bg2); }
+#insp-header { padding: 10px 14px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+#insp-title { font-size: 10px; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: .08em; }
+#ctx-stats { padding: 8px 14px; border-bottom: 1px solid var(--border); flex-shrink: 0; display: flex; gap: 16px; flex-wrap: wrap; }
+.stat { display: flex; flex-direction: column; gap: 1px; }
+.stat-lbl { font-size: 9px; color: var(--text3); text-transform: uppercase; letter-spacing: .06em; }
+.stat-val { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--text); }
+#result-list { flex: 1; overflow-y: auto; }
+.result-placeholder { color: var(--text3); font-style: italic; font-size: 12px; padding: 20px 14px; }
+
+.result-card { border-bottom: 1px solid var(--border); padding: 10px 14px; cursor: default; }
+.result-card.highlighted { background: #ede9fe; }
+@keyframes flash { 0%{background:#c7d2fe} 100%{background:#ede9fe} }
+.result-card.flash { animation: flash .4s ease-out forwards; }
+.result-card-hdr { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px; }
+.result-nm { font-family: var(--mono); font-size: 11px; font-weight: 600; color: var(--cyan); }
+.result-meta { font-family: var(--mono); font-size: 10px; color: var(--text3); }
+.result-body { font-family: var(--mono); font-size: 10.5px; color: var(--text2); white-space: pre-wrap; word-break: break-word; line-height: 1.55; max-height: 220px; overflow-y: auto; background: var(--bg3); border: 1px solid var(--border); border-radius: 4px; padding: 7px 8px; }
+
+/* Skill modal */
+#skill-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 100; align-items: center; justify-content: center; padding: 40px; }
+#skill-overlay.open { display: flex; }
+#skill-modal { background: var(--bg); border: 1px solid var(--border2); border-radius: 10px; width: 100%; max-width: 640px; max-height: 80vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,.12); }
+#skill-modal-hdr { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+#skill-modal-nm { font-size: 13px; font-weight: 700; color: var(--yellow); font-family: var(--mono); }
+#skill-close { background: none; border: none; color: var(--text2); cursor: pointer; font-size: 18px; padding: 0 4px; }
+#skill-modal-body { flex: 1; overflow-y: auto; padding: 16px; font-family: var(--mono); font-size: 11.5px; color: var(--text2); white-space: pre-wrap; line-height: 1.7; }
+
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="topbar">
+    <div class="brand">Agent<em>Inspector</em></div>
+    <input id="query-input" placeholder="Ask something… e.g. compare Claude Sonnet 4.5 vs GPT-4.1" />
+    <input id="api-key-input" class="ctrl" type="password" placeholder="OpenRouter API key" />
+    <select id="model-select" class="ctrl"></select>
+    <label id="deeper-label"><input type="checkbox" id="deeper-cb"> Deeper</label>
+    <button id="run-btn">&#9654; Run</button>
+  </div>
+
+  <div id="body">
+    <div id="left">
+      <div class="ptabs">
+        <div class="ptab active" data-tab="tools" onclick="switchTab(this)">Tools</div>
+        <div class="ptab" data-tab="skills" onclick="switchTab(this)">Skills</div>
+        <div class="ptab" data-tab="prompt" onclick="switchTab(this)">Prompt</div>
+      </div>
+      <div class="panel-body" id="tab-tools">
+        <div class="psec" id="tools-list"><div class="tool-desc-text" style="color:var(--text3)">Loading…</div></div>
+      </div>
+      <div class="panel-body" id="tab-skills" style="display:none">
+        <div class="psec" id="skills-list"><div class="tool-desc-text" style="color:var(--text3)">Loading…</div></div>
+      </div>
+      <div class="panel-body" id="tab-prompt" style="display:none">
+        <div class="psec">
+          <div class="psec-title">System Prompt</div>
+          <div class="prompt-box" id="prompt-box">Loading…</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="center">
+      <div id="trace">
+        <div class="trace-empty">
+          Enter a question and click &#9654; Run to trace the full agent loop.<br><br>
+          Parallel tool calls are grouped together. Click any result to highlight its output &#8594;
+        </div>
+      </div>
+    </div>
+
+    <div id="right">
+      <div id="insp-header">
+        <span id="insp-title">Tool Outputs</span>
+      </div>
+      <div id="ctx-stats">
+        <div class="stat"><span class="stat-lbl">Messages</span><span class="stat-val" id="s-msgs">—</span></div>
+        <div class="stat"><span class="stat-lbl">Chars</span><span class="stat-val" id="s-chars">—</span></div>
+        <div class="stat"><span class="stat-lbl">~Tokens</span><span class="stat-val" id="s-tokens">—</span></div>
+        <div class="stat"><span class="stat-lbl">Iterations</span><span class="stat-val" id="s-iters">—</span></div>
+      </div>
+      <div id="result-list">
+        <div class="result-placeholder" id="result-placeholder">Run a query — tool outputs will appear here as they complete.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="skill-overlay">
+  <div id="skill-modal">
+    <div id="skill-modal-hdr">
+      <span id="skill-modal-nm"></span>
+      <button id="skill-close" onclick="closeSkillModal()">&#215;</button>
+    </div>
+    <div id="skill-modal-body"></div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+const LS_KEY  = 'dashboard-user-openrouter-key';
+const LS_MODS = 'dashboard-available-models';
+const LS_MDL  = 'agent-model';
+
+let currentStream = null;
+let ctxChars = 0, ctxMsgs = 0, ctxIters = 0;
+let pendingRows = {};   // callId → {row, status, meta, cardId}
+let resultCards = {};   // cardId → DOM element
+let cardCounter = 0;
+let currentIterBlock = null, currentParaGroup = null;
+
+// ── Bootstrap ─────────────────────────────────────────────────
+document.getElementById('api-key-input').value = localStorage.getItem(LS_KEY) || '';
+document.getElementById('api-key-input').addEventListener('change', e => {
+  localStorage.setItem(LS_KEY, e.target.value.trim());
+});
+
+(function buildModelSelect() {
+  const sel = document.getElementById('model-select');
+  const avail = (localStorage.getItem(LS_MODS) || '').split(',').map(s=>s.trim()).filter(Boolean);
+  const list = avail.length ? avail : ['google/gemini-2.5-flash','anthropic/claude-sonnet-4-5','openai/gpt-4.1'];
+  const saved = localStorage.getItem(LS_MDL) || list[0];
+  list.forEach(m => {
+    const o = document.createElement('option');
+    o.value = m;
+    o.textContent = m.split('/').pop().replace(/-/g,' ');
+    if (m === saved) o.selected = true;
+    sel.appendChild(o);
+  });
+  sel.addEventListener('change', e => localStorage.setItem(LS_MDL, e.target.value));
+})();
+
+fetch('/api/agent-info')
+  .then(r => r.json())
+  .then(data => {
+    document.getElementById('prompt-box').textContent = data.system_prompt || '';
+    renderTools(data.tools || []);
+    renderSkills(data.skills_dir || []);
+  })
+  .catch(() => {
+    document.getElementById('prompt-box').textContent = '(Could not load — is the server running?)';
+  });
+
+// ── Tab switching ─────────────────────────────────────────────
+function switchTab(el) {
+  document.querySelectorAll('.ptab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  ['tools','skills','prompt'].forEach(id => {
+    document.getElementById('tab-' + id).style.display = (el.dataset.tab === id) ? '' : 'none';
+  });
+}
+
+// ── Tools ─────────────────────────────────────────────────────
+function renderTools(tools) {
+  const list = document.getElementById('tools-list');
+  list.textContent = '';
+  tools.forEach(t => {
+    const fn   = t.function || t;
+    const name = fn.name || t.name || '';
+    const desc = fn.description || t.description || '';
+    const div  = document.createElement('div');
+    div.className = 'tool-item';
+    const nm = document.createElement('div');
+    nm.className = 'tool-name';
+    nm.textContent = name;
+    const de = document.createElement('div');
+    de.className = 'tool-desc-text';
+    de.textContent = desc.length > 120 ? desc.slice(0, 120) + '…' : desc;
+    div.appendChild(nm);
+    div.appendChild(de);
+    div.addEventListener('click', () => testTool(name, div));
+    list.appendChild(div);
+  });
+}
+
+function testTool(name, itemEl) {
+  document.querySelectorAll('.tool-item').forEach(t => t.classList.remove('selected'));
+  itemEl.classList.add('selected');
+  const key = document.getElementById('api-key-input').value.trim();
+  if (!key) { addResultCard('// Need API key to test tool', name, 0, 0, 'test-' + name); return; }
+  addResultCard('// Executing ' + name + '…', name, 0, 0, 'test-' + name);
+  fetch('/api/agent-execute-tool', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({tool_name: name, tool_args: {}, api_key: key})
+  }).then(r => r.json()).then(d => {
+    updateResultCard('test-' + name, d.output || d.error || '', d.chars, d.estimated_tokens);
+  }).catch(e => updateResultCard('test-' + name, '// Error: ' + e.message, 0, 0));
+}
+
+// ── Skills ────────────────────────────────────────────────────
+function renderSkills(skills) {
+  const list = document.getElementById('skills-list');
+  list.textContent = '';
+  if (!skills.length) {
+    const msg = document.createElement('div');
+    msg.className = 'tool-desc-text';
+    msg.style.color = 'var(--text3)';
+    msg.style.padding = '12px';
+    msg.textContent = 'No skills found in skills/';
+    list.appendChild(msg);
+    return;
+  }
+  skills.forEach(sk => {
+    const div = document.createElement('div');
+    div.className = 'skill-item';
+    const nm = document.createElement('div');
+    nm.className = 'skill-nm';
+    nm.textContent = sk.name;
+    const pv = document.createElement('div');
+    pv.className = 'skill-preview';
+    const firstLine = (sk.content || '').split('\n')
+      .find(l => l.trim() && !l.startsWith('---') && !l.startsWith('name:') && !l.startsWith('description:')) || '';
+    pv.textContent = firstLine.replace(/^#+/, '').trim();
+    div.appendChild(nm);
+    div.appendChild(pv);
+    div.addEventListener('click', () => openSkillModal(sk));
+    list.appendChild(div);
+  });
+}
+
+function openSkillModal(sk) {
+  document.getElementById('skill-modal-nm').textContent = sk.name;
+  document.getElementById('skill-modal-body').textContent = sk.content || '';
+  document.getElementById('skill-overlay').classList.add('open');
+}
+function closeSkillModal() {
+  document.getElementById('skill-overlay').classList.remove('open');
+}
+document.getElementById('skill-overlay').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeSkillModal();
+});
+
+// ── Run ───────────────────────────────────────────────────────
+document.getElementById('run-btn').addEventListener('click', startRun);
+document.getElementById('query-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) startRun();
+});
+
+function startRun() {
+  const q   = document.getElementById('query-input').value.trim();
+  const key = document.getElementById('api-key-input').value.trim();
+  if (!q) return;
+  if (!key) { alert('Enter your OpenRouter API key first'); return; }
+  if (currentStream) { currentStream.abort(); }
+
+  clearTrace();
+  setBtnStop();
+
+  const model  = document.getElementById('model-select').value;
+  const deeper = document.getElementById('deeper-cb').checked;
+  const ctrl   = new AbortController();
+  currentStream = ctrl;
+
+  fetch('/api/agent-debug-stream', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({question: q, model, api_key: key, deeper_mode: deeper}),
+    signal: ctrl.signal
+  }).then(resp => {
+    const reader = resp.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    function pump() {
+      reader.read().then(({done, value}) => {
+        if (done) { finishRun(); return; }
+        buf += dec.decode(value, {stream: true});
+        const parts = buf.split('\n\n');
+        buf = parts.pop();
+        parts.forEach(p => {
+          if (p.startsWith('data: ')) {
+            try { handleEvent(JSON.parse(p.slice(6))); } catch(_) {}
+          }
+        });
+        pump();
+      }).catch(e => { if (e.name !== 'AbortError') finishRun(); });
+    }
+    pump();
+  }).catch(e => { if (e.name !== 'AbortError') finishRun(); });
+}
+
+function setBtnStop() {
+  const b = document.getElementById('run-btn');
+  b.disabled = false;
+  b.textContent = '◼ Stop';
+  b.onclick = () => { if (currentStream) { currentStream.abort(); currentStream = null; } finishRun(); };
+}
+
+function finishRun() {
+  currentStream = null;
+  const b = document.getElementById('run-btn');
+  b.disabled = false;
+  b.textContent = '▶ Run';
+  b.onclick = startRun;
+}
+
+// ── Event handler ─────────────────────────────────────────────
+function handleEvent(ev) {
+  const trace = document.getElementById('trace');
+
+  if (ev.t === 'start') {
+    ctxChars = ev.system_chars || 0; ctxMsgs = 1;
+    appendRawLine(trace, '▸ ' + ev.model + ' · max ' + ev.max_iter + ' iter');
+  }
+
+  else if (ev.t === 'llm_call') {
+    ctxIters = ev.iter;
+    ctxChars = ev.context_chars || ctxChars;
+    ctxMsgs  = ev.context_msgs  || ctxMsgs;
+    currentIterBlock = makeIterBlock(ev.iter);
+    trace.appendChild(currentIterBlock);
+    currentParaGroup = null;
+
+    const row = document.createElement('div');
+    row.className = 'thinking-row';
+    row.id = 'thinking-' + ev.iter;
+    const dot = document.createElement('span');
+    dot.className = 'blink';
+    dot.textContent = '⬡';
+    row.appendChild(dot);
+    const lbl = document.createElement('span');
+    lbl.textContent = ' LLM inference…';
+    row.appendChild(lbl);
+    currentIterBlock.appendChild(row);
+    updateStats();
+  }
+
+  else if (ev.t === 'llm_response') {
+    const th = document.getElementById('thinking-' + ev.iter);
+    if (th) th.remove();
+    const info = '⬡ LLM → ' + (ev.n_tools > 0 ? ev.n_tools + ' tool call(s)' : 'final response') + ' · ' + ev.elapsed_ms + 'ms';
+    appendRawLine(currentIterBlock, info);
+    updateStats();
+  }
+
+  else if (ev.t === 'tool_calls') {
+    currentParaGroup = document.createElement('div');
+    currentParaGroup.className = 'para-group';
+    const hdr = document.createElement('div');
+    hdr.className = 'para-hdr';
+    hdr.textContent = ev.calls.length > 1 ? 'Parallel ×' + ev.calls.length : 'Tool call';
+    currentParaGroup.appendChild(hdr);
+    currentIterBlock.appendChild(currentParaGroup);
+
+    ev.calls.forEach(call => {
+      const row = document.createElement('div');
+      row.className = 'tc-row';
+
+      const icon = document.createElement('span');
+      icon.className = 'tc-icon';
+      icon.textContent = '⬡';
+
+      const nm = document.createElement('span');
+      nm.className = 'tc-name-el';
+      nm.textContent = call.name;
+
+      const args = document.createElement('span');
+      args.className = 'tc-args-el';
+      args.textContent = JSON.stringify(call.args || {}).slice(0, 80);
+
+      const status = document.createElement('span');
+      status.className = 'tc-status pending';
+      status.textContent = '…';
+
+      const meta = document.createElement('span');
+      meta.className = 'tc-meta-el';
+
+      row.appendChild(icon);
+      row.appendChild(nm);
+      row.appendChild(args);
+      row.appendChild(status);
+      row.appendChild(meta);
+      currentParaGroup.appendChild(row);
+
+      const cardId = 'card-' + (++cardCounter);
+      pendingRows[call.id || call.name] = {row, status, meta, cardId};
+    });
+  }
+
+  else if (ev.t === 'tool_result') {
+    const key = ev.id || ev.name;
+    const entry = pendingRows[key];
+    ctxChars += ev.chars;
+    ctxMsgs++;
+    if (entry) {
+      entry.status.textContent = '✓';
+      entry.status.className = 'tc-status done';
+      entry.meta.textContent = fmt(ev.chars) + 'ch · ~' + fmt(ev.estimated_tokens) + 'tk · ' + ev.elapsed_ms + 'ms';
+
+      // Add persistent card in right panel
+      addResultCard(ev.output, ev.name, ev.chars, ev.estimated_tokens, entry.cardId);
+
+      // Clicking trace row highlights the card
+      entry.row.addEventListener('click', () => {
+        document.querySelectorAll('.tc-row').forEach(r => r.classList.remove('inspecting'));
+        entry.row.classList.add('inspecting');
+        scrollToCard(entry.cardId);
+      });
+    }
+    updateStats();
+  }
+
+  else if (ev.t === 'assistant_text') {
+    const box = document.createElement('div');
+    box.className = 'assistant-box';
+    box.textContent = ev.content;
+    currentIterBlock.appendChild(box);
+    ctxChars += ev.content.length;
+    ctxMsgs++;
+    updateStats();
+  }
+
+  else if (ev.t === 'done') {
+    if (ev.content && currentIterBlock) {
+      const box = document.createElement('div');
+      box.className = 'assistant-box final';
+      const lbl = document.createElement('div');
+      lbl.style.cssText = 'font-size:10px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px';
+      lbl.textContent = 'Final Response';
+      box.appendChild(lbl);
+      const txt = document.createElement('div');
+      txt.textContent = ev.content;
+      box.appendChild(txt);
+      currentIterBlock.appendChild(box);
+    }
+    const endLine = ev.hit_limit
+      ? '◼ Hit ' + ev.iters + '-iteration limit'
+      : '✓ Done in ' + ev.iters + ' iteration' + (ev.iters > 1 ? 's' : '');
+    appendRawLine(trace, endLine, ev.hit_limit ? 'var(--yellow)' : 'var(--green)');
+    finishRun();
+  }
+
+  else if (ev.t === 'error') {
+    appendRawLine(trace, '✗ Error: ' + ev.msg, 'var(--red)');
+    finishRun();
+  }
+
+  trace.scrollTop = trace.scrollHeight;
+}
+
+// ── DOM helpers ───────────────────────────────────────────────
+function clearTrace() {
+  const t = document.getElementById('trace');
+  t.textContent = '';
+  currentIterBlock = null; currentParaGroup = null; pendingRows = {};
+  cardCounter = 0; resultCards = {};
+
+  // Reset right panel
+  const rl = document.getElementById('result-list');
+  rl.textContent = '';
+  const ph = document.createElement('div');
+  ph.className = 'result-placeholder';
+  ph.id = 'result-placeholder';
+  ph.textContent = 'Run a query — tool outputs will appear here as they complete.';
+  rl.appendChild(ph);
+
+  ctxChars = 0; ctxMsgs = 0; ctxIters = 0;
+  updateStats();
+}
+
+function makeIterBlock(n) {
+  const block = document.createElement('div');
+  block.className = 'iter-block';
+  const hdr = document.createElement('div');
+  hdr.className = 'iter-hdr';
+  const num = document.createElement('span');
+  num.className = 'iter-num';
+  num.textContent = 'Iter ' + n;
+  const line = document.createElement('span');
+  line.className = 'iter-line';
+  hdr.appendChild(num);
+  hdr.appendChild(line);
+  block.appendChild(hdr);
+  return block;
+}
+
+function appendRawLine(parent, text, color) {
+  const d = document.createElement('div');
+  d.className = 'raw-line';
+  if (color) d.style.color = color;
+  d.textContent = text;
+  parent.appendChild(d);
+}
+
+// Add a new persistent result card to the right panel
+function addResultCard(output, toolName, chars, tokens, cardId) {
+  const ph = document.getElementById('result-placeholder');
+  if (ph) ph.remove();
+
+  const rl = document.getElementById('result-list');
+
+  const card = document.createElement('div');
+  card.className = 'result-card';
+  card.id = cardId;
+
+  const hdr = document.createElement('div');
+  hdr.className = 'result-card-hdr';
+
+  const nm = document.createElement('span');
+  nm.className = 'result-nm';
+  nm.textContent = toolName || '';
+
+  const meta = document.createElement('span');
+  meta.className = 'result-meta';
+  if (chars) meta.textContent = fmt(chars) + 'ch · ~' + fmt(tokens || Math.round(chars / 4)) + 'tk';
+
+  hdr.appendChild(nm);
+  hdr.appendChild(meta);
+
+  const body = document.createElement('div');
+  body.className = 'result-body';
+  body.textContent = output || '';
+
+  card.appendChild(hdr);
+  card.appendChild(body);
+  rl.appendChild(card);
+  resultCards[cardId] = card;
+
+  // Scroll right panel to show new card
+  rl.scrollTop = rl.scrollHeight;
+}
+
+// Update an existing card's content (used by manual tool tester)
+function updateResultCard(cardId, output, chars, tokens) {
+  const card = resultCards[cardId];
+  if (!card) { addResultCard(output, '', chars, tokens, cardId); return; }
+  const body = card.querySelector('.result-body');
+  if (body) body.textContent = output || '';
+  const meta = card.querySelector('.result-meta');
+  if (meta && chars) meta.textContent = fmt(chars) + 'ch · ~' + fmt(tokens || Math.round(chars / 4)) + 'tk';
+}
+
+function scrollToCard(cardId) {
+  const card = resultCards[cardId];
+  if (!card) return;
+  // Clear previous highlights
+  Object.values(resultCards).forEach(c => {
+    c.classList.remove('highlighted', 'flash');
+  });
+  card.classList.add('highlighted', 'flash');
+  card.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+}
+
+function updateStats() {
+  document.getElementById('s-msgs').textContent   = ctxMsgs  || '—';
+  document.getElementById('s-chars').textContent  = ctxChars > 0 ? fmt(ctxChars)  : '—';
+  document.getElementById('s-tokens').textContent = ctxChars > 0 ? '~' + fmt(Math.round(ctxChars / 4)) : '—';
+  document.getElementById('s-iters').textContent  = ctxIters  || '—';
+}
+
+function fmt(n) {
+  if (!n && n !== 0) return '—';
+  if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+  if (n >= 1000)    return (n / 1000).toFixed(1) + 'k';
+  return String(n);
+}
+</script>
+</body>
+</html>
